@@ -81,6 +81,7 @@ export function appManifest(baseUrl: string) {
     setup_on_update: true,
     public: false,
     default_permissions: { contents: "read", metadata: "read", pull_requests: "read", issues: "read" },
-    default_events: ["push", "release", "pull_request", "star", "installation_repositories"],
+    // installation·installation_repositories 이벤트는 앱에 자동 전달되므로 매니페스트에 적지 않는다.
+    default_events: ["push", "release", "pull_request", "star"],
   };
 }
