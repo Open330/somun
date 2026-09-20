@@ -142,6 +142,7 @@ export const settings = sqliteTable("settings", {
 });
 
 export const llmKeyState = sqliteTable("llm_key_state", {
+  /** "free-1" 또는 "free-1|gemini-3.7-flash" — 쿼터는 프로젝트·모델 단위라 모델별로 따로 센다. */
   label: text("label").primaryKey(),
   lastUsedAt: integer("last_used_at").notNull(),
   cooldownUntil: integer("cooldown_until"),

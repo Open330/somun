@@ -8,22 +8,23 @@ import { emit, type AppContext } from "./context.js";
 /** 서버 Gemini 무료 키 풀 상태 (AI_API.md 운영 기준). */
 export function keyPoolOps(ctx: AppContext): KeyPoolOps {
   return {
-    order: async (labels) => {
+    order: async (labels, model) => {
       const now = Date.now();
       const day = ptDayKey(now);
       const rows = ctx.db.select().from(schema.llmKeyState).all();
       const by = new Map(rows.map((r) => [r.label, r]));
       return labels
         .filter((l) => {
-          const r = by.get(l);
+          const r = by.get(`${l}|${model}`);
           if (!r) return true;
           if (r.cooldownUntil && r.cooldownUntil > now) return false;
           if (r.dayKey === day && r.dayCount >= RPD_SOFT_CAP) return false;
           return true;
         })
-        .sort((a, b) => (by.get(a)?.lastUsedAt ?? 0) - (by.get(b)?.lastUsedAt ?? 0));
+        .sort((a, b) => (by.get(`${a}|${model}`)?.lastUsedAt ?? 0) - (by.get(`${b}|${model}`)?.lastUsedAt ?? 0));
     },
-    report: async ({ label, ok, status, body }) => {
+    report: async ({ label: base, model, ok, status, body }) => {
+      const label = `${base}|${model}`;
       const now = Date.now();
       const day = ptDayKey(now);
       const row = ctx.db.select().from(schema.llmKeyState).where(eq(schema.llmKeyState.label, label)).get();
@@ -42,6 +43,7 @@ export function keyPoolOps(ctx: AppContext): KeyPoolOps {
 export function keyStatus(ctx: AppContext): KeyStatus[] {
   const day = ptDayKey(Date.now());
   return ctx.db.select().from(schema.llmKeyState).all()
-    .map((r) => ({ label: r.label, todayCount: r.dayKey === day ? r.dayCount : 0, cap: RPD_SOFT_CAP, cooldownUntil: r.cooldownUntil ?? undefined, cooldownReason: r.cooldownReason ?? undefined, lastUsedAt: r.lastUsedAt, lastQuotaId: r.lastQuotaId ?? undefined }))
+    .filter((r) => r.label.includes("|"))
+    .map((r) => ({ label: r.label.replace("|", " · "), todayCount: r.dayKey === day ? r.dayCount : 0, cap: RPD_SOFT_CAP, cooldownUntil: r.cooldownUntil ?? undefined, cooldownReason: r.cooldownReason ?? undefined, lastUsedAt: r.lastUsedAt, lastQuotaId: r.lastQuotaId ?? undefined }))
     .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 }

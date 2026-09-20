@@ -18,8 +18,9 @@ export type LlmResult = { json: unknown; provider: LlmProvider; model: string; k
 
 /** 서버 키 풀 상태 접근. 앱 층이 DB 기반으로 만들어 넘긴다. 없으면 무상태 순환. */
 export type KeyPoolOps = {
-  order: (labels: string[]) => Promise<string[]>;
-  report: (r: { label: string; ok: boolean; status?: number; body?: string }) => Promise<void>;
+  /** 모델별로 상태를 본다. Gemini 무료 쿼터는 프로젝트·모델 단위. */
+  order: (labels: string[], model: string) => Promise<string[]>;
+  report: (r: { label: string; model: string; ok: boolean; status?: number; body?: string }) => Promise<void>;
 };
 
 export const DEFAULT_MODEL: Record<Exclude<LlmProvider, "local-agent">, string> = {
@@ -27,15 +28,13 @@ export const DEFAULT_MODEL: Record<Exclude<LlmProvider, "local-agent">, string> 
   openai: "gpt-5",
   anthropic: "claude-opus-5",
 };
-/**
- * 판단과 초안은 한 단계 위 모델. 다이제스트(추리기)는 기본 모델로 충분하다.
- * flash-lite로 판단하면 같은 후보가 실행마다 4점과 6점을 오갔다.
- */
+/** 초안은 한 단계 위 모델. 다이제스트·판단은 기본 모델 (판단 편차는 가중치와 임계로 흡수). */
 export const DEFAULT_DRAFT_MODEL: Partial<Record<LlmProvider, string>> = { gemini: "gemini-3.7-flash" };
 
 export function modelFor(config: LlmConfig, kind: "digest" | "judge" | "draft"): string {
   if (config.provider === "local-agent") return config.agentCli ?? "claude";
-  if (kind !== "digest") return config.draftModel?.trim() || DEFAULT_DRAFT_MODEL[config.provider] || config.model?.trim() || DEFAULT_MODEL[config.provider];
+  // 초안만 상위 모델. 판단은 기본 모델로 (무료 티어에서 3.7-flash의 일일 한도가 20 안팎이라 판단까지 쓰면 하루도 못 간다).
+  if (kind === "draft") return config.draftModel?.trim() || DEFAULT_DRAFT_MODEL[config.provider] || config.model?.trim() || DEFAULT_MODEL[config.provider];
   return config.model?.trim() || DEFAULT_MODEL[config.provider];
 }
 
@@ -140,18 +139,18 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
   for (let round = 0; round < 3; round++) {
     if (round > 0) await new Promise((r) => setTimeout(r, 4000 * round));
-    const labels = pool ? await pool.order(all.map((k) => k.label)) : rotateStateless(all.map((k) => k.label));
+    const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
     if (labels.length === 0) throw new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true);
     for (const label of labels) {
       const key = byLabel.get(label)!;
       try {
         const res = await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label);
-        await pool?.report({ label, ok: true });
+        await pool?.report({ label, model, ok: true });
         return res;
       } catch (e) {
         lastErr = e;
         if (e instanceof LlmError) {
-          await pool?.report({ label, ok: false, status: e.status, body: e.body });
+          await pool?.report({ label, model, ok: false, status: e.status, body: e.body });
           if (e.retryable) {
             if (e.status === 503) break; // 모델 수요 문제: 키를 바꿔도 같다. 쉬었다 다음 바퀴
             continue; // 429: 이 키는 쿨다운에 들어갔고 다음 키로
