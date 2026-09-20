@@ -1,11 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#128A72"/><stop offset="1" stop-color="#0A4F42"/></linearGradient></defs>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#138A72"/><stop offset="1" stop-color="#0A4F42"/></linearGradient>
+  <clipPath id="box"><rect x="160" y="352" width="512" height="512" rx="120"/></clipPath></defs>
   <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
-  <g transform="translate(512 512) scale(0.78) translate(-512 -512)">
-    <g fill="none" stroke="#F4F6F8" stroke-width="132" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M540 236 L262 800"/>
-      <path d="M468 470 L762 800"/>
-    </g>
-    <circle cx="548" cy="736" r="66" fill="#E5A33C"/>
+  <g transform="translate(512 512) scale(0.74) translate(-512 -536)">
+    <rect x="160" y="352" width="512" height="512" rx="120" fill="#F4F6F8"/>
+    <g fill="none" stroke="#F4F6F8" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M628 208 L362 720"/><path d="M556 346 L864 720"/></g>
+    <g clip-path="url(#box)" fill="none" stroke="#0B5A4A" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M628 208 L362 720"/><path d="M556 346 L864 720"/></g>
   </g>
 </svg>

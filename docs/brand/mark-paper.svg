@@ -1,7 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <g fill="none" stroke="#F4F6F8" stroke-width="132" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M540 236 L262 800"/>
-    <path d="M468 470 L762 800"/>
+  <!--
+    소문 = ㅁ(만든 것) 위로 ㅅ(말)이 걸쳐 나간다.
+    격자 1024. 획 굵기 128. ㅁ은 꽉 찬 둥근 사각, ㅅ은 두 획. ㅁ 안쪽의 ㅅ은 종이색으로 반전.
+    ㅅ의 오른획은 한글 구조대로 왼획 중간에서 갈라진다.
+  -->
+  <defs>
+    <clipPath id="box"><rect x="160" y="352" width="512" height="512" rx="120"/></clipPath>
+    <clipPath id="outside"><path d="M0 0H1024V1024H0Z M160 352 h512 a0 0 0 0 1 0 0 v512 h-512 z" clip-rule="evenodd"/></clipPath>
+  </defs>
+  <rect x="160" y="352" width="512" height="512" rx="120" fill="#F4F6F8"/>
+  <!-- ㅅ 바깥 부분: 잉크 -->
+  <g fill="none" stroke="#F4F6F8" stroke-width="128" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M628 208 L362 720"/>
+    <path d="M556 346 L864 720"/>
   </g>
-  <circle cx="548" cy="736" r="66" fill="#E5A33C"/>
+  <!-- ㅅ의 ㅁ 안쪽 부분: 종이색으로 반전 -->
+  <g clip-path="url(#box)" fill="none" stroke="#0E1216" stroke-width="128" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M628 208 L362 720"/>
+    <path d="M556 346 L864 720"/>
+  </g>
 </svg>

@@ -1,8 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200">
-  <g transform="translate(20 20) scale(0.156)">
-    <g fill="none" stroke="#0F6F5C" stroke-width="132" stroke-linecap="round" stroke-linejoin="round"><path d="M540 236 L262 800"/><path d="M468 470 L762 800"/></g>
-    <circle cx="548" cy="736" r="66" fill="#E5A33C"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" width="680" height="200">
+  <defs><clipPath id="box"><rect x="160" y="352" width="512" height="512" rx="120"/></clipPath></defs>
+  <g transform="translate(16 12) scale(0.172)">
+    <rect x="160" y="352" width="512" height="512" rx="120" fill="#0F6F5C"/>
+    <g fill="none" stroke="#0F6F5C" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M628 208 L362 720"/><path d="M556 346 L864 720"/></g>
+    <g clip-path="url(#box)" fill="none" stroke="#F4F6F8" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M628 208 L362 720"/><path d="M556 346 L864 720"/></g>
   </g>
-  <text x="200" y="118" font-family="'Noto Sans KR','Apple SD Gothic Neo',sans-serif" font-weight="700" font-size="88" letter-spacing="-2" fill="#131A22">소문</text>
-  <text x="392" y="118" font-family="Sora,'Helvetica Neue',sans-serif" font-weight="600" font-size="34" letter-spacing="3" fill="#6B7681">somun</text>
+  <text x="212" y="120" font-family="'Noto Sans KR','Apple SD Gothic Neo',sans-serif" font-weight="700" font-size="88" letter-spacing="-2" fill="#131A22">소문</text>
+  <text x="404" y="120" font-family="Sora,'Helvetica Neue',sans-serif" font-weight="600" font-size="34" letter-spacing="3" fill="#6B7681">somun</text>
 </svg>
