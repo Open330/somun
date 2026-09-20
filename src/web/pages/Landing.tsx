@@ -31,7 +31,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
         <div className="demo" aria-label="실제 초안 예시">
           <div className="bar"><b>Open330/muxa v0.8.47</b> · 릴리스 · 판단 6/10 · <span className="badge ok">초안</span></div>
           <div className="body">
-            <div className="tabs" style={{ margin: 0 }}><button className="sm active">X (en)</button><button className="sm">Show HN</button><button className="sm">LinkedIn</button><button className="sm">Show GN</button></div>
+            <div className="tabs" style={{ margin: 0 }}><button className="sm active">X · EN</button><button className="sm">X · KO</button><button className="sm">Show HN</button><button className="sm">LinkedIn · KO</button><button className="sm">Show GN</button></div>
             <div className="post">{"I ran agents in tmux and lost track of their sessions.\n\nMuxa adds keyboard navigation and natural language automation rules to orchestrate agent sessions.\n\n61 releases, still 0.x: https://github.com/Open330/muxa"}</div>
             <div className="facts"><span>stars=28</span><span>commits=707</span><span>releases=61</span><span>limit: API may change before 1.0</span></div>
             <div className="row between"><span className="badge ok">린트 통과</span><div className="toolbar"><button className="sm">수정</button><button className="sm primary">복사</button></div></div>

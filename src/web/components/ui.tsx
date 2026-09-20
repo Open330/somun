@@ -74,6 +74,29 @@ export function Spark({ values }: { values: number[] }) {
   return <div className="spark">{values.map((v, i) => <i key={i} style={{ height: `${6 + ((v - min) / span) * 30}px` }} title={String(v)} />)}</div>;
 }
 
+/** 발행 전후 스타 추이. 한 축, 발행 시점 세로선, 기준선(발행 전 마지막 값) 점선. */
+export function MetricChart({ series, publishedAt, baseline }: { series: { at: number; stars: number }[]; publishedAt: number; baseline?: number }) {
+  if (series.length < 2) return <div className="chart empty-chart tiny muted">지표 2개 이상 쌓이면 그래프가 보입니다</div>;
+  const W = 260, H = 72, px = 6, py = 8;
+  const xs = series.map((s) => s.at), ys = series.map((s) => s.stars);
+  const x0 = Math.min(...xs, publishedAt), x1 = Math.max(...xs, publishedAt);
+  const y0 = Math.min(...ys, baseline ?? Infinity), y1 = Math.max(...ys, baseline ?? -Infinity);
+  const sx = (x: number) => px + ((x - x0) / Math.max(1, x1 - x0)) * (W - px * 2);
+  const sy = (y: number) => H - py - ((y - y0) / Math.max(1, y1 - y0)) * (H - py * 2);
+  const d = series.map((s, i) => `${i ? "L" : "M"}${sx(s.at).toFixed(1)},${sy(s.stars).toFixed(1)}`).join(" ");
+  const last = series[series.length - 1];
+  return (
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={`스타 ${ys[0]}에서 ${last.stars}`}>
+      {baseline !== undefined && <line x1={px} x2={W - px} y1={sy(baseline)} y2={sy(baseline)} className="base" />}
+      <line x1={sx(publishedAt)} x2={sx(publishedAt)} y1={py / 2} y2={H - py / 2} className="pub-line" />
+      <path d={d} className="line" />
+      <circle cx={sx(last.at)} cy={sy(last.stars)} r={3} className="dot" />
+      <text x={W - px} y={sy(last.stars) - 6} textAnchor="end" className="lbl">{last.stars}</text>
+      {baseline !== undefined && baseline !== last.stars && <text x={px} y={sy(baseline) + (sy(baseline) < H / 2 ? 12 : -5)} className="lbl muted">{baseline}</text>}
+    </svg>
+  );
+}
+
 export function Skeleton({ rows = 3 }: { rows?: number }) {
   return <div className="stack">{Array.from({ length: rows }, (_, i) => <div key={i} className="skel" />)}</div>;
 }

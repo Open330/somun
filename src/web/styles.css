@@ -116,6 +116,14 @@ select { width: auto; }
 pre.evidence { white-space: pre-wrap; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); background: var(--surface-2); padding: 14px; border-radius: var(--radius-sm); max-height: 60vh; overflow: auto; margin: 0; }
 .lint { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .draft-body { white-space: pre-wrap; line-height: 1.65; padding: 14px 16px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 15px; }
+.chart { display: block; max-width: 100%; height: auto; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; }
+.chart .dot { fill: var(--accent); }
+.chart .base { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+.chart .pub-line { stroke: var(--score); stroke-width: 1; opacity: .8; }
+.chart .lbl { font-family: var(--font-mono); font-size: 10px; fill: var(--ink); }
+.chart .lbl.muted { fill: var(--muted); }
+.empty-chart { width: 260px; height: 72px; display: grid; place-items: center; border: 1px dashed var(--line); border-radius: 8px; }
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; }
 .spark i { display: block; width: 6px; background: var(--accent); border-radius: 2px 2px 0 0; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -249,7 +257,7 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 .settabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 8px 12px; color: var(--muted); }
 .settabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
 .topbar { display: none; }
-.pub { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
+.pub { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto auto auto; gap: 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); }
 .pub:first-child { border-top: 0; }
 .delta { font-family: var(--font-display); font-variant-numeric: tabular-nums; font-weight: 600; }
 .delta.up { color: var(--accent); }

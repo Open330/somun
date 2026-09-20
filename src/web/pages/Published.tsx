@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { PublicationWithMetrics } from "@shared/types";
-import { CHANNEL_LABEL, Skeleton, Spark, fmtDate } from "../components/ui";
+import { CHANNEL_LABEL, MetricChart, Skeleton, fmtDate } from "../components/ui";
 import { post, useResource } from "../lib/api";
 
 export default function Published() {
   const { data: rows } = useResource<PublicationWithMetrics[]>("/publications", ["publications", "candidates"]);
   return (
     <>
-      <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 발행 전 7일 기준선과 비교합니다.</p></div></div>
+      <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 세로선이 발행 시점, 점선이 발행 전 기준선입니다.</p></div></div>
       {rows === undefined ? <Skeleton rows={3} /> : rows.length === 0 ? (
         <div className="empty">
           <p style={{ marginBottom: 12 }}>아직 발행한 글이 없습니다.</p>
@@ -31,7 +31,7 @@ export default function Published() {
                     <div>스타 {p.baselineStars ?? "?"} → {p.latestStars ?? "?"} {delta !== undefined && <span className={`delta ${delta > 0 ? "up" : ""}`}>{delta > 0 ? `+${delta}` : delta}</span>}</div>
                     {p.series.at(-1)?.uniques !== undefined && <div>방문자 14일 {p.series.at(-1)?.uniques}</div>}
                   </div>
-                  <Spark values={p.series.map((s) => s.stars)} />
+                  <MetricChart series={p.series} publishedAt={p.publishedAt} baseline={p.baselineStars} />
                 </div>
                 <ManualStats id={p.id} stats={p.manualStats} />
               </div>
