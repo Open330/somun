@@ -18,7 +18,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
-    "omp-sync": "tsx scripts/omp-sync.ts",
+    "push": "tsx scripts/push-sessions.ts",
     "agent-worker": "tsx scripts/agent-worker.ts"
   },
   "dependencies": {

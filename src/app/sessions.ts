@@ -3,13 +3,13 @@ import { schema } from "../infra/db/index.js";
 import type { Evidence } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 
-export type OmpRepoSummary = { repo: string; summary: string; sessions: { sessionId: string; source: string; startedAt: number; promptCount: number; topic: string }[] };
+export type RepoSessionInput = { repo: string; summary: string; sessions: { sessionId: string; source: string; startedAt: number; promptCount: number; retries?: number; topic: string }[] };
 
 /** omp 세션 요약 수신. 단독 후보가 되지 않고 같은 저장소의 열린 후보에 근거로 붙는다. */
-export function ingestOmpSessions(ctx: AppContext, ownerId: string, repos: OmpRepoSummary[]): { inserted: number; attached: number } {
-  let source = ctx.db.select().from(schema.sources).where(and(eq(schema.sources.ownerId, ownerId), eq(schema.sources.kind, "omp"))).get();
+export function ingestSessions(ctx: AppContext, ownerId: string, repos: RepoSessionInput[]): { inserted: number; attached: number } {
+  let source = ctx.db.select().from(schema.sources).where(and(eq(schema.sources.ownerId, ownerId), eq(schema.sources.kind, "sessions"))).get();
   if (!source) {
-    const id = Number(ctx.db.insert(schema.sources).values({ ownerId, kind: "omp", targets: ["local"], enabled: true }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId, kind: "sessions", targets: ["local"], enabled: true }).run().lastInsertRowid);
     source = ctx.db.select().from(schema.sources).where(eq(schema.sources.id, id)).get()!;
   }
   let inserted = 0, attached = 0;

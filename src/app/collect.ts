@@ -1,5 +1,7 @@
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
+import { installationToken } from "../infra/github/app.js";
 import { GitHubClient, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
+import { githubAppConfig } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { mergeOpenReleases, refreshEvidence } from "./candidates.js";
 import type { AppContext } from "./context.js";
@@ -50,10 +52,13 @@ export function limitationsFrom(readme: string): string[] {
 }
 
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
-  const token = ctx.env.githubToken;
-  if (!token) throw new Error("GITHUB_TOKEN이 없습니다.");
   const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
   if (!source) return {};
+  // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
+  const instId = source.options?.installationId ? Number(source.options.installationId) : undefined;
+  const cfg = instId ? githubAppConfig(ctx) : null;
+  const token = instId && cfg ? await installationToken(cfg, instId) : ctx.env.githubToken;
+  if (!token) throw new Error("GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.");
   const gh = new GitHubClient(token);
   const ownerId = source.ownerId;
   const since = Date.now() - 14 * DAY;

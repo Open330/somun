@@ -7,7 +7,9 @@ import { collectAll } from "../../app/collect.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
-import { ingestOmpSessions } from "../../app/omp.js";
+import { ingestSessions } from "../../app/sessions.js";
+import { connectorsView, githubAppConfig, recordInstallation, saveGithubApp } from "../../app/connectors.js";
+import { appManifest } from "../../infra/github/app.js";
 import { runStep } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, registerPublication, setManualStats } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
@@ -23,6 +25,11 @@ const id = (v: string) => {
   if (!Number.isInteger(n) || n <= 0) throw new NotFoundError("id");
   return n;
 };
+
+function publicBase(url: string, proto?: string, host?: string): string {
+  const u = new URL(url);
+  return `${proto ?? u.protocol.replace(":", "")}://${host ?? u.host}`;
+}
 
 /** /api 아래 전부. 얇은 층: 검증 → 유스케이스 → JSON. */
 export function apiRoutes(ctx: AppContext) {
@@ -85,7 +92,34 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));
   app.post("/jobs/:id/claim", async (c) => c.json({ claimed: claimJob(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ runner: z.string() }))).runner) }));
   app.post("/jobs/:id/complete", async (c) => c.json(await completeJob(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional() })))));
-  app.post("/omp/sessions", async (c) => c.json(ingestOmpSessions(ctx, c.get("ownerId"), (await body(c, z.object({ repos: z.array(z.object({ repo: z.string(), summary: z.string(), sessions: z.array(z.object({ sessionId: z.string(), source: z.string(), startedAt: z.number(), promptCount: z.number(), topic: z.string() })) })) }))).repos)));
+  const sessionsBody = z.object({ repos: z.array(z.object({ repo: z.string(), summary: z.string(), sessions: z.array(z.object({ sessionId: z.string(), source: z.string(), startedAt: z.number(), promptCount: z.number(), retries: z.number().optional(), topic: z.string() })) })) });
+  app.post("/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
+  app.post("/omp/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
+
+  // connectors · GitHub App
+  app.get("/connectors", (c) => c.json(connectorsView(ctx, c.get("ownerId"))));
+  app.get("/github/app", (c) => {
+    const cfg = githubAppConfig(ctx);
+    const base = publicBase(c.req.url, c.req.header("x-forwarded-proto"), c.req.header("host"));
+    return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, manifest: appManifest(base), createUrl: "https://github.com/settings/apps/new" });
+  });
+  /** 설치 완료 후 GitHub가 보내는 곳. 로그인된 브라우저에서 열리므로 ownerId를 안다. */
+  app.get("/github/setup", async (c) => {
+    const id = Number(c.req.query("installation_id"));
+    if (!id) return c.json({ error: "installation_id required" }, 400);
+    const r = await recordInstallation(ctx, c.get("ownerId"), id);
+    return c.json({ ok: true, ...r });
+  });
+  /** 매니페스트 플로우 콜백: code → 앱 자격 증명. 첫 관리자가 한 번 호출한다. */
+  app.get("/github/app/created", async (c) => {
+    const code = c.req.query("code");
+    if (!code) return c.json({ error: "code required" }, 400);
+    const res = await fetch(`https://api.github.com/app-manifests/${code}/conversions`, { method: "POST", headers: { Accept: "application/vnd.github+json", "User-Agent": "somun" } });
+    if (!res.ok) return c.json({ error: `github ${res.status}` }, 502);
+    const j = (await res.json()) as { id: number; slug: string; pem: string; webhook_secret?: string };
+    saveGithubApp(ctx, { id: j.id, slug: j.slug, pem: j.pem, webhook_secret: j.webhook_secret });
+    return c.redirect(`https://github.com/apps/${j.slug}/installations/new`);
+  });
 
   // SSE: 내 자원이 바뀌면 알려준다. 화면은 다시 fetch.
   app.get("/events", (c) => {

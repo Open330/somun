@@ -2,7 +2,7 @@
 import type { Channel } from "../core/channels.js";
 export type { Channel } from "../core/channels.js";
 
-export type SourceKind = "github" | "npm" | "blog" | "omp";
+export type SourceKind = "github" | "npm" | "blog" | "sessions" | "omp";
 export type SignalKind = "release" | "pr_merged" | "repo_created" | "readme_changed" | "star_milestone" | "download_milestone" | "blog_post" | "omp_session";
 export type CandidateType = "release" | "new-repo" | "milestone" | "blog" | "in-progress";
 export type CandidateStatus = "new" | "judged" | "drafted" | "published" | "dropped" | "deferred";
@@ -62,3 +62,8 @@ export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; dra
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };
+
+export type ConnectorsView = {
+  github: { mode: "app" | "token" | "none"; appConfigured: boolean; appSlug?: string; installUrl?: string; installations: { id: number; account: string; repos: number; updatedAt: number }[]; manualTargets: string[]; lastPolledAt?: number; lastError?: string };
+  sessions: { lastUploadAt?: number; sessionCount14d: number; sources: string[] };
+};

@@ -53,6 +53,25 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
   );
 }
 
+export function ScoreBar({ total, max = 10 }: { total: number; max?: number }) {
+  return (
+    <div className="scorebar" title={`${total}/${max}`}>
+      {Array.from({ length: max }, (_, i) => <i key={i} className={i < total ? "on" : ""} />)}
+    </div>
+  );
+}
+
+/** 후보의 파이프라인 단계. 상태와 근거만으로 추정한다. */
+export function stageOf(c: { status: string; evidence: { highlightsAt?: number }; latestJudgmentId?: number }): { label: string; busy: boolean } {
+  if (c.status === "dropped") return { label: "버림", busy: false };
+  if (c.status === "published") return { label: "발행됨", busy: false };
+  if (c.status === "drafted") return { label: "초안 있음", busy: false };
+  if (c.status === "deferred") return { label: "보류", busy: false };
+  if (!c.evidence.highlightsAt) return { label: "다이제스트 중", busy: true };
+  if (!c.latestJudgmentId) return { label: "판단 중", busy: true };
+  return { label: "초안 작성 중", busy: true };
+}
+
 export function Spark({ values }: { values: number[] }) {
   if (values.length < 2) return null;
   const max = Math.max(...values), min = Math.min(...values);

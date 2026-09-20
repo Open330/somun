@@ -168,3 +168,21 @@ export const llmJobs = sqliteTable("llm_jobs", {
   claimedAt: integer("claimed_at"),
   finishedAt: integer("finished_at"),
 }, (t) => [index("jobs_owner_status").on(t.ownerId, t.status), index("jobs_candidate").on(t.candidateId)]);
+
+/** GitHub App 설치. 사용자(ownerId)가 설치한 계정/저장소. */
+export const githubInstallations = sqliteTable("github_installations", {
+  installationId: integer("installation_id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  account: text("account").notNull(),
+  accountType: text("account_type").notNull(),
+  repos: json<string[]>("repos").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("gh_inst_owner").on(t.ownerId)]);
+
+/** 서버 전역 키-값 (매니페스트로 만든 GitHub App 자격 증명 등). 값은 평문이므로 DATA_DIR 보호가 전제. */
+export const appState = sqliteTable("app_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

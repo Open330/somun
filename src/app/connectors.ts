@@ -1,0 +1,81 @@
+import { and, desc, eq, gte } from "drizzle-orm";
+import { schema } from "../infra/db/index.js";
+import { appConfigFromEnv, installationInfo, type GitHubAppConfig } from "../infra/github/app.js";
+import type { ConnectorsView } from "../shared/types.js";
+import { emit, type AppContext } from "./context.js";
+import { listSources, upsertSource } from "./sources.js";
+
+/**
+ * 커넥터: GitHub(App 설치 또는 서버 토큰), 세션 업로더. 화면 요약과 GitHub App 설치 기록.
+ * App 자격 증명은 환경변수(GITHUB_APP_*)가 우선이고, 매니페스트 플로우로 만든 것은 app_state에 저장된다.
+ */
+export function githubAppConfig(ctx: AppContext): GitHubAppConfig | null {
+  const fromEnv = appConfigFromEnv(process.env);
+  if (fromEnv) return fromEnv;
+  const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, "github_app")).get();
+  if (!row) return null;
+  const j = JSON.parse(row.value) as { id: number; pem: string; slug: string; webhook_secret?: string };
+  return { appId: String(j.id), privateKeyPem: j.pem, slug: j.slug, webhookSecret: j.webhook_secret };
+}
+
+export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string }): void {
+  const value = JSON.stringify(app);
+  ctx.db.insert(schema.appState).values({ key: "github_app", value, updatedAt: Date.now() }).onConflictDoUpdate({ target: schema.appState.key, set: { value, updatedAt: Date.now() } }).run();
+}
+
+export function listInstallations(ctx: AppContext, ownerId: string) {
+  return ctx.db.select().from(schema.githubInstallations).where(eq(schema.githubInstallations.ownerId, ownerId)).all();
+}
+
+/** 설치 콜백: 설치 정보를 읽어 기록하고, 설치 저장소를 github 소스로 등록한다. */
+export async function recordInstallation(ctx: AppContext, ownerId: string, installationId: number): Promise<{ account: string; repos: string[] }> {
+  const cfg = githubAppConfig(ctx);
+  if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+  const info = await installationInfo(cfg, installationId);
+  const now = Date.now();
+  ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: schema.githubInstallations.installationId, set: { ownerId, account: info.account, accountType: info.accountType, repos: info.repos, updatedAt: now } }).run();
+  // 설치 저장소 → 소스. 이미 있는 github 소스는 대상만 갱신.
+  const existing = listSources(ctx, ownerId).find((s) => s.kind === "github" && s.options?.installationId === String(installationId));
+  upsertSource(ctx, ownerId, { id: existing?.id, kind: "github", targets: info.repos, options: { installationId: String(installationId), account: info.account }, enabled: true });
+  emit(ctx, ownerId, { resource: "sources" });
+  return { account: info.account, repos: info.repos };
+}
+
+export function removeInstallation(ctx: AppContext, installationId: number): void {
+  const row = ctx.db.select().from(schema.githubInstallations).where(eq(schema.githubInstallations.installationId, installationId)).get();
+  if (!row) return;
+  ctx.db.delete(schema.githubInstallations).where(eq(schema.githubInstallations.installationId, installationId)).run();
+  const src = listSources(ctx, row.ownerId).find((s) => s.options?.installationId === String(installationId));
+  if (src) ctx.db.delete(schema.sources).where(eq(schema.sources.id, src.id)).run();
+  emit(ctx, row.ownerId, { resource: "sources" });
+}
+
+/** webhook의 installation id → ownerId. */
+export function ownerOfInstallation(ctx: AppContext, installationId: number): string | null {
+  return ctx.db.select().from(schema.githubInstallations).where(eq(schema.githubInstallations.installationId, installationId)).get()?.ownerId ?? null;
+}
+
+export function connectorsView(ctx: AppContext, ownerId: string): ConnectorsView {
+  const cfg = githubAppConfig(ctx);
+  const sources = listSources(ctx, ownerId);
+  const gh = sources.filter((s) => s.kind === "github");
+  const inst = listInstallations(ctx, ownerId);
+  const manual = gh.filter((s) => !s.options?.installationId).flatMap((s) => s.targets);
+  const since = Date.now() - 14 * 86400e3;
+  const sess = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.kind, "omp_session"), gte(schema.signals.occurredAt, since))).all();
+  const lastUpload = ctx.db.select().from(schema.sources).where(and(eq(schema.sources.ownerId, ownerId), eq(schema.sources.kind, "sessions"))).orderBy(desc(schema.sources.lastPolledAt)).get()?.lastPolledAt ?? undefined;
+  return {
+    github: {
+      mode: inst.length ? "app" : gh.length && ctx.env.githubToken ? "token" : "none",
+      appConfigured: Boolean(cfg),
+      appSlug: cfg?.slug,
+      installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined,
+      installations: inst.map((i) => ({ id: i.installationId, account: i.account, repos: i.repos.length, updatedAt: i.updatedAt })),
+      manualTargets: manual,
+      lastPolledAt: gh.map((s) => s.lastPolledAt ?? 0).sort().at(-1) || undefined,
+      lastError: gh.find((s) => s.lastError)?.lastError,
+    },
+    sessions: { lastUploadAt: lastUpload, sessionCount14d: sess.length, sources: [...new Set(sess.map((s) => String((s.payload as { source?: string })?.source ?? "")).filter(Boolean))] },
+  };
+}
