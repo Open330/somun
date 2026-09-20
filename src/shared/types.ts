@@ -1,6 +1,6 @@
 /** 서버와 웹이 공유하는 도메인 타입. DB 행과 API 응답의 모양. */
-import type { Channel } from "../core/channels.js";
-export type { Channel } from "../core/channels.js";
+import type { Channel, ChannelLangs } from "../core/channels.js";
+export type { Channel, ChannelLangs } from "../core/channels.js";
 
 export type SourceKind = "github" | "npm" | "blog" | "sessions" | "omp";
 export type SignalKind = "release" | "pr_merged" | "repo_created" | "readme_changed" | "star_milestone" | "download_milestone" | "blog_post" | "omp_session";
@@ -28,7 +28,8 @@ export type Settings = {
   rubricWeights: RubricScores;
   draftThreshold: number;
   deferThreshold: number;
-  enabledChannels: Channel[];
+  /** 채널별 활성 언어. 비어 있으면 그 채널은 꺼진 것. */
+  channelLangs: ChannelLangs;
   bannedPhrases: string[];
   llm: LlmConfig;
 };
@@ -41,22 +42,22 @@ export type Judgment = { id: number; candidateId: number; scores: RubricScores; 
 
 export type LintResult = { rule: string; ok: boolean; detail?: string };
 
-export type Draft = { id: number; candidateId: number; channel: Channel; version: number; title?: string; body: string; mediaHint?: string; lint: LintResult[]; status: DraftStatus; model: string; createdAt: number; updatedAt: number };
+export type Draft = { id: number; candidateId: number; channel: Channel; lang: string; version: number; title?: string; body: string; mediaHint?: string; lint: LintResult[]; status: DraftStatus; model: string; createdAt: number; updatedAt: number };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
 export type CandidateListItem = Candidate & { judgment: Judgment | null };
 
-export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number } };
+export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number } };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
 export type PublicationWithMetrics = Publication & { candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[] };
 
-export type Example = { id: number; channel: Channel; lang: "ko" | "en"; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
+export type Example = { id: number; channel: Channel; lang: string; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
 
 export type KeyStatus = { label: string; todayCount: number; cap: number; cooldownUntil?: number; cooldownReason?: string; lastUsedAt?: number; lastQuotaId?: string };
 
-export type Job = { id: number; kind: JobKind; candidateId: number; channel?: Channel; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
+export type Job = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
 
 export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[] };
 

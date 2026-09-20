@@ -8,7 +8,7 @@ import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
-import { connectorsView, githubAppConfig, recordInstallation, saveGithubApp } from "../../app/connectors.js";
+import { connectorsView, githubAppConfig, recordInstallation } from "../../app/connectors.js";
 import { appManifest } from "../../infra/github/app.js";
 import { runStep } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, registerPublication, setManualStats } from "../../app/publications.js";
@@ -19,6 +19,7 @@ import type { ChangeEvent } from "../../shared/types.js";
 import type { AuthVars } from "../auth.js";
 
 const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
+const lang = z.string().min(2).max(8).regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
 const reason = z.enum(["wrong_facts", "voice", "wrong_channel", "not_yet", "not_worth", "other"]);
 const id = (v: string) => {
   const n = Number(v);
@@ -44,7 +45,7 @@ export function apiRoutes(ctx: AppContext) {
     const input = await body(c, z.object({
       rubricWeights: z.object({ runnable: z.number(), numbers: z.number(), lesson: z.number(), novelty: z.number(), audience: z.number() }).optional(),
       draftThreshold: z.number().optional(), deferThreshold: z.number().optional(),
-      enabledChannels: z.array(channel).optional(), bannedPhrases: z.array(z.string()).optional(),
+      channelLangs: z.record(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
     }));
@@ -65,9 +66,9 @@ export function apiRoutes(ctx: AppContext) {
   app.post("/candidates/:id/override", async (c) => { const i = await body(c, z.object({ decision: z.enum(["draft", "drop"]), reason, note: z.string().optional() })); overrideJudgment(ctx, c.get("ownerId"), id(c.req.param("id")), i.decision, i.reason, i.note); return c.body(null, 204); });
   app.post("/candidates/:id/rejudge", async (c) => c.json(await runStep(ctx, c.get("ownerId"), "digest", id(c.req.param("id")))));
   app.post("/candidates/:id/redraft", async (c) => {
-    const { channels } = await body(c, z.object({ channels: z.array(channel).min(1) }));
+    const { targets } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1) }));
     const out: Record<string, unknown> = {};
-    for (const ch of channels) out[ch] = await runStep(ctx, c.get("ownerId"), "draft", id(c.req.param("id")), ch);
+    for (const t of targets) out[`${t.channel}:${t.lang}`] = await runStep(ctx, c.get("ownerId"), "draft", id(c.req.param("id")), t.channel, t.lang);
     return c.json(out);
   });
 
@@ -77,13 +78,13 @@ export function apiRoutes(ctx: AppContext) {
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
-  app.post("/publications", async (c) => c.json({ id: registerPublication(ctx, c.get("ownerId"), await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, url: z.string().url() }))) }));
+  app.post("/publications", async (c) => c.json({ id: registerPublication(ctx, c.get("ownerId"), await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.string().url() }))) }));
   app.post("/publications/:id/stats", async (c) => { setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: z.number().optional(), comments: z.number().optional(), reposts: z.number().optional() }))); return c.body(null, 204); });
 
   // examples
   app.get("/examples", (c) => c.json(listExamples(ctx, c.get("ownerId"), c.req.query("channel") as Channel | undefined)));
-  app.post("/examples", async (c) => c.json(addExample(ctx, c.get("ownerId"), await body(c, z.object({ channel, lang: z.enum(["ko", "en"]), title: z.string().optional(), body: z.string().min(1), note: z.string().optional(), source: z.enum(["seed", "approved"]).optional() })))));
-  app.post("/examples/import", async (c) => c.json({ inserted: importSeeds(ctx, c.get("ownerId"), (await body(c, z.object({ items: z.array(z.object({ channel, lang: z.enum(["ko", "en"]), title: z.string().optional(), body: z.string().min(1), note: z.string().optional() })) }))).items) }));
+  app.post("/examples", async (c) => c.json(addExample(ctx, c.get("ownerId"), await body(c, z.object({ channel, lang, title: z.string().optional(), body: z.string().min(1), note: z.string().optional(), source: z.enum(["seed", "approved"]).optional() })))));
+  app.post("/examples/import", async (c) => c.json({ inserted: importSeeds(ctx, c.get("ownerId"), (await body(c, z.object({ items: z.array(z.object({ channel, lang, title: z.string().optional(), body: z.string().min(1), note: z.string().optional() })) }))).items) }));
   app.post("/examples/:id/active", async (c) => { setExampleActive(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ active: z.boolean() }))).active); return c.body(null, 204); });
   app.delete("/examples/:id", (c) => { removeExample(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
 
@@ -101,7 +102,7 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/github/app", (c) => {
     const cfg = githubAppConfig(ctx);
     const base = publicBase(c.req.url, c.req.header("x-forwarded-proto"), c.req.header("host"));
-    return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, manifest: appManifest(base), createUrl: "https://github.com/settings/apps/new" });
+    return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, manifest: cfg ? undefined : appManifest(base), createUrl: "https://github.com/settings/apps/new" });
   });
   /** 설치 완료 후 GitHub가 보내는 곳. 로그인된 브라우저에서 열리므로 ownerId를 안다. */
   app.get("/github/setup", async (c) => {
@@ -110,17 +111,6 @@ export function apiRoutes(ctx: AppContext) {
     const r = await recordInstallation(ctx, c.get("ownerId"), id);
     return c.json({ ok: true, ...r });
   });
-  /** 매니페스트 플로우 콜백: code → 앱 자격 증명. 첫 관리자가 한 번 호출한다. */
-  app.get("/github/app/created", async (c) => {
-    const code = c.req.query("code");
-    if (!code) return c.json({ error: "code required" }, 400);
-    const res = await fetch(`https://api.github.com/app-manifests/${code}/conversions`, { method: "POST", headers: { Accept: "application/vnd.github+json", "User-Agent": "somun" } });
-    if (!res.ok) return c.json({ error: `github ${res.status}` }, 502);
-    const j = (await res.json()) as { id: number; slug: string; pem: string; webhook_secret?: string };
-    saveGithubApp(ctx, { id: j.id, slug: j.slug, pem: j.pem, webhook_secret: j.webhook_secret });
-    return c.redirect(`https://github.com/apps/${j.slug}/installations/new`);
-  });
-
   // SSE: 내 자원이 바뀌면 알려준다. 화면은 다시 fetch.
   app.get("/events", (c) => {
     const ownerId = c.get("ownerId");

@@ -1,7 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
 
-export const CHANNEL_LABEL: Record<string, string> = { x_en: "X (en)", x_ko: "X (ko)", threads: "Threads", linkedin_ko: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog_outline: "블로그 개요" };
+export const CHANNEL_LABEL: Record<string, string> = { x: "X", threads: "Threads", linkedin: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog: "블로그 개요" };
+/** "X · EN" 처럼 채널과 언어를 함께. 고정 언어 채널은 채널 이름만. */
+export function targetLabel(channel: string, lang?: string, fixed?: boolean): string {
+  const base = CHANNEL_LABEL[channel] ?? channel;
+  return lang && !fixed ? `${base} · ${lang.toUpperCase()}` : base;
+}
 export const TYPE_LABEL: Record<string, string> = { release: "릴리스", "new-repo": "새 저장소", milestone: "마일스톤", blog: "블로그", "in-progress": "진행 중" };
 export const CRITERIA: [keyof Judgment["scores"], string, string][] = [
   ["runnable", "실행 가능", "링크 눌러 1분 안에 써볼 수 있는가"],

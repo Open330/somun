@@ -2,7 +2,7 @@ import type { Channel } from "@core/channels";
 
 /** 채널 모양대로 보여주는 미리보기. 글자 수와 줄바꿈이 실제 화면과 비슷하게 읽히도록. */
 export function ChannelPreview({ channel, title, body, author }: { channel: Channel; title?: string; body: string; author: string }) {
-  if (channel === "x_en" || channel === "x_ko" || channel === "threads") {
+  if (channel === "x" || channel === "threads") {
     return (
       <div className="pv pv-x">
         <div className="pv-head"><span className="pv-avatar" /><b>{author}</b><span className="muted">@{author.toLowerCase().replace(/\s+/g, "")} · 지금</span></div>
@@ -28,7 +28,7 @@ export function ChannelPreview({ channel, title, body, author }: { channel: Chan
       </div>
     );
   }
-  if (channel === "linkedin_ko") {
+  if (channel === "linkedin") {
     const [first, ...rest] = body.split("\n");
     return (
       <div className="pv pv-li">

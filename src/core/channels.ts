@@ -1,158 +1,103 @@
 /**
- * 채널 어댑터 정의. 형식 제약과 초안 프롬프트 조각.
- * 순수 데이터 — 서버와 브라우저 양쪽에서 import 가능.
+ * 채널 = 플랫폼. 언어는 채널의 설정이다 (채널마다 여러 언어, 코드는 자유).
+ * 초안은 (channel, lang) 쌍으로 만들어진다. Show HN처럼 언어가 고정된 채널도 있다.
  */
-
-export type Channel =
-  | "x_en"
-  | "x_ko"
-  | "threads"
-  | "linkedin_ko"
-  | "show_hn"
-  | "show_gn"
-  | "blog_outline";
-
-export type Lang = "ko" | "en";
+export type Channel = "x" | "threads" | "linkedin" | "show_hn" | "show_gn" | "blog";
 
 export type ChannelSpec = {
   id: Channel;
   label: string;
-  lang: Lang;
+  /** 고정 언어가 있으면 그 언어만. 없으면 사용자가 고른다. */
+  fixedLang?: string;
+  defaultLangs: string[];
   maxChars: number | null;
   hasTitle: boolean;
   titleMaxChars?: number;
-  /** 초안 작성 규칙 (LLM에 그대로 전달) */
+  /** 언어와 무관한 형식 규칙 (LLM에 그대로 전달) */
   rules: string;
-  /** 사람이 붙일 이미지 안내 */
   mediaHint: string;
-  /** 발행 화면으로 가는 링크 */
   composeUrl: string;
   /** 복사한 뒤 올리기 전에 확인할 것 */
   runbook: string[];
 };
 
 export const CHANNELS: Record<Channel, ChannelSpec> = {
-  x_en: {
-    id: "x_en",
-    label: "X (English)",
-    lang: "en",
-    maxChars: 280,
-    hasTitle: false,
-    rules: [
-      "Exactly three short lines separated by blank lines.",
-      "Line 1: the concrete problem, in first person, past tense, no adjectives.",
-      "Line 2: what the tool does about it (one sentence).",
-      "Line 3: one number or one limitation, then the link.",
-      "No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
-    ].join(" "),
+  x: {
+    id: "x", label: "X", defaultLangs: ["en", "ko"], maxChars: 280, hasTitle: false,
+    rules: "Exactly three short lines separated by blank lines. Line 1: the concrete problem, first person, past tense, no adjectives. Line 2: what the tool does about it, one sentence. Line 3: one number or one limitation, then the link. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
     mediaHint: "터미널 GIF 또는 실제 출력 스크린샷 1장 (홈 경로·내부 브랜치명 가리기)",
     composeUrl: "https://x.com/compose/post",
-    runbook: ["이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)","링크는 본문 마지막 줄에","올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
-  },
-  x_ko: {
-    id: "x_ko",
-    label: "X (한국어)",
-    lang: "ko",
-    maxChars: 280,
-    hasTitle: false,
-    rules: [
-      "세 줄. 빈 줄로 구분.",
-      "1줄: 겪은 문제를 1인칭 과거형으로, 수식어 없이.",
-      "2줄: 도구가 그 문제에 무엇을 하는지 한 문장.",
-      "3줄: 숫자 하나 또는 한계 하나, 그리고 링크.",
-      "존댓말 평서형('만들었습니다'). 해시태그·이모지·감탄부호 금지.",
-    ].join(" "),
-    mediaHint: "x_en과 같은 이미지",
-    composeUrl: "https://x.com/compose/post",
-    runbook: ["x_en과 같은 이미지","같은 날 GeekNews Show GN과 함께"],
+    runbook: ["이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
   },
   threads: {
-    id: "threads",
-    label: "Threads",
-    lang: "ko",
-    maxChars: 500,
-    hasTitle: false,
-    rules: [
-      "1~2문장. 대화체 반말 또는 가벼운 존댓말.",
-      "정보 전달이 아니라 입장을 취하거나 질문으로 끝낸다.",
-      "링크는 넣지 않는다 (댓글에 단다).",
-    ].join(" "),
+    id: "threads", label: "Threads", defaultLangs: ["ko"], maxChars: 500, hasTitle: false,
+    rules: "One or two sentences, conversational. Take a position or end with a question rather than informing. No link in the body (it goes in the first reply).",
     mediaHint: "선택. 스크린샷 1장이면 충분",
     composeUrl: "https://www.threads.net/",
-    runbook: ["링크는 본문이 아니라 첫 댓글에","올린 뒤 30~60분은 답글에 바로 반응 (초기 반응이 노출을 결정)"],
+    runbook: ["링크는 본문이 아니라 첫 댓글에", "올린 뒤 30~60분은 답글에 바로 반응 (초기 반응이 노출을 결정)"],
   },
-  linkedin_ko: {
-    id: "linkedin_ko",
-    label: "LinkedIn (한국어)",
-    lang: "ko",
-    maxChars: 3000,
-    hasTitle: false,
-    rules: [
-      "첫 줄은 결과 또는 문제 한 문장. 접힘선 위에서 끝나야 하므로 40자 이내.",
-      "본문 3~5문단: 문제 → 만든 것 → 숫자/전후 → 배운 것 → 링크.",
-      "문단당 2~3문장. 이모지 목록 금지. 해시태그는 마지막 줄에 최대 3개.",
-      "존댓말. '공유드립니다', '소개합니다' 같은 관용구 금지.",
-    ].join(" "),
+  linkedin: {
+    id: "linkedin", label: "LinkedIn", defaultLangs: ["ko"], maxChars: 3000, hasTitle: false,
+    rules: "First line is the result or the problem in one sentence, under 40 characters so it ends above the fold. Then 3-5 paragraphs: problem → what was built → numbers or before/after → what was learned → link. 2-3 sentences per paragraph. No emoji bullets. Hashtags only on the last line, at most 3. No 'excited to share' phrasing.",
     mediaHint: "실제 데이터가 보이는 스크린샷 1장 (대시보드, 터미널 출력, 전후 비교)",
     composeUrl: "https://www.linkedin.com/feed/?shareActive=true",
-    runbook: ["첫 줄이 접힘선 위에서 끝나는지 확인 (40자)","실제 데이터가 보이는 스크린샷 1장","해시태그는 마지막 줄 최대 3개"],
+    runbook: ["첫 줄이 접힘선 위에서 끝나는지 확인 (40자)", "실제 데이터가 보이는 스크린샷 1장", "해시태그는 마지막 줄 최대 3개"],
   },
   show_hn: {
-    id: "show_hn",
-    label: "Show HN",
-    lang: "en",
-    maxChars: 2000,
-    hasTitle: true,
-    titleMaxChars: 80,
-    rules: [
-      "Title: 'Show HN: <Name> – <plain one-line description>'. No adjectives, no hype, under 80 chars.",
-      "Body is the author's first comment, posted right after submission.",
-      "Paragraph 1: the specific problem and who has it.",
-      "Paragraph 2: what it does and the mechanism, 2-3 sentences.",
-      "Paragraph 3: design choices worth arguing about.",
-      "Paragraph 4: 'Limitations:' followed by 2-3 honest ones.",
-      "Last paragraph: one genuine open question for the reader.",
-      "Never ask for upvotes. No emoji. No exclamation marks.",
-    ].join(" "),
+    id: "show_hn", label: "Show HN", fixedLang: "en", defaultLangs: ["en"], maxChars: 2000, hasTitle: true, titleMaxChars: 80,
+    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is the author's first comment posted right after submission. Paragraph 1: the specific problem and who has it. Paragraph 2: what it does and the mechanism, 2-3 sentences. Paragraph 3: design choices worth arguing about. Paragraph 4: 'Limitations:' followed by 2-3 honest ones. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
     mediaHint: "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
     composeUrl: "https://news.ycombinator.com/submit",
-    runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁","제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함","제출 직후 위 본문을 첫 댓글로","48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게","어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
+    runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁", "제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함", "제출 직후 위 본문을 첫 댓글로", "48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게", "어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
   },
   show_gn: {
-    id: "show_gn",
-    label: "Show GN (GeekNews)",
-    lang: "ko",
-    maxChars: 3000,
-    hasTitle: true,
-    titleMaxChars: 80,
-    rules: [
-      "제목: 'Show GN: <이름> - <한 줄 설명>'.",
-      "본문 절 순서: 무엇을 만들었나 / 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 / 듣고 싶은 피드백.",
-      "각 절은 소제목 한 줄과 항목 2~4개. 마케팅 어휘('혁신', '강력한', '손쉽게') 금지.",
-      "사실만. 실행 명령 하나 포함. 투표·댓글 요청 금지.",
-    ].join(" "),
+    id: "show_gn", label: "Show GN", fixedLang: "ko", defaultLangs: ["ko"], maxChars: 3000, hasTitle: true, titleMaxChars: 80,
+    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Sections in order, each a one-line heading plus 2-4 items: 무엇을 만들었나 / 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 / 듣고 싶은 피드백. Facts only, no marketing words. Include one runnable command. Never ask for votes or comments.",
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
-    runbook: ["사실만, 마케팅 어휘 없이 (GeekNews 가이드)","지인에게 추천·댓글 부탁 금지","버전마다 재등록 금지. 큰 변화가 있을 때만"],
+    runbook: ["사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],
   },
-  blog_outline: {
-    id: "blog_outline",
-    label: "블로그 개요",
-    lang: "ko",
-    maxChars: 2000,
-    hasTitle: true,
-    titleMaxChars: 60,
-    rules: [
-      "본문을 쓰지 않는다. 개요만.",
-      "제목 후보 3개(각 30자 이내, 숫자나 구체적 상황 포함).",
-      "절 구조 4~6개, 각 절에 넣을 사실·숫자·스크린샷을 한 줄씩.",
-      "마지막에 '독자에게 물을 것' 한 줄.",
-    ].join(" "),
+  blog: {
+    id: "blog", label: "블로그 개요", defaultLangs: ["ko"], maxChars: 2000, hasTitle: true, titleMaxChars: 60,
+    rules: "Do not write the article. Outline only: 3 title candidates (each under 30 characters, with a number or a concrete situation), 4-6 sections each with one line on which facts, numbers or screenshots go there, and a final line 'what to ask the reader'.",
     mediaHint: "",
     composeUrl: "",
-    runbook: ["개요를 블로그 저장소의 초안으로 옮겨 본문을 씀","발행 후 URL을 등록하면 다른 채널에 재배포 후보가 됨"],
+    runbook: ["개요를 블로그 저장소의 초안으로 옮겨 본문을 씀", "발행 후 URL을 등록하면 다른 채널에 재배포 후보가 됨"],
   },
 };
 
 export const ALL_CHANNELS = Object.keys(CHANNELS) as Channel[];
-export const DEFAULT_ENABLED_CHANNELS: Channel[] = ["x_en", "x_ko", "linkedin_ko", "show_hn", "show_gn"];
+
+/** 채널별 언어 설정. 기본값. */
+export type ChannelLangs = Partial<Record<Channel, string[]>>;
+export const DEFAULT_CHANNEL_LANGS: ChannelLangs = { x: ["en", "ko"], linkedin: ["ko"], show_hn: ["en"], show_gn: ["ko"] };
+
+/** 설정에서 활성화된 (channel, lang) 쌍. 고정 언어 채널은 설정과 무관하게 그 언어. */
+export function enabledTargets(langs: ChannelLangs): { channel: Channel; lang: string }[] {
+  const out: { channel: Channel; lang: string }[] = [];
+  for (const ch of ALL_CHANNELS) {
+    const spec = CHANNELS[ch];
+    const list = langs[ch];
+    if (!list || list.length === 0) continue;
+    for (const lang of spec.fixedLang ? [spec.fixedLang] : list) out.push({ channel: ch, lang });
+  }
+  return out;
+}
+
+/** 언어 코드 → 이름과 문체 힌트. 목록에 없는 코드도 쓸 수 있다 (이름은 코드 그대로). */
+export const LANGS: Record<string, { name: string; nativeName: string; style: string }> = {
+  en: { name: "English", nativeName: "English", style: "Plain, direct, no exclamation marks." },
+  ko: { name: "Korean", nativeName: "한국어", style: "존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장." },
+  ja: { name: "Japanese", nativeName: "日本語", style: "です・ます調。誇張なし。" },
+  zh: { name: "Chinese (Simplified)", nativeName: "简体中文", style: "平实直接，避免营销用语。" },
+  es: { name: "Spanish", nativeName: "Español", style: "Registro neutro, sin exclamaciones." },
+  de: { name: "German", nativeName: "Deutsch", style: "Sachlich, ohne Superlative." },
+  fr: { name: "French", nativeName: "Français", style: "Ton sobre, sans superlatifs." },
+  pt: { name: "Portuguese", nativeName: "Português", style: "Registro neutro, sem exclamações." },
+};
+export function langName(code: string): string { return LANGS[code]?.nativeName ?? code; }
+export function langInstruction(code: string): string {
+  const l = LANGS[code];
+  return l ? `Write in ${l.name}. ${l.style}` : `Write in the language with code "${code}".`;
+}
+export const targetKey = (channel: string, lang: string) => `${channel}:${lang}`;

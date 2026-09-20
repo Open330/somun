@@ -4,10 +4,10 @@ import type { Channel, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
 
-export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; url: string }): number {
+export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
   const now = Date.now();
-  const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, url: input.url, publishedAt: now }).run().lastInsertRowid);
+  const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url: input.url, publishedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(eq(schema.candidates.id, input.candidateId)).run();
   if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
   emit(ctx, ownerId, { resource: "publications", id });

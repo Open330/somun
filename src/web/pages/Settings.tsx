@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ALL_CHANNELS, CHANNELS, type Channel } from "@core/channels";
+import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import type { KeyStatus, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, CRITERIA, Skeleton, Toast, fmtDate, useToast } from "../components/ui";
 import { patch, useResource } from "../lib/api";
@@ -23,7 +23,7 @@ export default function Settings() {
   }, [settings]);
   if (!settings) return <Skeleton rows={4} />;
 
-  const toggleChannel = (ch: Channel) => void update({ enabledChannels: settings.enabledChannels.includes(ch) ? settings.enabledChannels.filter((c) => c !== ch) : [...settings.enabledChannels, ch] });
+  const setLangs = (ch: Channel, langs: string[]) => void update({ channelLangs: { ...settings.channelLangs, [ch]: langs } });
 
   return (
     <>
@@ -60,14 +60,9 @@ export default function Settings() {
       )}
 
       {tab === "channels" && (
-        <div className="card stack" style={{ maxWidth: 720 }}>
-          <p className="small muted">켜진 채널마다 초안이 만들어집니다. 규칙은 각 채널의 형식과 언어를 따릅니다.</p>
-          {ALL_CHANNELS.map((ch) => (
-            <label key={ch} className="row between" style={{ padding: "8px 0", borderTop: "1px solid var(--line)" }}>
-              <span><b>{CHANNEL_LABEL[ch]}</b> <span className="tiny muted">{CHANNELS[ch].lang} · {CHANNELS[ch].maxChars ? `${CHANNELS[ch].maxChars}자` : "제한 없음"}</span><div className="tiny muted" style={{ maxWidth: 520 }}>{CHANNELS[ch].rules.split(". ")[0]}.</div></span>
-              <input type="checkbox" style={{ width: "auto" }} checked={settings.enabledChannels.includes(ch)} onChange={() => toggleChannel(ch)} />
-            </label>
-          ))}
+        <div className="card stack" style={{ maxWidth: 760 }}>
+          <p className="small muted">채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).</p>
+          {ALL_CHANNELS.map((ch) => <ChannelLangRow key={ch} ch={ch} langs={settings.channelLangs[ch] ?? []} onChange={(l) => setLangs(ch, l)} />)}
         </div>
       )}
 
@@ -107,5 +102,29 @@ export default function Settings() {
       )}
       <Toast msg={toast} />
     </>
+  );
+}
+
+function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[]; onChange: (l: string[]) => void }) {
+  const spec = CHANNELS[ch];
+  const [custom, setCustom] = useState("");
+  const on = langs.length > 0;
+  const common = Object.keys(LANGS);
+  return (
+    <div className="row between wrap" style={{ padding: "10px 0", borderTop: "1px solid var(--line)", alignItems: "flex-start" }}>
+      <div style={{ minWidth: 200 }}>
+        <label className="row" style={{ gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={on} onChange={() => onChange(on ? [] : spec.defaultLangs)} /><b>{CHANNEL_LABEL[ch]}</b></label>
+        <div className="tiny muted" style={{ maxWidth: 360 }}>{spec.maxChars ? `${spec.maxChars}자` : "길이 제한 없음"}{spec.fixedLang ? ` · ${langName(spec.fixedLang)} 고정` : ""}</div>
+      </div>
+      {spec.fixedLang ? (
+        <span className="badge outline">{langName(spec.fixedLang)}</span>
+      ) : (
+        <div className="row wrap" style={{ gap: 6, maxWidth: 420, justifyContent: "flex-end" }}>
+          {common.map((code) => <button key={code} className={`sm ${langs.includes(code) ? "active" : "ghost"}`} onClick={() => onChange(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code])}>{LANGS[code].nativeName}</button>)}
+          {langs.filter((l) => !common.includes(l)).map((code) => <button key={code} className="sm active" onClick={() => onChange(langs.filter((l) => l !== code))}>{code} ×</button>)}
+          <input placeholder="코드 추가" value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
+        </div>
+      )}
+    </div>
   );
 }

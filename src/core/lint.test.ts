@@ -5,10 +5,10 @@ import { clusterKeyFor, crossedThreshold } from "./cluster.js";
 describe("lintDraft", () => {
   it("passes a plain three-line X post with a number, a limit, and a link", () => {
     const body = "I kept finding my agents stuck 30 minutes after they asked.\n\nmuxa shows which one is waiting.\n\n61 releases, no Windows yet. https://github.com/Open330/muxa";
-    expect(lintPassed(lintDraft("x_en", undefined, body))).toBe(true);
+    expect(lintPassed(lintDraft("x", undefined, body))).toBe(true);
   });
   it("fails on banned phrases and exclamation", () => {
-    const r = lintDraft("x_en", undefined, "Excited to announce muxa! 61 releases https://x.y");
+    const r = lintDraft("x", undefined, "Excited to announce muxa! 61 releases https://x.y");
     expect(r.find((x) => x.rule === "banned_phrases")?.ok).toBe(false);
     expect(r.find((x) => x.rule === "no_exclamation")?.ok).toBe(false);
   });

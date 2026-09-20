@@ -4,7 +4,7 @@
  * 원칙: 원자료(커밋 제목, PR 제목, README, omp 세션)는 다이제스트만 본다.
  * 판단과 초안은 다이제스트가 추린 highlights + 기본 사실만 본다. 전체를 넘기지 않는다.
  */
-import { CHANNELS, type Channel } from "./channels.js";
+import { CHANNELS, langInstruction, langName, type Channel } from "./channels.js";
 
 export type EvidenceLike = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
@@ -100,7 +100,7 @@ export const JUDGE_SCHEMA = {
       additionalProperties: false,
     },
     reasoning: { type: "string" },
-    suggestedChannels: { type: "array", items: { type: "string", enum: ["x_en", "x_ko", "threads", "linkedin_ko", "show_hn", "show_gn", "blog_outline"] } },
+    suggestedChannels: { type: "array", items: { type: "string", enum: ["x", "threads", "linkedin", "show_hn", "show_gn", "blog"] } },
     angle: { type: "string" },
   },
   required: ["scores", "reasoning", "suggestedChannels", "angle"],
@@ -134,10 +134,10 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
-export function draftPrompt(c: CandidateLike, channel: Channel, examples: { source: string; title?: string; body: string }[], angle?: string): PromptSpec {
+export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string): PromptSpec {
   const spec = CHANNELS[channel];
   const exampleText = examples.length
-    ? `## Examples of the voice to match (${spec.lang})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
+    ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
     : "";
   return {
     schemaName: "draft",
@@ -150,9 +150,10 @@ Hard rules:
 - Use the numbers from "Numbers you may use" directly. Write [number needed] only when that line has no matching number.
 - No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.
 - Match the voice of the Examples: sentence length, register, how they open and close. Examples are for voice, not for facts.
-- Write in the channel's language. title must be an empty string if the channel has no title.`,
+- title must be an empty string if the channel has no title.`,
     user: [
-      `## Channel: ${spec.label}`,
+      `## Channel: ${spec.label} · Language: ${langName(lang)}`,
+      langInstruction(lang),
       `Rules: ${spec.rules}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.hasTitle ? `A title is required (max ${spec.titleMaxChars} chars).` : "No title (return empty string).",

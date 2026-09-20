@@ -77,7 +77,7 @@ export function appManifest(baseUrl: string) {
     description: "PR for developers who'd rather build than announce. Reads releases, PRs and commits to draft posts you review.",
     hook_attributes: { url: `${baseUrl}/api/webhooks/github` },
     redirect_url: `${baseUrl}/api/github/app/created`,
-    setup_url: `${baseUrl}/api/github/setup`,
+    setup_url: `${baseUrl}/github/setup`,
     setup_on_update: true,
     public: false,
     default_permissions: { contents: "read", metadata: "read", pull_requests: "read", issues: "read" },

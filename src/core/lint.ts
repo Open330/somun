@@ -46,20 +46,20 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
 
-  if (channel === "x_en" || channel === "x_ko") {
+  if (channel === "x") {
     const ok = NUMBER.test(body) || LIMITATION_HINT.test(body);
     results.push({ rule: "has_number_or_limit", ok, detail: ok ? undefined : "숫자 하나 또는 한계 하나가 필요합니다" });
-  } else if (channel !== "threads" && channel !== "blog_outline") {
+  } else if (channel !== "threads" && channel !== "blog") {
     results.push({ rule: "has_number", ok: NUMBER.test(body), detail: NUMBER.test(body) ? undefined : "숫자 하나가 필요합니다" });
     results.push({ rule: "has_limitation", ok: LIMITATION_HINT.test(body), detail: LIMITATION_HINT.test(body) ? undefined : "한계 하나가 필요합니다" });
   }
   results.push({ rule: "no_placeholder", ok: !/\[(number needed|숫자 확인)\]/i.test(body), detail: "채우지 못한 숫자가 있습니다" });
 
-  if (channel === "x_en" || channel === "x_ko" || channel === "linkedin_ko") {
+  if (channel === "x" || channel === "linkedin") {
     results.push({ rule: "has_link", ok: LINK.test(body) });
   }
 
-  if (channel === "show_hn" || channel === "x_en" || channel === "x_ko") {
+  if (channel === "show_hn" || channel === "x") {
     results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(body) });
   }
 

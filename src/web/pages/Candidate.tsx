@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CHANNELS, type Channel } from "@core/channels";
+import { CHANNELS, enabledTargets, targetKey, type Channel } from "@core/channels";
 import type { CandidateDetail, Draft, SettingsView } from "@shared/types";
-import { CHANNEL_LABEL, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, useToast } from "../components/ui";
+import { CHANNEL_LABEL, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, targetLabel, useToast } from "../components/ui";
 import { ChannelPreview, WordDiff } from "../components/preview";
 import { post, useResource } from "../lib/api";
 import { useAuth } from "../lib/auth/context";
@@ -17,16 +17,21 @@ export default function Candidate() {
   const { data } = useResource<CandidateDetail>(`/candidates/${cid}`, ["candidates", "drafts", "publications"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [tab, setTab] = useState<Channel | null>(null);
+  const [tab, setTab] = useState<string | null>(null); // targetKey(channel, lang)
   const [toast, showToast] = useToast();
 
-  const draftsByChannel = useMemo(() => {
-    const m = new Map<Channel, Draft[]>();
-    for (const d of data?.drafts ?? []) m.set(d.channel, [...(m.get(d.channel) ?? []), d]);
+  const draftsByTarget = useMemo(() => {
+    const m = new Map<string, Draft[]>();
+    for (const d of data?.drafts ?? []) { const k = targetKey(d.channel, d.lang); m.set(k, [...(m.get(k) ?? []), d]); }
     return m;
   }, [data?.drafts]);
-  const channels = useMemo(() => [...new Set([...draftsByChannel.keys(), ...(settings?.enabledChannels ?? [])])] as Channel[], [draftsByChannel, settings?.enabledChannels]);
-  useEffect(() => { if (!tab && channels.length) setTab(channels[0]); }, [channels, tab]);
+  const targets = useMemo(() => {
+    const enabled = enabledTargets(settings?.channelLangs ?? {});
+    const fromDrafts = [...draftsByTarget.keys()].map((k) => { const [channel, lang] = k.split(":"); return { channel: channel as Channel, lang }; });
+    const seen = new Set<string>();
+    return [...enabled, ...fromDrafts].filter((t) => { const k = targetKey(t.channel, t.lang); if (seen.has(k)) return false; seen.add(k); return true; });
+  }, [draftsByTarget, settings?.channelLangs]);
+  useEffect(() => { if (!tab && targets.length) setTab(targetKey(targets[0].channel, targets[0].lang)); }, [targets, tab]);
 
   if (!data) return <Skeleton rows={6} />;
   const { candidate: c, judgments, publications } = data;
@@ -36,7 +41,8 @@ export default function Candidate() {
   const angle = j?.reasoning.split("각도: ")[1]?.trim();
   const reasoning = j?.reasoning.split("\n\n각도:")[0];
   const decision = j?.overriddenDecision ?? j?.decision;
-  const redraftAll = async () => { setBusy("draft"); try { await post(`/candidates/${cid}/redraft`, { channels: settings?.enabledChannels ?? [] }); } finally { setBusy(null); } };
+  const redraftAll = async () => { setBusy("draft"); try { await post(`/candidates/${cid}/redraft`, { targets: enabledTargets(settings?.channelLangs ?? {}) }); } finally { setBusy(null); } };
+  const current = targets.find((t) => targetKey(t.channel, t.lang) === tab) ?? null;
 
   return (
     <>
@@ -90,15 +96,15 @@ export default function Candidate() {
         <section>
           <h2>초안</h2>
           <div className="chtabs">
-            {channels.map((ch) => {
-              const ds = draftsByChannel.get(ch) ?? [];
-              const live = ds.find((d) => d.status !== "dropped");
-              const pub = publications.find((p) => p.channel === ch);
-              return <button key={ch} className={tab === ch ? "active" : ""} onClick={() => setTab(ch)}>{CHANNEL_LABEL[ch] ?? ch}<span className="st">{pub ? "✓ 올림" : live ? (live.status === "copied" ? "복사됨" : live.lint.every((l) => l.ok) ? "●" : "!") : busy === "draft" || stage.busy ? "…" : "+"}</span></button>;
+            {targets.map((t) => {
+              const k = targetKey(t.channel, t.lang);
+              const live = (draftsByTarget.get(k) ?? []).find((d) => d.status !== "dropped");
+              const pub = publications.find((p) => p.channel === t.channel && (p.lang ?? t.lang) === t.lang);
+              return <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{targetLabel(t.channel, t.lang, Boolean(CHANNELS[t.channel].fixedLang))}<span className="st">{pub ? "✓ 올림" : live ? (live.status === "copied" ? "복사됨" : live.lint.every((l) => l.ok) ? "●" : "!") : busy === "draft" || stage.busy ? "…" : "+"}</span></button>;
             })}
           </div>
-          {tab && <DraftPanel cid={cid} channel={tab} drafts={draftsByChannel.get(tab) ?? []} published={publications.find((p) => p.channel === tab)?.url} busy={busy === `draft:${tab}` || busy === "draft"} showToast={showToast}
-            onRedraft={async () => { setBusy(`draft:${tab}`); try { await post(`/candidates/${cid}/redraft`, { channels: [tab] }); } finally { setBusy(null); } }} />}
+          {current && <DraftPanel key={tab!} cid={cid} channel={current.channel} lang={current.lang} drafts={draftsByTarget.get(tab!) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url} busy={busy === `draft:${tab}` || busy === "draft"} showToast={showToast}
+            onRedraft={async () => { setBusy(`draft:${tab}`); try { await post(`/candidates/${cid}/redraft`, { targets: [current] }); } finally { setBusy(null); } }} />}
         </section>
       </div>
       <Toast msg={toast} />
@@ -106,7 +112,7 @@ export default function Candidate() {
   );
 }
 
-function DraftPanel({ cid, channel, drafts, published, busy, onRedraft, showToast }: { cid: number; channel: Channel; drafts: Draft[]; published?: string; busy: boolean; onRedraft: () => Promise<void>; showToast: (m: string) => void }) {
+function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, showToast }: { cid: number; channel: Channel; lang: string; drafts: Draft[]; published?: string; busy: boolean; onRedraft: () => Promise<void>; showToast: (m: string) => void }) {
   const latest = [...drafts].sort((a, b) => b.version - a.version).find((d) => d.status !== "dropped") ?? null;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
@@ -142,7 +148,7 @@ function DraftPanel({ cid, channel, drafts, published, busy, onRedraft, showToas
 
   if (published) return <div className="card"><p className="small"><span className="badge ok">올림</span> <a href={published} target="_blank" rel="noreferrer">{published}</a></p><p className="tiny muted">발행 화면에서 스타·방문자 변화를 봅니다.</p></div>;
   if (!latest) {
-    return <div className="card"><p className="muted small">이 채널 초안이 아직 없습니다.</p><button className="primary" disabled={busy} onClick={() => void onRedraft()}>{busy ? "쓰는 중…" : `${spec.label} 초안 쓰기`}</button></div>;
+    return <div className="card"><p className="muted small">{targetLabel(channel, lang, Boolean(spec.fixedLang))} 초안이 아직 없습니다.</p><button className="primary" disabled={busy} onClick={() => void onRedraft()}>{busy ? "쓰는 중…" : "초안 쓰기"}</button></div>;
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
 
@@ -192,11 +198,11 @@ function DraftPanel({ cid, channel, drafts, published, busy, onRedraft, showToas
 
       {step === "post" && !editing && (
         <div className="step-post">
-          <div className="row between"><b>올리기 전 확인 · {spec.label}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{spec.label} 작성 화면 열기 ↗</a>}</div>
+          <div className="row between"><b>올리기 전 확인 · {targetLabel(channel, lang, Boolean(spec.fixedLang))}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{spec.label} 작성 화면 열기 ↗</a>}</div>
           <ol>{spec.runbook.map((r, i) => <li key={i}>{r}</li>)}</ol>
           <div className="row">
             <input placeholder="올렸으면 URL을 붙여 넣으세요" value={url} onChange={(ev) => setUrl(ev.target.value)} />
-            <button className="primary" disabled={!/^https?:\/\//.test(url)} onClick={async () => { await post("/publications", { candidateId: cid, draftId: latest.id, channel, url }); setUrl(""); showToast("등록했습니다. 발행 화면에서 추이를 봅니다."); }}>올렸어요</button>
+            <button className="primary" disabled={!/^https?:\/\//.test(url)} onClick={async () => { await post("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url }); setUrl(""); showToast("등록했습니다. 발행 화면에서 추이를 봅니다."); }}>올렸어요</button>
           </div>
         </div>
       )}

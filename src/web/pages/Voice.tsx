@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ALL_CHANNELS, CHANNELS, type Channel } from "@core/channels";
+import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import type { Example } from "@shared/types";
 import { CHANNEL_LABEL, Skeleton, Toast, relTime, useToast } from "../components/ui";
 import { del, post, useResource } from "../lib/api";
@@ -10,7 +10,7 @@ export default function Voice() {
   const [ch, setCh] = useState<Channel | "all">("all");
   const [openId, setOpenId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState<{ channel: Channel; title: string; body: string }>({ channel: "x_en", title: "", body: "" });
+  const [draft, setDraft] = useState<{ channel: Channel; lang: string; title: string; body: string }>({ channel: "x", lang: "en", title: "", body: "" });
   const [toast, showToast] = useToast();
   if (!examples) return <Skeleton rows={4} />;
   const list = examples.filter((e) => ch === "all" || e.channel === ch);
@@ -25,9 +25,9 @@ export default function Voice() {
       </div>
       {adding && (
         <div className="card stack" style={{ marginBottom: 16 }}>
-          <div className="row"><select value={draft.channel} onChange={(ev) => setDraft({ ...draft, channel: ev.target.value as Channel })}>{ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}</select>{CHANNELS[draft.channel].hasTitle && <input placeholder="제목" value={draft.title} onChange={(ev) => setDraft({ ...draft, title: ev.target.value })} />}</div>
+          <div className="row"><select value={draft.channel} onChange={(ev) => { const c = ev.target.value as Channel; setDraft({ ...draft, channel: c, lang: CHANNELS[c].fixedLang ?? draft.lang }); }}>{ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABEL[c]}</option>)}</select><select value={draft.lang} disabled={Boolean(CHANNELS[draft.channel].fixedLang)} onChange={(ev) => setDraft({ ...draft, lang: ev.target.value })}>{Object.keys(LANGS).map((l) => <option key={l} value={l}>{langName(l)}</option>)}</select>{CHANNELS[draft.channel].hasTitle && <input placeholder="제목" value={draft.title} onChange={(ev) => setDraft({ ...draft, title: ev.target.value })} />}</div>
           <textarea placeholder="내가 실제로 올렸거나 올리고 싶은 문장" value={draft.body} onChange={(ev) => setDraft({ ...draft, body: ev.target.value })} style={{ minHeight: 110 }} />
-          <div><button className="primary" disabled={!draft.body.trim()} onClick={async () => { await post("/examples", { channel: draft.channel, lang: CHANNELS[draft.channel].lang, title: draft.title || undefined, body: draft.body }); setDraft({ ...draft, body: "", title: "" }); setAdding(false); showToast("추가했습니다"); }}>추가</button></div>
+          <div><button className="primary" disabled={!draft.body.trim()} onClick={async () => { await post("/examples", { channel: draft.channel, lang: draft.lang, title: draft.title || undefined, body: draft.body }); setDraft({ ...draft, body: "", title: "" }); setAdding(false); showToast("추가했습니다"); }}>추가</button></div>
         </div>
       )}
       <div className="chtabs">
@@ -39,7 +39,7 @@ export default function Voice() {
           {list.map((e) => (
             <div key={e.id} className="rowi" style={{ gridTemplateColumns: "minmax(0,1fr) auto", cursor: "default" }}>
               <div style={{ minWidth: 0 }}>
-                <div className="row wrap" style={{ gap: 6, marginBottom: 2 }}><span className="badge outline">{CHANNEL_LABEL[e.channel]}</span><span className={`badge ${e.source === "seed" ? "" : "ok"}`}>{e.source === "seed" ? "참고" : e.source === "edited" ? "내가 고침" : "내가 승인"}</span>{!e.active && <span className="badge bad">비활성</span>}<span className="tiny muted">{relTime(e.createdAt)}{e.note ? ` · ${e.note}` : ""}</span></div>
+                <div className="row wrap" style={{ gap: 6, marginBottom: 2 }}><span className="badge outline">{CHANNEL_LABEL[e.channel]} · {e.lang.toUpperCase()}</span><span className={`badge ${e.source === "seed" ? "" : "ok"}`}>{e.source === "seed" ? "참고" : e.source === "edited" ? "내가 고침" : "내가 승인"}</span>{!e.active && <span className="badge bad">비활성</span>}<span className="tiny muted">{relTime(e.createdAt)}{e.note ? ` · ${e.note}` : ""}</span></div>
                 <div className={openId === e.id ? "draft-body" : "r"} style={openId === e.id ? { marginTop: 6 } : {}} onClick={() => setOpenId(openId === e.id ? null : e.id)}>{e.title ? `${e.title} — ` : ""}{e.body}</div>
               </div>
               <div className="toolbar"><button className="ghost sm" onClick={() => void post(`/examples/${e.id}/active`, { active: !e.active })}>{e.active ? "끄기" : "켜기"}</button><button className="ghost sm danger" onClick={() => void del(`/examples/${e.id}`)}>삭제</button></div>

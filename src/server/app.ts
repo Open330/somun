@@ -5,12 +5,13 @@ import { NotFoundError, type AppContext } from "../app/context.js";
 import { authMiddleware } from "./auth.js";
 import type { Config } from "./config.js";
 import { apiRoutes } from "./routes/api.js";
-import { githubWebhook } from "./routes/webhooks.js";
+import { githubAppCreated, githubWebhook } from "./routes/webhooks.js";
 
 export function createApp(ctx: AppContext, config: Config) {
   const app = new Hono();
   app.get("/health", (c) => c.text("ok"));
   app.post("/api/webhooks/github", githubWebhook(ctx));
+  app.get("/api/github/app/created", githubAppCreated(ctx));
   app.use("/api/*", authMiddleware(config));
   app.route("/api", apiRoutes(ctx));
   app.onError((err, c) => {

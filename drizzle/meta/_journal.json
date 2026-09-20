@@ -15,6 +15,13 @@
       "when": 1789908921884,
       "tag": "0001_wild_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789911137220,
+      "tag": "0002_channel-langs",
+      "breakpoints": true
     }
   ]
 }
