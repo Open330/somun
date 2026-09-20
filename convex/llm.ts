@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getOwnerId } from "./owner";
-import { runLlm, type LlmConfig } from "./lib/providers";
+import { runLlm, type KeyPoolOps, type LlmConfig } from "./lib/providers";
 import { digestPrompt, draftPrompt, judgePrompt, type PromptSpec } from "./lib/prompts";
 import type { Channel } from "./lib/channels";
 import type { Id } from "./_generated/dataModel";
@@ -49,7 +49,11 @@ export const run = internalAction({
       return { queued: true };
     }
     try {
-      const res = await runLlm(llm, prompt, kind);
+      const pool: KeyPoolOps = {
+        order: (labels) => ctx.runQuery(internal.keys.order, { labels }),
+        report: async (r) => { await ctx.runMutation(internal.keys.report, r); },
+      };
+      const res = await runLlm(llm, prompt, kind, pool);
       const applied = await ctx.runMutation(internal.jobs.apply, { kind, candidateId, channel: ch, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` });
       return { applied };
     } catch (e) {

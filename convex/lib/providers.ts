@@ -16,6 +16,12 @@ export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: st
 export type LlmRequest = { system: string; user: string; schema: Record<string, unknown>; schemaName: string; maxTokens?: number };
 export type LlmResult = { json: unknown; provider: LlmProvider; model: string; keyLabel?: string };
 
+/** 서버 키 풀 상태 접근. Convex 액션이 ctx로 만들어 넘긴다. 없으면 무상태 순환. */
+export type KeyPoolOps = {
+  order: (labels: string[]) => Promise<string[]>;
+  report: (r: { label: string; ok: boolean; status?: number; body?: string }) => Promise<void>;
+};
+
 export const DEFAULT_MODEL: Record<Exclude<LlmProvider, "local-agent">, string> = {
   gemini: "gemini-3.5-flash-lite",
   openai: "gpt-5",
@@ -37,7 +43,7 @@ const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/ope
 const OPENAI_BASE = "https://api.openai.com/v1";
 
 export class LlmError extends Error {
-  constructor(message: string, public readonly status?: number, public readonly retryable = false) {
+  constructor(message: string, public readonly status?: number, public readonly retryable = false, public readonly body?: string) {
     super(message);
   }
 }
@@ -85,7 +91,7 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new LlmError(`${model} → ${res.status}: ${text.slice(0, 300)}`, res.status, res.status === 429 || res.status >= 500);
+    throw new LlmError(`${model} → ${res.status}: ${text.slice(0, 300)}`, res.status, res.status === 429 || res.status >= 500, text.slice(0, 2000));
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
   const content = data.choices?.[0]?.message?.content;
@@ -112,7 +118,7 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Pr
  * 설정에 따라 호출. gemini 서버 키 풀은 429/5xx 때 다음 키로 넘어간다.
  * local-agent는 여기 오면 안 된다 (호출자가 큐로 보낸다).
  */
-export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge"): Promise<LlmResult> {
+export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps): Promise<LlmResult> {
   const provider = config.provider;
   if (provider === "local-agent") throw new LlmError("local-agent는 워커가 처리합니다");
   const model = modelFor(config, kind);
@@ -127,27 +133,43 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   }
   // gemini
   if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok");
-  const pool = freeGeminiKeys(process.env.GEMINI_API_KEYS);
-  if (pool.length === 0) throw new LlmError("GEMINI_API_KEYS가 서버에 없고 사용자 키도 없습니다");
-  // 요청마다 시작 키를 돌려 한 키에 몰리지 않게 한다.
-  const start = Math.floor(Math.random() * pool.length);
+  const all = freeGeminiKeys(process.env.GEMINI_API_KEYS);
+  if (all.length === 0) throw new LlmError("GEMINI_API_KEYS가 서버에 없고 사용자 키도 없습니다");
+  const byLabel = new Map(all.map((k) => [k.label, k.key]));
   let lastErr: unknown;
-  // 503(모델 수요 폭주)은 키를 바꿔도 같으므로 두 바퀴째는 잠시 쉬고 다시 돈다.
+  // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
   for (let round = 0; round < 3; round++) {
     if (round > 0) await new Promise((r) => setTimeout(r, 4000 * round));
-    for (let i = 0; i < pool.length; i++) {
-      const { label, key } = pool[(start + i) % pool.length];
+    const labels = pool ? await pool.order(all.map((k) => k.label)) : rotateStateless(all.map((k) => k.label));
+    if (labels.length === 0) throw new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true);
+    for (const label of labels) {
+      const key = byLabel.get(label)!;
       try {
-        return await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label);
+        const res = await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label);
+        await pool?.report({ label, ok: true });
+        return res;
       } catch (e) {
         lastErr = e;
-        if (e instanceof LlmError && e.retryable) {
-          if (e.status === 503) break; // 다음 바퀴로
-          continue;
+        if (e instanceof LlmError) {
+          await pool?.report({ label, ok: false, status: e.status, body: e.body });
+          if (e.retryable) {
+            if (e.status === 503) break; // 모델 수요 문제: 키를 바꿔도 같다. 쉬었다 다음 바퀴
+            continue; // 429: 이 키는 쿨다운에 들어갔고 다음 키로
+          }
         }
         throw e;
       }
     }
   }
+  // 상위 모델이 수요 폭주(503)로 계속 막히면 기본 모델로 한 번 더. 판단·초안이 아예 멈추는 것보다 낫다.
+  const base = config.model?.trim() || DEFAULT_MODEL.gemini;
+  if (lastErr instanceof LlmError && lastErr.status === 503 && model !== base) {
+    return await runLlm({ ...config, draftModel: base }, req, kind, pool);
+  }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
+}
+
+function rotateStateless(labels: string[]): string[] {
+  const start = Math.floor(Math.random() * labels.length);
+  return labels.map((_, i) => labels[(start + i) % labels.length]);
 }

@@ -266,6 +266,25 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
 
+  /**
+   * 서버 Gemini 키 풀 상태. 액션은 무상태라 쿨다운·일일 사용량을 여기 둔다.
+   * label = free-N. 유료 키는 이 테이블에 오지 않는다.
+   */
+  llmKeyState: defineTable({
+    label: v.string(),
+    lastUsedAt: v.number(),
+    /** 이 시각까지 순환에서 제외 */
+    cooldownUntil: v.optional(v.number()),
+    cooldownReason: v.optional(v.string()),
+    /** PT 기준 날짜 키(YYYY-MM-DD)와 그날 요청 수 */
+    dayKey: v.string(),
+    dayCount: v.number(),
+    /** 마지막 429의 quotaId / retryDelay (관찰용) */
+    lastQuotaId: v.optional(v.string()),
+    lastRetryDelay: v.optional(v.string()),
+    lastErrorAt: v.optional(v.number()),
+  }).index("by_label", ["label"]),
+
   /** LLM 작업 큐. local-agent 프로바이더는 워커(scripts/agent-worker.mjs)가 가져가서 처리한다. */
   llmJobs: defineTable({
     ownerId: v.string(),

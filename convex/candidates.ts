@@ -109,3 +109,34 @@ export const refreshEvidence = internalMutation({
     return n;
   },
 });
+
+/**
+ * 같은 저장소의 열린 릴리스 후보가 10일 안에 여러 개면 하나로 합친다.
+ * 초안이 가장 많은 것(같으면 최신)을 남기고 최신 태그로 제목·키를 바꾼다. 나머지는 신호를 옮기고 지운다.
+ */
+export const mergeOpenReleases = internalMutation({
+  args: { ownerId: v.string(), repo: v.string() },
+  handler: async (ctx, { ownerId, repo }) => {
+    const rows = await ctx.db.query("candidates").withIndex("by_owner_updated", (q) => q.eq("ownerId", ownerId)).order("desc").take(100);
+    const open = rows.filter((c) => c.repo === repo && c.type === "release" && !["dropped", "published"].includes(c.status) && Date.now() - c.createdAt < 10 * 24 * 3600 * 1000);
+    if (open.length < 2) return 0;
+    const withCounts = [];
+    for (const c of open) {
+      const drafts = await ctx.db.query("drafts").withIndex("by_candidate", (q) => q.eq("candidateId", c._id)).collect();
+      withCounts.push({ c, drafts: drafts.length });
+    }
+    withCounts.sort((a, b) => b.drafts - a.drafts || b.c.createdAt - a.c.createdAt);
+    const keeper = withCounts[0].c;
+    const newestTag = open.map((c) => c.key.split("@")[1] ?? "").sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
+    const now = Date.now();
+    for (const { c } of withCounts.slice(1)) {
+      const sigs = await ctx.db.query("signals").withIndex("by_owner_repo_time", (q) => q.eq("ownerId", ownerId).eq("repo", repo)).collect();
+      for (const sg of sigs) if (sg.candidateId === c._id) await ctx.db.patch(sg._id, { candidateId: keeper._id });
+      for (const j of await ctx.db.query("judgments").withIndex("by_candidate", (q) => q.eq("candidateId", c._id)).collect()) await ctx.db.delete(j._id);
+      for (const jb of await ctx.db.query("llmJobs").withIndex("by_candidate", (q) => q.eq("candidateId", c._id)).collect()) await ctx.db.delete(jb._id);
+      await ctx.db.delete(c._id);
+    }
+    if (newestTag) await ctx.db.patch(keeper._id, { title: `${repo} ${newestTag}`, key: `release:${repo}@${newestTag}`, updatedAt: now });
+    return withCounts.length - 1;
+  },
+});

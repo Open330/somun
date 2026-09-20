@@ -12,6 +12,7 @@ export default function Settings() {
   const upsertSource = useMutation(api.sources.upsert);
   const removeSource = useMutation(api.sources.remove);
   const examples = useQuery(api.examples.list, {});
+  const keyStatus = useQuery(api.keys.status);
   const setActive = useMutation(api.examples.setActive);
   const removeExample = useMutation(api.examples.remove);
   const addExample = useMutation(api.examples.add);
@@ -138,6 +139,23 @@ CONVEX_URL=${import.meta.env.VITE_CONVEX_URL} node scripts/agent-worker.mjs --cl
           {settings.llm.apiKeySet && <button className="danger" onClick={() => void update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, agentCli: llm.agentCli }, keepApiKey: false })}>저장된 키 삭제</button>}
         </div>
       </div>
+
+      {llm.provider === "gemini" && (keyStatus?.length ?? 0) > 0 && (
+        <>
+          <h2>서버 키 풀</h2>
+          <div className="card small">
+            <p className="muted">무료 키 6개를 가장 오래 안 쓴 것부터 돌립니다. 키별 오늘 상한 {keyStatus?.[0]?.cap} RPD(태평양 자정 초기화). 429는 분 단위면 잠깐, 일 단위면 자정까지 제외됩니다.</p>
+            <div className="list">
+              {keyStatus?.map((k) => (
+                <div key={k.label} className="row between">
+                  <span><span className="badge">{k.label}</span> 오늘 {k.todayCount}/{k.cap}{k.lastUsedAt ? ` · 마지막 ${fmtDate(k.lastUsedAt)}` : ""}</span>
+                  <span>{k.cooldownUntil && k.cooldownUntil > Date.now() ? <span className="badge warn" title={k.lastQuotaId}>{k.cooldownReason} · {fmtDate(k.cooldownUntil)}까지</span> : <span className="badge ok">사용 가능</span>}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       <h2>문체 예시</h2>
       <div className="card">

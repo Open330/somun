@@ -173,6 +173,7 @@ export const collectGithubSource = internalAction({
           viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10).map((r) => ({ referrer: r.referrer, uniques: r.uniques })), npmDownloadsMonth: npmMonthlyDownloads,
         });
         await ctx.runMutation(internal.candidates.refreshEvidence, { ownerId, repo: name, evidence });
+        await ctx.runMutation(internal.candidates.mergeOpenReleases, { ownerId, repo: name });
         if (signals.length) {
           const result = await ctx.runMutation(internal.signals.ingest, {
             ownerId, sourceId, signals,
