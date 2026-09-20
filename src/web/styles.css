@@ -180,3 +180,25 @@ footer.landing-foot { padding-top: 40px; color: var(--muted); font-size: 13px; d
   .channels { grid-template-columns: 1fr; }
   .cand { grid-template-columns: 1fr; }
 }
+
+/* ── previews ───────────────────────────────────────────── */
+.pv { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+.pv-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.pv-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--score)); display: inline-block; }
+.pv-avatar.sq { border-radius: 6px; }
+.pv-body { white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
+.pv-foot { margin-top: 10px; font-size: 12px; }
+.pv-hn { font-family: Verdana, Geneva, sans-serif; font-size: 13px; background: #f6f6ef; color: #222; border-color: #e6e6dc; }
+.pv-hn .muted { color: #828282; }
+.pv-hn-tri { color: #828282; font-size: 10px; }
+.pv-hn-meta { margin: 2px 0 10px 14px; }
+.pv-hn-comment { margin-left: 14px; padding-left: 10px; border-left: 2px solid #e0e0d8; }
+.pv-hn .pv-body { font-size: 13px; }
+.pv-gn { font-size: 14px; }
+.pv-gn-title { margin-bottom: 8px; }
+.pv-li .pv-body { font-size: 14px; }
+.diff del { background: var(--danger-soft); color: var(--danger); text-decoration: line-through; }
+.diff ins { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 4px 10px; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line-strong); }

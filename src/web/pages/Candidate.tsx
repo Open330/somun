@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CHANNELS, type Channel } from "@core/channels";
 import type { CandidateDetail, Draft, SettingsView } from "@shared/types";
-import { CHANNEL_LABEL, DecisionBadge, LintBadges, REASONS, TYPE_LABEL, fmtDate } from "../components/ui";
+import { CHANNEL_LABEL, DecisionBadge, LintBadges, REASONS, ScoreBar, TYPE_LABEL, fmtDate, stageOf } from "../components/ui";
+import { ChannelPreview, WordDiff } from "../components/preview";
+import { useAuth } from "../lib/auth/context";
 import { post, useResource } from "../lib/api";
 
 export default function Candidate() {
@@ -37,13 +39,13 @@ export default function Candidate() {
 
   return (
     <>
-      <div className="row between">
-        <h1>
-          <span className="badge" style={{ marginRight: 8 }}>{TYPE_LABEL[c.type] ?? c.type}</span>
-          {c.title}
-        </h1>
+      <div className="page-head">
+        <div>
+          <div className="row" style={{ marginBottom: 6 }}><span className="badge outline">{TYPE_LABEL[c.type] ?? c.type}</span><DecisionBadge j={j} />{stageOf(c).busy ? <span className="progress"><i />{stageOf(c).label}</span> : <span className="tiny muted">{stageOf(c).label}</span>}</div>
+          <h1>{c.title}</h1>
+          {j && <div className="row"><ScoreBar total={j.total} /><span className="small muted">{j.total}/10 · {j.model}</span></div>}
+        </div>
         <div className="toolbar">
-          <DecisionBadge j={j} />
           <button disabled={busy !== null} onClick={async () => { setBusy("judge"); try { await rejudge({ candidateId: cid }); } finally { setBusy(null); } }}>
             {busy === "judge" ? "판단 중…" : "다시 판단"}
           </button>
@@ -55,13 +57,10 @@ export default function Candidate() {
           <h2>판단</h2>
           {j ? (
             <div className="card">
-              <div className="row between">
-                <div className="row small muted">
-                  {(["runnable", "numbers", "lesson", "novelty", "audience"] as const).map((k) => (
-                    <span key={k} className="badge">{k} {j.scores[k]}</span>
-                  ))}
-                </div>
-                <div className="score">{j.total}</div>
+              <div className="row wrap small muted" style={{ marginBottom: 8 }}>
+                {([["runnable", "실행 가능"], ["numbers", "숫자"], ["lesson", "배움"], ["novelty", "새로움"], ["audience", "청중"]] as const).map(([k, l]) => (
+                  <span key={k} className={`badge ${j.scores[k] === 2 ? "ok" : j.scores[k] === 0 ? "" : "warn"}`}>{l} {j.scores[k]}</span>
+                ))}
               </div>
               <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{j.reasoning}</p>
               <div className="small muted">채널 제안: {j.suggestedChannels.map((ch) => CHANNEL_LABEL[ch] ?? ch).join(", ") || "없음"} · {j.model} · {fmtDate(j.createdAt)}</div>
@@ -161,7 +160,13 @@ function DraftPanel({ cid, channel, drafts, busy, onRedraft }: { cid: number; ch
   const [url, setUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [dropReason, setDropReason] = useState<(typeof REASONS)[number][0]>("voice");
+  const [view, setView] = useState<"preview" | "text">("preview");
+  const [toast, setToast] = useState<string | null>(null);
+  const auth = useAuth();
+  const author = auth.user?.displayName ?? auth.user?.username ?? "you";
   const spec = CHANNELS[channel];
+  const original = latest ? [...drafts].filter((d) => d.channel === channel && d.version === latest.version)[0] : null;
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800); };
 
   useEffect(() => {
     setTitle(latest?.title ?? "");
@@ -173,7 +178,17 @@ function DraftPanel({ cid, channel, drafts, busy, onRedraft }: { cid: number; ch
   const copyText = async (text: string) => {
     await navigator.clipboard.writeText(text);
     setCopied(true);
+    showToast("복사했습니다. 채널 화면에 붙여 넣으세요.");
   };
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (editing || !latest || (ev.target as HTMLElement)?.tagName === "INPUT" || (ev.target as HTMLElement)?.tagName === "TEXTAREA") return;
+      if (ev.key === "c" && !ev.metaKey && !ev.ctrlKey) { void copyText(spec.hasTitle ? `${title}\n\n${body}` : body); }
+      if (ev.key === "e") setEditing(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   if (!latest) {
     return (
@@ -191,8 +206,19 @@ function DraftPanel({ cid, channel, drafts, busy, onRedraft }: { cid: number; ch
         <span>{spec.mediaHint}</span>
       </div>
       <div className="lint"><LintBadges lint={latest.lint} /></div>
-      {spec.hasTitle && (editing ? <input value={title} onChange={(ev) => setTitle(ev.target.value)} style={{ marginBottom: 8 }} /> : <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>)}
-      {editing ? <textarea value={body} onChange={(ev) => setBody(ev.target.value)} /> : <div className="draft-body">{body}</div>}
+      {!editing && <div className="row between" style={{ marginBottom: 8 }}><div className="seg"><button className={view === "preview" ? "active" : ""} onClick={() => setView("preview")}>미리보기</button><button className={view === "text" ? "active" : ""} onClick={() => setView("text")}>텍스트</button></div><span className="tiny muted"><span className="kbd">c</span> 복사 · <span className="kbd">e</span> 수정</span></div>}
+      {editing ? (
+        <>
+          {spec.hasTitle && <input value={title} onChange={(ev) => setTitle(ev.target.value)} style={{ marginBottom: 8 }} />}
+          <textarea value={body} onChange={(ev) => setBody(ev.target.value)} />
+          {original && original.body !== body && <><div className="tiny muted" style={{ margin: "8px 0 4px" }}>바뀐 부분 — 저장하면 이 문장이 다음 초안의 문체 예시가 됩니다</div><WordDiff before={original.body} after={body} /></>}
+        </>
+      ) : view === "preview" ? (
+        <ChannelPreview channel={channel} title={title} body={body} author={author} />
+      ) : (
+        <>{spec.hasTitle && <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>}<div className="draft-body">{body}</div></>
+      )}
+      {toast && <div className="toast">{toast}</div>}
       <div className="small muted" style={{ marginTop: 6 }}>{[...body].length}{spec.maxChars ? `/${spec.maxChars}` : ""}자</div>
       <div className="toolbar" style={{ marginTop: 10 }}>
         {!editing ? (
