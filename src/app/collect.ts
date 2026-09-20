@@ -61,6 +61,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   try {
     for (const repo of await expandTargets(gh, source.targets)) {
       const name = repo.full_name;
+      try {
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
         gh.get<GhRelease[]>(`/repos/${name}/releases?per_page=100`),
@@ -70,7 +71,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         gh.get<{ content: string }>(`/repos/${name}/contents/package.json`),
       ]);
       const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
-      const allReleases = releases ?? [];
+      // 게시되지 않은 초안 릴리스는 published_at이 null이라 날짜 계산을 깨뜨린다.
+      const allReleases = (releases ?? []).filter((r) => r.published_at && !Number.isNaN(Date.parse(r.published_at)));
       const prev = latestForRepo(ctx, ownerId, name);
       const last = lastSnapshot(ctx, ownerId, name);
       const signals: IncomingSignal[] = [];
@@ -125,6 +127,11 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       if (signals.length) {
         const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: prev.latestReleaseAt ?? (latest ? Date.parse(latest.published_at) : undefined), repoCreatedAt: createdAt, recentPrCount: prev.recentPrCount + signals.filter((s) => s.kind === "pr_merged").length }, evidence);
         summary[name] = r.inserted;
+      }
+      } catch (e) {
+        // 저장소 하나의 실패가 조직 전체 수집을 막지 않는다.
+        ctx.log.warn({ repo: name, err: (e as Error).message }, "repo collect failed");
+        summary[name] = -1;
       }
     }
     markPolled(ctx, sourceId);
