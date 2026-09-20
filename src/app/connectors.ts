@@ -1,7 +1,7 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
-import { appConfigFromEnv, installationInfo, type GitHubAppConfig } from "../infra/github/app.js";
-import type { ConnectorsView } from "../shared/types.js";
+import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppConfig } from "../infra/github/app.js";
+import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { listSources, upsertSource } from "./sources.js";
 
@@ -37,7 +37,9 @@ export async function recordInstallation(ctx: AppContext, ownerId: string, insta
     .onConflictDoUpdate({ target: schema.githubInstallations.installationId, set: { ownerId, account: info.account, accountType: info.accountType, repos: info.repos, updatedAt: now } }).run();
   // 설치 저장소 → 소스. 이미 있는 github 소스는 대상만 갱신.
   const existing = listSources(ctx, ownerId).find((s) => s.kind === "github" && s.options?.installationId === String(installationId));
-  upsertSource(ctx, ownerId, { id: existing?.id, kind: "github", targets: info.repos, options: { installationId: String(installationId), account: info.account }, enabled: true });
+  // 처음 설치면 아무것도 지켜보지 않는다. 무엇을 볼지는 고르기 화면(/github/pick)에서 사용자가 정한다.
+  // 이미 소스가 있으면 사용자가 고른 대상을 유지한다.
+  upsertSource(ctx, ownerId, { id: existing?.id, kind: "github", targets: existing?.targets ?? [], options: { installationId: String(installationId), account: info.account }, enabled: true });
   emit(ctx, ownerId, { resource: "sources" });
   return { account: info.account, repos: info.repos };
 }
@@ -71,11 +73,37 @@ export function connectorsView(ctx: AppContext, ownerId: string): ConnectorsView
       appConfigured: Boolean(cfg),
       appSlug: cfg?.slug,
       installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined,
-      installations: inst.map((i) => ({ id: i.installationId, account: i.account, repos: i.repos.length, updatedAt: i.updatedAt })),
+      installations: inst.map((i) => ({ id: i.installationId, account: i.account, repos: i.repos.length, watched: gh.find((s) => s.options?.installationId === String(i.installationId))?.targets.length ?? 0, updatedAt: i.updatedAt })),
       manualTargets: manual,
       lastPolledAt: gh.map((s) => s.lastPolledAt ?? 0).sort().at(-1) || undefined,
       lastError: gh.find((s) => s.lastError)?.lastError,
     },
     sessions: { lastUploadAt: lastUpload, sessionCount14d: sess.length, sources: [...new Set(sess.map((s) => String((s.payload as { source?: string })?.source ?? "")).filter(Boolean))] },
   };
+}
+
+function installationSource(ctx: AppContext, ownerId: string, installationId: number) {
+  return listSources(ctx, ownerId).find((s) => s.kind === "github" && s.options?.installationId === String(installationId));
+}
+
+/** 고르기 화면: 설치가 볼 수 있는 저장소 + 지금 지켜보는지. */
+export async function listInstallationRepos(ctx: AppContext, ownerId: string, installationId: number): Promise<InstallationRepo[]> {
+  const cfg = githubAppConfig(ctx);
+  if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+  const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
+  if (!inst) throw new Error("이 계정에 기록된 설치가 아닙니다.");
+  const watched = new Set(installationSource(ctx, ownerId, installationId)?.targets ?? []);
+  const repos = await installationRepos(cfg, installationId);
+  return repos.map((r) => ({ ...r, watched: watched.has(r.fullName) })).sort((a, b) => (b.pushedAt ?? 0) - (a.pushedAt ?? 0));
+}
+
+/** 지켜볼 저장소를 정한다. 소스의 targets를 통째로 바꾼다. */
+export function setWatchedRepos(ctx: AppContext, ownerId: string, installationId: number, repos: string[]): { sourceId: number; count: number } {
+  const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
+  if (!inst) throw new Error("이 계정에 기록된 설치가 아닙니다.");
+  const allowed = new Set(inst.repos);
+  const targets = [...new Set(repos.filter((r) => allowed.has(r)))];
+  const existing = installationSource(ctx, ownerId, installationId);
+  const src = upsertSource(ctx, ownerId, { id: existing?.id, kind: "github", targets, options: { installationId: String(installationId), account: inst.account }, enabled: true });
+  return { sourceId: src.id, count: targets.length };
 }

@@ -61,6 +61,23 @@ export async function installationInfo(cfg: GitHubAppConfig, installationId: num
   return { id: installationId, account: m?.account.login ?? repos[0]?.split("/")[0] ?? "", accountType: m?.account.type ?? "", repos };
 }
 
+export type InstallationRepoMeta = { fullName: string; description?: string; pushedAt?: number; stars: number; language?: string; fork: boolean; archived: boolean; isPrivate: boolean };
+
+/** 설치가 볼 수 있는 저장소의 메타데이터. 고르기 화면에서 필터(최근 갱신·스타·포크)에 쓴다. */
+export async function installationRepos(cfg: GitHubAppConfig, installationId: number): Promise<InstallationRepoMeta[]> {
+  const token = await installationToken(cfg, installationId);
+  const h = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "somun" };
+  const out: InstallationRepoMeta[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, { headers: h });
+    if (!r.ok) break;
+    const j = (await r.json()) as { repositories: { full_name: string; description: string | null; pushed_at: string | null; stargazers_count: number; language: string | null; fork: boolean; archived: boolean; private: boolean }[] };
+    for (const x of j.repositories) out.push({ fullName: x.full_name, description: x.description ?? undefined, pushedAt: x.pushed_at ? Date.parse(x.pushed_at) : undefined, stars: x.stargazers_count, language: x.language ?? undefined, fork: x.fork, archived: x.archived, isPrivate: x.private });
+    if (j.repositories.length < 100) break;
+  }
+  return out;
+}
+
 /** X-Hub-Signature-256 검증. */
 export function verifyWebhook(secret: string, rawBody: string, signature: string | undefined): boolean {
   if (!signature?.startsWith("sha256=")) return false;

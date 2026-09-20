@@ -32,7 +32,13 @@ export type Settings = {
   channelLangs: ChannelLangs;
   bannedPhrases: string[];
   llm: LlmConfig;
+  /** 새 글감 처리 방식. manual: 모아만 두고 사용자가 고른 것만 판단. auto: 최근 recentDays 안에 갱신된 글감은 자동으로 판단·초안. */
+  watch: WatchSettings;
 };
+export type WatchSettings = { mode: "manual" | "auto"; recentDays: number };
+
+/** GitHub App 설치가 볼 수 있는 저장소 하나. 고르기 화면용. */
+export type InstallationRepo = { fullName: string; description?: string; pushedAt?: number; stars: number; language?: string; fork: boolean; archived: boolean; isPrivate: boolean; watched: boolean };
 /** 화면에 주는 설정. 키 원문 대신 설정 여부와 끝자리만. */
 export type SettingsView = Omit<Settings, "llm"> & { llm: Omit<LlmConfig, "apiKey"> & { apiKeySet: boolean; apiKeyHint?: string } };
 
@@ -65,6 +71,6 @@ export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; dra
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };
 
 export type ConnectorsView = {
-  github: { mode: "app" | "token" | "none"; appConfigured: boolean; appSlug?: string; installUrl?: string; installations: { id: number; account: string; repos: number; updatedAt: number }[]; manualTargets: string[]; lastPolledAt?: number; lastError?: string };
+  github: { mode: "app" | "token" | "none"; appConfigured: boolean; appSlug?: string; installUrl?: string; installations: { id: number; account: string; repos: number; watched: number; updatedAt: number }[]; manualTargets: string[]; lastPolledAt?: number; lastError?: string };
   sessions: { lastUploadAt?: number; sessionCount14d: number; sources: string[] };
 };

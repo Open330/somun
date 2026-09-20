@@ -35,6 +35,15 @@ export default function Settings() {
       {tab === "judge" && (
         <div className="card stack" style={{ gap: 14, maxWidth: 720 }}>
           <div>
+            <h3>새 글감 처리</h3>
+            <p className="small muted">수동은 글감을 모아만 두고 사용자가 고른 것만 판단합니다. 자동은 최근 N일 안에 생긴 글감을 매시간 판단하고 임계를 넘으면 초안까지 씁니다. 자동은 모델 호출이 많습니다.</p>
+            <div className="row" style={{ gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+              <label className="row small" style={{ gap: 6 }}><input type="radio" name="watch" checked={settings.watch.mode === "manual"} onChange={() => void update({ watch: { ...settings.watch, mode: "manual" } })} /> 수동: 내가 고른 것만</label>
+              <label className="row small" style={{ gap: 6 }}><input type="radio" name="watch" checked={settings.watch.mode === "auto"} onChange={() => void update({ watch: { ...settings.watch, mode: "auto" } })} /> 자동</label>
+              <label className="row small" style={{ gap: 6 }}>최근 <input type="number" min={1} max={365} style={{ width: 64 }} value={settings.watch.recentDays} onChange={(ev) => void update({ watch: { ...settings.watch, recentDays: Math.max(1, Math.min(365, Number(ev.target.value) || 30)) } })} /> 일 안에 생긴 글감만</label>
+            </div>
+          </div>
+          <div>
             <h3>임계</h3>
             <p className="small muted">다섯 항목(각 0~2, 가중치 적용) 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.</p>
             <div className="row">

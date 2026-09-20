@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { CandidateListItem, Source } from "@shared/types";
+import type { CandidateListItem, SettingsView, Source } from "@shared/types";
 import { Section, Skeleton, StageChip, TYPE_LABEL, Toast, relTime, stageOf, useToast } from "../components/ui";
 import { post, useResource } from "../lib/api";
 
@@ -12,6 +12,7 @@ export default function Inbox() {
   const nav = useNavigate();
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts"]);
   const { data: sources } = useResource<Source[]>("/sources", ["sources"]);
+  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState(0);
   const [toast, showToast] = useToast();
@@ -20,9 +21,9 @@ export default function Inbox() {
   const groups = useMemo(() => {
     const open = (rows ?? []).filter((c) => !["dropped", "published"].includes(c.status));
     const by = (k: string[]) => open.filter((c) => k.includes(stageOf(c).key)).sort((a, b) => (b.judgment?.total ?? -1) - (a.judgment?.total ?? -1) || b.updatedAt - a.updatedAt);
-    return { review: by(["review"]), working: by(["working", "ask"]), deferred: by(["deferred"]) };
+    return { review: by(["review"]), fresh: by(["fresh"]), working: by(["working", "ask"]), deferred: by(["deferred"]) };
   }, [rows]);
-  const flat = [...groups.review, ...groups.working, ...groups.deferred];
+  const flat = [...groups.review, ...groups.fresh, ...groups.working, ...groups.deferred];
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -49,7 +50,7 @@ export default function Inbox() {
         <div className="toolbar">
           <span className="tiny muted"><span className="kbd">j</span><span className="kbd">k</span> 이동 · <span className="kbd">↵</span> 열기 · <span className="kbd">l</span> 보류</span>
           <button className="primary" disabled={busy || !github.length} title={!github.length ? "연결에서 GitHub를 먼저 연결하세요" : ""}
-            onClick={async () => { setBusy(true); try { await post("/collect"); showToast("확인했습니다. 새 후보는 판단이 끝나면 나타납니다."); } finally { setBusy(false); } }}>
+            onClick={async () => { setBusy(true); try { await post("/collect"); showToast(settings?.watch.mode === "auto" ? "확인했습니다. 새 글감은 판단이 끝나면 나타납니다." : "확인했습니다. 새 글감은 \"새 글감\"에 쌓입니다."); } finally { setBusy(false); } }}>
             {busy ? "확인 중…" : "지금 확인"}
           </button>
         </div>
@@ -61,6 +62,15 @@ export default function Inbox() {
           <Section title="검수할 초안" count={groups.review.length} hint="초안이 준비된 글감. 열어서 복사하거나 고쳐서 올리세요.">
             {groups.review.length ? <Rows items={groups.review} flat={flat} focus={focus} onFocus={setFocus} /> : <div className="empty small">지금은 없습니다. 처리 중인 후보의 판단이 끝나면 여기 쌓입니다.</div>}
           </Section>
+          {groups.fresh.length > 0 && (
+            <Section title="새 글감" count={groups.fresh.length} hint={settings?.watch.mode === "auto" ? "자동 모드: 곧 판단이 시작됩니다. 오래된 것은 직접 판단을 눌러야 합니다." : "아직 판단하지 않았습니다. 볼 만한 것만 골라 판단하세요. 모델 호출은 이때 일어납니다."}>
+              <div className="row between small" style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
+                <span className="muted">{groups.fresh.length}개 중 어떤 걸 만들어볼까요?</span>
+                <button className="sm" disabled={busy} onClick={async () => { setBusy(true); try { await post("/candidates/judge", { ids: groups.fresh.slice(0, 50).map((c) => c.id) }); showToast("판단을 시작했습니다. 끝나면 검수할 초안에 나타납니다."); } finally { setBusy(false); } }}>모두 판단 ({Math.min(50, groups.fresh.length)})</button>
+              </div>
+              <Rows items={groups.fresh} flat={flat} focus={focus} onFocus={setFocus} onJudge={async (id) => { await post("/candidates/judge", { ids: [id] }); showToast("판단을 시작했습니다."); }} />
+            </Section>
+          )}
           {groups.working.length > 0 && (
             <Section title="처리 중" count={groups.working.length} hint="다이제스트 → 판단 → 초안이 자동으로 이어집니다.">
               <Rows items={groups.working} flat={flat} focus={focus} onFocus={setFocus} />
@@ -79,7 +89,7 @@ export default function Inbox() {
   );
 }
 
-function Rows({ items, flat, focus, onFocus }: { items: CandidateListItem[]; flat: CandidateListItem[]; focus: number; onFocus: (i: number) => void }) {
+function Rows({ items, flat, focus, onFocus, onJudge }: { items: CandidateListItem[]; flat: CandidateListItem[]; focus: number; onFocus: (i: number) => void; onJudge?: (id: number) => Promise<void> }) {
   const nav = useNavigate();
   return (
     <div className="rows">
@@ -97,6 +107,7 @@ function Rows({ items, flat, focus, onFocus }: { items: CandidateListItem[]; fla
             <span className={`sc ${(c.judgment?.total ?? 0) < 4 ? "low" : ""}`}>{c.judgment ? c.judgment.total : ""}</span>
             <div className="row" style={{ gap: 8 }}>
               <StageChip stage={st} />
+              {onJudge && st.key === "fresh" && <button className="sm primary" onClick={(e) => { e.stopPropagation(); void onJudge(c.id); }}>판단</button>}
               <Link to={`/c/${c.id}`} className="btn sm" onClick={(e) => e.stopPropagation()}>{st.key === "review" ? "검수" : "열기"}</Link>
             </div>
           </div>

@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   channelLangs: DEFAULT_CHANNEL_LANGS,
   bannedPhrases: DEFAULT_BANNED_PHRASES,
   llm: { provider: "gemini", model: "gemini-3.5-flash-lite" },
+  watch: { mode: "manual", recentDays: 30 },
 };
 
 /** 구 설정(enabledChannels: x_en, x_ko, ...)을 channelLangs로 옮긴다. */

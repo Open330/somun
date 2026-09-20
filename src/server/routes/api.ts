@@ -3,14 +3,14 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
-import { collectAll } from "../../app/collect.js";
+import { collectAll, collectGithubSource } from "../../app/collect.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
-import { connectorsView, githubAppConfig, recordInstallation } from "../../app/connectors.js";
+import { connectorsView, githubAppConfig, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import { appManifest } from "../../infra/github/app.js";
-import { runStep } from "../../app/pipeline.js";
+import { judgeCandidates, runStep } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, registerPublication, setManualStats } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
@@ -48,6 +48,7 @@ export function apiRoutes(ctx: AppContext) {
       channelLangs: z.record(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
+      watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
     }));
     const { keepApiKey, ...patch } = input;
     return c.json(updateSettings(ctx, c.get("ownerId"), patch, keepApiKey ?? true));
@@ -64,6 +65,8 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/candidates/:id", (c) => c.json(getCandidateDetail(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.post("/candidates/:id/status", async (c) => { setCandidateStatus(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ status: z.enum(["new", "judged", "drafted", "published", "dropped", "deferred"]) }))).status); return c.body(null, 204); });
   app.post("/candidates/:id/override", async (c) => { const i = await body(c, z.object({ decision: z.enum(["draft", "drop"]), reason, note: z.string().optional() })); overrideJudgment(ctx, c.get("ownerId"), id(c.req.param("id")), i.decision, i.reason, i.note); return c.body(null, 204); });
+  // 수동 모드: 고른 글감만 판단. 오래 걸리므로 시작만 알리고 진행은 SSE로.
+  app.post("/candidates/judge", async (c) => { const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) })); void judgeCandidates(ctx, c.get("ownerId"), ids); return c.json({ started: ids.length }); });
   app.post("/candidates/:id/rejudge", async (c) => c.json(await runStep(ctx, c.get("ownerId"), "digest", id(c.req.param("id")))));
   app.post("/candidates/:id/redraft", async (c) => {
     const { targets } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1) }));
@@ -105,6 +108,14 @@ export function apiRoutes(ctx: AppContext) {
     return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, manifest: cfg ? undefined : appManifest(base), createUrl: "https://github.com/settings/apps/new" });
   });
   /** 설치 완료 후 GitHub가 보내는 곳. 로그인된 브라우저에서 열리므로 ownerId를 안다. */
+  app.get("/github/installations/:id/repos", async (c) => c.json(await listInstallationRepos(ctx, c.get("ownerId"), id(c.req.param("id")))));
+  app.post("/github/installations/:id/watch", async (c) => {
+    const { repos } = await body(c, z.object({ repos: z.array(z.string().min(3)).max(500) }));
+    const r = setWatchedRepos(ctx, c.get("ownerId"), id(c.req.param("id")), repos);
+    // 고른 즉시 한 번 수집한다. 자동 모드가 아니면 글감은 "새 글감"으로만 쌓인다.
+    if (r.count) void collectGithubSource(ctx, r.sourceId).catch((e: Error) => ctx.log.warn({ err: e.message }, "collect after watch failed"));
+    return c.json(r);
+  });
   app.get("/github/setup", async (c) => {
     const id = Number(c.req.query("installation_id"));
     if (!id) return c.json({ error: "installation_id required" }, 400);

@@ -13,6 +13,7 @@ import Settings from "./pages/Settings";
 import TokenLogin from "./pages/TokenLogin";
 import Voice from "./pages/Voice";
 import GithubSetup from "./pages/GithubSetup";
+import Pick from "./pages/Pick";
 import SetupGithubApp from "./pages/SetupGithubApp";
 import type { ConnectorsView } from "@shared/types";
 import { Lockup, Mark } from "./components/Mark";
@@ -66,6 +67,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
             <Route path="/settings" element={<Settings />} />
             <Route path="/welcome" element={<Landing />} />
             <Route path="/github/setup" element={<GithubSetup />} />
+            <Route path="/github/pick" element={<Pick />} />
             <Route path="/setup/github-app" element={<SetupGithubApp />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
           </Routes>

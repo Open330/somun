@@ -282,3 +282,10 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 .shots figure { margin: 0; }
 .shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); background: var(--surface); }
 .shots figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+
+/* 저장소 고르기 */
+.pick-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); cursor: pointer; }
+.pick-row:first-child { border-top: 0; }
+.pick-row:hover { background: var(--surface-2); }
+.pick-row input[type="checkbox"] { width: 16px; height: 16px; }
+@media (max-width: 640px) { .pick-row { grid-template-columns: auto minmax(0, 1fr); } .pick-row > :last-child { grid-column: 2; text-align: left; } }

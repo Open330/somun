@@ -29,7 +29,7 @@ export default function Connectors() {
           {app?.installUrl && <a className="btn primary" href={app.installUrl}>{v.github.installations.length ? "다른 계정·저장소 추가" : "GitHub 권한 허용"}</a>}
         </div>
         {v.github.installations.length > 0 && (
-          <div className="list">{v.github.installations.map((i) => <div key={i.id} className="row between small"><span><span className="badge outline">{i.account}</span> 저장소 {i.repos}개</span><span className="muted">갱신 {relTime(i.updatedAt)}</span></div>)}</div>
+          <div className="list">{v.github.installations.map((i) => <div key={i.id} className="row between small"><span><span className="badge outline">{i.account}</span> 접근 가능 {i.repos}개 · 지켜보는 중 {i.watched}개</span><span className="row" style={{ gap: 8 }}><span className="muted">갱신 {relTime(i.updatedAt)}</span><a className="btn sm" href={`/github/pick?installation_id=${i.id}`}>저장소 고르기</a></span></div>)}</div>
         )}
         {!app?.configured && <p className="small muted">이 서버는 아직 GitHub 연동이 준비되지 않았습니다. 운영자가 설정하면 여기에 "GitHub 권한 허용" 버튼이 나타납니다. 그때까지는 아래에 저장소를 직접 지정할 수 있습니다.</p>}
         <details className="raw">

@@ -69,11 +69,36 @@ export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, c
 }
 
 /** 새 후보 전부 다이제스트부터. 순차 실행(키 풀과 모델 수요를 아낀다). */
+/**
+ * 아직 판단하지 않은 후보를 태운다. 자동 모드(watch.mode=auto)인 소유자의 것만, 그중 recentDays 안에 갱신된 것만.
+ * 수동 모드에서는 사용자가 고른 것만 judgeCandidates로 태운다.
+ */
 export async function processNewCandidates(ctx: AppContext, ownerId?: string): Promise<number> {
   const where = ownerId ? and(eq(schema.candidates.status, "new"), eq(schema.candidates.ownerId, ownerId)) : eq(schema.candidates.status, "new");
   const rows = ctx.db.select().from(schema.candidates).where(where).all();
-  for (const c of rows) await runStep(ctx, c.ownerId, "digest", c.id);
-  return rows.length;
+  const settingsByOwner = new Map<string, ReturnType<typeof getSettings>>();
+  let n = 0;
+  for (const c of rows) {
+    const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
+    settingsByOwner.set(c.ownerId, s);
+    if (s.watch.mode !== "auto") continue;
+    if (c.updatedAt < Date.now() - s.watch.recentDays * 86400e3) continue;
+    await runStep(ctx, c.ownerId, "digest", c.id);
+    n++;
+  }
+  return n;
+}
+
+/** 사용자가 고른 후보를 판단한다 (수동 모드의 진입점). 순서대로 돌리고 실패는 건너뛴다. */
+export async function judgeCandidates(ctx: AppContext, ownerId: string, ids: number[]): Promise<{ started: number }> {
+  let started = 0;
+  for (const id of ids) {
+    const c = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, id), eq(schema.candidates.ownerId, ownerId))).get();
+    if (!c || ["dropped", "published"].includes(c.status)) continue;
+    started++;
+    try { await runStep(ctx, ownerId, "digest", id); } catch (e) { ctx.log.warn({ id, err: (e as Error).message }, "judge failed"); }
+  }
+  return { started };
 }
 
 export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, lang: string | undefined, prompt: PromptSpec): number {

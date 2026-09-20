@@ -31,13 +31,14 @@ export function relTime(ts: number): string {
 }
 
 /** 후보의 한 가지 상태. 배지 하나로 끝낸다. */
-export type Stage = { key: "review" | "working" | "deferred" | "ask" | "published" | "dropped"; label: string; tone: "ok" | "warn" | "" | "bad"; busy?: boolean };
+export type Stage = { key: "review" | "fresh" | "working" | "deferred" | "ask" | "published" | "dropped"; label: string; tone: "ok" | "warn" | "" | "bad"; busy?: boolean };
 export function stageOf(c: Pick<Candidate, "status" | "evidence" | "latestJudgmentId"> & { judgment?: Judgment | null }): Stage {
   if (c.status === "dropped") return { key: "dropped", label: "버림", tone: "bad" };
   if (c.status === "published") return { key: "published", label: "발행됨", tone: "ok" };
   if (c.status === "drafted") return { key: "review", label: "검수 대기", tone: "ok" };
   if (c.status === "deferred") return { key: "deferred", label: "보류", tone: "warn" };
-  if (!c.evidence.highlightsAt) return { key: "working", label: "다이제스트 중", tone: "", busy: true };
+  // 수동 모드에서는 새 후보가 판단 없이 쌓인다. 판단이 시작되면 highlights가 생기며 "처리 중"으로 넘어간다.
+  if (!c.evidence.highlightsAt) return { key: "fresh", label: "새 글감", tone: "" };
   if (!c.latestJudgmentId) return { key: "working", label: "판단 중", tone: "", busy: true };
   const d = c.judgment?.overriddenDecision ?? c.judgment?.decision;
   if (d === "ask") return { key: "ask", label: "묻기만", tone: "" };
