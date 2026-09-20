@@ -266,3 +266,5 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
   .page-head .toolbar button { flex: 1; justify-content: center; }
   .pub { grid-template-columns: 1fr auto; }
 }
+.tri-head h2 { white-space: nowrap; }
+@media (max-width: 860px) { .tri-head .tiny { display: none; } .rowi .sc { font-size: 15px; } }
