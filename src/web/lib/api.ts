@@ -31,9 +31,12 @@ export const del = (path: string) => api<void>(path, { method: "DELETE" });
 type Listener = (ev: ChangeEvent) => void;
 const listeners = new Set<Listener>();
 let source: EventSource | null = null;
-function ensureSource() {
+async function ensureSource() {
   if (source) return;
-  const t = storedToken();
+  // OAuth 모드면 외부 JWT를, 토큰 모드면 저장된 토큰을 query로 (EventSource는 헤더를 못 붙인다).
+  const m = getAuthManager();
+  const t = m ? await m.fetchApiToken() : storedToken();
+  if (source) return;
   source = new EventSource(`/api/events${t ? `?token=${encodeURIComponent(t)}` : ""}`, { withCredentials: true });
   source.addEventListener("change", (e) => {
     const ev = JSON.parse((e as MessageEvent).data) as ChangeEvent;
@@ -58,7 +61,7 @@ export function useResource<T>(path: string | null, resources: ChangeEvent["reso
   useEffect(() => {
     load();
     if (!path) return;
-    ensureSource();
+    void ensureSource();
     const l: Listener = (ev) => { if (resRef.current.includes(ev.resource)) load(); };
     listeners.add(l);
     return () => void listeners.delete(l);
