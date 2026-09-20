@@ -74,6 +74,11 @@ export const getInternal = internalQuery({
   handler: async (ctx, { id }) => await ctx.db.get(id),
 });
 
+export const getJudgment = internalQuery({
+  args: { id: v.id("judgments") },
+  handler: async (ctx, { id }) => await ctx.db.get(id),
+});
+
 export const recentPublishedTitles = internalQuery({
   args: { ownerId: v.string(), days: v.number() },
   handler: async (ctx, { ownerId, days }) => {
@@ -88,31 +93,19 @@ export const recentPublishedTitles = internalQuery({
   },
 });
 
-export const recordJudgment = internalMutation({
-  args: {
-    candidateId: v.id("candidates"),
-    scores: v.object({ runnable: v.number(), numbers: v.number(), lesson: v.number(), novelty: v.number(), audience: v.number() }),
-    total: v.number(),
-    reasoning: v.string(),
-    decision: v.union(v.literal("draft"), v.literal("defer"), v.literal("ask")),
-    suggestedChannels: v.array(v.string()),
-    model: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const c = await ctx.db.get(args.candidateId);
-    if (!c) throw new Error("candidate not found");
-    const id = await ctx.db.insert("judgments", {
-      ownerId: c.ownerId,
-      candidateId: args.candidateId,
-      scores: args.scores,
-      total: args.total,
-      reasoning: args.reasoning,
-      decision: args.decision,
-      suggestedChannels: args.suggestedChannels as never,
-      model: args.model,
-      createdAt: Date.now(),
-    });
-    await ctx.db.patch(args.candidateId, { latestJudgmentId: id, status: args.decision === "defer" ? "deferred" : "judged", updatedAt: Date.now() });
-    return id;
+/** 수집 때마다 열린 후보의 기본 사실(스타, 버전, 한계, 커밋 제목 등)을 최신으로. 다이제스트 결과는 지우지 않는다. */
+export const refreshEvidence = internalMutation({
+  args: { ownerId: v.string(), repo: v.string(), evidence: v.any() },
+  handler: async (ctx, { ownerId, repo, evidence }) => {
+    const rows = await ctx.db.query("candidates").withIndex("by_owner_updated", (q) => q.eq("ownerId", ownerId)).order("desc").take(100);
+    let n = 0;
+    for (const c of rows) {
+      if (c.repo !== repo || ["dropped", "published"].includes(c.status)) continue;
+      const incoming = evidence as Record<string, unknown>;
+      const keepLimits = c.evidence.limitations?.length && !(incoming.limitations as string[] | undefined)?.length;
+      await ctx.db.patch(c._id, { evidence: { ...c.evidence, ...incoming, limitations: keepLimits ? c.evidence.limitations : (incoming.limitations as string[] | undefined), highlights: c.evidence.highlights, highlightsAt: c.evidence.highlightsAt, ompSummary: c.evidence.ompSummary ?? (incoming.ompSummary as string | undefined) } });
+      n++;
+    }
+    return n;
   },
 });

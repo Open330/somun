@@ -31,7 +31,7 @@ export const DEFAULT_BANNED_PHRASES = [
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
 const NUMBER = /\d/;
-const LIMITATION_HINT = /(limit|doesn'?t|does not|not yet|no windows|beta|아직|안 됨|안 됩니다|한계|미지원|않습니다|못합니다)/i;
+const LIMITATION_HINT = /(limit|doesn'?t|does not|not yet|no windows|beta|0\.\d+|may change|아직|안 됨|안 됩니다|한계|미지원|않습니다|못합니다|바뀔 수)/i;
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /!/;
 
@@ -46,10 +46,14 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
 
-  if (channel !== "threads" && channel !== "blog_outline") {
+  if (channel === "x_en" || channel === "x_ko") {
+    const ok = NUMBER.test(body) || LIMITATION_HINT.test(body);
+    results.push({ rule: "has_number_or_limit", ok, detail: ok ? undefined : "숫자 하나 또는 한계 하나가 필요합니다" });
+  } else if (channel !== "threads" && channel !== "blog_outline") {
     results.push({ rule: "has_number", ok: NUMBER.test(body), detail: NUMBER.test(body) ? undefined : "숫자 하나가 필요합니다" });
     results.push({ rule: "has_limitation", ok: LIMITATION_HINT.test(body), detail: LIMITATION_HINT.test(body) ? undefined : "한계 하나가 필요합니다" });
   }
+  results.push({ rule: "no_placeholder", ok: !/\[(number needed|숫자 확인)\]/i.test(body), detail: "채우지 못한 숫자가 있습니다" });
 
   if (channel === "x_en" || channel === "x_ko" || channel === "linkedin_ko") {
     results.push({ rule: "has_link", ok: LINK.test(body) });

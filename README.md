@@ -1,78 +1,186 @@
-# 소문 (somun)
+<div align="center">
 
-**소문낼 줄 모르는 개발자를 위한 PR 도우미.**
-somun — PR for developers who'd rather build than announce.
+<br />
 
-작업 내역을 지켜보다가 글감이 익으면, 채널별(X, Threads, LinkedIn, Show HN, Show GN) 초안을 써서 내밀고, 사람이 고쳐서 올린 결과로 다음 초안을 더 잘 쓰는 편집자.
+# 소문 &nbsp;·&nbsp; somun
 
-- 하는 것: 관찰 → 판단 → 채널별 초안 → 복사 → 피드백 → 개선
-- 하지 않는 것: 자동 발행, 커밋 단위 포스트, 근거 없는 문장
+**PR for developers who'd rather build than announce.**
 
-원칙 하나. **사실은 시스템이, 목소리는 사람이.** 모든 초안은 자동 수집된 근거(릴리스, 스타, 다운로드, 한계) 위에서만 쓰이고, 저장 전에 슬롭 린트를 통과해야 한다.
+<sub>*somun* (소문) is Korean for "word of mouth". The tool spreads the word so you don't have to.</sub>
 
-## 구조
+<br />
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)
+[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)
+[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)
+
+**English** · [한국어](README.ko.md)
+
+</div>
+
+<br />
+
+You ship every day. Nobody hears about it.
+
+somun watches your repos, decides when something is actually worth telling, and hands you a draft for each channel — X, Threads, LinkedIn, Show HN, GeekNews — that you review, copy, and post yourself. Every edit you make teaches it your voice. Every post you register gets measured.
+
+It never posts for you. It never writes from thin air. It never says "excited to announce".
+
+<br />
+
+## How it thinks
 
 ```
-sources ─▶ signals ─▶ candidates ─▶ judgments ─▶ drafts ─▶ publications ─▶ metricSnapshots
-                                        ▲             ▲           │
-                                        └─ feedback ──┴─ examples ┘
+ GitHub · npm · blog · agent sessions
+            │
+            ▼
+   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with
+   │  1. observe      │    ──────────────────────────────────────────────────────────
+   └────────┬────────┘
+            ▼
+   ┌─────────────────┐    keeps only what an outside reader would care about:
+   │  2. digest       │    user-visible changes · real numbers · reversals · lessons
+   └────────┬────────┘    drops refactors, chores, CI, bumps
+            ▼
+   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:
+   │  3. judge        │    runnable · numbers · lesson · novelty · audience
+   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask
+            ▼
+   ┌─────────────────┐    one draft per channel, in that channel's shape and language,
+   │  4. draft        │    facts only from the digest, voice only from your examples,
+   └────────┬────────┘    slop-linted before it reaches you
+            ▼
+   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · "posted, here's the URL"
+   │  5. you          │
+   └────────┬────────┘
+            ▼
+   ┌─────────────────┐    edits → voice examples · drops → judge calibration
+   │  6. learn        │    URLs → stars, visitors, downloads vs. the 7-day baseline
+   └─────────────────┘
 ```
 
-| 디렉터리 | 내용 |
-|---|---|
-| `convex/schema.ts` | 데이터 모델 (소유자 스코프) |
-| `convex/collect.ts` | GitHub·npm 수집기 (릴리스, 머지 PR, 새 레포, 스타·다운로드 임계, 트래픽 스냅샷) |
-| `convex/signals.ts` | 신호 → 의미 단위 후보 묶기 (연속 릴리스 병합, 릴리스 앞 PR 부착) |
-| `convex/llm.ts` | 판단(5항목 루브릭 + 이유)과 채널별 초안. Claude API 구조화 출력 |
-| `convex/lib/channels.ts` | 채널 어댑터: 형식 제약, 작성 규칙, 이미지 안내, 작성 화면 링크 |
-| `convex/lib/lint.ts` | 슬롭 린트: 금지어, 이모지 목록, 숫자·한계·링크 필수, 투표 요청 금지 |
-| `convex/drafts.ts` | 복사/수정/버림. 수정 diff → 문체 예시 자동 승격, 버림 사유 → feedback |
-| `convex/omp.ts` + `scripts/omp-sync.mjs` | oh-my-prompt 세션 요약을 후보 근거로 부착 |
-| `convex/crons.ts` | 매일 09:00 KST 수집 → 판단 → 초안 |
-| `src/` | Inbox · Candidate · Published · Settings (Vite + React) |
-| `seeds/` | best-practice 시드 코퍼스 (Show HN 첫 댓글 38건 + 채널 규칙) |
+**Facts from the system, voice from you.** A draft may only use numbers that exist in the evidence. If a number is missing, it writes `[number needed]` instead of inventing one.
 
-## 실행 (로컬)
+<br />
+
+## What you get
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Inbox**
+Candidates ranked by score, one line of reasoning each. "Not worth it" is a valid answer and you can overrule it.
+
+**Candidate**
+Evidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.
+
+</td>
+<td width="50%" valign="top">
+
+**Published**
+Paste the URL after you post. From then on: star and visitor deltas against the pre-post baseline, plus whatever reactions you type in.
+
+**Settings**
+Sources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.
+
+</td>
+</tr>
+</table>
+
+<br />
+
+## Channels
+
+| Channel | Shape | Language |
+|---|---|---|
+| X | three lines: problem · what it does · one number or limit + link | en, ko |
+| Threads | one or two sentences, ends with a take or a question | ko |
+| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |
+| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |
+| Show GN (GeekNews) | what / why / how it differs / decisions / limits / feedback wanted | ko |
+| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
+
+Every draft passes a **slop lint** before you see it: banned phrases, emoji bullets, missing number, missing limitation, missing link, exclamation marks, vote requests.
+
+<br />
+
+## Models & keys
+
+| Provider | Default model | Key |
+|---|---|---|
+| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |
+| Anthropic | `claude-opus-5` | your own |
+| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |
+| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |
+
+The local agent mode queues each judgment and draft as a job. Run the worker where your CLI is logged in:
+
+```bash
+node scripts/agent-worker.mjs --cli claude    # or --cli codex
+```
+
+<br />
+
+## Run it
 
 ```bash
 npm install
-npx convex dev                       # 로컬 익명 Convex 백엔드. .env.local에 VITE_CONVEX_URL을 써 준다
-npx convex env set SOMUN_ALLOW_ANONYMOUS true
+npx convex dev                                        # local Convex backend, writes VITE_CONVEX_URL to .env.local
+npx convex env set SOMUN_ALLOW_ANONYMOUS true         # local only
 npx convex env set GITHUB_TOKEN "$(gh auth token)"
-npx convex env set ANTHROPIC_API_KEY sk-ant-...
-npm run dev                          # http://localhost:5180
+npx convex env set GEMINI_API_KEYS '{"free-1":"..."}' # labeled JSON map; paid keys never rotate
+npm run dev                                           # http://localhost:5180
 
-node scripts/seed.mjs                # 시드 예시 넣기 (1회)
-node scripts/omp-sync.mjs --days 14  # omp 세션 요약 부착 (선택, 로컬 omp.db 읽기)
+node scripts/seed.mjs                                 # best-practice voice examples (once)
+node scripts/omp-sync.mjs --days 14                   # optional: attach oh-my-prompt session summaries
 ```
 
-Settings에서 GitHub 소스(`Open330`, `jiunbae/oh-my-prompt` 등)를 추가하고 Inbox의 "지금 확인"을 누르면 후보가 뜬다.
-판단과 초안은 `ANTHROPIC_API_KEY`가 있어야 돈다. 없으면 후보 수집까지만 된다.
+Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.
 
 ```bash
 npm run typecheck && npm test
 ```
 
-## 검수 루프
+<br />
 
-- **복사**: 그대로 승인. 본문이 `approved` 예시로 저장된다.
-- **수정 후 복사**: before/after가 `draftEdits`에, 수정본이 `edited` 예시로 저장된다. 채널당 사용자 예시가 5개 쌓이면 시드는 비활성화된다.
-- **버리기**: 사유(사실 틀림 / 문체 / 채널 / 아직 / 글감 아님)가 `feedback`에 남고 다음 판단 프롬프트에 들어간다.
-- **올렸어요**: URL 등록 시점부터 스타·방문자·다운로드 스냅샷을 발행 전 기준선과 비교한다.
+## Deploy
 
-## 클라우드 배포
-
-daily와 같은 구조. 셀프호스트 convex-backend(`somun-api.jiun.dev`), jiun-api(`api.jiun.dev`)의 OAuth와 RS256 외부 JWT(aud `somun`), 정적 웹(`somun.jiun.dev`, `docker/Dockerfile.web`).
-
-jiun-api 쪽 준비: `JWT_EXTERNAL_AUDIENCES`에 `somun` 추가, `JIUN_SERVICES`에 `{"id":"somun","redirectUris":["https://somun.jiun.dev/auth/callback"]}`, CORS 허용 원본에 `https://somun.jiun.dev`.
+Same shape as the other `*.jiun.dev` apps: self-hosted Convex (`somun-api.jiun.dev`), OAuth and RS256 external JWTs from `api.jiun.dev` (audience `somun`), static web (`somun.jiun.dev`) from `docker/Dockerfile.web`.
 
 ```bash
-CONVEX_SELF_HOSTED_URL=https://somun-api.jiun.dev CONVEX_SELF_HOSTED_ADMIN_KEY=... npx convex deploy
+CONVEX_SELF_HOSTED_URL=https://somun-api.jiun.dev CONVEX_SELF_HOSTED_ADMIN_KEY=… npx convex deploy
 docker build -f docker/Dockerfile.web --build-arg VITE_CONVEX_URL=https://somun-api.jiun.dev --build-arg VITE_AUTH_URL=https://api.jiun.dev -t somun-web .
 ```
 
-Convex 서버 환경변수: `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, 선택 `SOMUN_MODEL`. 클라우드에서는 `SOMUN_ALLOW_ANONYMOUS`를 설정하지 않는다.
+Server env: `GITHUB_TOKEN`, `GEMINI_API_KEYS`. Never set `SOMUN_ALLOW_ANONYMOUS` in the cloud.
 
-기획 문서: [docs/spec.md](docs/spec.md)
+<br />
 
-License: Apache-2.0
+## Layout
+
+```
+convex/
+  schema.ts          sources → signals → candidates → judgments → drafts → publications → metricSnapshots
+  collect.ts         GitHub / npm collector: releases, merged PRs, commits since last release, milestones, traffic
+  signals.ts         signal → candidate clustering (merges back-to-back releases, attaches PRs to a release)
+  llm.ts · jobs.ts   digest → judge → draft runner; local-agent job queue; result application
+  lib/providers.ts   Gemini key pool · Anthropic · OpenAI-compatible
+  lib/prompts.ts     the three prompts and their JSON schemas
+  lib/channels.ts    per-channel shape, rules, media hints, compose links
+  lib/lint.ts        slop lint
+  drafts.ts          copy / edit / drop → voice examples and feedback
+  omp.ts             oh-my-prompt session summaries as evidence
+  crons.ts           daily at 09:00 KST
+src/                 Inbox · Candidate · Published · Settings
+scripts/             seed.mjs · omp-sync.mjs · agent-worker.mjs
+seeds/               38 real Show HN first comments that landed, plus per-channel rules
+docs/spec.md         the plan this was built from
+```
+
+<br />
+
+<div align="center">
+<sub>Built by <a href="https://github.com/Open330">Open330</a>. First launch it will run: <a href="https://github.com/Open330/muxa">muxa</a>.</sub>
+</div>

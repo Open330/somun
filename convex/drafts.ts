@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { assertOwned, getOwnerId } from "./owner";
 import { channelValidator } from "./schema";
 import { lintDraft } from "./lib/lint";
@@ -12,40 +12,6 @@ export const listByCandidate = query({
     const c = await ctx.db.get(candidateId);
     assertOwned(c, ownerId, "candidate");
     return await ctx.db.query("drafts").withIndex("by_candidate", (q) => q.eq("candidateId", candidateId)).collect();
-  },
-});
-
-export const record = internalMutation({
-  args: {
-    candidateId: v.id("candidates"),
-    channel: channelValidator,
-    title: v.optional(v.string()),
-    body: v.string(),
-    model: v.string(),
-    bannedPhrases: v.array(v.string()),
-  },
-  handler: async (ctx, { candidateId, channel, title, body, model, bannedPhrases }) => {
-    const c = await ctx.db.get(candidateId);
-    if (!c) throw new Error("candidate not found");
-    const prev = await ctx.db.query("drafts").withIndex("by_candidate", (q) => q.eq("candidateId", candidateId)).collect();
-    const version = prev.filter((d) => d.channel === channel).length + 1;
-    const now = Date.now();
-    const id = await ctx.db.insert("drafts", {
-      ownerId: c.ownerId,
-      candidateId,
-      channel,
-      version,
-      title,
-      body,
-      mediaHint: CHANNELS[channel].mediaHint || undefined,
-      lint: lintDraft(channel, title, body, bannedPhrases),
-      status: "proposed",
-      model,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await ctx.db.patch(candidateId, { status: "drafted", updatedAt: now });
-    return id;
   },
 });
 

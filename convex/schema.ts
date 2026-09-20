@@ -68,6 +68,27 @@ export const evidenceValidator = v.object({
   mergedPrTitles: v.optional(v.array(v.string())),
   /** omp 세션 요약: 같은 기간의 세션 수, 재시도 횟수, 오래 걸린 주제 */
   ompSummary: v.optional(v.string()),
+  /** 마지막 릴리스 이후 커밋 제목 (원자료, 다이제스트 입력) */
+  commitSubjects: v.optional(v.array(v.string())),
+  /** 다이제스트: 원자료에서 추린 PR에 쓸 만한 사실만 (판단·초안은 이것을 본다) */
+  highlights: v.optional(v.array(v.string())),
+  highlightsAt: v.optional(v.number()),
+});
+
+export const llmProviderValidator = v.union(v.literal("gemini"), v.literal("anthropic"), v.literal("openai"), v.literal("local-agent"));
+
+export const llmConfigValidator = v.object({
+  provider: llmProviderValidator,
+  /** 비우면 프로바이더 기본 모델 */
+  model: v.optional(v.string()),
+  /** 판단·초안 모델 (비우면 gemini는 3.7-flash, 나머지는 model). 다이제스트는 model을 쓴다 */
+  draftModel: v.optional(v.string()),
+  /** BYOK. 비우면 서버 키(gemini만) 사용 */
+  apiKey: v.optional(v.string()),
+  /** openai 호환 엔드포인트 (선택) */
+  baseUrl: v.optional(v.string()),
+  /** local-agent: 워커가 쓸 CLI */
+  agentCli: v.optional(v.union(v.literal("claude"), v.literal("codex"))),
 });
 
 export default defineSchema({
@@ -239,8 +260,29 @@ export default defineSchema({
     deferThreshold: v.number(),
     enabledChannels: v.array(channelValidator),
     bannedPhrases: v.array(v.string()),
-    /** 판단·초안에 쓰는 모델 ID */
+    /** (구) 모델 ID. llm.model로 이전됨 */
     model: v.string(),
+    llm: v.optional(llmConfigValidator),
     updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+
+  /** LLM 작업 큐. local-agent 프로바이더는 워커(scripts/agent-worker.mjs)가 가져가서 처리한다. */
+  llmJobs: defineTable({
+    ownerId: v.string(),
+    kind: v.union(v.literal("digest"), v.literal("judge"), v.literal("draft")),
+    candidateId: v.id("candidates"),
+    channel: v.optional(channelValidator),
+    system: v.string(),
+    user: v.string(),
+    schemaJson: v.string(),
+    status: v.union(v.literal("pending"), v.literal("claimed"), v.literal("done"), v.literal("failed")),
+    runner: v.optional(v.string()),
+    resultJson: v.optional(v.string()),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    claimedAt: v.optional(v.number()),
+    finishedAt: v.optional(v.number()),
+  })
+    .index("by_owner_status", ["ownerId", "status"])
+    .index("by_candidate", ["candidateId"]),
 });

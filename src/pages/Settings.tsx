@@ -20,6 +20,7 @@ export default function Settings() {
   const [banned, setBanned] = useState("");
   const [model, setModel] = useState("");
   const [thresholds, setThresholds] = useState({ draft: 6, defer: 4 });
+  const [llm, setLlm] = useState<{ provider: "gemini" | "anthropic" | "openai" | "local-agent"; model: string; apiKey: string; baseUrl: string; agentCli: "claude" | "codex"; draftModel: string }>({ provider: "gemini", model: "", draftModel: "", apiKey: "", baseUrl: "", agentCli: "claude" });
   const [ex, setEx] = useState<{ channel: Channel; body: string; title: string }>({ channel: "x_en", body: "", title: "" });
   const [exChannel, setExChannel] = useState<Channel | "all">("all");
 
@@ -28,6 +29,7 @@ export default function Settings() {
     setBanned(settings.bannedPhrases.join("\n"));
     setModel(settings.model);
     setThresholds({ draft: settings.draftThreshold, defer: settings.deferThreshold });
+    setLlm({ provider: settings.llm.provider, model: settings.llm.model ?? "", draftModel: settings.llm.draftModel ?? "", apiKey: "", baseUrl: settings.llm.baseUrl ?? "", agentCli: settings.llm.agentCli ?? "claude" });
   }, [settings]);
 
   if (!settings) return <div className="empty">불러오는 중…</div>;
@@ -88,7 +90,6 @@ export default function Settings() {
         <div className="row">
           <label className="field"><span>초안 임계 (합계)</span><input type="number" value={thresholds.draft} onChange={(ev) => setThresholds({ ...thresholds, draft: Number(ev.target.value) })} /></label>
           <label className="field"><span>보류 임계</span><input type="number" value={thresholds.defer} onChange={(ev) => setThresholds({ ...thresholds, defer: Number(ev.target.value) })} /></label>
-          <label className="field"><span>모델</span><input value={model} onChange={(ev) => setModel(ev.target.value)} /></label>
         </div>
         <div className="row small muted" style={{ marginBottom: 8 }}>
           가중치:
@@ -101,6 +102,41 @@ export default function Settings() {
         </div>
         <label className="field"><span>금지 표현 (줄바꿈으로 구분)</span><textarea value={banned} onChange={(ev) => setBanned(ev.target.value)} style={{ minHeight: 100 }} /></label>
         <button className="primary" onClick={() => void update({ draftThreshold: thresholds.draft, deferThreshold: thresholds.defer, model, bannedPhrases: banned.split("\n").map((s) => s.trim()).filter(Boolean) })}>저장</button>
+      </div>
+
+      <h2>모델 · 키</h2>
+      <div className="card">
+        <p className="small muted">
+          기본은 서버의 Gemini 키 풀(3.5 Flash-Lite)입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.
+          {settings.llm.apiKeySet && <> 현재 저장된 키: …{settings.llm.apiKeyHint}</>}
+        </p>
+        <div className="tabs">
+          {([["gemini", "Gemini (서버 키 또는 내 키)"], ["anthropic", "Anthropic (내 키)"], ["openai", "OpenAI 호환 (내 키)"], ["local-agent", "로컬 에이전트 (Claude Code / Codex)"]] as const).map(([k, l]) => (
+            <button key={k} className={llm.provider === k ? "active" : ""} onClick={() => setLlm({ ...llm, provider: k })}>{l}</button>
+          ))}
+        </div>
+        {llm.provider === "local-agent" ? (
+          <>
+            <div className="row">
+              <label className="field"><span>CLI</span>
+                <select value={llm.agentCli} onChange={(ev) => setLlm({ ...llm, agentCli: ev.target.value as "claude" | "codex" })}><option value="claude">claude (Claude Code)</option><option value="codex">codex (Codex CLI)</option></select>
+              </label>
+            </div>
+            <pre className="evidence">{`# 내 컴퓨터에서 (본인 구독으로 처리, 키 불필요)
+CONVEX_URL=${import.meta.env.VITE_CONVEX_URL} node scripts/agent-worker.mjs --cli ${llm.agentCli}`}</pre>
+          </>
+        ) : (
+          <div className="row">
+            <label className="field"><span>다이제스트 모델 (비우면 기본값)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.5-flash-lite" : llm.provider === "anthropic" ? "claude-opus-5" : "gpt-5"} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
+            <label className="field"><span>판단·초안 모델 (비우면 {llm.provider === "gemini" ? "gemini-3.7-flash" : "위와 같음"})</span><input value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
+            <label className="field"><span>API 키 {llm.provider === "gemini" ? "(비우면 서버 키)" : "(필수)"}</span><input type="password" placeholder={settings.llm.apiKeySet ? "저장됨 — 바꾸려면 입력" : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
+            {llm.provider === "openai" && <label className="field"><span>Base URL (선택, OpenRouter·Ollama 등)</span><input placeholder="https://api.openai.com/v1" value={llm.baseUrl} onChange={(ev) => setLlm({ ...llm, baseUrl: ev.target.value })} /></label>}
+          </div>
+        )}
+        <div className="toolbar">
+          <button className="primary" onClick={() => void update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, apiKey: llm.apiKey || undefined, baseUrl: llm.baseUrl || undefined, agentCli: llm.agentCli }, keepApiKey: !llm.apiKey })}>저장</button>
+          {settings.llm.apiKeySet && <button className="danger" onClick={() => void update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, agentCli: llm.agentCli }, keepApiKey: false })}>저장된 키 삭제</button>}
+        </div>
       </div>
 
       <h2>문체 예시</h2>

@@ -62,9 +62,12 @@ function firstGif(readme: string): string | undefined {
 }
 
 function limitationsFrom(readme: string): string[] {
+  const notes: string[] = [];
+  const beta = /\[!(?:IMPORTANT|WARNING|CAUTION)\]\s*\n((?:>.*\n?){1,4})/i.exec(readme);
+  if (beta) notes.push(beta[1].replace(/^>\s?/gm, "").replace(/\s+/g, " ").trim().slice(0, 240));
   const m = /(?:^|\n)#+\s*(?:limitations?|known issues|caveats|not (?:yet )?supported|한계|제한|아직 안 되는 것)[^\n]*\n([\s\S]{0,1200}?)(?:\n#+\s|$)/i.exec(readme);
-  if (!m) return [];
-  return m[1].split("\n").map((l) => l.replace(/^[-*\d.\s]+/, "").trim()).filter((l) => l.length > 8).slice(0, 5);
+  if (!m) return notes;
+  return [...notes, ...m[1].split("\n").map((l) => l.replace(/^[-*\d.\s]+/, "").trim()).filter((l) => l.length > 8)].slice(0, 5);
 }
 
 type CollectResult = { skipped?: boolean; summary?: Record<string, number> };
@@ -136,6 +139,9 @@ export const collectGithubSource = internalAction({
         }
 
         const latest = allReleases[0];
+        const sinceIso = new Date(latest ? Math.min(Date.parse(latest.published_at), since) : since).toISOString();
+        const commits = await gh<{ commit: { message: string } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`, token);
+        const commitSubjects = (commits ?? []).map((c) => c.commit.message.split("\n")[0].trim()).filter((m) => m && !/^(merge|chore\(deps|bump|release v?\d)/i.test(m)).slice(0, 80);
         const commitsHead = await fetch(`${GH}/repos/${name}/commits?per_page=1`, { headers: { Authorization: `Bearer ${token}`, "User-Agent": "somun" } });
         const link = commitsHead.headers.get("link") ?? "";
         const commitCount = Number(/page=(\d+)>; rel="last"/.exec(link)?.[1] ?? (commitsHead.ok ? 1 : 0));
@@ -159,12 +165,14 @@ export const collectGithubSource = internalAction({
           demoAsset: firstGif(readme),
           limitations: limitationsFrom(readme),
           readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500),
+          commitSubjects,
         };
 
         await ctx.runMutation(internal.metrics.snapshot, {
           ownerId, repo: name, stars: repo.stargazers_count, forks: repo.forks_count,
           viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10).map((r) => ({ referrer: r.referrer, uniques: r.uniques })), npmDownloadsMonth: npmMonthlyDownloads,
         });
+        await ctx.runMutation(internal.candidates.refreshEvidence, { ownerId, repo: name, evidence });
         if (signals.length) {
           const result = await ctx.runMutation(internal.signals.ingest, {
             ownerId, sourceId, signals,
