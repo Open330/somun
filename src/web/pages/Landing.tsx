@@ -1,4 +1,6 @@
 import { AUTH_PROVIDERS } from "../lib/auth/config";
+import shotInbox from "../assets/shots/inbox.jpg";
+import shotCandidate from "../assets/shots/candidate.jpg";
 import { useAuth } from "../lib/auth/context";
 import { Lockup, Mark } from "../components/Mark";
 
@@ -49,6 +51,15 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           <div className="st"><b>4 초안</b><span>채널마다 그 형식과 언어로. 슬롭 린트를 통과해야 보임</span></div>
           <div className="st"><b>5 검수</b><span>복사 · 수정 후 복사 · 버리기(사유) · 올린 URL 등록</span></div>
           <div className="st"><b>6 학습</b><span>수정은 문체 예시로, 버림은 판단 보정으로, URL은 지표로</span></div>
+        </div>
+      </section>
+
+      <section className="section" id="shots">
+        <h2>실제 화면</h2>
+        <p className="lede">왼쪽은 오늘 검수할 글감 목록, 오른쪽은 한 글감의 사실·판단 이유·채널별 초안입니다. 초안 옆의 숫자는 근거에 있는 값만 씁니다.</p>
+        <div className="shots">
+          <figure><img src={shotInbox} alt="글감 목록: 검수할 초안 2개와 보류 5개, 각 행에 점수와 판단 요약" loading="lazy" width={1600} height={1025} /><figcaption>글감 · 점수순으로 검수할 것과 보류를 나눕니다</figcaption></figure>
+          <figure><img src={shotCandidate} alt="글감 상세: 무엇이 달라졌나, 사실 칩, 판단 이유, 채널·언어별 초안 탭과 X 미리보기" loading="lazy" width={1600} height={1025} /><figcaption>글감 상세 · 사실과 판단 이유 옆에서 초안을 복사하거나 고칩니다</figcaption></figure>
         </div>
       </section>
 

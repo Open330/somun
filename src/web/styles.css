@@ -276,3 +276,9 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 }
 .tri-head h2 { white-space: nowrap; }
 @media (max-width: 860px) { .tri-head .tiny { display: none; } .rowi .sc { font-size: 15px; } }
+
+/* 랜딩 실제 화면 */
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.shots figure { margin: 0; }
+.shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); background: var(--surface); }
+.shots figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
