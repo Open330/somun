@@ -1,0 +1,146 @@
+[
+ {
+  "title": "Show HN: An e-ink frame that hears birds and draws them as 1800s illustrations",
+  "points": 2364,
+  "comments": 259,
+  "url": "https://github.com/arnegiacomo/fugleramme",
+  "hn": "https://news.ycombinator.com/item?id=49711544",
+  "author": "arnemunthekaas",
+  "first_comment": "Author here. A mic listens to the sounds in my garden, BirdNET-Go (an open-source BirdNET classifier) detects birds by sound, and the e-ink frame draws a real 1800s natural-history illustration of each one as it hears them. Here’s a live web-demo from my garden in Bergen, Norway: https://fugleramme.arnegiacomo.dev A few things that might be interesting: - The screen only redraws when the set of birds changes, and dithers the collage down to six colours for the e-ink display. - Bigger birds sit toward the centre, scaled by real body mass. - 800+ cutouts across 400+ species, each cut from a real public domain plate. All art is historic and human-made. Coverage is currently best for the Nordics, Britain and Germany (but other parts of the world are in the works). - Runs fully local on a Raspberry Pi or your homelab (yes, even the classifier runs great on a RPI) The e-ink panel is optional and it can run web-only in a container against a BirdNET-Go you already have. Happy to answer any questions!"
+ },
+ {
+  "title": "Show HN: Getting GLM 5.2 running on my slow computer",
+  "points": 937,
+  "comments": 240,
+  "url": "https://github.com/JustVugg/colibri",
+  "hn": "https://news.ycombinator.com/item?id=48842459",
+  "author": "vforno",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Open-source engine running Gemma 4 26B in 2 GB RAM on any M-series Mac",
+  "points": 919,
+  "comments": 344,
+  "url": "https://github.com/drumih/turbo-fieldfare",
+  "hn": "https://news.ycombinator.com/item?id=49098510",
+  "author": "gitpusher42",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: I built a tiny LLM to demystify how language models work",
+  "points": 915,
+  "comments": 134,
+  "url": "https://github.com/arman-bd/guppylm",
+  "hn": "https://news.ycombinator.com/item?id=47655408",
+  "author": "armanified",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Needle: We Distilled Gemini Tool Calling into a 26M Model",
+  "points": 776,
+  "comments": 211,
+  "url": "https://github.com/cactus-compute/needle",
+  "hn": "https://news.ycombinator.com/item?id=48111896",
+  "author": "HenryNdubuaku",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Files.md – Open-source alternative to Obsidian",
+  "points": 730,
+  "comments": 356,
+  "url": "https://github.com/zakirullin/files.md",
+  "hn": "https://news.ycombinator.com/item?id=48179677",
+  "author": "zakirullin",
+  "first_comment": "I believe that not only you should own your data in plain files, but also you should own the software that opens those files. So that your files and tools can grow together, fully under your ownership, through the ages. The app can be easily tweaked for your own needs via an LLM - code is optimized for that. P.S. And Golang seems to be great fit for this kind of software."
+ },
+ {
+  "title": "Show HN: Kage – Shadow any website to a single binary for offline viewing",
+  "points": 712,
+  "comments": 141,
+  "url": "https://github.com/tamnd/kage",
+  "hn": "https://news.ycombinator.com/item?id=48529990",
+  "author": "tamnd",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Forge – Guardrails take an 8B model from 53% to 99% on agentic tasks",
+  "points": 687,
+  "comments": 252,
+  "url": "https://github.com/antoinezambelli/forge",
+  "hn": "https://news.ycombinator.com/item?id=48192383",
+  "author": "zambelli",
+  "first_comment": "Happy to answer questions about the eval methodology, the backend findings, or anything in the repo. I'll be around."
+ },
+ {
+  "title": "Show HN: ChartGPU – WebGPU-powered charting library (1M points at 60fps)",
+  "points": 670,
+  "comments": 214,
+  "url": "https://github.com/ChartGPU/ChartGPU",
+  "hn": "https://news.ycombinator.com/item?id=46706528",
+  "author": "huntergemmer",
+  "first_comment": "Quick update: Just shipped a fix for the data zoom slider bug that several of you reported (thanks d--b, azangru, and others). The slider should now track the cursor correctly on macOS. If you tried the million-points demo earlier and the zoom felt off, give it another shot. This is why I love launching on HN - real feedback from people actually trying the demos. Keep it coming! :)"
+ },
+ {
+  "title": "Show HN: Craftplan – I built my wife a production management tool for her bakery",
+  "points": 577,
+  "comments": 167,
+  "url": "https://github.com/puemos/craftplan",
+  "hn": "https://news.ycombinator.com/item?id=46847690",
+  "author": "deofoo",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: WhatCable, a tiny menu bar app for inspecting USB-C cables",
+  "points": 566,
+  "comments": 168,
+  "url": "https://github.com/darrylmorley/whatcable",
+  "hn": "https://news.ycombinator.com/item?id=47972511",
+  "author": "sleepingNomad",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Three new Kitten TTS models – smallest less than 25MB",
+  "points": 561,
+  "comments": 181,
+  "url": "https://github.com/KittenML/KittenTTS",
+  "hn": "https://news.ycombinator.com/item?id=47441546",
+  "author": "rohan_joshi",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: NanoClaw – “Clawdbot” in 500 lines of TS with Apple container isolation",
+  "points": 533,
+  "comments": 224,
+  "url": "https://github.com/gavrielc/nanoclaw",
+  "hn": "https://news.ycombinator.com/item?id=46850205",
+  "author": "jimminyx",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Smol machines – subsecond coldstart, portable virtual machines",
+  "points": 499,
+  "comments": 152,
+  "url": "https://github.com/smol-machines/smolvm",
+  "hn": "https://news.ycombinator.com/item?id=47808268",
+  "author": "binsquare",
+  "first_comment": "Hello, I'm building a replacement for docker containers with a virtual machine with the ergonomics of containers + subsecond start times. I worked in AWS previously in the container space + with firecracker. I realized the container is an unnecessary layer that slowed things down + firecracker was a technology designed for AWS org structure + usecase. So I ended up building a hybrid taking the best of containers with the best of firecracker. Let me know your thoughts, thanks!"
+ },
+ {
+  "title": "Show HN: Ghost Pepper – Local hold-to-talk speech-to-text for macOS",
+  "points": 467,
+  "comments": 200,
+  "url": "https://github.com/matthartman/ghost-pepper",
+  "hn": "https://news.ycombinator.com/item?id=47666024",
+  "author": "MattHart88",
+  "first_comment": null
+ },
+ {
+  "title": "Show HN: Semble – Code search for agents that uses 98% fewer tokens than grep",
+  "points": 445,
+  "comments": 151,
+  "url": "https://github.com/MinishLab/semble",
+  "hn": "https://news.ycombinator.com/item?id=48169874",
+  "author": "Bibabomas",
+  "first_comment": null
+ }
+]

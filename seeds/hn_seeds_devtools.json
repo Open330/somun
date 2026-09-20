@@ -1,0 +1,178 @@
+[
+ {
+  "title": "Show HN: Forge – Guardrails take an 8B model from 53% to 99% on agentic tasks",
+  "points": 687,
+  "comments": 252,
+  "url": "https://github.com/antoinezambelli/forge",
+  "hn": "https://news.ycombinator.com/item?id=48192383",
+  "first_comment": "Happy to answer questions about the eval methodology, the backend findings, or anything in the repo. I'll be around."
+ },
+ {
+  "title": "Show HN: Whispering – Open-source, local-first dictation you can trust",
+  "points": 591,
+  "comments": 152,
+  "url": "https://github.com/epicenter-so/epicenter/tree/main/apps/whispering",
+  "hn": "https://news.ycombinator.com/item?id=44942731",
+  "first_comment": "For those checking out the repo this morning, I'm in the middle of a release that adds Whisper C++ support! https://github.com/epicenter-so/epicenter/pull/655 After this pushes, we'll have far more extensive local transcription support. Just fixing a few more small things :)"
+ },
+ {
+  "title": "Show HN: Witr – Explain why a process is running on your Linux system",
+  "points": 526,
+  "comments": 105,
+  "url": "https://github.com/pranshuparmar/witr",
+  "hn": "https://news.ycombinator.com/item?id=46392910",
+  "first_comment": "A quick note on scope: this is not meant to replace existing monitoring or observability tools. It’s designed for those moments when you SSH into a box and need to quickly understand “why is this running” without digging through configs, cron jobs, or service trees manually. Happy to answer questions or adjust direction based on feedback."
+ },
+ {
+  "title": "Show HN: I was tired of opening 2 tabs for every HN link, so I made a userscript",
+  "points": 433,
+  "comments": 126,
+  "url": "https://github.com/twalichiewicz/HNewhere",
+  "hn": "https://news.ycombinator.com/item?id=49090607",
+  "first_comment": "Thanks again for the feedback everyone! I've made quite a few improvements from the original version over the past few days, but unfortunately the OG version I released didn't specify the @updateURL or @downloadURL so you may not automatically get updated if you installed when I first posted this. And as always, if you find any bugs or have any additional feedback, please report at https://github.com/twalichiewicz/HNewhere/issues"
+ },
+ {
+  "title": "Show HN: OSS Agent I built topped the TerminalBench on Gemini-3-flash-preview",
+  "points": 393,
+  "comments": 148,
+  "url": "https://github.com/dirac-run/dirac",
+  "hn": "https://news.ycombinator.com/item?id=47920787",
+  "first_comment": "Interesting things Dirac does: 1. Uses an optimized version of Hash-Anchored edits for file editing ( https://dirac.run/posts/hash-anchors-myers-diff-single-token ) 2. Utilizes language's AST to decide what to fetch into context, entirely avoids large code file reads 3. Batches all operations. Does large number of reads/edits simultaneously (you can see a video demo for deepseek-v4-flash here https://www.reddit.com/r/LocalLLaMA/comments/1suhdki/tested_... ) 4. Allows the model to execute code to analyze things on the fly, so the model can simply write bash/python/perl script to accomplish things where appropriate 5. A lot of context curation and opportunistic context updates, i.e. put into context anything that you are certain model would ask next"
+ },
+ {
+  "title": "Show HN: CineCLI – Browse and torrent movies directly from your terminal",
+  "points": 348,
+  "comments": 111,
+  "url": "https://github.com/eyeblech/cinecli",
+  "hn": "https://news.ycombinator.com/item?id=46362655",
+  "first_comment": "leave a feedback folks:|"
+ },
+ {
+  "title": "Show HN: Juggler – an open-source GUI coding agent, by the creator of JUCE",
+  "points": 280,
+  "comments": 119,
+  "url": "https://github.com/juggler-ai/juggler",
+  "hn": "https://news.ycombinator.com/item?id=48883305",
+  "first_comment": "Just wanted to add a follow-up to what I posted above.. In terms of who might be interested in this: I've watched amazing communities spring up around open agents like Opencode and Pi. People are getting into those because of their extensibility and being model-independant. They're great projects, but like many people I know, I really hate being stuck in the terminal for this kind of tool. I also had some ideas around what an agent's UX could be like if every item in the context was a plugin (with its own custom UI). So I guess if you're a claude/codex user but want to escape the terminal (and let's face it, their GUI apps are also basically the same UX as a terminal but with nicer fonts), I'm trying to do something different here, would be really keen to hear what the enthusiasts think of it!"
+ },
+ {
+  "title": "Show HN: Doxx – Terminal .docx viewer inspired by Glow",
+  "points": 261,
+  "comments": 72,
+  "url": "https://github.com/bgreenwell/doxx",
+  "hn": "https://news.ycombinator.com/item?id=44934391",
+  "first_comment": "Thanks for all the support and good feedback! First release is out! https://github.com/bgreenwell/doxx/releases/tag/v0.1.1"
+ },
+ {
+  "title": "Show HN: Ferrite – Markdown editor in Rust with native Mermaid diagram rendering",
+  "points": 241,
+  "comments": 190,
+  "url": "https://github.com/OlaProeis/Ferrite",
+  "hn": "https://news.ycombinator.com/item?id=46571980",
+  "first_comment": "v0.2.2 just released — addressing several issues raised in this thread: - CJK font support 1 — Korean/Chinese/Japanese characters now render properly - CLI improvements (#9, #10) — ferrite file.md now works, plus --version and --help flags - Undo/redo fixes 2 — Fixed scroll reset and focus issues - Default view mode setting 3 — Can now set split/preview as default - Configurable log level 4 — Reduce stderr noise - Ubuntu 22.04 compatibility 5 — .deb now works on 22.04+ Thanks to everyone who reported issues! Download: https://github.com/OlaProeis/Ferrite/releases/tag/v0.2.2"
+ },
+ {
+  "title": "Show HN: Cactus – Ollama for Smartphones",
+  "points": 231,
+  "comments": 82,
+  "url": "https://github.com/cactus-compute/cactus",
+  "hn": "https://news.ycombinator.com/item?id=44524544",
+  "first_comment": "Please feel free to join our Discord: https://discord.com/invite/bNurx3AXTJ"
+ },
+ {
+  "title": "Show HN: Wyzer Programming Language",
+  "points": 227,
+  "comments": 120,
+  "url": "https://github.com/Wyzer-Lang/wyzer",
+  "hn": "https://news.ycombinator.com/item?id=49209385",
+  "first_comment": "i heard you guys and took my time to improve the project with the feedback which i really appreciate, i really don't know how to delete this HN since someone impersonated me from this account which really isn't mine. You might have expected a polished language and found a WIP programming language which i'm really sorry for, i updated the README as per the people's request and also got the documentations up on the website! :) , i'm open to more feedback and assistance to make the project better and most importantly questions! (i do have to really fix the documentation but i'd rather focus on the language first)"
+ },
+ {
+  "title": "Show HN: TERMy – A fast terminal assistant that does not use LLMs",
+  "points": 225,
+  "comments": 45,
+  "url": "https://github.com/gioblu/NPC-Forge/blob/main/docs/development.md",
+  "hn": "https://news.ycombinator.com/item?id=49562219",
+  "first_comment": "Hi, I am the creator, feel free to ask any questions :) What do you think about it?"
+ },
+ {
+  "title": "Show HN: Rust but Lisp",
+  "points": 218,
+  "comments": 74,
+  "url": "https://github.com/ThatXliner/rust-but-lisp",
+  "hn": "https://news.ycombinator.com/item?id=48078575",
+  "first_comment": "For everyone who is shaming on the project for \"not implementing enough,\" then you can definitely help me with it. For everyone who is shaming on the project for being \"LLM slop,\" sure but that's the reason why something like this can exist in the first place. The point isn't to be a finished, production-ready product. The point is to be an interesting work, and just a sly bit silly"
+ },
+ {
+  "title": "Show HN: CLI to order groceries via reverse-engineered REWE API (Haskell)",
+  "points": 205,
+  "comments": 85,
+  "url": "https://github.com/yannick-cw/korb",
+  "hn": "https://news.ycombinator.com/item?id=47571183",
+  "first_comment": "I want to add something else to this. In the process of writing this, I also played with formal verification and formally verified the suggestion engine, which was a really nice side discovery. The basic idea is to write a prove in Lean4 and then test both the production implementation (Haskell) and the Lean implementation against random inputs. Compare if the results are the same. If that is the case -> you can be pretty sure the unproven production version is as correct as the proven lean version. https://www.dev-log.me/formal_verification_in_any_language_f..."
+ },
+ {
+  "title": "Show HN: Sonar – A tiny CLI to see and kill whatever's running on localhost",
+  "points": 204,
+  "comments": 77,
+  "url": "https://github.com/RasKrebs/sonar",
+  "hn": "https://news.ycombinator.com/item?id=47452515",
+  "first_comment": "I always have a bunch of local projects running, particularly during the weekend where I'm rarely working on one thing at a time. A big pain of mine was constantly running into port: Redis from one project blocking another, orphaned dev servers from old worktrees, Docker containers I forgot about. The usual fix is lsof -iTCP | grep ..., then figuring out what the PID actually is, then killing it. But I always forget the command, and it doesn’t really include all the information that I like. So I built this lightweight CLI. Single binary, no dependencies. It shows everything listening on localhost with process names, Docker container info, clickable URLs etc. Sure there are workarounds, but none that satisfied my need for a short, easily rememberable command. Also nothing really has the same satisfaction as running sonar kill 3000 — it just feels nice. I’ve already been approached by a few agent orchestration tools that have been struggling with the same thing. It's really useful when you have multiple agents running, but it's not built for just that use case, I have also find it handy when killing off all containers after a failed cleanup and so on. Also know that MCPs are dead and CLIs are the new thing in agentic coding, this might be a useful tool for Claude, particularly when a compose process exits before all containers are stopped. Open for contributions, ideas and feedback."
+ },
+ {
+  "title": "Show HN: Tiny VM sandbox in C with apps in Rust, C and Zig",
+  "points": 196,
+  "comments": 12,
+  "url": "https://github.com/ringtailsoftware/uvm32",
+  "hn": "https://news.ycombinator.com/item?id=46249538",
+  "first_comment": "\"Just add rats\" https://github.com/ringtailsoftware/uvm32/tree/main/apps/zig..."
+ },
+ {
+  "title": "Show HN: Turbolite – a SQLite VFS serving sub-250ms cold JOIN queries from S3",
+  "points": 185,
+  "comments": 43,
+  "url": "https://github.com/russellromney/turbolite",
+  "hn": "https://news.ycombinator.com/item?id=47534283",
+  "first_comment": "A bit more color on what I found interesting building this: The motivating question for me was less “can SQLite read over the network?” and more “what assumptions break once the storage layer is object storage instead of a filesystem?” The biggest conceptual shift was around *layout*. What felt most wrong in naive designs was that SQLite page numbers are not laid out in a way that matches how you want to fetch data remotely. If an index is scattered across many unrelated page ranges, then “prefetch nearby pages” is kind of a fake optimization. Nearby in the file is not the same thing as relevant to the query. That pushed me toward B-tree-aware grouping. Once the storage layer starts understanding which table or index a page belongs to, a lot of other things get cleaner: more targeted prefetch, better scan behavior, less random fetching, and much saner request economics. Another thing that became much more important than I expected is that *different page types matter a lot*. Interior B-tree pages are tiny in footprint but disproportionately important, because basically every query traverses them. That changed how I thought about the system: much less as “a database file” and much more as “different classes of pages with very different value on the critical path.” The query-plan-aware “frontrun” part came from the same instinct. Reactive prefetch is fine, but SQLite often already knows a lot about what it is about to touch. If the storage layer can see enough of that early, it can start warming the right structures before the first miss fully cascades. That’s still pretty experimental, but it was one of the more fun parts of the project. A few things I learned building this: 1. *Cold point reads and small joins seem more plausible than I expected.* Not local-disk fast, obviously, but plausible for the “many mostly-cold DBs” niche. 2. *The real enemy is request count more than raw bytes.* Once I leaned harder into grouping and prefetch by tree, the design got much more coherent. 3. *Scans are still where reality bites.* They got much less bad, but they are still the place where remote object storage most clearly reminds you that it is not a local SSD. 4. *The storage backend is super important.* Different storage backends (S3, S3 Express, Tigris) have verg different round trip latencies and it's the single most important thing in determining how to tune prefetching. Anyway, happy to talk about the architecture, the benchmark setup, what broke, or why I chose this shape instead of raw-file range GETs / replication-first approaches / etc."
+ },
+ {
+  "title": "Show HN: Ante, a coding agent in a single binary that runs offline",
+  "points": 169,
+  "comments": 93,
+  "url": "https://github.com/AntigmaLabs/ante",
+  "hn": "https://news.ycombinator.com/item?id=49245437",
+  "first_comment": "Hi HN, I'm Mohan from Antigma Labs. Ante is a coding agent that ships as one self-contained ~15MB binary: the TUI, an embedded ripgrep, local PDF/OCR, and a natively managed llama.cpp engine are all inside. No runtime dependencies, no node_modules, no account. - Ante installs a pinned, checksum-verified official llama.cpp build matched to your machine (Metal on Apple silicon; CUDA, Vulkan, or CPU on Linux) and handles upgrades when the pin changes. - It discovers GGUF files already on disk (~/.ante/models, the llama.cpp and Hugging Face caches), attaches to llama servers already running on local ports, and estimates RAM/VRAM from model size and context window before anything loads. - `ante --offline-model /path/to/model.gguf \"prompt\"` boots the server, runs the session, and shuts it down. `/offline-mode` does the same interactively; `ante serve --offline-model` loads a model once for many clients. - No API key, no account. Once the model is on disk, inference needs no network at all; set ANTE_TELEMETRY=off and no telemetry is exported either. On capability, we'd rather publish the number than oversell: we benchmark local models with the same harness and auditable runs as frontier ones, and Qwen3.6 27B (a 17 GB download) scores 56.2% on Terminal-Bench 2.1 across 445 trials (live results: https://antigma.ai/eval ). That's a real gap from frontier models. The design bet is that you mix: hosted providers and local live in the same catalog, `/providers` switches mid-session, so sensitive repos or high-volume work go local and hard problems go frontier. Hosted models work with your own keys or subscription. But nothing about trying Ante requires signing up for anything: download the binary, point it at a GGUF. Offline mode is under active development and has rough edges with the overview at https://ante.run/local/overview . I'll be in the comments."
+ },
+ {
+  "title": "Show HN: Artifact Keeper – Open-Source Artifactory/Nexus Alternative in Rust",
+  "points": 166,
+  "comments": 67,
+  "url": "https://github.com/artifact-keeper",
+  "hn": "https://news.ycombinator.com/item?id=46909037",
+  "first_comment": "Want to thank everyone for taking the time to make comments here. I am using what was said to improve the code base. Currently active in some refactors. If anyone wants to test ArtifactKeeper I recommend waiting for my 1.0.0.a2 release. Hopefully by the end of the weekend. Thanks again!!!"
+ },
+ {
+  "title": "Show HN: qqqa – A fast, stateless LLM-powered assistant for your shell",
+  "points": 165,
+  "comments": 86,
+  "url": "https://github.com/matisojka/qqqa",
+  "hn": "https://news.ycombinator.com/item?id=45833811",
+  "first_comment": "And of course, if you find any bugs or feature requests, report them via issues on Github."
+ },
+ {
+  "title": "Show HN: Agent Vault – Open-source credential proxy and vault for agents",
+  "points": 156,
+  "comments": 55,
+  "url": "https://github.com/Infisical/agent-vault",
+  "hn": "https://news.ycombinator.com/item?id=47865822",
+  "first_comment": "T from Infisical here - Also forgot to mention that this is a research preview launch for Agent Vault and should be treated as such - experimental Since the project is in active development, the form factor including API is unstable but I think it gives a good first glance into how we're thinking about secrets management for AI agents; we made some interesting architectural decisions along the way to get here, and I think this is generally on the right track with how the industry is thinking about solving credential exfiltration: thru credential brokering. We'd appreciate any feedback; feel free also to raise issues, and contribute - this is very much welcome :)"
+ },
+ {
+  "title": "Show HN: Open-source browser for AI agents",
+  "points": 155,
+  "comments": 55,
+  "url": "https://github.com/theredsix/agent-browser-protocol",
+  "hn": "https://news.ycombinator.com/item?id=47336171",
+  "first_comment": "Op here, happy to answer any question!"
+ }
+]
