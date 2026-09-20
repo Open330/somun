@@ -69,7 +69,7 @@ export default function Settings() {
       {tab === "model" && (
         <div className="stack" style={{ gap: 16, maxWidth: 760 }}>
           <div className="card stack" style={{ gap: 12 }}>
-            <p className="small muted">기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.{settings.llm.apiKeySet && <> 현재 저장된 키: …{settings.llm.apiKeyHint}</>}</p>
+            <p className="small muted">분석(다이제스트·판단)은 가벼운 모델, 초안 생성만 상위 모델을 씁니다. 무료 쿼터가 모델별로 다르기 때문입니다. 기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.{settings.llm.apiKeySet && <> 현재 저장된 키: …{settings.llm.apiKeyHint}</>}</p>
             <div className="tabs">
               {([["gemini", "Gemini"], ["anthropic", "Anthropic"], ["openai", "OpenAI 호환"], ["local-agent", "로컬 에이전트"]] as const).map(([k, l]) => <button key={k} className={llm.provider === k ? "active" : ""} onClick={() => setLlm({ ...llm, provider: k })}>{l}</button>)}
             </div>
@@ -80,8 +80,8 @@ export default function Settings() {
               </>
             ) : (
               <div className="row wrap">
-                <label className="field" style={{ flex: 1 }}><span>다이제스트 모델</span><input placeholder={llm.provider === "gemini" ? "gemini-3.5-flash-lite" : llm.provider === "anthropic" ? "claude-opus-5" : "gpt-5"} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
-                <label className="field" style={{ flex: 1 }}><span>판단·초안 모델</span><input placeholder={llm.provider === "gemini" ? "gemini-3.7-flash" : "위와 같음"} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
+                <label className="field" style={{ flex: 1 }}><span>분석 모델 (다이제스트·판단)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.5-flash-lite" : llm.provider === "anthropic" ? "claude-opus-5" : "gpt-5"} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
+                <label className="field" style={{ flex: 1 }}><span>초안 모델 (글 생성만)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.7-flash" : "위와 같음"} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
                 <label className="field" style={{ flex: 1 }}><span>API 키 {llm.provider === "gemini" ? "(비우면 서버 키)" : "(필수)"}</span><input type="password" placeholder={settings.llm.apiKeySet ? "저장됨 — 바꾸려면 입력" : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
                 {llm.provider === "openai" && <label className="field" style={{ flex: 1 }}><span>Base URL (선택)</span><input placeholder="https://api.openai.com/v1" value={llm.baseUrl} onChange={(ev) => setLlm({ ...llm, baseUrl: ev.target.value })} /></label>}
               </div>
