@@ -2,7 +2,7 @@
 
 <br />
 
-# 소문 &nbsp;·&nbsp; somun
+<img src="docs/brand/lockup.png" alt="somun" width="420" />
 
 **PR for developers who'd rather build than announce.**
 

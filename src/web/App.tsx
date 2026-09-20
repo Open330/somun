@@ -15,6 +15,7 @@ import Voice from "./pages/Voice";
 import GithubSetup from "./pages/GithubSetup";
 import SetupGithubApp from "./pages/SetupGithubApp";
 import type { ConnectorsView } from "@shared/types";
+import { Lockup, Mark } from "./components/Mark";
 
 const NAV = [["/", "글감"], ["/published", "발행"], ["/connectors", "연결"], ["/voice", "문체"], ["/settings", "설정"]] as const;
 
@@ -46,13 +47,13 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="brand"><span className="word">소문</span><span className="roman">somun</span></div>
+        <div className="brand"><Lockup size={30} /></div>
         <nav className="nav">{links}</nav>
         <div className="spacer" />
         <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>나가기</button></div>
       </aside>
       <div>
-        <div className="topbar"><div className="brand"><span className="word">소문</span></div>{links}</div>
+        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}</div>
         <main className="main">
           {needConsent ? <Consent installUrl={app!.installUrl!} /> : (
           <Routes>
@@ -77,6 +78,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
 function Consent({ installUrl }: { installUrl: string }) {
   return (
     <div className="card lift" style={{ maxWidth: 560, margin: "48px auto", padding: 28 }}>
+      <div style={{ marginBottom: 14 }}><Mark size={44} /></div>
       <h1 style={{ marginBottom: 8 }}>저장소 읽기 권한이 필요합니다</h1>
       <p className="muted">소문은 GitHub의 릴리스, 머지된 PR, 커밋, 스타를 읽어 글감을 찾습니다. 쓰기 권한은 요청하지 않고, 어느 조직·저장소를 허용할지는 GitHub 화면에서 고릅니다.</p>
       <div className="toolbar" style={{ marginTop: 16 }}>

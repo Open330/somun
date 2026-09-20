@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Lockup } from "../components/Mark";
 
 /** SOMUN_TOKEN 모드 로그인. 토큰은 이 브라우저의 localStorage에만 저장된다. */
 export default function TokenLogin({ onDone }: { onDone: () => void }) {
@@ -6,7 +7,7 @@ export default function TokenLogin({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="main">
-      <h1>소문</h1>
+      <div style={{ marginBottom: 12 }}><Lockup size={36} /></div>
       <p className="muted">소문낼 줄 모르는 개발자를 위한 PR 도우미. 접근 토큰을 넣으면 시작합니다.</p>
       <form
         className="row"

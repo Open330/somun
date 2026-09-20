@@ -1,5 +1,6 @@
 import { AUTH_PROVIDERS } from "../lib/auth/config";
 import { useAuth } from "../lib/auth/context";
+import { Lockup, Mark } from "../components/Mark";
 
 /** 로그아웃 상태의 첫 화면. 약속 한 문장, 실제 초안 예시, 어떻게 생각하는가, 로그인. */
 export default function Landing({ onToken }: { onToken?: () => void }) {
@@ -7,7 +8,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
   return (
     <div className="landing">
       <nav>
-        <div className="brand"><span className="word">소문</span><span className="roman">somun</span></div>
+        <div className="brand"><Lockup size={30} /></div>
         <div className="toolbar">
           <a className="btn ghost" href="https://github.com/Open330/somun" target="_blank" rel="noreferrer">GitHub</a>
           {auth.enabled ? <button className="primary" onClick={() => auth.signIn(AUTH_PROVIDERS[0])}>로그인</button> : <button className="primary" onClick={onToken}>들어가기</button>}
@@ -83,7 +84,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       </section>
 
       <footer className="landing-foot">
-        <span>소문 · Open330 · Apache-2.0</span>
+        <span className="row" style={{ gap: 8 }}><Mark size={18} /> 소문 · Open330 · Apache-2.0</span>
         <span><a href="https://github.com/Open330/somun">소스</a> · <a href="https://github.com/Open330/somun/blob/main/docs/spec.md">기획</a></span>
       </footer>
     </div>

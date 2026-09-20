@@ -2,7 +2,7 @@
 
 <br />
 
-# 소문 &nbsp;·&nbsp; somun
+<img src="docs/brand/lockup.png" alt="소문" width="420" />
 
 **소문낼 줄 모르는 개발자를 위한 PR 도우미.**
 
