@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200" width="640" height="200">
+  <g transform="translate(20 20) scale(0.156)">
+    <g fill="none" stroke="#0F6F5C" stroke-width="132" stroke-linecap="round" stroke-linejoin="round"><path d="M540 236 L262 800"/><path d="M468 470 L762 800"/></g>
+    <circle cx="548" cy="736" r="66" fill="#E5A33C"/>
+  </g>
+  <text x="200" y="118" font-family="'Noto Sans KR','Apple SD Gothic Neo',sans-serif" font-weight="700" font-size="88" letter-spacing="-2" fill="#131A22">소문</text>
+  <text x="392" y="118" font-family="Sora,'Helvetica Neue',sans-serif" font-weight="600" font-size="34" letter-spacing="3" fill="#6B7681">somun</text>
+</svg>

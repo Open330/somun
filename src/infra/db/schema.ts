@@ -190,3 +190,13 @@ export const appState = sqliteTable("app_state", {
   value: text("value").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/** jiun-api 사용량 이벤트 대기열. 전송이 확인된 행만 지운다. */
+export const usageOutbox = sqliteTable("usage_outbox", {
+  eventId: text("event_id").primaryKey(),
+  payload: json<Record<string, unknown>>("payload").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAt: integer("next_at").notNull(),
+  lastError: text("last_error"),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [index("usage_outbox_next").on(t.nextAt)]);

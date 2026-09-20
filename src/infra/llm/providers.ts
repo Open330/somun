@@ -14,7 +14,8 @@ export type LlmProvider = "gemini" | "anthropic" | "openai" | "local-agent";
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };
 
 export type LlmRequest = { system: string; user: string; schema: Record<string, unknown>; schemaName: string; maxTokens?: number };
-export type LlmResult = { json: unknown; provider: LlmProvider; model: string; keyLabel?: string };
+export type LlmUsage = { inputTokens: number; outputTokens: number; cachedInputTokens: number; totalTokens: number };
+export type LlmResult = { json: unknown; provider: LlmProvider; model: string; keyLabel?: string; usage?: LlmUsage; latencyMs: number };
 
 /** 서버 키 풀 상태 접근. 앱 층이 DB 기반으로 만들어 넘긴다. 없으면 무상태 순환. */
 export type KeyPoolOps = {
@@ -74,6 +75,7 @@ function extractJson(text: string): unknown {
 }
 
 async function openaiCompatible(baseUrl: string, apiKey: string, model: string, req: LlmRequest, keyLabel?: string): Promise<LlmResult> {
+  const t0 = Date.now();
   const body = {
     model,
     messages: [
@@ -92,15 +94,18 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
     const text = await res.text();
     throw new LlmError(`${model} → ${res.status}: ${text.slice(0, 300)}`, res.status, res.status === 429 || res.status >= 500, text.slice(0, 2000));
   }
-  const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
+  const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } };
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new LlmError("빈 응답");
-  return { json: extractJson(content), provider: baseUrl === GEMINI_OPENAI_BASE ? "gemini" : "openai", model, keyLabel };
+  const u = data.usage;
+  const usage: LlmUsage | undefined = u ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0, cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? 0, totalTokens: u.total_tokens ?? (u.prompt_tokens ?? 0) + (u.completion_tokens ?? 0) } : undefined;
+  return { json: extractJson(content), provider: baseUrl === GEMINI_OPENAI_BASE ? "gemini" : "openai", model, keyLabel, usage, latencyMs: Date.now() - t0 };
 }
 
 async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Promise<LlmResult> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
+  const t0 = Date.now();
   const res = await client.messages.create({
     model,
     max_tokens: req.maxTokens ?? 4000,
@@ -110,7 +115,8 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Pr
   } as never);
   if (res.stop_reason === "refusal") throw new LlmError("anthropic refusal");
   const text = res.content.find((b) => b.type === "text")?.text ?? "";
-  return { json: extractJson(text), provider: "anthropic", model };
+  const cached = (res.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
+  return { json: extractJson(text), provider: "anthropic", model, usage: { inputTokens: res.usage.input_tokens + cached, outputTokens: res.usage.output_tokens, cachedInputTokens: cached, totalTokens: res.usage.input_tokens + cached + res.usage.output_tokens }, latencyMs: Date.now() - t0 };
 }
 
 /**
@@ -171,4 +177,13 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
 function rotateStateless(labels: string[]): string[] {
   const start = Math.floor(Math.random() * labels.length);
   return labels.map((_, i) => labels[(start + i) % labels.length]);
+}
+
+/** jiun-api 사용량 계약의 provider 어휘 (벤더). gemini는 google. */
+export function usageProviderOf(p: LlmProvider, baseUrl?: string): "google" | "anthropic" | "openai" | "openrouter" | "local" {
+  if (p === "gemini") return "google";
+  if (p === "anthropic") return "anthropic";
+  if (p === "local-agent") return "local";
+  if (baseUrl?.includes("openrouter.ai")) return "openrouter";
+  return "openai";
 }

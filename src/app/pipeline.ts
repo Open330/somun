@@ -3,7 +3,8 @@ import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { lintDraft } from "../core/lint.js";
 import { digestPrompt, draftPrompt, judgePrompt, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { LlmError, runLlm } from "../infra/llm/providers.js";
+import { LlmError, runLlm, usageProviderOf } from "../infra/llm/providers.js";
+import { UsageReporter } from "../infra/usage.js";
 import type { Decision, Evidence, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, type AppContext } from "./context.js";
@@ -49,11 +50,18 @@ export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, c
     enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, prompt);
     return { queued: true };
   }
+  const startedAt = Date.now();
   try {
     const res = await runLlm({ ...settings.llm }, prompt, kind, keyPoolOps(ctx), ctx.env.geminiKeys);
+    ctx.usage.record({
+      userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(res.provider, settings.llm.baseUrl), model: res.model,
+      apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: res.latencyMs, status: "success",
+      inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0,
+    });
     const applied = await applyResult(ctx, ownerId, { kind, candidateId, channel, lang, result: res.json, model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` });
     return { applied };
   } catch (e) {
+    ctx.usage.record({ userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(settings.llm.provider, settings.llm.baseUrl), model: settings.llm.model ?? "unknown", latencyMs: Date.now() - startedAt, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 });
     const msg = e instanceof LlmError ? e.message : String((e as Error).message ?? e);
     ctx.log.error({ kind, candidateId, channel, lang, err: msg }, "llm step failed");
     return { error: msg };

@@ -15,6 +15,10 @@ const schema = z.object({
   /** UTC cron. 기본 00:00 UTC = 09:00 KST */
   CRON: z.string().default("0 0 * * *"),
   WEB_DIST: z.string().default("./dist/web"),
+  /** jiun-api 사용량 보고. 키가 없으면 보고하지 않는다 (로컬 개발). */
+  JIUN_API_URL: z.string().url().default("https://api.jiun.dev"),
+  JIUN_USAGE_SERVICE_ID: z.string().default("somun"),
+  JIUN_USAGE_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema> & { dbFile: string; anonymous: boolean };

@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type { Db } from "../infra/db/index.js";
 import type { Logger } from "../infra/logger.js";
 import type { ChangeEvent } from "../shared/types.js";
+import type { UsageReporter } from "../infra/usage.js";
 
 /** 유스케이스가 받는 실행 문맥. HTTP·크론·스크립트 어디서 부르든 같다. */
 export type AppContext = {
@@ -9,6 +10,7 @@ export type AppContext = {
   log: Logger;
   env: { githubToken?: string; geminiKeys?: string };
   bus: EventEmitter;
+  usage: UsageReporter;
 };
 
 export function emit(ctx: AppContext, ownerId: string, ev: ChangeEvent): void {
