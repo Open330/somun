@@ -1,4 +1,3 @@
-import { AUTH_PROVIDERS } from "../lib/auth/config";
 import shotInbox from "../assets/shots/inbox.jpg";
 import shotCandidate from "../assets/shots/candidate.jpg";
 import { useAuth } from "../lib/auth/context";
@@ -13,7 +12,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
         <div className="brand"><Lockup size={30} /></div>
         <div className="toolbar">
           <a className="btn ghost" href="https://github.com/Open330/somun" target="_blank" rel="noreferrer">GitHub</a>
-          {auth.enabled ? <button className="primary" onClick={() => auth.signIn(AUTH_PROVIDERS[0])}>로그인</button> : <button className="primary" onClick={onToken}>들어가기</button>}
+          {auth.enabled ? <button className="primary" onClick={() => auth.signIn("github")}>GitHub로 로그인</button> : <button className="primary" onClick={onToken}>들어가기</button>}
         </div>
       </nav>
 
@@ -23,7 +22,8 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           <p className="sub">소문은 저장소와 작업 세션을 지켜보다가 정말 알릴 만한 것이 생겼을 때만 채널별 초안을 건넵니다. 검수하고 복사해서 올리는 건 사용자 몫입니다. 대신 올리지 않고, 없는 숫자를 지어내지 않습니다.</p>
           <div className="toolbar">
             {auth.enabled ? (
-              AUTH_PROVIDERS.slice(0, 2).map((p) => <button key={p} className={p === "github" ? "primary" : ""} onClick={() => auth.signIn(p)}>{p === "github" ? "GitHub로 시작" : `${p}로 시작`}</button>)
+              // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
+              <button className="primary" onClick={() => auth.signIn("github")}>GitHub로 시작</button>
             ) : (
               <button className="primary" onClick={onToken}>토큰으로 들어가기</button>
             )}
