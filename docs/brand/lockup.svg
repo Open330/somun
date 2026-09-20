@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" width="680" height="200">
-  <defs><clipPath id="box"><rect x="352" y="352" width="512" height="512" rx="120"/></clipPath></defs>
-  <g transform="translate(-6 12) scale(0.172)">
-    <rect x="352" y="352" width="512" height="512" rx="120" fill="#0F6F5C"/>
-    <g fill="none" stroke="#0F6F5C" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M420 208 L154 720"/><path d="M348 346 L656 720"/></g>
-    <g clip-path="url(#box)" fill="none" stroke="#F4F6F8" stroke-width="128" stroke-linecap="round" stroke-linejoin="round"><path d="M420 208 L154 720"/><path d="M348 346 L656 720"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 200" width="700" height="200">
+  <defs><clipPath id="box"><rect x="420" y="336" width="464" height="464" rx="72"/></clipPath></defs>
+  <g transform="translate(-6 8) scale(0.18)">
+    <rect x="420" y="336" width="464" height="464" rx="72" fill="#123F3A"/>
+    <g fill="#123F3A"><polygon points="474.0,160 610.3,160 240.8,800 104.5,800"/><polygon points="363.1,352.0 499.4,352.0 758.1,800 621.8,800"/></g>
+    <g clip-path="url(#box)"><g fill="#F3F4F2"><polygon points="474.0,160 610.3,160 240.8,800 104.5,800"/><polygon points="363.1,352.0 499.4,352.0 758.1,800 621.8,800"/></g></g>
   </g>
-  <text x="196" y="120" font-family="'Noto Sans KR','Apple SD Gothic Neo',sans-serif" font-weight="700" font-size="88" letter-spacing="-2" fill="#131A22">소문</text>
-  <text x="388" y="120" font-family="Sora,'Helvetica Neue',sans-serif" font-weight="600" font-size="34" letter-spacing="3" fill="#6B7681">somun</text>
+  <text x="196" y="122" font-family="'Noto Sans KR','Apple SD Gothic Neo',sans-serif" font-weight="700" font-size="88" letter-spacing="-2" fill="#15191E">소문</text>
+  <text x="388" y="122" font-family="Sora,'Helvetica Neue',sans-serif" font-weight="600" font-size="34" letter-spacing="3" fill="#6B7681">somun</text>
 </svg>
