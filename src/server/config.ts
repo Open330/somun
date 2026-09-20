@@ -7,6 +7,8 @@ const schema = z.object({
   LOG_LEVEL: z.string().default("info"),
   SOMUN_ALLOW_ANONYMOUS: z.enum(["true", "false"]).default("false"),
   SOMUN_TOKEN: z.string().optional(),
+  /** 토큰 요청이 대행할 소유자. 운영자 한 명이 OAuth로 쓰는 배포에서 스크립트·워커가 같은 데이터를 보게 한다. 비우면 "local". */
+  SOMUN_TOKEN_OWNER_ID: z.string().optional(),
   AUTH_ISSUER: z.string().url().optional(),
   AUTH_JWKS_URL: z.string().url().optional(),
   AUTH_AUDIENCE: z.string().default("somun"),
