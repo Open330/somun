@@ -27,6 +27,8 @@ export type ChannelSpec = {
   mediaHint: string;
   /** 발행 화면으로 가는 링크 */
   composeUrl: string;
+  /** 복사한 뒤 올리기 전에 확인할 것 */
+  runbook: string[];
 };
 
 export const CHANNELS: Record<Channel, ChannelSpec> = {
@@ -45,6 +47,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "터미널 GIF 또는 실제 출력 스크린샷 1장 (홈 경로·내부 브랜치명 가리기)",
     composeUrl: "https://x.com/compose/post",
+    runbook: ["이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)","링크는 본문 마지막 줄에","올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
   },
   x_ko: {
     id: "x_ko",
@@ -61,6 +64,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "x_en과 같은 이미지",
     composeUrl: "https://x.com/compose/post",
+    runbook: ["x_en과 같은 이미지","같은 날 GeekNews Show GN과 함께"],
   },
   threads: {
     id: "threads",
@@ -75,6 +79,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "선택. 스크린샷 1장이면 충분",
     composeUrl: "https://www.threads.net/",
+    runbook: ["링크는 본문이 아니라 첫 댓글에","올린 뒤 30~60분은 답글에 바로 반응 (초기 반응이 노출을 결정)"],
   },
   linkedin_ko: {
     id: "linkedin_ko",
@@ -90,6 +95,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "실제 데이터가 보이는 스크린샷 1장 (대시보드, 터미널 출력, 전후 비교)",
     composeUrl: "https://www.linkedin.com/feed/?shareActive=true",
+    runbook: ["첫 줄이 접힘선 위에서 끝나는지 확인 (40자)","실제 데이터가 보이는 스크린샷 1장","해시태그는 마지막 줄 최대 3개"],
   },
   show_hn: {
     id: "show_hn",
@@ -110,6 +116,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
     composeUrl: "https://news.ycombinator.com/submit",
+    runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁","제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함","제출 직후 위 본문을 첫 댓글로","48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게","어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
   },
   show_gn: {
     id: "show_gn",
@@ -126,6 +133,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
+    runbook: ["사실만, 마케팅 어휘 없이 (GeekNews 가이드)","지인에게 추천·댓글 부탁 금지","버전마다 재등록 금지. 큰 변화가 있을 때만"],
   },
   blog_outline: {
     id: "blog_outline",
@@ -142,6 +150,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     ].join(" "),
     mediaHint: "",
     composeUrl: "",
+    runbook: ["개요를 블로그 저장소의 초안으로 옮겨 본문을 씀","발행 후 URL을 등록하면 다른 채널에 재배포 후보가 됨"],
   },
 };
 
