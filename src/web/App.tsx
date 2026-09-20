@@ -37,6 +37,7 @@ export default function App() {
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
+  const auth = useAuth();
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
   const { data: conn } = useResource<ConnectorsView>("/connectors", ["sources"]);
   const { data: app } = useResource<{ configured: boolean; installUrl?: string }>("/github/app", []);
@@ -55,7 +56,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
       <div>
         <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}</div>
         <main className="main">
-          {needConsent ? <Consent installUrl={app!.installUrl!} /> : (
+          {needConsent ? <Consent installUrl={app!.installUrl!} user={auth.user ?? undefined} onSwitch={async () => { await auth.signOut(); auth.signIn("github"); }} /> : (
           <Routes>
             <Route path="/" element={<Inbox />} />
             <Route path="/c/:id" element={<Candidate />} />
@@ -75,14 +76,23 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   );
 }
 
-function Consent({ installUrl }: { installUrl: string }) {
+function Consent({ installUrl, user, onSwitch }: { installUrl: string; user?: { username: string; provider?: string; email?: string }; onSwitch: () => void }) {
+  // 설치 기록은 로그인 계정(제공자별로 다른 계정)에 묶인다. GitHub가 아닌 계정으로 들어오면 그 사실을 먼저 알린다.
+  const notGithub = user?.provider !== undefined && user.provider !== "github";
   return (
     <div className="card lift" style={{ maxWidth: 560, margin: "48px auto", padding: 28 }}>
       <div style={{ marginBottom: 14 }}><Mark size={44} /></div>
       <h1 style={{ marginBottom: 8 }}>저장소 읽기 권한이 필요합니다</h1>
       <p className="muted">소문은 GitHub의 릴리스, 머지된 PR, 커밋, 스타를 읽어 글감을 찾습니다. 쓰기 권한은 요청하지 않고, 어느 조직·저장소를 허용할지는 GitHub 화면에서 고릅니다.</p>
+      {user && (
+        <p className="small muted" style={{ marginTop: 12 }}>
+          지금 로그인: <b style={{ color: "var(--ink)" }}>{user.email ?? user.username}</b>{user.provider ? ` (${user.provider})` : ""}.
+          {notGithub ? " 권한은 로그인 계정마다 따로 기록됩니다. 이미 GitHub 계정으로 허용했다면 그 계정으로 다시 들어오세요." : " 이미 허용했는데 이 화면이 보이면 다른 계정으로 허용한 것입니다."}
+        </p>
+      )}
       <div className="toolbar" style={{ marginTop: 16 }}>
         <a className="btn primary" href={installUrl}>GitHub 권한 허용</a>
+        {notGithub && <button className="btn" onClick={onSwitch}>GitHub 계정으로 다시 로그인</button>}
         <a className="btn ghost" href="/connectors">저장소를 직접 지정할래요</a>
       </div>
     </div>

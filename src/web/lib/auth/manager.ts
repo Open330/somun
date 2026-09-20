@@ -7,7 +7,7 @@ import { AUTH_AUDIENCE, AUTH_URL, type AuthProviderName } from "./config";
 const ACCESS_TOKEN_FRESH_MS = 55 * 60 * 1000;
 const API_TOKEN_EARLY_REFRESH_MS = 5 * 60 * 1000;
 
-export type AuthUser = { id: string; username: string; displayName?: string; avatarUrl?: string };
+export type AuthUser = { id: string; username: string; displayName?: string; avatarUrl?: string; provider?: string; email?: string };
 export type AuthSnapshot = { status: "loading" | "signedOut" | "signedIn"; user: AuthUser | null };
 
 function normalizeExpiresAt(expiresAt: number): number {
@@ -94,7 +94,7 @@ export class AuthManager {
       if (!id) return;
       this.snapshot = {
         ...this.snapshot,
-        user: { id, username: String(u.username ?? ""), displayName: (u.displayName as string | undefined) ?? (u.name as string | undefined), avatarUrl: (u.avatarUrl as string | undefined) ?? undefined },
+        user: { id, username: String(u.username ?? ""), displayName: (u.displayName as string | undefined) ?? (u.name as string | undefined), avatarUrl: (u.avatarUrl as string | undefined) ?? undefined, provider: (u.provider as string | undefined) ?? undefined, email: (u.email as string | undefined) ?? undefined },
       };
     } catch {
       /* 표시용 */
