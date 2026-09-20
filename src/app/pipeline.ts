@@ -1,0 +1,132 @@
+import { and, desc, eq } from "drizzle-orm";
+import { CHANNELS, type Channel } from "../core/channels.js";
+import { lintDraft } from "../core/lint.js";
+import { digestPrompt, draftPrompt, judgePrompt, type PromptSpec } from "../core/prompts.js";
+import { schema } from "../infra/db/index.js";
+import { LlmError, runLlm } from "../infra/llm/providers.js";
+import type { Decision, Evidence, JobKind } from "../shared/types.js";
+import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
+import { emit, type AppContext } from "./context.js";
+import { keyPoolOps } from "./keys.js";
+import { getSettings } from "./settings.js";
+
+/**
+ * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
+ * 프로바이더가 local-agent면 큐(llm_jobs)에 넣고 워커가 처리한다. 결과 반영은 applyResult 한 곳.
+ */
+
+export type RunResult = { queued?: true; applied?: Applied; error?: string };
+export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
+
+function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, limit: number) {
+  const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt)).limit(50).all();
+  const own = rows.filter((r) => r.source !== "seed");
+  const seed = rows.filter((r) => r.source === "seed");
+  return [...own, ...seed].slice(0, limit).map((e) => ({ source: e.source, title: e.title ?? undefined, body: e.body }));
+}
+
+function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
+  return ctx.db.select().from(schema.feedback).where(eq(schema.feedback.ownerId, ownerId)).orderBy(desc(schema.feedback.createdAt)).limit(limit).all().map((f) => ({ targetType: f.targetType, reason: f.reason, note: f.note ?? undefined }));
+}
+
+export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel): PromptSpec {
+  const row = getCandidateRow(ctx, ownerId, candidateId);
+  const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
+  const settings = getSettings(ctx, ownerId);
+  if (kind === "digest") return digestPrompt(c);
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: settings.enabledChannels, feedback: recentFeedback(ctx, ownerId, 10) });
+  if (!channel) throw new Error("draft needs a channel");
+  const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
+  const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
+  return draftPrompt(c, channel, examplesFor(ctx, ownerId, channel, 4), angle);
+}
+
+/** 한 단계 실행. 직접 프로바이더면 호출 후 반영, local-agent면 큐잉. */
+export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel): Promise<RunResult> {
+  const settings = getSettings(ctx, ownerId);
+  const prompt = buildPrompt(ctx, ownerId, kind, candidateId, channel);
+  if (settings.llm.provider === "local-agent") {
+    enqueueJob(ctx, ownerId, kind, candidateId, channel, prompt);
+    return { queued: true };
+  }
+  try {
+    const res = await runLlm({ ...settings.llm }, prompt, kind, keyPoolOps(ctx), ctx.env.geminiKeys);
+    const applied = await applyResult(ctx, ownerId, { kind, candidateId, channel, result: res.json, model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` });
+    return { applied };
+  } catch (e) {
+    const msg = e instanceof LlmError ? e.message : String((e as Error).message ?? e);
+    ctx.log.error({ kind, candidateId, channel, err: msg }, "llm step failed");
+    return { error: msg };
+  }
+}
+
+/** 새 후보 전부 다이제스트부터. 순차 실행(키 풀과 모델 수요를 아낀다). */
+export async function processNewCandidates(ctx: AppContext, ownerId?: string): Promise<number> {
+  const where = ownerId ? and(eq(schema.candidates.status, "new"), eq(schema.candidates.ownerId, ownerId)) : eq(schema.candidates.status, "new");
+  const rows = ctx.db.select().from(schema.candidates).where(where).all();
+  for (const c of rows) await runStep(ctx, c.ownerId, "digest", c.id);
+  return rows.length;
+}
+
+export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, prompt: PromptSpec): number {
+  const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
+    .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.status === "pending" || j.status === "claimed"));
+  if (open) return open.id;
+  const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+  emit(ctx, ownerId, { resource: "jobs", id });
+  return id;
+}
+
+/** 결과 반영. 판단이 draft면 채널별 초안을 이어서 실행한다 (await하지 않고 백그라운드). */
+export async function applyResult(ctx: AppContext, ownerId: string, args: { kind: JobKind; candidateId: number; channel?: Channel; result: unknown; model: string }): Promise<Applied> {
+  const c = getCandidateRow(ctx, ownerId, args.candidateId);
+  const settings = getSettings(ctx, ownerId);
+  const now = Date.now();
+  const ev = c.evidence as Evidence;
+
+  if (args.kind === "digest") {
+    const r = args.result as { highlights?: unknown; limitations?: unknown };
+    const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
+    const highlights = strs(r.highlights, 8);
+    const limitations = ev.limitations?.length ? ev.limitations : strs(r.limitations, 3);
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, highlightsAt: now, limitations } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    emit(ctx, ownerId, { resource: "candidates", id: c.id });
+    void runStep(ctx, ownerId, "judge", c.id);
+    return { kind: "digest", highlights: highlights.length };
+  }
+
+  if (args.kind === "judge") {
+    const r = args.result as { scores?: Record<string, unknown>; reasoning?: string; suggestedChannels?: unknown; angle?: string };
+    const clamp = (n: unknown) => Math.max(0, Math.min(2, Math.round(Number(n) || 0)));
+    const scores = { runnable: clamp(r.scores?.runnable), numbers: clamp(r.scores?.numbers), lesson: clamp(r.scores?.lesson), novelty: clamp(r.scores?.novelty), audience: clamp(r.scores?.audience) };
+    const w = settings.rubricWeights;
+    const total = scores.runnable * w.runnable + scores.numbers * w.numbers + scores.lesson * w.lesson + scores.novelty * w.novelty + scores.audience * w.audience;
+    const decision: Decision = total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
+    const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => (settings.enabledChannels as string[]).includes(String(ch)));
+    const reasoning = r.angle ? `${r.reasoning}\n\n각도: ${r.angle}` : String(r.reasoning ?? "");
+    const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
+    ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    emit(ctx, ownerId, { resource: "candidates", id: c.id });
+    if (decision === "draft") {
+      const channels = suggested.length ? suggested : settings.enabledChannels;
+      void (async () => {
+        for (const ch of channels) await runStep(ctx, ownerId, "draft", c.id, ch);
+      })();
+    }
+    return { kind: "judge", decision, total };
+  }
+
+  const channel = args.channel;
+  if (!channel) throw new Error("draft needs a channel");
+  const r = args.result as { title?: string; body?: string };
+  const spec = CHANNELS[channel];
+  const title = spec.hasTitle ? String(r.title ?? "").trim() || undefined : undefined;
+  const body = String(r.body ?? "").trim();
+  if (!body) throw new Error("empty draft body");
+  const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel))).all().length + 1;
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases), status: "proposed", model: args.model, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  ctx.db.update(schema.candidates).set({ status: "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+  emit(ctx, ownerId, { resource: "drafts", id: draftId });
+  emit(ctx, ownerId, { resource: "candidates", id: c.id });
+  return { kind: "draft", draftId };
+}

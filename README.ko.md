@@ -125,16 +125,15 @@ node scripts/agent-worker.mjs --cli claude    # 또는 --cli codex
 
 ## 실행
 
+프로세스 하나, SQLite 파일 하나. 외부 서비스 없음.
+
 ```bash
 npm install
-npx convex dev                                        # 로컬 Convex. .env.local에 VITE_CONVEX_URL을 써 준다
-npx convex env set SOMUN_ALLOW_ANONYMOUS true         # 로컬 전용
-npx convex env set GITHUB_TOKEN "$(gh auth token)"
-npx convex env set GEMINI_API_KEYS '{"free-1":"..."}' # 라벨 붙은 JSON 맵. 유료 키는 순환에 넣지 않는다
-npm run dev                                           # http://localhost:5180
+cp .env.example .env            # GITHUB_TOKEN, GEMINI_API_KEYS 채우기. 로컬은 SOMUN_ALLOW_ANONYMOUS=true
+npm run dev                     # API :8790, 웹 :5180
 
-node scripts/seed.mjs                                 # best-practice 문체 예시 (1회)
-node scripts/omp-sync.mjs --days 14                   # 선택: oh-my-prompt 세션 요약 부착
+npm run seed                    # best-practice 문체 예시 (1회)
+npm run omp-sync -- --days 14   # 선택: oh-my-prompt 세션 요약 부착
 ```
 
 Settings에서 GitHub 소스(`Open330`, `you/repo`)를 추가하고 Inbox의 **지금 확인**을 누르세요.
@@ -147,38 +146,46 @@ npm run typecheck && npm test
 
 ## 배포
 
-다른 `*.jiun.dev` 앱과 같은 구조입니다. 셀프호스트 Convex(`somun-api.jiun.dev`), `api.jiun.dev`의 OAuth와 RS256 외부 JWT(audience `somun`), `docker/Dockerfile.web`의 정적 웹(`somun.jiun.dev`).
+컨테이너 하나. API와 빌드된 웹을 같은 Node 프로세스가 서빙하고, 데이터베이스는 볼륨의 파일 하나입니다.
 
 ```bash
-CONVEX_SELF_HOSTED_URL=https://somun-api.jiun.dev CONVEX_SELF_HOSTED_ADMIN_KEY=… npx convex deploy
-docker build -f docker/Dockerfile.web --build-arg VITE_CONVEX_URL=https://somun-api.jiun.dev --build-arg VITE_AUTH_URL=https://api.jiun.dev -t somun-web .
+docker build -f docker/Dockerfile -t somun .
+docker run -p 8790:8790 -v somun-data:/data \
+  -e SOMUN_TOKEN=change-me -e GITHUB_TOKEN=… -e GEMINI_API_KEYS='{"free-1":"…"}' somun
 ```
 
-jiun-api 쪽 준비: `JWT_EXTERNAL_AUDIENCES`에 `somun`, `JIUN_SERVICES`에 `{"id":"somun","redirectUris":["https://somun.jiun.dev/auth/callback"]}`, CORS 허용 원본에 `https://somun.jiun.dev`.
-서버 환경변수: `GITHUB_TOKEN`, `GEMINI_API_KEYS`. 클라우드에서 `SOMUN_ALLOW_ANONYMOUS`는 설정하지 않습니다.
+인증은 세 가지 중 하나입니다. 공유 토큰 `SOMUN_TOKEN`(단일 사용자), 신뢰하는 발급자의 RS256 JWT(`AUTH_ISSUER`, `AUTH_JWKS_URL`, `AUTH_AUDIENCE`. `somun.jiun.dev`가 `api.jiun.dev`를 쓰는 방식), 로컬 개발 전용 `SOMUN_ALLOW_ANONYMOUS=true`.
 
 <br />
 
 ## 구조
 
+계층은 안쪽으로만 의존합니다. `core`는 IO를 모르고, `app`은 HTTP를 모르고, `server`는 얇습니다.
+
 ```
-convex/
-  schema.ts          sources → signals → candidates → judgments → drafts → publications → metricSnapshots
-  collect.ts         GitHub / npm 수집: 릴리스, 머지 PR, 마지막 릴리스 이후 커밋, 마일스톤, 트래픽
-  signals.ts         신호 → 후보 묶기 (연속 릴리스 병합, 릴리스에 PR 부착)
-  llm.ts · jobs.ts   다이제스트 → 판단 → 초안 실행기, 로컬 에이전트 작업 큐, 결과 반영
-  lib/providers.ts   Gemini 키 풀 · Anthropic · OpenAI 호환
-  lib/prompts.ts     프롬프트 셋과 JSON 스키마
-  lib/channels.ts    채널별 형식, 규칙, 이미지 안내, 작성 화면 링크
-  lib/lint.ts        슬롭 린트
-  drafts.ts          복사 / 수정 / 버림 → 문체 예시와 피드백
-  omp.ts             oh-my-prompt 세션 요약을 근거로
-  crons.ts           매일 09:00 KST
-src/                 Inbox · Candidate · Published · Settings
-scripts/             seed.mjs · omp-sync.mjs · agent-worker.mjs
-seeds/               실제로 통한 Show HN 첫 댓글 38건과 채널별 규칙
-docs/spec.md         이 도구를 만든 기획
+src/
+  core/        순수 도메인 — IO 없음, 단위 테스트 대상
+    channels   채널별 형식, 규칙, 이미지 안내, 작성 화면 링크
+    prompts    프롬프트 셋(다이제스트 · 판단 · 초안)과 JSON 스키마
+    lint       슬롭 린트
+    cluster    신호 → 후보 규칙, 마일스톤 임계
+    keypool    Gemini 429 분류, 태평양 자정 기준 날짜 키
+  app/         유스케이스 — AppContext(db, log, env, 이벤트 버스)를 받는다
+    collect    GitHub / npm → 신호, 근거, 지표 스냅샷
+    signals    묶기, 연속 릴리스 병합, PR 부착
+    pipeline   다이제스트 → 판단 → 초안. 프로바이더 호출 또는 로컬 에이전트 큐. 결과 반영
+    review     복사 / 수정 / 버림 → 문체 예시와 피드백
+    publications · candidates · sources · settings · keys · jobs · omp · scheduler
+  infra/       어댑터 — SQLite(Drizzle), GitHub REST, LLM 프로바이더, 로거
+  server/      Hono — 인증 미들웨어(토큰 · JWT · 익명), /api 라우트, SSE, 정적 웹
+  shared/      서버와 웹이 공유하는 타입
+  web/         Vite + React — Inbox · Candidate · Published · Settings
+scripts/       seed · omp-sync · agent-worker (HTTP API만 사용)
+drizzle/       SQL 마이그레이션, 시작 시 적용
+seeds/         실제로 통한 Show HN 첫 댓글 38건과 채널별 규칙
 ```
+
+웹은 데이터베이스를 직접 만지지 않습니다. `/api/*`를 읽고 `/api/events`(SSE)로 바뀐 자원만 다시 가져옵니다.
 
 <br />
 

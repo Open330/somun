@@ -125,16 +125,15 @@ node scripts/agent-worker.mjs --cli claude    # or --cli codex
 
 ## Run it
 
+One process, one SQLite file. No external services.
+
 ```bash
 npm install
-npx convex dev                                        # local Convex backend, writes VITE_CONVEX_URL to .env.local
-npx convex env set SOMUN_ALLOW_ANONYMOUS true         # local only
-npx convex env set GITHUB_TOKEN "$(gh auth token)"
-npx convex env set GEMINI_API_KEYS '{"free-1":"..."}' # labeled JSON map; paid keys never rotate
-npm run dev                                           # http://localhost:5180
+cp .env.example .env            # set GITHUB_TOKEN and GEMINI_API_KEYS; SOMUN_ALLOW_ANONYMOUS=true for local
+npm run dev                     # API on :8790, web on :5180
 
-node scripts/seed.mjs                                 # best-practice voice examples (once)
-node scripts/omp-sync.mjs --days 14                   # optional: attach oh-my-prompt session summaries
+npm run seed                    # best-practice voice examples (once)
+npm run omp-sync -- --days 14   # optional: attach oh-my-prompt session summaries
 ```
 
 Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.
@@ -147,37 +146,46 @@ npm run typecheck && npm test
 
 ## Deploy
 
-Same shape as the other `*.jiun.dev` apps: self-hosted Convex (`somun-api.jiun.dev`), OAuth and RS256 external JWTs from `api.jiun.dev` (audience `somun`), static web (`somun.jiun.dev`) from `docker/Dockerfile.web`.
+A single container. The API and the built web are served by the same Node process; the database is a file on a volume.
 
 ```bash
-CONVEX_SELF_HOSTED_URL=https://somun-api.jiun.dev CONVEX_SELF_HOSTED_ADMIN_KEY=… npx convex deploy
-docker build -f docker/Dockerfile.web --build-arg VITE_CONVEX_URL=https://somun-api.jiun.dev --build-arg VITE_AUTH_URL=https://api.jiun.dev -t somun-web .
+docker build -f docker/Dockerfile -t somun .
+docker run -p 8790:8790 -v somun-data:/data \
+  -e SOMUN_TOKEN=change-me -e GITHUB_TOKEN=… -e GEMINI_API_KEYS='{"free-1":"…"}' somun
 ```
 
-Server env: `GITHUB_TOKEN`, `GEMINI_API_KEYS`. Never set `SOMUN_ALLOW_ANONYMOUS` in the cloud.
+Auth is one of three modes, checked in order: a shared `SOMUN_TOKEN` bearer (single user), an RS256 JWT from an issuer you trust (`AUTH_ISSUER`, `AUTH_JWKS_URL`, `AUTH_AUDIENCE`; this is how `somun.jiun.dev` uses `api.jiun.dev`), or `SOMUN_ALLOW_ANONYMOUS=true` for local development only.
 
 <br />
 
-## Layout
+## Architecture
+
+Layers point inward. `core` knows nothing about IO; `app` knows nothing about HTTP; `server` is thin.
 
 ```
-convex/
-  schema.ts          sources → signals → candidates → judgments → drafts → publications → metricSnapshots
-  collect.ts         GitHub / npm collector: releases, merged PRs, commits since last release, milestones, traffic
-  signals.ts         signal → candidate clustering (merges back-to-back releases, attaches PRs to a release)
-  llm.ts · jobs.ts   digest → judge → draft runner; local-agent job queue; result application
-  lib/providers.ts   Gemini key pool · Anthropic · OpenAI-compatible
-  lib/prompts.ts     the three prompts and their JSON schemas
-  lib/channels.ts    per-channel shape, rules, media hints, compose links
-  lib/lint.ts        slop lint
-  drafts.ts          copy / edit / drop → voice examples and feedback
-  omp.ts             oh-my-prompt session summaries as evidence
-  crons.ts           daily at 09:00 KST
-src/                 Inbox · Candidate · Published · Settings
-scripts/             seed.mjs · omp-sync.mjs · agent-worker.mjs
-seeds/               38 real Show HN first comments that landed, plus per-channel rules
-docs/spec.md         the plan this was built from
+src/
+  core/        pure domain — no IO, fully unit-tested
+    channels   per-channel shape, rules, media hints, compose links
+    prompts    the three prompts (digest · judge · draft) and their JSON schemas
+    lint       slop lint
+    cluster    signal → candidate rules, milestone thresholds
+    keypool    Gemini 429 classification, PT-midnight day keys
+  app/         use cases — take an AppContext (db, log, env, event bus)
+    collect    GitHub / npm → signals, evidence, metric snapshots
+    signals    clustering, back-to-back release merging, PR attachment
+    pipeline   digest → judge → draft; provider call or local-agent queue; result application
+    review     copy / edit / drop → voice examples and feedback
+    publications · candidates · sources · settings · keys · jobs · omp · scheduler
+  infra/       adapters — SQLite (Drizzle), GitHub REST, LLM providers, logger
+  server/      Hono — auth middleware (token · JWT · anonymous), /api routes, SSE, static web
+  shared/      types shared by server and web
+  web/         Vite + React — Inbox · Candidate · Published · Settings
+scripts/       seed · omp-sync · agent-worker (talk to the HTTP API only)
+drizzle/       SQL migrations, applied on start
+seeds/         38 real Show HN first comments that landed, plus per-channel rules
 ```
+
+The web never touches the database: it reads `/api/*` and subscribes to `/api/events` (SSE) to refetch what changed.
 
 <br />
 

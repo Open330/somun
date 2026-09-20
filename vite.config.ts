@@ -4,7 +4,16 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  server: { port: 5180 },
-  test: { include: ["convex/**/*.test.ts", "src/**/*.test.ts"] },
+  root: "src/web",
+  publicDir: false,
+  build: { outDir: "../../dist/web", emptyOutDir: true },
+  resolve: {
+    alias: {
+      "@core": fileURLToPath(new URL("./src/core", import.meta.url)),
+      "@shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
+      "@web": fileURLToPath(new URL("./src/web", import.meta.url)),
+    },
+  },
+  server: { port: 5180, proxy: { "/api": "http://localhost:8790" } },
+  test: { root: ".", include: ["src/**/*.test.ts"] },
 });

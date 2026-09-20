@@ -125,13 +125,15 @@ Evidence 블록 (자동, 링크 포함): 레포, 버전, 릴리스 노트 요약
 3. Published: 발행물 목록과 지표 스파크라인, 리트로
 4. Settings: 소스 연결, 채널 on/off, 예시 코퍼스 관리, 금지어, 루브릭 가중치
 
-## 스택 (daily 재사용)
+## 스택 (2026-09-20 변경: Convex → 단일 Node 서비스)
 
-- 웹: Expo Router 웹 빌드 or Next.js 중 daily와 동일한 쪽. 모바일은 v0 제외
-- 데이터·크론: 셀프호스트 Convex (스케줄드 함수로 09:00 수집)
-- 인증: api.jiun.dev JWT, ownerId 스코프
-- LLM: 판정·초안 모두 API 호출. 모델은 구현 시 claude-api 스킬로 확인해 선택
-- 배포: 기존 k8s + ArgoCD, somun.jiun.dev ingress
+처음엔 daily의 Convex 구조를 재사용했으나, 오픈소스로 남이 셀프호스트하기 어렵고 액션의 무상태 제약이 우회 코드를 만들어 갈아탔다.
+
+- 서버: Node + Hono, SQLite(better-sqlite3) + Drizzle. 크론은 프로세스 안(croner)
+- 웹: Vite + React. `/api` fetch + SSE로 변경 자원만 재조회
+- 인증: SOMUN_TOKEN(단일 사용자) / 외부 RS256 JWT(api.jiun.dev, aud somun) / 익명(로컬)
+- LLM: Gemini 기본(서버 키 풀), BYOK(Anthropic, OpenAI 호환), 로컬 에이전트(Claude Code·Codex 워커)
+- 배포: 컨테이너 하나 + 볼륨 하나. somun.jiun.dev ingress
 - 저장소: Open330/somun (공개, Apache-2.0)
 
 ## v0 완료 조건
