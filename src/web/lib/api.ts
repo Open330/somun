@@ -3,9 +3,16 @@ import type { ChangeEvent } from "@shared/types";
 import { getAuthManager } from "./auth/manager";
 
 /** fetch 래퍼. 인증 토큰이 있으면 Bearer로. */
+export function storedToken(): string | null {
+  try { return localStorage.getItem("somun.token"); } catch { return null; }
+}
+export function clearStoredToken(): void {
+  try { localStorage.removeItem("somun.token"); } catch { /* ignore */ }
+}
+
 async function authHeader(): Promise<Record<string, string>> {
   const m = getAuthManager();
-  const token = m ? await m.fetchApiToken() : import.meta.env.VITE_SOMUN_TOKEN;
+  const token = m ? await m.fetchApiToken() : storedToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -26,7 +33,8 @@ const listeners = new Set<Listener>();
 let source: EventSource | null = null;
 function ensureSource() {
   if (source) return;
-  source = new EventSource("/api/events", { withCredentials: true });
+  const t = storedToken();
+  source = new EventSource(`/api/events${t ? `?token=${encodeURIComponent(t)}` : ""}`, { withCredentials: true });
   source.addEventListener("change", (e) => {
     const ev = JSON.parse((e as MessageEvent).data) as ChangeEvent;
     for (const l of listeners) l(ev);

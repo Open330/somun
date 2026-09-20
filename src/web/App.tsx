@@ -1,5 +1,8 @@
 import { NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "./lib/auth/context";
+import { api, clearStoredToken, storedToken } from "./lib/api";
+import TokenLogin from "./pages/TokenLogin";
 import { AUTH_PROVIDERS } from "./lib/auth/config";
 import AuthCallback from "./pages/AuthCallback";
 import Candidate from "./pages/Candidate";
@@ -26,6 +29,14 @@ function Login() {
 
 export default function App() {
   const auth = useAuth();
+  // 토큰 모드: OAuth가 없을 때 /api/me 로 접근 가능 여부를 확인한다 (익명 허용이면 바로 통과).
+  const [tokenState, setTokenState] = useState<"checking" | "ok" | "need">("checking");
+  useEffect(() => {
+    if (auth.enabled) return;
+    api("/me").then(() => setTokenState("ok")).catch(() => setTokenState("need"));
+  }, [auth.enabled]);
+  if (!auth.enabled && tokenState === "checking") return <div className="empty">확인 중…</div>;
+  if (!auth.enabled && tokenState === "need") return <TokenLogin onDone={() => setTokenState("ok")} />;
   if (auth.enabled && auth.isLoading) return <div className="empty">세션 확인 중…</div>;
   if (auth.enabled && !auth.isAuthenticated) {
     return (
@@ -47,12 +58,17 @@ export default function App() {
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <div className="spacer" />
-        {auth.enabled && (
+        {auth.enabled ? (
           <div className="small muted row between">
             <span>{auth.user?.displayName ?? auth.user?.username}</span>
             <button onClick={() => void auth.signOut()}>로그아웃</button>
           </div>
-        )}
+        ) : storedToken() ? (
+          <div className="small muted row between">
+            <span>토큰 세션</span>
+            <button onClick={() => { clearStoredToken(); setTokenState("need"); }}>나가기</button>
+          </div>
+        ) : null}
       </aside>
       <main className="main">
         <Routes>

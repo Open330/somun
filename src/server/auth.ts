@@ -15,7 +15,9 @@ export function authMiddleware(config: Config): MiddlewareHandler<{ Variables: A
   const jwks = config.AUTH_JWKS_URL ? createRemoteJWKSet(new URL(config.AUTH_JWKS_URL)) : null;
   return async (c, next) => {
     const header = c.req.header("authorization") ?? "";
-    const bearer = header.startsWith("Bearer ") ? header.slice(7) : undefined;
+    // SSE(EventSource)는 헤더를 못 붙이므로 /api/events 만 query token을 허용한다.
+    const queryToken = c.req.path.endsWith("/api/events") ? c.req.query("token") : undefined;
+    const bearer = header.startsWith("Bearer ") ? header.slice(7) : queryToken;
     if (bearer && config.SOMUN_TOKEN && bearer === config.SOMUN_TOKEN) {
       c.set("ownerId", "local");
       return next();
