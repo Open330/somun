@@ -68,6 +68,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ gitea.sha }}
+          # 웹 로그인은 jiun-api OAuth. 빌드 시점에 번들에 박힌다.
+          build-args: |
+            VITE_AUTH_URL=https://api.jiun.dev
+            VITE_AUTH_AUDIENCE=somun
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
