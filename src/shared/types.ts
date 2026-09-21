@@ -18,7 +18,7 @@ export type RubricScores = { runnable: number; numbers: number; lesson: number; 
 export type Evidence = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
-  npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; readmeExcerpt?: string;
+  npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
 };
 

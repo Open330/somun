@@ -128,8 +128,9 @@ export async function applyResult(ctx: AppContext, ownerId: string, args: { kind
     const r = args.result as { highlights?: unknown; limitations?: unknown };
     const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
     const highlights = strs(r.highlights, 8);
-    const limitations = ev.limitations?.length ? ev.limitations : strs(r.limitations, 3);
-    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, highlightsAt: now, limitations } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    const fromReadme = Boolean(ev.limitations?.length);
+    const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     void runStep(ctx, ownerId, "judge", c.id);
     return { kind: "digest", highlights: highlights.length };

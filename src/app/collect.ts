@@ -127,7 +127,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, 3000) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
-        npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme),
+        npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const,
         readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), commitSubjects,
       };
 

@@ -69,8 +69,11 @@ export function refreshEvidence(ctx: AppContext, ownerId: string, repo: string, 
   for (const c of rows) {
     if (["dropped", "published"].includes(c.status)) continue;
     const cur = c.evidence as Evidence;
-    const limitations = cur.limitations?.length && !incoming.limitations?.length ? cur.limitations : incoming.limitations;
-    const merged: Evidence = { ...cur, ...incoming, limitations, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
+    // README에서 온 한계는 README 결과로 통째로 바꾼다(빈 것도 반영). 다이제스트가 채운 한계만 README가 비어 있을 때 지킨다.
+    const keepDigest = cur.limitationsSource === "digest" && !incoming.limitations?.length;
+    const limitations = keepDigest ? cur.limitations : incoming.limitations;
+    const limitationsSource = keepDigest ? "digest" as const : incoming.limitationsSource ?? "readme" as const;
+    const merged: Evidence = { ...cur, ...incoming, limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
     ctx.db.update(schema.candidates).set({ evidence: merged as Record<string, unknown> }).where(eq(schema.candidates.id, c.id)).run();
     n++;
   }
