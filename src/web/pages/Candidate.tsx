@@ -108,6 +108,7 @@ export default function Candidate() {
               {e.firstReleaseAt && <><dt>첫 릴리스</dt><dd>{e.firstReleaseAt}</dd></>}
               {e.npmPackage && <><dt>npm</dt><dd>{e.npmPackage} · {e.npmMonthlyDownloads}/월</dd></>}
               {(e.language || e.license) && <><dt>언어 · 라이선스</dt><dd>{[e.language, e.license].filter(Boolean).join(" · ")}</dd></>}
+              {e.milestones?.length ? <><dt>이번 창 임계</dt><dd>{e.milestones.map((m) => `${m.metric === "stars" ? "스타" : "다운로드"} ${m.threshold}`).join(" · ")}</dd></> : null}
               <dt>데모</dt><dd className={e.demoAsset ? "" : "muted"}>{e.demoAsset ? e.demoAsset.split("/").pop() : "없음 (올리기 전 GIF나 스크린샷을 준비하세요)"}</dd>
             </dl>
             <h2 style={{ marginTop: 14 }}>한계</h2>

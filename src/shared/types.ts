@@ -20,6 +20,8 @@ export type Evidence = {
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
+  /** 이 창에서 넘은 임계. 글감이 아니라 사실로 쓴다. */
+  milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
 };
 
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };

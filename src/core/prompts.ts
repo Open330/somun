@@ -12,6 +12,7 @@ export type EvidenceLike = {
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[];
+  milestones?: { metric: string; threshold: number; at: number }[];
 };
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
@@ -30,6 +31,7 @@ export function factsBlock(c: CandidateLike): string {
     e.releaseCount !== undefined ? `releases: ${e.releaseCount}` : "",
     e.commitCount !== undefined ? `commits: ${e.commitCount}` : "",
     e.stars !== undefined ? `stars: ${e.stars}, forks: ${e.forks ?? 0}` : "",
+    e.milestones?.length ? `milestones crossed this window: ${e.milestones.map((m) => `${m.metric} ${m.threshold}`).join(", ")}` : "",
     e.language ? `language: ${e.language}, license: ${e.license ?? "?"}` : "",
     e.homepage ? `homepage: ${e.homepage}` : "",
     e.npmPackage ? `npm: ${e.npmPackage}, downloads last month: ${e.npmMonthlyDownloads}` : "",

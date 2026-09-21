@@ -3,7 +3,7 @@ import { installationToken } from "../infra/github/app.js";
 import { GitHubClient, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
 import { githubAppConfig } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
-import { mergeOpenReleases, refreshEvidence } from "./candidates.js";
+import { refreshEvidence } from "./candidates.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
@@ -133,7 +133,6 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
       refreshEvidence(ctx, ownerId, name, evidence);
-      mergeOpenReleases(ctx, ownerId, name);
       if (signals.length) {
         const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: prev.latestReleaseAt ?? (latest ? Date.parse(latest.published_at) : undefined), repoCreatedAt: createdAt, recentPrCount: prev.recentPrCount + signals.filter((s) => s.kind === "pr_merged").length }, evidence);
         summary[name] = r.inserted;

@@ -85,3 +85,23 @@ export function crossedThreshold(prev: number | undefined, now: number, threshol
   for (const t of thresholds) if (p < t && now >= t) crossed = t;
   return crossed;
 }
+
+/**
+ * 글감의 단위는 "저장소 × 10일 창"이다. 창 안의 신호(릴리스·마일스톤·진행 중)는 한 글감에 쌓인다.
+ * 글감의 type/title은 가장 강한 신호가 정한다: release > new-repo > in-progress > milestone.
+ */
+export const WINDOW_DAYS = 10;
+const TYPE_RANK: Record<CandidateType, number> = { release: 4, "new-repo": 3, "in-progress": 2, milestone: 1, blog: 0 };
+
+export function strongerType(a: CandidateType, b: CandidateType): CandidateType {
+  return TYPE_RANK[b] > TYPE_RANK[a] ? b : a;
+}
+
+/** 저장소 창 키. 창의 시작일(UTC)로 만든다. */
+export function windowKey(repo: string, startedAt: number): string {
+  return `repo:${repo}:${new Date(startedAt).toISOString().slice(0, 10)}`;
+}
+
+export function inWindow(candidateCreatedAt: number, now: number): boolean {
+  return now - candidateCreatedAt < WINDOW_DAYS * DAY;
+}

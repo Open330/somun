@@ -1,8 +1,9 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { clusterKeyFor, type SignalLike } from "../core/cluster.js";
+import { clusterKeyFor, inWindow, strongerType, windowKey, type CandidateType, type SignalLike } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Evidence, SignalKind } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
+import { uniqueKey } from "./candidates.js";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -21,35 +22,44 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       const ck = clusterKeyFor(s as SignalLike, cluster);
       let candidateId: number | null = null;
       if (ck) {
-        let existing = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, ck.key))).get();
-        if (!existing && ck.type === "release") {
-          const mergeable = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, s.repo), eq(schema.candidates.type, "release"))).all()
-            .find((c) => !["published", "dropped"].includes(c.status) && now - c.createdAt < 10 * DAY);
-          if (mergeable) {
-            // 최신 태그일 때만 이름을 바꾼다 (GitHub는 최신 릴리스부터 주므로 뒤에 오는 옛 태그로 덮어쓰지 않게).
-            const oldTag = mergeable.key.split("@")[1] ?? "";
-            const newTag = ck.key.split("@")[1] ?? "";
-            const newer = newTag.localeCompare(oldTag, undefined, { numeric: true }) > 0;
-            if (newer) tx.update(schema.candidates).set({ title: ck.title, key: ck.key }).where(eq(schema.candidates.id, mergeable.id)).run();
-            existing = newer ? { ...mergeable, title: ck.title, key: ck.key } : mergeable;
-          }
-        }
+        // 블로그 글은 저장소가 아니라 글 단위. 나머지는 저장소 × 10일 창 하나에 모은다.
+        let existing = ck.type === "blog"
+          ? tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, ck.key))).get()
+          : tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, s.repo))).all()
+              .filter((c) => !["published", "dropped"].includes(c.status) && inWindow(c.createdAt, now))
+              .sort((a, b) => b.createdAt - a.createdAt)[0];
+        const milestone = s.kind === "star_milestone" || s.kind === "download_milestone"
+          ? { metric: (s.kind === "star_milestone" ? "stars" : "downloads") as "stars" | "downloads", threshold: Number(s.payload.threshold ?? 0), at: s.occurredAt }
+          : null;
         if (existing) {
           candidateId = existing.id;
-          tx.update(schema.candidates).set({ evidence: { ...(existing.evidence as Evidence), ...evidence } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          const cur = existing.evidence as Evidence;
+          const ms = milestone ? [...(cur.milestones ?? []).filter((m) => !(m.metric === milestone.metric && m.threshold === milestone.threshold)), milestone] : cur.milestones;
+          const type = strongerType(existing.type as CandidateType, ck.type);
+          // 더 강한 신호가 오면 제목이 바뀐다. 같은 등급의 릴리스는 최신 태그일 때만.
+          let title = existing.title;
+          if (type !== existing.type) title = ck.title;
+          else if (ck.type === "release" && existing.type === "release") {
+            const oldTag = (cur.version ?? existing.title.split(" ").pop() ?? "");
+            const newTag = String(s.payload.tag ?? "");
+            if (newTag.localeCompare(oldTag, undefined, { numeric: true }) > 0) title = ck.title;
+          }
+          tx.update(schema.candidates).set({ type, title, evidence: { ...cur, ...evidence, milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          touched.add(existing.key);
         } else {
-          candidateId = Number(tx.insert(schema.candidates).values({ ownerId, type: ck.type, title: ck.title, repo: s.repo, key: ck.key, evidence: evidence as Record<string, unknown>, status: "new", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+          const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
+          const ev: Evidence = { ...evidence, milestones: milestone ? [milestone] : undefined };
+          candidateId = Number(tx.insert(schema.candidates).values({ ownerId, type: ck.type, title: ck.title, repo: s.repo, key, evidence: ev as Record<string, unknown>, status: "new", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+          touched.add(key);
         }
-        touched.add(ck.key);
       }
       tx.insert(schema.signals).values({ ownerId, sourceId, kind: s.kind, repo: s.repo, ref: s.ref, title: s.title, payload: s.payload, occurredAt: s.occurredAt, candidateId }).run();
       inserted++;
     }
     // 릴리스 후보에 직전 30일의 고아 PR을 붙인다.
     for (const key of touched) {
-      if (!key.startsWith("release:")) continue;
       const cand = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, key))).get();
-      if (!cand) continue;
+      if (!cand || cand.type !== "release") continue;
       const orphans = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, cand.repo), eq(schema.signals.kind, "pr_merged"), isNull(schema.signals.candidateId))).all();
       const titles: string[] = [];
       for (const o of orphans) {
