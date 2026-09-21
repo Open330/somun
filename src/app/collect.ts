@@ -44,8 +44,13 @@ export function firstDemoAsset(readme: string): string | undefined {
 /** README의 한계: 경고 블록(IMPORTANT/WARNING)과 Limitations 절. */
 export function limitationsFrom(readme: string): string[] {
   const notes: string[] = [];
+  // 경고 블록은 운영 메모("X 바꾸면 Y 실행")인 경우가 많다. 제품의 한계를 말하는 문장일 때만 쓴다.
+  const LIMIT_WORDS = /not (?:yet )?support|does ?n['’]?t|do ?n['’]?t|cannot|can['’]?t|only|yet|beta|experimental|limitation|unstable|아직|미지원|안 됩니다|안 됨|불가|제한|지원하지 않|실험/i;
   const alert = /\[!(?:IMPORTANT|WARNING|CAUTION)\]\s*\n((?:>.*\n?){1,4})/i.exec(readme);
-  if (alert) notes.push(alert[1].replace(/^>\s?/gm, "").replace(/\s+/g, " ").trim().slice(0, 240));
+  if (alert) {
+    const text = alert[1].replace(/^>\s?/gm, "").replace(/\s+/g, " ").trim().slice(0, 240);
+    if (LIMIT_WORDS.test(text)) notes.push(text);
+  }
   const m = /(?:^|\n)#+\s*(?:limitations?|known issues|caveats|not (?:yet )?supported|한계|제한|아직 안 되는 것)[^\n]*\n([\s\S]{0,1200}?)(?:\n#+\s|$)/i.exec(readme);
   if (m) notes.push(...m[1].split("\n").map((l) => l.replace(/^[-*\d.\s]+/, "").trim()).filter((l) => l.length > 8));
   return notes.slice(0, 5);
