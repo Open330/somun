@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { CHANNELS, enabledTargets, targetKey, type Channel } from "@core/channels";
 import { voicePreset } from "@core/voice";
 import type { CandidateDetail, Draft, SettingsView } from "@shared/types";
-import { CHANNEL_LABEL, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, targetLabel, useToast } from "../components/ui";
+import { CHANNEL_LABEL, ChannelIcon, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, targetLabel, useToast } from "../components/ui";
 import { ChannelPreview, WordDiff } from "../components/preview";
 import { post, useResource } from "../lib/api";
 import { useAuth } from "../lib/auth/context";
@@ -20,7 +20,8 @@ export default function Candidate() {
   const { data } = useResource<CandidateDetail>(`/candidates/${cid}`, ["candidates", "drafts", "publications"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [tab, setTab] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>(null); // channel
+  const [langByCh, setLangByCh] = useState<Record<string, string>>({});
   const [toast, showToast] = useToast();
 
   const draftsByTarget = useMemo(() => {
@@ -34,7 +35,10 @@ export default function Candidate() {
     const seen = new Set<string>();
     return [...enabled, ...fromDrafts].filter((t) => { const k = targetKey(t.channel, t.lang); if (seen.has(k)) return false; seen.add(k); return true; });
   }, [draftsByTarget, settings?.channelLangs]);
-  useEffect(() => { if (!tab && targets.length) setTab(targetKey(targets[0].channel, targets[0].lang)); }, [targets, tab]);
+  // 채널 단위 탭. 언어는 채널 안에서 고른다 (활성 언어가 둘 이상일 때만 토글이 보인다).
+  const channels = useMemo(() => [...new Set(targets.map((t) => t.channel))], [targets]);
+  const langsOf = (ch: Channel) => targets.filter((t) => t.channel === ch).map((t) => t.lang);
+  useEffect(() => { if (!tab && channels.length) setTab(channels[0]); }, [channels, tab]);
 
   if (!data) return <Skeleton rows={6} />;
   const { candidate: c, judgments, publications } = data;
@@ -44,7 +48,10 @@ export default function Candidate() {
   const angle = j?.reasoning.split("각도: ")[1]?.trim();
   const reasoning = j?.reasoning.split("\n\n각도:")[0];
   const decision = j?.overriddenDecision ?? j?.decision;
-  const current = targets.find((t) => targetKey(t.channel, t.lang) === tab) ?? null;
+  const curLangs = tab ? langsOf(tab as Channel) : [];
+  const curLang = tab ? (langByCh[tab] && curLangs.includes(langByCh[tab]) ? langByCh[tab] : curLangs[0]) : undefined;
+  const current = tab && curLang ? { channel: tab as Channel, lang: curLang } : null;
+  const curKey = current ? targetKey(current.channel, current.lang) : null;
 
   const redraft = async (ts: { channel: Channel; lang: string }[], instruction?: string, key = "draft") => {
     setBusy(key);
@@ -87,37 +94,36 @@ export default function Candidate() {
         <aside className="cand-side">
           <section className="side-block">
             <h2>무엇이 달라졌나</h2>
-            {e.highlights?.length ? <ul className="hl">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted">{stage.busy ? "다이제스트를 만드는 중입니다." : "아직 다이제스트가 없습니다. 초안 쓰기를 누르면 먼저 만듭니다."}</p>}
+            {e.highlights?.length ? <ul className="hl check">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted" style={{ margin: 0 }}>{stage.busy ? "다이제스트를 만드는 중입니다." : "아직 다이제스트가 없습니다. 초안 쓰기를 누르면 먼저 만듭니다."}</p>}
             {e.ompSummary && <details className="raw"><summary>에이전트 세션 요약</summary><pre className="evidence">{e.ompSummary}</pre></details>}
           </section>
 
           <section className="side-block">
-            <h2>사실 <span className="tiny muted" style={{ textTransform: "none", letterSpacing: 0 }}>초안이 쓸 수 있는 숫자</span></h2>
-            <div className="facts">
-              {e.stars !== undefined && <span className="badge">stars {e.stars}</span>}
-              {e.forks !== undefined && <span className="badge">forks {e.forks}</span>}
-              {e.commitCount !== undefined && <span className="badge">commits {e.commitCount}</span>}
-              {e.releaseCount !== undefined && <span className="badge">releases {e.releaseCount}</span>}
-              {e.firstReleaseAt && <span className="badge">first {e.firstReleaseAt}</span>}
-              {e.npmPackage && <span className="badge">npm {e.npmMonthlyDownloads}/월</span>}
-              {e.language && <span className="badge">{e.language}</span>}
-              {e.license && <span className="badge">{e.license}</span>}
-              <span className={`badge ${e.demoAsset ? "ok" : "warn"}`}>{e.demoAsset ? `데모 ${e.demoAsset.split("/").pop()}` : "데모 자산 없음"}</span>
-            </div>
-            <div className="tiny muted" style={{ margin: "12px 0 4px" }}>한계</div>
-            {e.limitations?.length ? <ul className="hl small">{e.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul> : <p className="tiny muted" style={{ margin: 0 }}>README에 명시된 한계가 없습니다. 초안은 버전 상태를 한계로 씁니다.</p>}
+            <h2>사실</h2>
+            <dl className="kv">
+              {e.stars !== undefined && <><dt>스타</dt><dd>{e.stars}</dd></>}
+              {e.forks !== undefined && <><dt>포크</dt><dd>{e.forks}</dd></>}
+              {e.commitCount !== undefined && <><dt>커밋</dt><dd>{e.commitCount}</dd></>}
+              {e.releaseCount !== undefined && <><dt>릴리스</dt><dd>{e.releaseCount}{e.version ? ` · 최신 ${e.version}` : ""}</dd></>}
+              {e.firstReleaseAt && <><dt>첫 릴리스</dt><dd>{e.firstReleaseAt}</dd></>}
+              {e.npmPackage && <><dt>npm</dt><dd>{e.npmPackage} · {e.npmMonthlyDownloads}/월</dd></>}
+              {(e.language || e.license) && <><dt>언어 · 라이선스</dt><dd>{[e.language, e.license].filter(Boolean).join(" · ")}</dd></>}
+              <dt>데모</dt><dd className={e.demoAsset ? "" : "muted"}>{e.demoAsset ? e.demoAsset.split("/").pop() : "없음 (올리기 전 GIF나 스크린샷을 준비하세요)"}</dd>
+            </dl>
+            <h2 style={{ marginTop: 14 }}>한계</h2>
+            {e.limitations?.length ? e.limitations.map((l, i) => <div key={i} className="callout" style={{ marginTop: i ? 6 : 0 }}>{l}</div>) : <div className="callout muted-box">README에 명시된 한계가 없습니다. 초안은 버전 상태를 한계로 씁니다.</div>}
           </section>
 
           {j && (
             <section className="side-block">
               <h2>판단 이유</h2>
               <p className="small" style={{ lineHeight: 1.65, margin: 0 }}>{reasoning}</p>
-              <div className="tiny muted" style={{ marginTop: 6 }}>{j.model} · {fmtDate(j.createdAt)}</div>
+              <div className="meta-line"><code>{j.model.split("@")[0].replace("gemini/", "")}</code><span>{fmtDate(j.createdAt)}</span></div>
             </section>
           )}
 
           <section className="side-block">
-            <details className="raw"><summary>원자료 (릴리스 노트, 머지된 PR, 커밋 제목)</summary>
+            <details className="raw"><summary>원자료 · 릴리스 노트, 머지된 PR, 커밋 제목</summary>
               <pre className="evidence">{[e.releaseNotes && `릴리스 노트\n${e.releaseNotes}`, e.mergedPrTitles?.length && `머지된 PR\n- ${e.mergedPrTitles.join("\n- ")}`, e.commitSubjects?.length && `커밋\n- ${e.commitSubjects.slice(0, 40).join("\n- ")}`].filter(Boolean).join("\n\n") || "(없음)"}</pre>
             </details>
           </section>
@@ -125,7 +131,7 @@ export default function Candidate() {
           {publications.length > 0 && (
             <section className="side-block">
               <h2>발행됨</h2>
-              <div className="stack small">{publications.map((p) => <div key={p.id} className="row between"><span className="badge outline">{CHANNEL_LABEL[p.channel]}</span><a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 44)}</a><span className="muted">{fmtDate(p.publishedAt)}</span></div>)}</div>
+              <div className="stack small">{publications.map((p) => <div key={p.id} className="row between"><span className="row" style={{ gap: 6 }}><ChannelIcon channel={p.channel} size={14} />{CHANNEL_LABEL[p.channel]}</span><a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 40)}</a><span className="muted">{fmtDate(p.publishedAt)}</span></div>)}</div>
             </section>
           )}
         </aside>
@@ -136,15 +142,19 @@ export default function Candidate() {
             {settings && <Link to="/voice" className="tiny muted">문체: {voicePreset(settings.voice.preset).name}{settings.voice.guide ? " + 내 지침" : ""} ↗</Link>}
           </div>
           <div className="chtabs">
-            {targets.map((t) => {
-              const k = targetKey(t.channel, t.lang);
-              const live = (draftsByTarget.get(k) ?? []).find((d) => d.status !== "dropped");
-              const pub = publications.find((p) => p.channel === t.channel && (p.lang ?? t.lang) === t.lang);
-              return <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{targetLabel(t.channel, t.lang, Boolean(CHANNELS[t.channel].fixedLang))}<span className="st">{pub ? "✓ 올림" : live ? (live.status === "copied" ? "복사됨" : live.lint.every((l) => l.ok) ? "●" : "!") : busy === "draft" || stage.busy ? "…" : "+"}</span></button>;
+            {channels.map((ch) => {
+              const ls = langsOf(ch);
+              const live = ls.map((l) => (draftsByTarget.get(targetKey(ch, l)) ?? []).find((d) => d.status !== "dropped")).filter(Boolean) as Draft[];
+              const pub = publications.find((p) => p.channel === ch);
+              const st = pub ? "✓" : live.length === ls.length ? (live.every((d) => d.lint.every((l) => l.ok)) ? "●" : "!") : live.length ? `${live.length}/${ls.length}` : busy === "draft" || stage.busy ? "…" : "";
+              return <button key={ch} className={tab === ch ? "active" : ""} onClick={() => setTab(ch)}><ChannelIcon channel={ch} />{CHANNEL_LABEL[ch] ?? ch}{st && <span className="st">{st}</span>}</button>;
             })}
           </div>
-          {current && <DraftPanel key={tab!} cid={cid} channel={current.channel} lang={current.lang} drafts={draftsByTarget.get(tab!) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url} busy={busy === `draft:${tab}` || busy === "draft"} showToast={showToast}
-            onRedraft={(instruction) => redraft([current], instruction, `draft:${tab}`)} />}
+          {current && curKey && (
+            <DraftPanel key={curKey} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onLang={(l) => setLangByCh({ ...langByCh, [current.channel]: l })}
+              drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url}
+              busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
+          )}
         </section>
       </div>
       <Toast msg={toast} />
@@ -154,7 +164,9 @@ export default function Candidate() {
 
 const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자를 앞으로", "한계를 더 구체적으로", "질문으로 끝내기", "덜 격식 있게"];
 
-function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, showToast }: { cid: number; channel: Channel; lang: string; drafts: Draft[]; published?: string; busy: boolean; onRedraft: (instruction?: string) => Promise<void>; showToast: (m: string) => void }) {
+const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="tablist" aria-label="언어">{langs.map((l) => <button key={l} role="tab" className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : null;
+
+function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: string; busy: boolean; onRedraft: (instruction?: string) => Promise<void>; showToast: (m: string) => void }) {
   const versions = [...drafts].sort((a, b) => b.version - a.version);
   const latest = versions.find((d) => d.status !== "dropped") ?? null;
   const [viewId, setViewId] = useState<number | null>(null);
@@ -198,6 +210,7 @@ function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, sh
   if (!latest) {
     return (
       <div className="card draft-empty">
+        <LangSeg langs={langs} lang={lang} onLang={onLang} />
         <p className="muted small" style={{ margin: 0 }}>{targetLabel(channel, lang, Boolean(spec.fixedLang))} 초안이 아직 없습니다. 설정된 문체와 이 글감의 사실만으로 씁니다.</p>
         <button className="primary" disabled={busy} onClick={() => void onRedraft()}>{busy ? "쓰는 중…" : "초안 쓰기"}</button>
       </div>
@@ -205,12 +218,15 @@ function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, sh
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
+  const count = [...body].length;
 
   return (
     <div className="card draft-card">
-      <div className="draft-toolbar">
-        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+      <div className="draft-head">
+        <div className="meta">
+          <LangSeg langs={langs} lang={lang} onLang={onLang} />
           <LintBadges lint={latest.lint} />
+          <span className={`badge ${spec.maxChars && count > spec.maxChars ? "bad" : "outline"}`}>{count}{spec.maxChars ? ` / ${spec.maxChars}` : ""}자</span>
           {versions.length > 1 ? (
             <select className="ver" value={shown?.id ?? latest.id} onChange={(ev) => setViewId(Number(ev.target.value))} title="버전">
               {versions.map((d) => <option key={d.id} value={d.id}>v{d.version}{d.status === "dropped" ? " (버림)" : d.id === latest.id ? " (현재)" : ""} · {d.model.split("@")[0].replace("gemini/", "")}</option>)}
@@ -248,19 +264,19 @@ function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, sh
           {!isOld && (
             <div className="draft-actions">
               <div className="toolbar">
-                <button className="primary" onClick={() => void copy()}>복사</button>
-                <button onClick={() => setEditing(true)}>수정</button>
-                <button className={rewriteOpen ? "active" : ""} disabled={busy} onClick={() => setRewriteOpen((o) => !o)}>{busy ? "쓰는 중…" : "다시 쓰기"}</button>
+                <button className="primary" title="c" onClick={() => void copy()}>복사</button>
+                <button title="e" onClick={() => setEditing(true)}>수정</button>
+                <button className={rewriteOpen ? "active" : ""} title="r" disabled={busy} onClick={() => setRewriteOpen((o) => !o)}>{busy ? "쓰는 중…" : "다시 쓰기"}</button>
               </div>
-              <span className="tiny muted">{[...body].length}{spec.maxChars ? `/${spec.maxChars}` : ""}자 · <span className="kbd">c</span> 복사 <span className="kbd">e</span> 수정 <span className="kbd">r</span> 다시 쓰기{spec.mediaHint ? ` · 이미지: ${spec.mediaHint}` : ""}</span>
+              <span className="tiny muted"><span className="kbd">c</span> <span className="kbd">e</span> <span className="kbd">r</span></span>
             </div>
           )}
           {rewriteOpen && !isOld && (
             <div className="rewrite">
-              <div className="small" style={{ marginBottom: 6 }}><b>다시 쓰기 지침</b> <span className="muted">비워 두면 같은 문체로 새로 씁니다. 지침을 주면 그 점만 바꿉니다. 사실과 숫자는 그대로입니다.</span></div>
-              <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>{REWRITE_HINTS.map((h) => <button key={h} className="ghost sm chip" onClick={() => setInstruction((v) => (v ? `${v}, ${h}` : h))}>{h}</button>)}</div>
-              <textarea value={instruction} onChange={(ev) => setInstruction(ev.target.value)} placeholder="예: 첫 문장을 내가 겪은 문제로 시작하고, 마지막은 링크만 남겨 주세요." style={{ minHeight: 70 }} />
-              <div className="toolbar" style={{ marginTop: 8 }}>
+              <div className="rewrite-head"><b>다시 쓰기</b><span className="tiny muted">사실과 숫자는 그대로. 비우면 같은 문체로 새로 씁니다.</span></div>
+              <div className="chips">{REWRITE_HINTS.map((h) => <button key={h} className="ghost sm chip" onClick={() => setInstruction((v) => (v ? `${v}, ${h}` : h))}>{h}</button>)}</div>
+              <textarea value={instruction} onChange={(ev) => setInstruction(ev.target.value)} placeholder="바꾸고 싶은 점. 예: 첫 문장을 내가 겪은 문제로 시작" />
+              <div className="toolbar">
                 <button className="primary" disabled={busy} onClick={async () => { await onRedraft(instruction.trim() || undefined); setRewriteOpen(false); setInstruction(""); }}>{busy ? "쓰는 중…" : instruction.trim() ? "이 지침으로 다시 쓰기" : "같은 문체로 다시 쓰기"}</button>
                 <button className="ghost" onClick={() => setRewriteOpen(false)}>닫기</button>
               </div>
@@ -280,7 +296,7 @@ function DraftPanel({ cid, channel, lang, drafts, published, busy, onRedraft, sh
       {step === "post" && !editing && !isOld && (
         <div className="step-post">
           <div className="row between"><b>올리기 전 확인 · {targetLabel(channel, lang, Boolean(spec.fixedLang))}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{spec.label} 작성 화면 열기 ↗</a>}</div>
-          <ol>{spec.runbook.map((r, i) => <li key={i}>{r}</li>)}</ol>
+          <ol>{spec.runbook.map((r, i) => <li key={i}>{r}</li>)}{spec.mediaHint && <li>이미지: {spec.mediaHint}</li>}</ol>
           <div className="row">
             <input placeholder="올렸으면 URL을 붙여 넣으세요" value={url} onChange={(ev) => setUrl(ev.target.value)} />
             <button className="primary" disabled={!/^https?:\/\//.test(url)} onClick={async () => { await post("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url }); setUrl(""); showToast("등록했습니다. 발행 화면에서 추이를 봅니다."); }}>올렸어요</button>

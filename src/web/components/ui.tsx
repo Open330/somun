@@ -2,6 +2,19 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
 
 export const CHANNEL_LABEL: Record<string, string> = { x: "X", threads: "Threads", linkedin: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog: "블로그 개요" };
+
+/** 채널 아이콘. 단색 SVG. HN·GN은 사이트 색 사각형 안에 글자. */
+export function ChannelIcon({ channel, size = 16 }: { channel: string; size?: number }) {
+  const s = { width: size, height: size, flex: "none" as const };
+  switch (channel) {
+    case "x": return <svg style={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M18.9 2H22l-6.8 7.8L23 22h-6.3l-4.9-6.4L6.2 22H3l7.3-8.3L2.5 2h6.4l4.4 5.9L18.9 2zm-1.1 18h1.7L7.3 3.9H5.5L17.8 20z" /></svg>;
+    case "threads": return <svg style={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M12.2 22c-2.9 0-5.1-1-6.6-2.9C4.3 17.4 3.6 15.1 3.6 12c0-3.1.7-5.4 2-7.1C7.1 3 9.3 2 12.2 2c2.2 0 4.1.6 5.5 1.8 1.2 1 2 2.3 2.4 3.9l-2 .5c-.6-2.5-2.6-4.1-5.9-4.1-2.2 0-3.9.7-5 2.1-1 1.3-1.5 3.3-1.5 5.8s.5 4.5 1.5 5.8c1.1 1.4 2.8 2.1 5 2.1 2 0 3.4-.5 4.4-1.5.7-.7 1-1.5 1-2.4 0-.8-.3-1.5-.9-2-.5-.4-1.2-.7-2-.9-.1 1.3-.5 2.4-1.2 3.1-.8.9-1.9 1.3-3.2 1.3-1.1 0-2-.3-2.7-.9-.8-.7-1.2-1.6-1.2-2.6 0-1.1.5-2 1.4-2.7.9-.6 2.1-1 3.6-1 .6 0 1.2 0 1.8.1-.1-.7-.3-1.2-.7-1.6-.4-.4-1-.6-1.8-.6-1.1 0-2 .4-2.6 1.1l-1.6-1.1c1-1.3 2.4-2 4.2-2 1.4 0 2.5.4 3.3 1.2.8.8 1.2 1.9 1.3 3.3 1.4.3 2.5.8 3.3 1.6 1 .9 1.5 2.1 1.5 3.6 0 1.5-.6 2.9-1.7 4-1.3 1.3-3.3 2-5.7 2zm-.3-8.6c-1 0-1.8.2-2.3.6-.4.3-.6.6-.6 1 0 .4.2.7.5 1 .4.3.9.4 1.5.4.8 0 1.4-.2 1.8-.7.4-.5.7-1.2.7-2.2-.5-.1-1-.1-1.6-.1z" /></svg>;
+    case "linkedin": return <svg style={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M20.4 2H3.6C2.7 2 2 2.7 2 3.6v16.8c0 .9.7 1.6 1.6 1.6h16.8c.9 0 1.6-.7 1.6-1.6V3.6c0-.9-.7-1.6-1.6-1.6zM8 19H5V9.5h3V19zM6.5 8.2a1.7 1.7 0 1 1 0-3.5 1.7 1.7 0 0 1 0 3.5zM19 19h-3v-4.6c0-1.1 0-2.5-1.5-2.5S12.7 13 12.7 14.3V19h-3V9.5h2.9v1.3c.4-.8 1.4-1.5 2.8-1.5 3 0 3.6 2 3.6 4.6V19z" /></svg>;
+    case "show_hn": return <svg style={s} viewBox="0 0 24 24" aria-hidden><rect width="24" height="24" rx="4" fill="#ff6600" /><path d="M7 5h2.3l2.7 5.6L14.7 5H17l-4 7.5V19h-2v-6.5L7 5z" fill="#fff" /></svg>;
+    case "show_gn": return <svg style={s} viewBox="0 0 24 24" aria-hidden><rect width="24" height="24" rx="4" fill="#2e8b57" /><path d="M12.5 5C8.9 5 6.5 7.9 6.5 12s2.4 7 6 7c2 0 3.6-.8 4.7-2.2v-5.3h-5v2.2h2.6v2.1c-.5.5-1.3.8-2.3.8-2.2 0-3.6-1.9-3.6-4.6s1.4-4.6 3.6-4.6c1.2 0 2.1.5 2.8 1.4l1.7-1.5C15.9 5.8 14.4 5 12.5 5z" fill="#fff" /></svg>;
+    default: return <svg style={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 12h7M9 16h7" /></svg>;
+  }
+}
 /** "X · EN" 처럼 채널과 언어를 함께. 고정 언어 채널은 채널 이름만. */
 export function targetLabel(channel: string, lang?: string, fixed?: boolean): string {
   const base = CHANNEL_LABEL[channel] ?? channel;
