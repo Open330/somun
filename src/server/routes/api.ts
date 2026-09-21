@@ -72,9 +72,19 @@ export function apiRoutes(ctx: AppContext) {
   app.post("/candidates/:id/redraft", async (c) => {
     const { targets } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1) }));
     const out: Record<string, unknown> = {};
-    // 아직 다이제스트가 없는 새 글감이면 초안만 쓸 수 없다. 다이제스트→판단을 먼저 돌린다 (판단이 draft면 초안까지 이어진다).
-    const cand = getCandidateDetail(ctx, c.get("ownerId"), id(c.req.param("id"))).candidate;
-    if (!cand.evidence.highlightsAt) { out.digest = await runStep(ctx, c.get("ownerId"), "digest", cand.id); }
+    // 아직 다이제스트가 없는 새 글감이면 초안만 쓸 수 없다. 다이제스트(→판단은 안에서 이어짐) 뒤 요청한 초안을 쓴다.
+    // 세 단계를 합치면 Cloudflare 100초를 넘기므로 시작만 알리고 뒤에서 돌린다. 진행은 SSE로 화면에 보인다.
+    const ownerId = c.get("ownerId");
+    const cand = getCandidateDetail(ctx, ownerId, id(c.req.param("id"))).candidate;
+    if (!cand.evidence.highlightsAt) {
+      void (async () => {
+        try {
+          await runStep(ctx, ownerId, "digest", cand.id);
+          for (const t of targets) await runStep(ctx, ownerId, "draft", cand.id, t.channel, t.lang);
+        } catch (e) { ctx.log.warn({ id: cand.id, err: (e as Error).message }, "chain from fresh failed"); }
+      })();
+      return c.json({ started: "chain", targets: targets.length });
+    }
     for (const t of targets) out[`${t.channel}:${t.lang}`] = await runStep(ctx, c.get("ownerId"), "draft", id(c.req.param("id")), t.channel, t.lang);
     return c.json(out);
   });

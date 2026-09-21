@@ -104,7 +104,7 @@ export default function Candidate() {
             })}
           </div>
           {current && <DraftPanel key={tab!} cid={cid} channel={current.channel} lang={current.lang} drafts={draftsByTarget.get(tab!) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url} busy={busy === `draft:${tab}` || busy === "draft"} showToast={showToast}
-            onRedraft={async () => { setBusy(`draft:${tab}`); try { await post(`/candidates/${cid}/redraft`, { targets: [current] }); } catch (e) { showToast(`초안을 못 썼습니다: ${(e as Error).message}`); } finally { setBusy(null); } }} />}
+            onRedraft={async () => { setBusy(`draft:${tab}`); try { const r = await post<{ started?: string }>(`/candidates/${cid}/redraft`, { targets: [current] }); if (r?.started === "chain") showToast("다이제스트 → 판단 → 초안을 시작했습니다. 1~2분 안에 여기 나타납니다."); } catch (e) { showToast(`초안을 못 썼습니다: ${(e as Error).message}`); } finally { setBusy(null); } }} />}
         </section>
       </div>
       <Toast msg={toast} />
