@@ -4,6 +4,7 @@ import type { AppContext } from "../app/context.js";
 import { startScheduler } from "../app/scheduler.js";
 import { openDb } from "../infra/db/index.js";
 import { migrateLegacyCandidates } from "../app/candidates.js";
+import { backfillLedger } from "../app/ledger.js";
 import { logger } from "../infra/logger.js";
 import { UsageReporter } from "../infra/usage.js";
 import { createApp } from "./app.js";
@@ -17,6 +18,8 @@ const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOK
 {
   const r = migrateLegacyCandidates(ctx);
   if (r.merged || r.renamed) logger.info(r, "legacy candidates migrated to repo windows");
+  const n = backfillLedger(ctx);
+  if (n) logger.info({ n }, "change ledger backfilled from existing highlights");
 }
 // 못 보낸 사용량은 5분마다 다시 보낸다.
 const usageFlush = setInterval(() => void usage.flush(), 5 * 60_000);

@@ -5,6 +5,7 @@ import { githubAppConfig } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
 import { ensureProfile } from "./profiles.js";
+import { lastDigestAt } from "./ledger.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
@@ -137,7 +138,9 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       }
 
       const latest = allReleases[0];
-      const sinceIso = new Date(latest ? Math.min(Date.parse(latest.published_at), since) : since).toISOString();
+      // 커밋 창: 이 저장소를 마지막으로 다이제스트한 시각부터. 없으면 마지막 릴리스나 14일.
+      const digestedAt = lastDigestAt(ctx, ownerId, name);
+      const sinceIso = new Date(digestedAt ?? (latest ? Math.min(Date.parse(latest.published_at), since) : since)).toISOString();
       const commits = await gh.get<{ commit: { message: string } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
       const commitSubjects = (commits ?? []).map((c) => c.commit.message.split("\n")[0].trim()).filter((m) => m && !/^(merge|chore\(deps|bump|release v?\d)/i.test(m)).slice(0, 80);
 

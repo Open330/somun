@@ -11,6 +11,7 @@ import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
 import { getSettings } from "./settings.js";
 import { getProfile } from "./profiles.js";
+import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { voiceGuideFor } from "../core/voice.js";
 
 /**
@@ -37,8 +38,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
-  if (kind === "digest") return digestPrompt(c, { profile });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile });
+  if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).map((t) => t.text) });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
@@ -135,6 +136,7 @@ export async function applyResult(ctx: AppContext, ownerId: string, args: { kind
     const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
     ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
+    recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     void runStep(ctx, ownerId, "judge", c.id);
     return { kind: "digest", highlights: highlights.length };
   }

@@ -41,7 +41,7 @@ export default function Candidate() {
   useEffect(() => { if (!tab && channels.length) setTab(channels[0]); }, [channels, tab]);
 
   if (!data) return <Skeleton rows={6} />;
-  const { candidate: c, judgments, publications, profile } = data;
+  const { candidate: c, judgments, publications, profile, told } = data;
   const j = judgments[0];
   const e = c.evidence;
   const stage = stageOf({ ...c, judgment: j });
@@ -97,6 +97,11 @@ export default function Candidate() {
             <h2>무엇이 달라졌나</h2>
             {e.highlights?.length ? <ul className="hl check">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted" style={{ margin: 0 }}>{stage.busy ? "다이제스트를 만드는 중입니다." : "아직 다이제스트가 없습니다. 초안 쓰기를 누르면 먼저 만듭니다."}</p>}
             {e.ompSummary && <details className="raw"><summary>에이전트 세션 요약</summary><pre className="evidence">{e.ompSummary}</pre></details>}
+            {told.length > 0 && (
+              <details className="raw"><summary>이 저장소에서 이미 다룬 변경 {told.length}개 · 발행 {told.filter((t) => t.publishedAt).length}개</summary>
+                <ul className="hl small told">{told.map((t, i) => <li key={i} className={t.publishedAt ? "pub" : ""}>{t.text}{t.publishedAt && <span className="badge ok" style={{ marginLeft: 6 }}>{t.publishedChannel} 발행</span>}</li>)}</ul>
+              </details>
+            )}
           </section>
 
           <section className="side-block">

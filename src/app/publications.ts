@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { markPublished } from "./ledger.js";
 import { schema } from "../infra/db/index.js";
 import type { Channel, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
@@ -10,6 +11,7 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
   const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url: input.url, publishedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(eq(schema.candidates.id, input.candidateId)).run();
   if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
+  markPublished(ctx, ownerId, input.candidateId, input.channel, now);
   emit(ctx, ownerId, { resource: "publications", id });
   emit(ctx, ownerId, { resource: "candidates", id: input.candidateId });
   return id;

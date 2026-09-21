@@ -410,3 +410,5 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .side-block .meta-line code { font-family: var(--font-mono); }
 .side-block.profile { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
 .field textarea, .field input { width: 100%; }
+.told li { color: var(--muted); }
+.told li.pub { color: var(--ink); }

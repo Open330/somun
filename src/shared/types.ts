@@ -84,7 +84,7 @@ export type RepoProfile = {
 };
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 
-export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView };
+export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[] };
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };
