@@ -4,13 +4,14 @@ import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Ch
 import { emit, NotFoundError, type AppContext } from "./context.js";
 import { getProfile } from "./profiles.js";
 import { alreadyTold } from "./ledger.js";
+import { crossLangNumberDiff } from "../core/lint.js";
 
 const DAY = 24 * 3600 * 1000;
 
 export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: r.evidence as Evidence, status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
-export const toPublication = (r: typeof schema.publications.$inferSelect): Publication => ({ id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, channel: r.channel as Channel, lang: r.lang ?? undefined, url: r.url, publishedAt: r.publishedAt, manualStats: r.manualStats ?? undefined });
+export const toPublication = (r: typeof schema.publications.$inferSelect): Publication => ({ id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, channel: r.channel as Channel, lang: r.lang ?? undefined, url: r.url, publishedAt: r.publishedAt, manualStats: r.manualStats ?? undefined, autoStats: r.autoStats ?? undefined, autoStatsAt: r.autoStatsAt ?? undefined });
 
 export function getCandidateRow(ctx: AppContext, ownerId: string, id: number) {
   const row = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, id), eq(schema.candidates.ownerId, ownerId))).get();
@@ -32,7 +33,7 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map(toDraft);
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));
-  return { candidate: toCandidate(c), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }) };
+  return { candidate: toCandidate(c), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
 }
 
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {

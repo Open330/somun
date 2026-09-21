@@ -10,7 +10,7 @@ export default function Published() {
   const { data: summary } = useResource<PerformanceSummary>("/publications/summary", ["publications", "candidates"]);
   return (
     <>
-      <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 세로선이 발행 시점, 점선이 발행 전 기준선입니다.</p></div></div>
+      <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 세로선이 발행 시점, 점선이 발행 전 기준선입니다. X와 Show HN 반응은 매일 자동으로 받고, LinkedIn·Threads·GeekNews는 직접 입력합니다.</p></div>{rows && rows.length > 0 && <div className="toolbar"><button className="sm" onClick={async () => { await post("/publications/refresh"); }}>반응 새로 받기</button></div>}</div>
       {rows === undefined ? <Skeleton rows={3} /> : rows.length === 0 ? (
         <div className="empty">
           <p style={{ marginBottom: 12 }}>아직 발행한 글이 없습니다.</p>
@@ -23,11 +23,11 @@ export default function Published() {
           <div className="perf">
             <div className="perf-col">
               <div className="tiny muted" style={{ marginBottom: 6 }}>채널별 · 발행 7일 뒤</div>
-              {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{CHANNEL_LABEL[g.key] ?? g.key} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgUniques !== undefined ? ` · 방문 ${g.avgUniques}` : ""}</span></div>)}
+              {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{CHANNEL_LABEL[g.key] ?? g.key} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgUniques !== undefined ? ` · 방문 ${g.avgUniques}` : ""}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
             </div>
             <div className="perf-col">
               <div className="tiny muted" style={{ marginBottom: 6 }}>문체별 · 발행 7일 뒤</div>
-              {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? (g.key === "unknown" ? "문체 미기록" : g.key)} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}</span></div>)}
+              {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? (g.key === "unknown" ? "문체 미기록" : g.key)} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
             </div>
           </div>
         )}
@@ -48,7 +48,7 @@ export default function Published() {
                   </div>
                   <MetricChart series={p.series} publishedAt={p.publishedAt} baseline={p.baselineStars} />
                 </div>
-                <ManualStats id={p.id} stats={p.manualStats} />
+                {p.autoStats ? <span className="small muted" title={`자동 수집 (${p.autoStats.source}) · ${p.autoStatsAt ? fmtDate(p.autoStatsAt) : ""}`}>{p.autoStats.score !== undefined ? `점수 ${p.autoStats.score} · 댓글 ${p.autoStats.comments ?? 0}` : `♥ ${p.autoStats.likes ?? 0} · ↻ ${p.autoStats.reposts ?? 0} · 답글 ${p.autoStats.comments ?? 0}${p.autoStats.views ? ` · 조회 ${p.autoStats.views}` : ""}`} <span className="badge ok">자동</span></span> : <ManualStats id={p.id} stats={p.manualStats} />}
               </div>
             );
           })}

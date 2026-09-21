@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lintDraft, lintPassed } from "./lint.js";
+import { crossLangNumberDiff, lintDraft, lintPassed, numberTokens } from "./lint.js";
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
 
 describe("lintDraft", () => {
@@ -45,5 +45,20 @@ describe("lintDraft facts checks", () => {
   it("flags an invented limitation when facts have none", () => {
     const r = lintDraft("x", undefined, "설정 동기화를 고쳤습니다. 릴리스 100회. 아직 v2026.09.21.2, API가 바뀔 수 있습니다. https://github.com/jiunbae/settings", undefined, { repo: "jiunbae/settings", limitations: [] });
     expect(r.find((x) => x.rule === "no_invented_limit")?.ok).toBe(false);
+  });
+});
+
+describe("cross-language numbers", () => {
+  it("extracts version, count, percent, thousands", () => {
+    expect(numberTokens("v0.8.47 · 61 releases · 40% faster · 4,102 rows · still 0.x")).toEqual(["v0.8.47", "61", "40%", "4102", "0.x"]);
+  });
+  it("flags a number present in one language only", () => {
+    const r = crossLangNumberDiff([
+      { channel: "x", lang: "en", version: 1, status: "proposed", body: "61 releases, still 0.x https://g.com/a" },
+      { channel: "x", lang: "ko", version: 2, status: "proposed", body: "릴리스 61회. https://g.com/a" },
+      { channel: "x", lang: "ko", version: 1, status: "dropped", body: "릴리스 100회" },
+    ]);
+    expect(r).toHaveLength(1);
+    expect(r[0].onlyIn).toEqual([{ lang: "en", numbers: ["0.x"] }]);
   });
 });

@@ -1,5 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { markPublished } from "./ledger.js";
+import { refreshReactions } from "./reactions.js";
 import { schema } from "../infra/db/index.js";
 import type { PerformanceSummary, Channel, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
@@ -12,6 +13,8 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(eq(schema.candidates.id, input.candidateId)).run();
   if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
   markPublished(ctx, ownerId, input.candidateId, input.channel, now);
+  // 등록 직후 한 번 반응을 받아 둔다 (기준선). 실패해도 등록은 된다.
+  void refreshReactions(ctx, ownerId, true).catch(() => undefined);
   emit(ctx, ownerId, { resource: "publications", id });
   emit(ctx, ownerId, { resource: "candidates", id: input.candidateId });
   return id;
@@ -59,14 +62,15 @@ export function performanceSummary(ctx: AppContext, ownerId: string): Performanc
     return after7 && p.baselineStars !== undefined ? after7.stars - p.baselineStars : undefined;
   };
   const uniq = (p: PublicationWithMetrics) => p.series.filter((s) => s.at > p.publishedAt).at(-1)?.uniques;
+  const likes = (p: PublicationWithMetrics) => p.autoStats?.likes ?? p.manualStats?.likes;
   const avg = (xs: (number | undefined)[]) => { const v = xs.filter((x): x is number => x !== undefined); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined; };
   const group = <K extends string>(key: (p: PublicationWithMetrics) => K | undefined) => {
     const m = new Map<K, PublicationWithMetrics[]>();
     for (const p of pubs) { const k = key(p); if (k) m.set(k, [...(m.get(k) ?? []), p]); }
-    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, avgStarDelta: avg(ps.map(delta)), avgUniques: avg(ps.map(uniq)) })).sort((a, b) => b.count - a.count);
+    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, avgStarDelta: avg(ps.map(delta)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
   };
   return {
     byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
-    byVoice: group((p) => p.voice ?? "unknown").map(({ key, count, avgStarDelta }) => ({ key, count, avgStarDelta })),
+    byVoice: group((p) => p.voice ?? "unknown").map(({ key, count, avgStarDelta, avgLikes }) => ({ key, count, avgStarDelta, avgLikes })),
   };
 }

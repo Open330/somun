@@ -18,12 +18,17 @@ export default function Inbox() {
   const [focus, setFocus] = useState(0);
   const [toast, showToast] = useToast();
   const github = (sources ?? []).filter((s) => s.kind === "github");
+  // 계정별 분리: 저장소 owner(또는 blog:host)로 나눈다. 조직과 개인이 섞이지 않게 고를 수 있다.
+  const accountOf = (repo: string) => (repo.startsWith("blog:") ? "블로그" : repo.split("/")[0]);
+  const accounts = useMemo(() => [...new Set((rows ?? []).filter((c) => !["dropped", "published"].includes(c.status)).map((c) => accountOf(c.repo)))].sort(), [rows]);
+  const [account, setAccount] = useState<string>(() => { try { return localStorage.getItem("somun.inbox.account") ?? "all"; } catch { return "all"; } });
+  useEffect(() => { try { localStorage.setItem("somun.inbox.account", account); } catch { /* ignore */ } }, [account]);
 
   const groups = useMemo(() => {
-    const open = (rows ?? []).filter((c) => !["dropped", "published"].includes(c.status));
+    const open = (rows ?? []).filter((c) => !["dropped", "published"].includes(c.status) && (account === "all" || accountOf(c.repo) === account));
     const by = (k: string[]) => open.filter((c) => k.includes(stageOf(c).key)).sort((a, b) => (b.judgment?.total ?? -1) - (a.judgment?.total ?? -1) || b.updatedAt - a.updatedAt);
     return { review: by(["review"]), fresh: by(["fresh"]), working: by(["working", "ask"]), deferred: by(["deferred"]) };
-  }, [rows]);
+  }, [rows, account]);
   const flat = [...groups.review, ...groups.fresh, ...groups.working, ...groups.deferred];
 
   useEffect(() => {
@@ -58,6 +63,12 @@ export default function Inbox() {
       </div>
 
       <Onboarding rows={rows} />
+      {accounts.length > 1 && (
+        <div className="tabs" style={{ marginBottom: 14 }}>
+          <button className={`sm ${account === "all" ? "active" : ""}`} onClick={() => setAccount("all")}>전체</button>
+          {accounts.map((a) => <button key={a} className={`sm ${account === a ? "active" : ""}`} onClick={() => setAccount(a)}>{a}</button>)}
+        </div>
+      )}
       {rows === undefined ? <Skeleton rows={5} /> : (
         <>
           <Section title="검수할 초안" count={groups.review.length} hint="초안이 준비된 글감. 열어서 복사하거나 고쳐서 올리세요.">

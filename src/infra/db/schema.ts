@@ -113,6 +113,9 @@ export const publications = sqliteTable("publications", {
   url: text("url").notNull(),
   publishedAt: integer("published_at").notNull(),
   manualStats: json<{ likes?: number; comments?: number; reposts?: number }>("manual_stats"),
+  /** 공개 엔드포인트에서 자동 수집한 반응. X(FxTwitter), Show HN(HN API). 없으면 null. */
+  autoStats: json<{ likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string }>("auto_stats"),
+  autoStatsAt: integer("auto_stats_at"),
 }, (t) => [index("publications_candidate").on(t.candidateId), index("publications_owner_time").on(t.ownerId, t.publishedAt)]);
 
 export const metricSnapshots = sqliteTable("metric_snapshots", {

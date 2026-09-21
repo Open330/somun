@@ -8,6 +8,7 @@ import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../
 import { acceptSuggestion, dismissSuggestion, listSuggestions } from "../../app/learning.js";
 import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
+import { refreshReactions } from "../../app/reactions.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
@@ -117,6 +118,7 @@ export function apiRoutes(ctx: AppContext) {
   app.post("/suggestions/:id/accept", (c) => { acceptSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/suggestions/:id/dismiss", (c) => { dismissSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.get("/publications/summary", (c) => c.json(performanceSummary(ctx, c.get("ownerId"))));
+  app.post("/publications/refresh", async (c) => c.json({ refreshed: await refreshReactions(ctx, c.get("ownerId"), true) }));
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));

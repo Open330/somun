@@ -43,6 +43,13 @@
       "when": 1789969279059,
       "tag": "0005_learning-loop",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789971091255,
+      "tag": "0006_auto-stats",
+      "breakpoints": true
     }
   ]
 }

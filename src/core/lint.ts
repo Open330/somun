@@ -96,3 +96,42 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 export function lintPassed(results: LintResult[]): boolean {
   return results.every((r) => r.ok);
 }
+
+/**
+ * 초안에 쓰인 숫자 토큰. 버전(v1.2.0, 0.x), 횟수(61), 퍼센트(40%), 천 단위(4,102)를 하나의 토큰으로 본다.
+ * 언어 간 비교용이라 단위 단어는 뺀다.
+ */
+export function numberTokens(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?![\w.])/g)) {
+    let t = m[0].toLowerCase();
+    if (/^\d{1,2}$/.test(t) && Number(t) <= 1) continue; // 0, 1 은 문장 안 조사·순서일 때가 많다
+    t = t.replace(/,/g, "");
+    out.add(t);
+  }
+  return [...out];
+}
+
+/**
+ * 같은 채널의 최신 초안들(언어별)에서 숫자 집합이 다르면 알린다. EN에 "61 releases"가 있는데 KO에 없으면 잡힌다.
+ * 버림·이전 판은 제외. 언어가 하나면 비교하지 않는다.
+ */
+export function crossLangNumberDiff(drafts: { channel: string; lang: string; version: number; status: string; title?: string; body: string }[]): { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] {
+  const latest = new Map<string, typeof drafts[number]>();
+  for (const d of drafts) {
+    if (d.status === "dropped") continue;
+    const k = `${d.channel}:${d.lang}`;
+    const cur = latest.get(k);
+    if (!cur || d.version > cur.version) latest.set(k, d);
+  }
+  const byChannel = new Map<string, typeof drafts>();
+  for (const d of latest.values()) byChannel.set(d.channel, [...(byChannel.get(d.channel) ?? []), d]);
+  const out: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] = [];
+  for (const [channel, ds] of byChannel) {
+    if (ds.length < 2) continue;
+    const sets = ds.map((d) => ({ lang: d.lang, nums: new Set(numberTokens(`${d.title ?? ""}\n${d.body}`)) }));
+    const onlyIn = sets.map((s) => ({ lang: s.lang, numbers: [...s.nums].filter((n) => sets.some((o) => o !== s && !o.nums.has(n))) })).filter((x) => x.numbers.length);
+    if (onlyIn.length) out.push({ channel: channel as Channel, langs: ds.map((d) => d.lang), onlyIn });
+  }
+  return out;
+}

@@ -63,13 +63,14 @@ export type Draft = { id: number; candidateId: number; channel: Channel; lang: s
 export type GuideSuggestion = { id: number; rule: string; category: "voice" | "structure" | "facts" | "format"; count: number; sources: { kind: "edit" | "drop"; draftId: number; at: number }[]; status: "pending" | "accepted" | "dismissed"; createdAt: number; updatedAt: number };
 
 /** 발행 성과 요약. 채널·문체별 평균. */
-export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgUniques?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number }[] };
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgLikes?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
 export type CandidateListItem = Candidate & { judgment: Judgment | null };
 
-export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number } };
+export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
+export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number }; autoStats?: AutoStats; autoStatsAt?: number };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
 export type PublicationWithMetrics = Publication & { candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string };
@@ -92,7 +93,7 @@ export type RepoProfile = {
 };
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 
-export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[] };
+export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[]; consistency: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] };
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };

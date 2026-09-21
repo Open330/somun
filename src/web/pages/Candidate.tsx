@@ -42,7 +42,7 @@ export default function Candidate() {
   useEffect(() => { if (!tab && channels.length) setTab(channels[0]); }, [channels, tab]);
 
   if (!data) return <Skeleton rows={6} />;
-  const { candidate: c, judgments, publications, profile, told } = data;
+  const { candidate: c, judgments, publications, profile, told, consistency } = data;
   const j = judgments[0];
   const e = c.evidence;
   const stage = stageOf({ ...c, judgment: j });
@@ -149,6 +149,11 @@ export default function Candidate() {
             <h2 style={{ margin: 0 }}>초안</h2>
             {settings && <Link to="/voice" className="tiny muted">문체: {voicePreset(settings.voice.preset).name}{settings.voice.guide ? " + 내 지침" : ""} ↗</Link>}
           </div>
+          {consistency.length > 0 && (
+            <div className="callout" style={{ marginBottom: 10 }}>
+              <b>언어 간 숫자가 다릅니다.</b> {consistency.map((x) => `${CHANNEL_LABEL[x.channel] ?? x.channel}: ${x.onlyIn.map((o) => `${o.lang.toUpperCase()}에만 ${o.numbers.join(", ")}`).join(" · ")}`).join(" / ")}. 한쪽에만 있는 숫자는 사실 확인 뒤 맞추세요.
+            </div>
+          )}
           <div className="chtabs">
             {channels.map((ch) => {
               const ls = langsOf(ch);
