@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
-import { VOICE_PRESETS } from "@core/voice";
+import { SAMPLE_WORK, VOICE_PRESETS } from "@core/voice";
 import type { Example, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, Skeleton, Toast, relTime, useToast } from "../components/ui";
 import { del, patch, post, useResource } from "../lib/api";
@@ -13,6 +13,8 @@ export default function Voice() {
   const { data: examples } = useResource<Example[]>("/examples", ["examples"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [guide, setGuide] = useState<string | null>(null);
+  const [sampleLang, setSampleLang] = useState<"ko" | "en">("ko");
+  const [openSample, setOpenSample] = useState<string | null>(null);
   const [ch, setCh] = useState<Channel | "all">("all");
   const [openId, setOpenId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -38,13 +40,23 @@ export default function Voice() {
       {voice && (
         <div className="card stack" style={{ gap: 14, marginBottom: 20 }}>
           <div>
-            <h3 style={{ marginBottom: 8 }}>프리셋</h3>
+            <div className="row between" style={{ marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+              <h3 style={{ margin: 0 }}>프리셋</h3>
+              <div className="row" style={{ gap: 8 }}><span className="tiny muted">샘플 언어</span><div className="lang-seg">{(["ko", "en"] as const).map((l) => <button key={l} className={sampleLang === l ? "on" : ""} onClick={() => setSampleLang(l)}>{l.toUpperCase()}</button>)}</div></div>
+            </div>
+            <div className="sample-work">
+              <b>같은 작업물, 다른 문체</b>
+              <span className="muted">{SAMPLE_WORK.name}: {SAMPLE_WORK.what}</span>
+              <div className="facts">{SAMPLE_WORK.facts.map((f) => <span key={f} className="badge">{f}</span>)}</div>
+            </div>
             <div className="presets">
               {VOICE_PRESETS.map((p) => (
-                <button key={p.id} className={`preset ${voice.preset === p.id ? "on" : ""}`} onClick={() => void saveVoice({ preset: p.id })}>
-                  <b>{p.name}</b><span>{p.description}</span>
-                  <div className="sample">{p.ko}</div>
-                </button>
+                <div key={p.id} className={`preset ${voice.preset === p.id ? "on" : ""}`}>
+                  <button className="preset-pick" onClick={() => void saveVoice({ preset: p.id })}><b>{p.name}</b><span>{p.description}</span></button>
+                  <div className="preset-sample">{p.sample[sampleLang]}</div>
+                  <button className="ghost sm" onClick={() => setOpenSample(openSample === p.id ? null : p.id)}>{openSample === p.id ? "지침 닫기" : "지침 보기"}</button>
+                  {openSample === p.id && <div className="sample">{sampleLang === "ko" ? p.ko : p.en}</div>}
+                </div>
               ))}
             </div>
           </div>
