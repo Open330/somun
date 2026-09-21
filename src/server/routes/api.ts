@@ -3,7 +3,8 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
-import { collectAll, collectGithubSource } from "../../app/collect.js";
+import { collectAll, collectGithubSource, profileMaterialFor } from "../../app/collect.js";
+import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
@@ -93,6 +94,12 @@ export function apiRoutes(ctx: AppContext) {
   // drafts
   app.post("/drafts/:id/edit", async (c) => c.json(saveDraftEdit(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ title: z.string().optional(), body: z.string().min(1), markCopied: z.boolean() })))));
   app.post("/drafts/:id/drop", async (c) => { const i = await body(c, z.object({ reason, note: z.string().optional() })); dropDraft(ctx, c.get("ownerId"), id(c.req.param("id")), i.reason, i.note); return c.body(null, 204); });
+
+  // repo profiles (정체성 기준선)
+  app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));
+  app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
+  app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(6).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(8).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(12).optional() })))));
+  app.post("/profiles/:owner/:name/regenerate", async (c) => { const repo = `${c.req.param("owner")}/${c.req.param("name")}`; return c.json(await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo))); });
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));

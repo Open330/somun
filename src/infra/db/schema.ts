@@ -200,3 +200,30 @@ export const usageOutbox = sqliteTable("usage_outbox", {
   lastError: text("last_error"),
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("usage_outbox_next").on(t.nextAt)]);
+
+/** 저장소 프로필. 정체성의 기준선. README 해시가 바뀌면 다시 만들고, 사용자가 고친 필드(edits)는 유지한다. */
+export const repoProfiles = sqliteTable("repo_profiles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerId: text("owner_id").notNull(),
+  repo: text("repo").notNull(),
+  readmeHash: text("readme_hash").notNull(),
+  profile: json<Record<string, unknown>>("profile").notNull(),
+  edits: json<Record<string, unknown>>("edits"),
+  model: text("model").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("repo_profiles_owner_repo").on(t.ownerId, t.repo)]);
+
+/** 변경 원장. 저장소별로 "이미 다이제스트한 변경"과 발행 여부. 다이제스트가 같은 말을 반복하지 않게 한다. */
+export const changeLedger = sqliteTable("change_ledger", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerId: text("owner_id").notNull(),
+  repo: text("repo").notNull(),
+  text: text("text").notNull(),
+  normalized: text("normalized").notNull(),
+  source: text("source"),
+  candidateId: integer("candidate_id"),
+  firstSeenAt: integer("first_seen_at").notNull(),
+  publishedAt: integer("published_at"),
+  publishedChannel: text("published_channel"),
+}, (t) => [index("ledger_owner_repo_time").on(t.ownerId, t.repo, t.firstSeenAt), index("ledger_candidate").on(t.candidateId)]);

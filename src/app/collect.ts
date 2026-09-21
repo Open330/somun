@@ -4,6 +4,7 @@ import { GitHubClient, type GhPull, type GhRelease, type GhRepo } from "../infra
 import { githubAppConfig } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
+import { ensureProfile } from "./profiles.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
@@ -56,6 +57,23 @@ export function limitationsFrom(readme: string): string[] {
   return notes.slice(0, 5);
 }
 
+/** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
+export const PROFILE_BUDGET = 25;
+
+/** 저장소 하나의 프로필 재료를 GitHub에서 읽는다 (재생성용). */
+export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoName: string) {
+  const src = listEnabledSources(ctx, { ownerId, kind: "github" }).find((s) => s.targets.some((t) => t === repoName || t === repoName.split("/")[0]));
+  const instId = src?.options?.installationId ? Number(src.options.installationId) : undefined;
+  const cfg = instId ? githubAppConfig(ctx) : null;
+  const token = instId && cfg ? await installationToken(cfg, instId) : ctx.env.githubToken;
+  if (!token) throw new Error("GitHub 토큰이 없습니다.");
+  const gh = new GitHubClient(token);
+  const [repo, readmeRaw, releases] = await Promise.all([gh.get<GhRepo>(`/repos/${repoName}`), gh.get<{ content: string }>(`/repos/${repoName}/readme`), gh.get<GhRelease[]>(`/repos/${repoName}/releases?per_page=3`)]);
+  if (!repo) throw new Error("저장소를 읽을 수 없습니다.");
+  const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
+  return { repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
+}
+
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
   if (!source) return {};
@@ -68,6 +86,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   const ownerId = source.ownerId;
   const since = Date.now() - 14 * DAY;
   const summary: Record<string, number> = {};
+  let profileBudget = PROFILE_BUDGET;
   try {
     for (const repo of await expandTargets(gh, source.targets)) {
       const name = repo.full_name;
@@ -132,6 +151,13 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
+      // 프로필: 없거나 README가 바뀐 저장소만, 수집 한 번에 최대 PROFILE_BUDGET개. 나머지는 다음 수집에.
+      if (profileBudget > 0) {
+        try {
+          const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
+          if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
+        } catch (e) { ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed"); }
+      }
       refreshEvidence(ctx, ownerId, name, evidence);
       if (signals.length) {
         const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: prev.latestReleaseAt ?? (latest ? Date.parse(latest.published_at) : undefined), repoCreatedAt: createdAt, recentPrCount: prev.recentPrCount + signals.filter((s) => s.kind === "pr_merged").length }, evidence);

@@ -408,3 +408,5 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .callout.muted-box { border-left-color: var(--line-strong); background: var(--surface-2); color: var(--muted); }
 .side-block .meta-line { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
 .side-block .meta-line code { font-family: var(--font-mono); }
+.side-block.profile { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface)); }
+.field textarea, .field input { width: 100%; }

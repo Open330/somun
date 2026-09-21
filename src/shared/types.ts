@@ -72,7 +72,19 @@ export type KeyStatus = { label: string; todayCount: number; cap: number; cooldo
 
 export type Job = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
 
-export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[] };
+/** 저장소 프로필: 정체성의 기준선. 다이제스트·판단·초안이 "이 프로젝트는 이런 것"으로 받는다. */
+export type RepoProfile = {
+  what: string;
+  audience: string;
+  claims: string[];
+  stage: "experiment" | "beta" | "stable" | "archived" | "unknown";
+  limitations: string[];
+  naming: string;
+  avoid: string[];
+};
+export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
+
+export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView };
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };

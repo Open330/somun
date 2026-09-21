@@ -19,13 +19,29 @@ export type CandidateLike = { title: string; type: string; evidence: EvidenceLik
 
 export type PromptSpec = { system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
-/** 판단·초안이 보는 사실 블록. 원자료는 넣지 않는다. */
-export function factsBlock(c: CandidateLike): string {
+export type ProfileLike = { what: string; audience: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
+
+/** 프로필 블록. 정체성은 여기서만 말하고, 변경은 다이제스트가 말한다. */
+export function profileBlock(p: ProfileLike): string {
+  return [
+    "## What this project is (profile, the baseline; do not re-announce any of this as a change)",
+    `what: ${p.what}`,
+    `for whom: ${p.audience}`,
+    p.claims.length ? `core claims:\n- ${p.claims.join("\n- ")}` : "",
+    `stage: ${p.stage}`,
+    p.limitations.length ? `known limitations:\n- ${p.limitations.join("\n- ")}` : "",
+    p.naming ? `how to name it: ${p.naming}` : "",
+    p.avoid.length ? `never mention: ${p.avoid.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+/** 판단·초안이 보는 사실 블록. 원자료는 넣지 않는다. 프로필이 있으면 설명 대신 프로필을 쓴다. */
+export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
   const e = c.evidence;
   return [
     `# ${c.title} (${c.type})`,
     `repo: ${e.repo} — ${e.repoUrl}`,
-    e.description ? `what it is: ${e.description}` : "",
+    profile ? profileBlock(profile) : e.description ? `what it is: ${e.description}` : "",
     e.version ? `latest version: ${e.version}` : "",
     e.firstReleaseAt ? `first release: ${e.firstReleaseAt}` : "",
     e.releaseCount !== undefined ? `releases: ${e.releaseCount}` : "",
@@ -36,7 +52,7 @@ export function factsBlock(c: CandidateLike): string {
     e.homepage ? `homepage: ${e.homepage}` : "",
     e.npmPackage ? `npm: ${e.npmPackage}, downloads last month: ${e.npmMonthlyDownloads}` : "",
     e.demoAsset ? `demo asset in README: ${e.demoAsset}` : "demo asset: none found in README",
-    e.limitations?.length ? `limitations (from README):\n- ${e.limitations.join("\n- ")}` : "limitations: none stated in README",
+    e.limitations?.length ? `limitations (from README):\n- ${e.limitations.join("\n- ")}` : profile?.limitations.length ? "" : "limitations: none stated in README",
     e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}` : "\n## Digest: (none yet)",
     `\n## Numbers you may use (verbatim, nothing else)\n${numbersLine(e)}`,
   ].filter(Boolean).join("\n");
@@ -57,14 +73,14 @@ export function numbersLine(e: EvidenceLike): string {
 }
 
 /** 다이제스트만 원자료를 본다. */
-export function rawBlock(c: CandidateLike): string {
+export function rawBlock(c: CandidateLike, hasProfile = false): string {
   const e = c.evidence;
   return [
     e.releaseNotes ? `## Release notes\n${e.releaseNotes.slice(0, 3000)}` : "",
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",
     e.commitSubjects?.length ? `## Commit subjects since last release\n- ${e.commitSubjects.slice(0, 60).join("\n- ")}` : "",
     e.ompSummary ? `## Agent session summary (what the author struggled with)\n${e.ompSummary}` : "",
-    e.readmeExcerpt ? `## README excerpt\n${e.readmeExcerpt.slice(0, 1500)}` : "",
+    e.readmeExcerpt && !hasProfile ? `## README excerpt\n${e.readmeExcerpt.slice(0, 1500)}` : "",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -79,7 +95,9 @@ export const DIGEST_SCHEMA = {
   additionalProperties: false,
 };
 
-export function digestPrompt(c: CandidateLike): PromptSpec {
+export type DigestContext = { profile?: ProfileLike; alreadyTold?: string[] };
+
+export function digestPrompt(c: CandidateLike, ctx: DigestContext = {}): PromptSpec {
   return {
     schemaName: "digest",
     schema: DIGEST_SCHEMA,
@@ -88,8 +106,14 @@ Keep: user-visible features, behavior changes, measurable improvements with numb
 Drop: refactors, chores, CI, formatting, dependency bumps, internal renames, anything with no visible effect.
 Also collect limitations: beta notices, unsupported platforms, "not yet" items, anything the author admits does not work. Quote the substance, not the wording.
 Each highlight is one plain sentence with no adjectives. Never invent numbers. If the raw material contains a number, keep it verbatim. If nothing is worth telling, return an empty list.
-Write highlights in the same language as most of the raw material (English if mixed).`,
-    user: `${factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } })}\n\n# Raw material\n${rawBlock(c) || "(no raw material)"}`,
+Write highlights in the same language as most of the raw material (English if mixed).
+If a profile is given, it is the baseline: never restate what the project is as a highlight. Only what changed relative to it.
+If an "Already told" list is given, drop any highlight that says the same thing in other words.`,
+    user: [
+      factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
+      ctx.alreadyTold?.length ? `\n## Already told (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
+      `\n# Raw material\n${rawBlock(c, Boolean(ctx.profile)) || "(no raw material)"}`,
+    ].filter(Boolean).join("\n"),
   };
 }
 
@@ -110,7 +134,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[] }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[] }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -126,7 +150,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in Korean, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, feedbackText].join("\n"),
   };
 }
 
@@ -137,7 +161,7 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
-export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string } };
+export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike };
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
@@ -174,9 +198,49 @@ Hard rules:
       opts.instruction ? `\n## Editor instruction for this rewrite\n${opts.instruction}` : "",
       "",
       "## Facts",
-      factsBlock(c),
+      factsBlock(c, opts.profile),
       "",
       exampleText,
     ].filter((l) => l !== undefined).join("\n"),
+  };
+}
+
+export const PROFILE_SCHEMA = {
+  type: "object",
+  properties: {
+    what: { type: "string" }, audience: { type: "string" },
+    claims: { type: "array", items: { type: "string" } },
+    stage: { type: "string", enum: ["experiment", "beta", "stable", "archived", "unknown"] },
+    limitations: { type: "array", items: { type: "string" } },
+    naming: { type: "string" }, avoid: { type: "array", items: { type: "string" } },
+  },
+  required: ["what", "audience", "claims", "stage", "limitations", "naming", "avoid"],
+  additionalProperties: false,
+};
+
+export type ProfileMaterial = { repo: string; description?: string; readme: string; recentReleaseNotes: string[]; language?: string; license?: string; homepage?: string; stars?: number; topics?: string[] };
+
+/** 저장소 프로필 생성. README 전문과 최근 릴리스 노트로 정체성만 뽑는다. 변경 사항은 여기 들어가지 않는다. */
+export function profilePrompt(m: ProfileMaterial): PromptSpec {
+  return {
+    schemaName: "repo_profile",
+    schema: PROFILE_SCHEMA,
+    system: `You write a short, factual profile of a software project from its README and metadata. The profile is a baseline that other steps compare changes against, so describe what the project IS, not what recently changed.
+- what: one sentence, plain, no adjectives. Name the category (CLI, library, web app, dataset, config repo, coursework, ...).
+- audience: who would use it, in one sentence. If it is a personal/config/coursework repo, say so plainly.
+- claims: up to 4 concrete things it does or promises, taken from the README. No marketing words.
+- stage: experiment | beta | stable | archived | unknown, from version numbers, badges, "beta"/"WIP" notes, release count.
+- limitations: things the README admits do not work or are not supported. Empty if none.
+- naming: the exact name to use in prose (e.g. "muxa", not "Muxa CLI tool") and its owner/name form.
+- avoid: names, employers, internal hostnames or paths in the README that should never appear in a public post. Empty if none.
+Write in the language of the README (Korean if the README is Korean).`,
+    user: [
+      `repo: ${m.repo}`,
+      m.description ? `description: ${m.description}` : "",
+      m.language ? `language: ${m.language}` : "", m.license ? `license: ${m.license}` : "", m.homepage ? `homepage: ${m.homepage}` : "",
+      m.stars !== undefined ? `stars: ${m.stars}` : "", m.topics?.length ? `topics: ${m.topics.join(", ")}` : "",
+      m.recentReleaseNotes.length ? `\n## Recent release notes (for stage only)\n${m.recentReleaseNotes.map((n, i) => `### ${i + 1}\n${n.slice(0, 800)}`).join("\n")}` : "",
+      `\n## README\n${m.readme.slice(0, 7000)}`,
+    ].filter(Boolean).join("\n"),
   };
 }

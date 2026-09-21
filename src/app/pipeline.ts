@@ -10,6 +10,7 @@ import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
 import { getSettings } from "./settings.js";
+import { getProfile } from "./profiles.js";
 import { voiceGuideFor } from "../core/voice.js";
 
 /**
@@ -35,8 +36,9 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const row = getCandidateRow(ctx, ownerId, candidateId);
   const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
   const settings = getSettings(ctx, ownerId);
-  if (kind === "digest") return digestPrompt(c);
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10) });
+  const profile = getProfile(ctx, ownerId, row.repo)?.profile;
+  if (kind === "digest") return digestPrompt(c, { profile });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
@@ -44,6 +46,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
     guide: voiceGuideFor(settings.voice, lang),
+    profile,
     instruction: opts.instruction?.trim() || undefined,
     previous: opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
   });

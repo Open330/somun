@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Channel, Decision, Draft, Evidence, FeedbackReason, Judgment, Publication, SignalKind } from "../shared/types.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
+import { getProfile } from "./profiles.js";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -30,7 +31,7 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map(toDraft);
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));
-  return { candidate: toCandidate(c), judgments, drafts, publications, signals };
+  return { candidate: toCandidate(c), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo) };
 }
 
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
