@@ -47,7 +47,7 @@ export function recordHighlights(ctx: AppContext, ownerId: string, repo: string,
       continue;
     }
     ctx.db.insert(schema.changeLedger).values({ ownerId, repo, text: h, normalized: norm, source: source ?? null, candidateId, firstSeenAt: at, publishedAt: null, publishedChannel: null }).run();
-    existing.push({ id: -1, ownerId, repo, text: h, normalized: norm, source: source ?? null, candidateId, firstSeenAt: at, publishedAt: null, publishedChannel: null });
+    existing.push({ id: -1, ownerId, repo, text: h, normalized: norm, source: source ?? null, candidateId, firstSeenAt: at, publishedAt: null, publishedChannel: null, disputedAt: null });
     n++;
   }
   return n;

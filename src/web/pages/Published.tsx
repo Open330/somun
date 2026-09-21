@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { PublicationWithMetrics } from "@shared/types";
+import type { PerformanceSummary, PublicationWithMetrics } from "@shared/types";
+import { VOICE_PRESETS } from "@core/voice";
 import { CHANNEL_LABEL, MetricChart, Skeleton, fmtDate } from "../components/ui";
 import { post, useResource } from "../lib/api";
 
 export default function Published() {
   const { data: rows } = useResource<PublicationWithMetrics[]>("/publications", ["publications", "candidates"]);
+  const { data: summary } = useResource<PerformanceSummary>("/publications/summary", ["publications", "candidates"]);
   return (
     <>
       <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 세로선이 발행 시점, 점선이 발행 전 기준선입니다.</p></div></div>
@@ -16,6 +18,19 @@ export default function Published() {
           <Link to="/" className="btn primary">검수할 초안 보기</Link>
         </div>
       ) : (
+        <>
+        {summary && (summary.byChannel.length > 1 || summary.byVoice.length > 1) && (
+          <div className="perf">
+            <div className="perf-col">
+              <div className="tiny muted" style={{ marginBottom: 6 }}>채널별 · 발행 7일 뒤</div>
+              {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{CHANNEL_LABEL[g.key] ?? g.key} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgUniques !== undefined ? ` · 방문 ${g.avgUniques}` : ""}</span></div>)}
+            </div>
+            <div className="perf-col">
+              <div className="tiny muted" style={{ marginBottom: 6 }}>문체별 · 발행 7일 뒤</div>
+              {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? (g.key === "unknown" ? "문체 미기록" : g.key)} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}</span></div>)}
+            </div>
+          </div>
+        )}
         <div className="rows">
           {rows.map((p) => {
             const delta = p.latestStars !== undefined && p.baselineStars !== undefined ? p.latestStars - p.baselineStars : undefined;
@@ -38,6 +53,7 @@ export default function Published() {
             );
           })}
         </div>
+        </>
       )}
     </>
   );

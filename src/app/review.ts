@@ -6,6 +6,7 @@ import type { Draft, Example, FeedbackReason } from "../shared/types.js";
 import { toDraft } from "./candidates.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
 import { getSettings } from "./settings.js";
+import { disputeCandidateFacts, learnFromEdit } from "./learning.js";
 
 /** 검수 루프: 복사/수정/버림이 문체 예시와 피드백을 만든다. */
 
@@ -33,6 +34,8 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
     const exId = Number(ctx.db.insert(schema.examples).values({ ownerId, channel: d.channel, lang, title: input.title ?? null, body: input.body, source: "edited", note: `candidate ${d.candidateId} v${d.version}`, active: true, createdAt: now }).run().lastInsertRowid);
     ctx.db.insert(schema.draftEdits).values({ ownerId, draftId: id, channel: d.channel, before: d.body, after: input.body, promotedExampleId: exId, createdAt: now }).run();
     retireSeeds(ctx, ownerId, d.channel, lang);
+    // 수정에서 규칙을 뽑는다. 검수 흐름을 막지 않도록 뒤에서.
+    void learnFromEdit(ctx, ownerId, { draftId: id, channel: d.channel, lang, before: d.body, after: input.body });
   } else if (input.markCopied) {
     ctx.db.insert(schema.examples).values({ ownerId, channel: d.channel, lang, title: input.title ?? null, body: input.body, source: "approved", active: true, createdAt: now }).run();
     retireSeeds(ctx, ownerId, d.channel, lang);
@@ -46,9 +49,12 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
 }
 
 export function dropDraft(ctx: AppContext, ownerId: string, id: number, reason: FeedbackReason, note?: string): void {
-  getDraftRow(ctx, ownerId, id);
+  const d = getDraftRow(ctx, ownerId, id);
   ctx.db.update(schema.drafts).set({ status: "dropped", updatedAt: Date.now() }).where(eq(schema.drafts.id, id)).run();
   ctx.db.insert(schema.feedback).values({ ownerId, targetType: "draft", targetId: String(id), reason, note: note ?? null, createdAt: Date.now() }).run();
+  // 사유별로 갈 곳이 다르다. 문체 → 지침 제안, 사실 틀림 → 원장에 틀림 표시, 글감 아님 → 저장소별 횟수(판단이 읽음).
+  if (reason === "voice" || reason === "wrong_channel" || reason === "other") void learnFromEdit(ctx, ownerId, { draftId: id, channel: d.channel, lang: d.lang, before: d.body, dropReason: reason, note });
+  if (reason === "wrong_facts") disputeCandidateFacts(ctx, ownerId, d.candidateId);
   emit(ctx, ownerId, { resource: "drafts", id });
 }
 

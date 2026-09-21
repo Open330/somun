@@ -412,3 +412,11 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .field textarea, .field input { width: 100%; }
 .told li { color: var(--muted); }
 .told li.pub { color: var(--ink); }
+
+/* 학습 루프 */
+.sugg { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.perf { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: 16px; }
+.perf-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.perf-row:first-of-type { border-top: 0; }
+.perf .mono { font-family: var(--font-mono); font-size: 12.5px; }
+@media (max-width: 640px) { .perf { grid-template-columns: 1fr; } }

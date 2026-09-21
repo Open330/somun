@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import { SAMPLE_WORK, VOICE_PRESETS } from "@core/voice";
-import type { Example, SettingsView } from "@shared/types";
+import type { Example, GuideSuggestion, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, Skeleton, Toast, relTime, useToast } from "../components/ui";
 import { del, patch, post, useResource } from "../lib/api";
 
@@ -9,9 +9,12 @@ import { del, patch, post, useResource } from "../lib/api";
  * 문체. 위: 프리셋과 내 지침(초안 프롬프트에 들어가는 것). 아래: 예시 문장(선택, 켰을 때만 프롬프트에 붙는다).
  * 문체를 예시에서 유추하게 두면 어느 문장 때문에 그렇게 나왔는지 알 수 없다. 지침이 먼저고 예시는 보조다.
  */
+const CAT_LABEL: Record<string, string> = { voice: "말투", structure: "구성", facts: "사실", format: "형식" };
+
 export default function Voice() {
   const { data: examples } = useResource<Example[]>("/examples", ["examples"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: suggestions } = useResource<GuideSuggestion[]>("/suggestions", ["settings"]);
   const [guide, setGuide] = useState<string | null>(null);
   const [sampleLang, setSampleLang] = useState<"ko" | "en">("ko");
   const [openSample, setOpenSample] = useState<string | null>(null);
@@ -68,6 +71,28 @@ export default function Voice() {
               <label className="row small" style={{ gap: 6, flex: 1, whiteSpace: "nowrap" }}><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> 아래 예시 문장도 프롬프트에 참고로 붙이기</label>
               <button className="primary" disabled={guide === null || guide === voice.guide} onClick={async () => { await saveVoice({ guide: guide ?? "" }); setGuide(null); }}>지침 저장</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {suggestions && suggestions.length > 0 && (
+        <div className="card stack" style={{ gap: 10, marginBottom: 20, borderColor: "var(--accent)" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>지침 제안 <span className="tiny muted">수정과 버림에서 배운 것 · 승인하면 내 지침에 붙습니다</span></h3>
+          </div>
+          <div className="stack" style={{ gap: 6 }}>
+            {suggestions.map((g) => (
+              <div key={g.id} className="sugg">
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 600 }}>{g.rule}</div>
+                  <div className="tiny muted">{CAT_LABEL[g.category] ?? g.category} · {g.count}번 관찰 · 마지막 {relTime(g.updatedAt)}</div>
+                </div>
+                <span className="toolbar">
+                  <button className="sm primary" onClick={async () => { await post(`/suggestions/${g.id}/accept`); showToast("지침에 추가했습니다."); }}>지침에 추가</button>
+                  <button className="ghost sm" onClick={() => void post(`/suggestions/${g.id}/dismiss`)}>무시</button>
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

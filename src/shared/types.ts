@@ -55,7 +55,13 @@ export type Judgment = { id: number; candidateId: number; scores: RubricScores; 
 
 export type LintResult = { rule: string; ok: boolean; detail?: string };
 
-export type Draft = { id: number; candidateId: number; channel: Channel; lang: string; version: number; title?: string; body: string; mediaHint?: string; lint: LintResult[]; status: DraftStatus; model: string; createdAt: number; updatedAt: number };
+export type Draft = { id: number; candidateId: number; channel: Channel; lang: string; version: number; title?: string; body: string; mediaHint?: string; lint: LintResult[]; status: DraftStatus; model: string; voice?: string; createdAt: number; updatedAt: number };
+
+/** 지침 제안: 수정·버림에서 배운 한 줄 규칙. */
+export type GuideSuggestion = { id: number; rule: string; category: "voice" | "structure" | "facts" | "format"; count: number; sources: { kind: "edit" | "drop"; draftId: number; at: number }[]; status: "pending" | "accepted" | "dismissed"; createdAt: number; updatedAt: number };
+
+/** 발행 성과 요약. 채널·문체별 평균. */
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgUniques?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
@@ -64,7 +70,7 @@ export type CandidateListItem = Candidate & { judgment: Judgment | null };
 export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number } };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
-export type PublicationWithMetrics = Publication & { candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[] };
+export type PublicationWithMetrics = Publication & { candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string };
 
 export type Example = { id: number; channel: Channel; lang: string; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
 

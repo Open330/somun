@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { markPublished } from "./ledger.js";
 import { schema } from "../infra/db/index.js";
-import type { Channel, PublicationWithMetrics } from "../shared/types.js";
+import type { PerformanceSummary, Channel, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
 
@@ -33,7 +33,8 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
     const snaps = ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, c.repo))).orderBy(desc(schema.metricSnapshots.at)).limit(60).all();
     const before = snaps.filter((s) => s.at <= p.publishedAt);
     const after = snaps.filter((s) => s.at > p.publishedAt);
-    out.push({ ...toPublication(p), candidateTitle: c.title, repo: c.repo, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
+    const voice = p.draftId ? ctx.db.select({ v: schema.drafts.voice }).from(schema.drafts).where(eq(schema.drafts.id, p.draftId)).get()?.v ?? undefined : undefined;
+    out.push({ ...toPublication(p), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
   }
   return out;
 }
@@ -48,4 +49,24 @@ export function snapshotMetrics(ctx: AppContext, ownerId: string, m: { repo: str
 
 export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
   return ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, repo))).orderBy(desc(schema.metricSnapshots.at)).get();
+}
+
+/** 채널·문체별 성과 요약. 발행 7일 뒤 스타 증가와 방문자 평균. */
+export function performanceSummary(ctx: AppContext, ownerId: string): PerformanceSummary {
+  const pubs = listPublicationsWithMetrics(ctx, ownerId);
+  const delta = (p: PublicationWithMetrics) => {
+    const after7 = p.series.filter((s) => s.at > p.publishedAt && s.at <= p.publishedAt + 7 * 86400e3).at(-1) ?? p.series.filter((s) => s.at > p.publishedAt).at(-1);
+    return after7 && p.baselineStars !== undefined ? after7.stars - p.baselineStars : undefined;
+  };
+  const uniq = (p: PublicationWithMetrics) => p.series.filter((s) => s.at > p.publishedAt).at(-1)?.uniques;
+  const avg = (xs: (number | undefined)[]) => { const v = xs.filter((x): x is number => x !== undefined); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined; };
+  const group = <K extends string>(key: (p: PublicationWithMetrics) => K | undefined) => {
+    const m = new Map<K, PublicationWithMetrics[]>();
+    for (const p of pubs) { const k = key(p); if (k) m.set(k, [...(m.get(k) ?? []), p]); }
+    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, avgStarDelta: avg(ps.map(delta)), avgUniques: avg(ps.map(uniq)) })).sort((a, b) => b.count - a.count);
+  };
+  return {
+    byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
+    byVoice: group((p) => p.voice ?? "unknown").map(({ key, count, avgStarDelta }) => ({ key, count, avgStarDelta })),
+  };
 }

@@ -43,10 +43,12 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
   const { data: conn } = useResource<ConnectorsView>("/connectors", ["sources"]);
   const { data: app } = useResource<{ configured: boolean; installUrl?: string }>("/github/app", []);
+  const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
   // 첫 실행 동의: 앱이 준비돼 있고 아직 아무 연결도 없으면 권한 허용을 먼저 묻는다.
   const needConsent = conn && app?.configured && app.installUrl && conn.github.installations.length === 0 && conn.github.manualTargets.length === 0 && !window.location.pathname.startsWith("/github/") && !window.location.pathname.startsWith("/connectors");
   const review = (rows ?? []).filter((c) => c.status === "drafted").length;
-  const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{label}{to === "/" && review ? <span className="count">{review}</span> : null}</NavLink>);
+  const pending = suggestions?.length ?? 0;
+  const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{label}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title="지침 제안">{pending}</span> : null}</NavLink>);
   return (
     <div className="layout">
       <aside className="sidebar">

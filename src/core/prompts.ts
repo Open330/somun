@@ -95,7 +95,7 @@ export const DIGEST_SCHEMA = {
   additionalProperties: false,
 };
 
-export type DigestContext = { profile?: ProfileLike; alreadyTold?: string[] };
+export type DigestContext = { profile?: ProfileLike; alreadyTold?: string[]; disputed?: string[] };
 
 export function digestPrompt(c: CandidateLike, ctx: DigestContext = {}): PromptSpec {
   return {
@@ -112,6 +112,7 @@ If an "Already told" list is given, drop any highlight that says the same thing 
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
       ctx.alreadyTold?.length ? `\n## Already told (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
+      ctx.disputed?.length ? `\n## Flagged as wrong by the author (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
       `\n# Raw material\n${rawBlock(c, Boolean(ctx.profile)) || "(no raw material)"}`,
     ].filter(Boolean).join("\n"),
   };
@@ -134,7 +135,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[] }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -150,7 +151,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in Korean, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, feedbackText].join("\n"),
   };
 }
 
@@ -161,7 +162,7 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
-export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike };
+export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[] };
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
@@ -196,6 +197,7 @@ Hard rules:
       lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
       opts.previous ? `\n## Previous version (rewrite this; do not repeat it verbatim)\n${opts.previous.title ? `Title: ${opts.previous.title}\n` : ""}${opts.previous.body}` : "",
       opts.instruction ? `\n## Editor instruction for this rewrite\n${opts.instruction}` : "",
+      opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",
       factsBlock(c, opts.profile),
@@ -241,6 +243,35 @@ Write in the language of the README (Korean if the README is Korean).`,
       m.stars !== undefined ? `stars: ${m.stars}` : "", m.topics?.length ? `topics: ${m.topics.join(", ")}` : "",
       m.recentReleaseNotes.length ? `\n## Recent release notes (for stage only)\n${m.recentReleaseNotes.map((n, i) => `### ${i + 1}\n${n.slice(0, 800)}`).join("\n")}` : "",
       `\n## README\n${m.readme.slice(0, 7000)}`,
+    ].filter(Boolean).join("\n"),
+  };
+}
+
+export const LESSON_SCHEMA = {
+  type: "object",
+  properties: { rule: { type: "string" }, category: { type: "string", enum: ["voice", "structure", "facts", "format", "none"] } },
+  required: ["rule", "category"],
+  additionalProperties: false,
+};
+
+/**
+ * 수정 diff(또는 버린 초안과 사유)에서 다음 초안에 재사용할 한 줄 규칙을 뽑는다.
+ * 이 글감에만 해당하는 수정(오타, 특정 숫자)이면 category "none"과 빈 rule을 낸다.
+ */
+export function editLessonPrompt(input: { channel: string; lang: string; before: string; after?: string; dropReason?: string; note?: string; currentGuide?: string }): PromptSpec {
+  return {
+    schemaName: "edit_lesson",
+    schema: LESSON_SCHEMA,
+    system: `You turn one editing decision into at most one reusable writing rule for future drafts of the same author.
+Rules:
+- The rule must generalize beyond this post (about openings, structure, register, link placement, what to avoid, how to state limitations). If the change is specific to this post (a typo, a particular number, a name), return category "none" and an empty rule.
+- One sentence, imperative, in the language of the draft. Max 120 characters. No explanation.
+- If a current guide already says it, return "none".
+- category: voice (register, tone), structure (order, opening, closing), facts (what facts to include or omit), format (length, links, line breaks).`,
+    user: [
+      `channel: ${input.channel} · language: ${input.lang}`,
+      input.currentGuide ? `\n## Current guide\n${input.currentGuide}` : "",
+      input.after !== undefined ? `\n## Before (model draft)\n${input.before}\n\n## After (author's edit)\n${input.after}` : `\n## Draft the author dropped\n${input.before}\n\n## Reason\n${input.dropReason ?? ""}${input.note ? `: ${input.note}` : ""}`,
     ].filter(Boolean).join("\n"),
   };
 }

@@ -73,6 +73,8 @@ export const drafts = sqliteTable("drafts", {
   lint: json<{ rule: string; ok: boolean; detail?: string }[]>("lint").notNull(),
   status: text("status").notNull().default("proposed"),
   model: text("model").notNull(),
+  /** 생성 당시 문체 프리셋. 발행 성과를 문체별로 묶을 때 쓴다. */
+  voice: text("voice"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("drafts_candidate").on(t.candidateId), index("drafts_owner_status").on(t.ownerId, t.status)]);
@@ -226,4 +228,20 @@ export const changeLedger = sqliteTable("change_ledger", {
   firstSeenAt: integer("first_seen_at").notNull(),
   publishedAt: integer("published_at"),
   publishedChannel: text("published_channel"),
+  /** 사용자가 "사실이 틀림"으로 버린 초안에 쓰인 변경. 다음 다이제스트·초안이 피한다. */
+  disputedAt: integer("disputed_at"),
 }, (t) => [index("ledger_owner_repo_time").on(t.ownerId, t.repo, t.firstSeenAt), index("ledger_candidate").on(t.candidateId)]);
+
+/** 지침 제안. 수정 diff와 버림 사유에서 뽑은 재사용 가능한 한 줄 규칙. 승인하면 settings.voice.guide에 붙는다. */
+export const guideSuggestions = sqliteTable("guide_suggestions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerId: text("owner_id").notNull(),
+  rule: text("rule").notNull(),
+  normalized: text("normalized").notNull(),
+  category: text("category").notNull(),
+  count: integer("count").notNull().default(1),
+  sources: json<{ kind: "edit" | "drop"; draftId: number; at: number }[]>("sources").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("guide_sugg_owner_status").on(t.ownerId, t.status)]);

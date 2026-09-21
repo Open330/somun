@@ -5,6 +5,7 @@ import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { collectAll, collectGithubSource, profileMaterialFor } from "../../app/collect.js";
 import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
+import { acceptSuggestion, dismissSuggestion, listSuggestions } from "../../app/learning.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
@@ -12,7 +13,7 @@ import { ingestSessions } from "../../app/sessions.js";
 import { connectorsView, githubAppConfig, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import { appManifest } from "../../infra/github/app.js";
 import { judgeCandidates, runStep } from "../../app/pipeline.js";
-import { listPublicationsWithMetrics, registerPublication, setManualStats } from "../../app/publications.js";
+import { listPublicationsWithMetrics, performanceSummary, registerPublication, setManualStats } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
@@ -100,6 +101,12 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
   app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(6).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(8).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(12).optional() })))));
   app.post("/profiles/:owner/:name/regenerate", async (c) => { const repo = `${c.req.param("owner")}/${c.req.param("name")}`; return c.json(await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo))); });
+
+  // 지침 제안 (학습 루프)
+  app.get("/suggestions", (c) => c.json(listSuggestions(ctx, c.get("ownerId"))));
+  app.post("/suggestions/:id/accept", (c) => { acceptSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
+  app.post("/suggestions/:id/dismiss", (c) => { dismissSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
+  app.get("/publications/summary", (c) => c.json(performanceSummary(ctx, c.get("ownerId"))));
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
