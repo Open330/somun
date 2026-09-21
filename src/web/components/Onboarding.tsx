@@ -23,6 +23,7 @@ export function Onboarding({ rows }: { rows: CandidateListItem[] | undefined }) 
     { key: "connect", label: "GitHub 연결", hint: "읽기 권한만 요청합니다", done: connected, to: conn.github.installUrl && !connected ? conn.github.installUrl : "/connectors" },
     { key: "watch", label: "저장소 고르기", hint: "지켜볼 것만 고릅니다", done: watching, to: firstInst ? `/github/pick?installation_id=${firstInst.id}` : "/connectors" },
     { key: "channels", label: "채널·언어", hint: "올릴 곳과 언어를 정합니다", done: channels, to: "/settings" },
+    { key: "voice", label: "문체 고르기", hint: "프리셋 하나와 내 지침", done: Boolean(settings.voice?.chosenAt), to: "/voice" },
     { key: "judge", label: "첫 판단", hint: "새 글감에서 '판단'을 누릅니다", done: judged, to: "/" },
     { key: "post", label: "첫 발행", hint: "복사해 올리고 URL을 등록합니다", done: posted, to: "/" },
   ];

@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth/context";
 import { useReveal } from "../lib/useReveal";
 import type React from "react";
 import { Lockup, Mark } from "../components/Mark";
+import { GithubButton } from "../components/GithubButton";
 
 /** 로그아웃 상태의 첫 화면. 약속 한 문장, 실제 초안 예시, 어떻게 생각하는가, 로그인. */
 export default function Landing({ onToken }: { onToken?: () => void }) {
@@ -17,7 +18,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
         <div className="brand"><Lockup size={30} /></div>
         <div className="toolbar">
           <a className="btn ghost" href="https://github.com/Open330/somun" target="_blank" rel="noreferrer">GitHub</a>
-          {auth.enabled ? <button className="primary" onClick={() => auth.signIn("github")}>GitHub로 로그인</button> : <button className="primary" onClick={onToken}>들어가기</button>}
+          {auth.enabled ? <GithubButton onClick={() => auth.signIn("github")} label="GitHub로 로그인" /> : <button className="primary" onClick={onToken}>들어가기</button>}
         </div>
       </nav>
 
@@ -28,7 +29,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           <div className="toolbar">
             {auth.enabled ? (
               // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
-              <button className="primary" onClick={() => auth.signIn("github")}>GitHub로 시작</button>
+              <GithubButton size="lg" onClick={() => auth.signIn("github")} label="GitHub로 시작하기" />
             ) : (
               <button className="primary" onClick={onToken}>토큰으로 들어가기</button>
             )}

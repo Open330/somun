@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
-import type { Example } from "@shared/types";
+import { VOICE_PRESETS } from "@core/voice";
+import type { Example, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, Skeleton, Toast, relTime, useToast } from "../components/ui";
-import { del, post, useResource } from "../lib/api";
+import { del, patch, post, useResource } from "../lib/api";
 
-/** 문체 예시. 초안이 따라 쓰는 문장들. 시드는 사용자 예시가 쌓이면 물러난다. */
+/**
+ * 문체. 위: 프리셋과 내 지침(초안 프롬프트에 들어가는 것). 아래: 예시 문장(선택, 켰을 때만 프롬프트에 붙는다).
+ * 문체를 예시에서 유추하게 두면 어느 문장 때문에 그렇게 나왔는지 알 수 없다. 지침이 먼저고 예시는 보조다.
+ */
 export default function Voice() {
   const { data: examples } = useResource<Example[]>("/examples", ["examples"]);
+  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const [guide, setGuide] = useState<string | null>(null);
   const [ch, setCh] = useState<Channel | "all">("all");
   const [openId, setOpenId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
@@ -16,12 +22,47 @@ export default function Voice() {
   const list = examples.filter((e) => ch === "all" || e.channel === ch);
   const own = examples.filter((e) => e.source !== "seed" && e.active).length;
   const seed = examples.filter((e) => e.source === "seed" && e.active).length;
+  const voice = settings?.voice;
+  const saveVoice = async (next: Partial<NonNullable<typeof voice>>) => {
+    if (!voice) return;
+    await patch("/settings", { voice: { ...voice, ...next, chosenAt: voice.chosenAt ?? Date.now() } });
+    showToast("문체를 저장했습니다. 다음 초안부터 적용됩니다.");
+  };
 
   return (
     <>
       <div className="page-head">
-        <div><h1>문체</h1><p className="lede">초안이 따라 쓰는 문장. 내 예시 {own}개 · 참고 예시 {seed}개. "복사"와 "수정 후 복사"가 내 예시를 만들고, 채널당 5개가 쌓이면 참고 예시는 물러납니다.</p></div>
-        <div className="toolbar"><button className="primary" onClick={() => setAdding((a) => !a)}>{adding ? "닫기" : "예시 직접 추가"}</button></div>
+        <div><h1>문체</h1><p className="lede">초안이 어떤 말투로 쓰일지 정합니다. 프리셋 하나를 고르고, 필요하면 내 지침을 덧붙입니다. 예시 문장은 선택입니다.</p></div>
+      </div>
+
+      {voice && (
+        <div className="card stack" style={{ gap: 14, marginBottom: 20 }}>
+          <div>
+            <h3 style={{ marginBottom: 8 }}>프리셋</h3>
+            <div className="presets">
+              {VOICE_PRESETS.map((p) => (
+                <button key={p.id} className={`preset ${voice.preset === p.id ? "on" : ""}`} onClick={() => void saveVoice({ preset: p.id })}>
+                  <b>{p.name}</b><span>{p.description}</span>
+                  <div className="sample">{p.ko}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: 4 }}>내 지침 <span className="tiny muted">선택 · 프리셋보다 우선</span></h3>
+            <p className="small muted" style={{ margin: "0 0 8px" }}>글마다 반복해서 고치던 것을 여기 적어 두세요. 예: "링크는 항상 마지막 줄에", "회사 이름은 쓰지 않기", "영어 글에서는 I 대신 we".</p>
+            <textarea value={guide ?? voice.guide} onChange={(ev) => setGuide(ev.target.value)} placeholder="비워 두면 프리셋 지침만 씁니다." style={{ minHeight: 90 }} />
+            <div className="row between" style={{ marginTop: 8 }}>
+              <label className="row small" style={{ gap: 6, flex: 1, whiteSpace: "nowrap" }}><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> 아래 예시 문장도 프롬프트에 참고로 붙이기</label>
+              <button className="primary" disabled={guide === null || guide === voice.guide} onClick={async () => { await saveVoice({ guide: guide ?? "" }); setGuide(null); }}>지침 저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="page-head" style={{ marginTop: 8 }}>
+        <div><h2 style={{ margin: 0, textTransform: "none", letterSpacing: 0, fontSize: 16, color: "var(--ink)" }}>예시 문장 <span className="tiny muted">{voice?.useExamples ? "프롬프트에 참고로 들어감" : "지금은 프롬프트에 들어가지 않음"}</span></h2><p className="lede small">내 예시 {own}개 · 참고 예시 {seed}개. "복사"와 "수정 후 복사"가 내 예시를 만들고, 채널당 5개가 쌓이면 참고 예시는 물러납니다.</p></div>
+        <div className="toolbar"><button onClick={() => setAdding((a) => !a)}>{adding ? "닫기" : "예시 직접 추가"}</button></div>
       </div>
       {adding && (
         <div className="card stack" style={{ marginBottom: 16 }}>

@@ -10,6 +10,7 @@ import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
 import { getSettings } from "./settings.js";
+import { voiceGuideFor } from "../core/voice.js";
 
 /**
  * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
@@ -30,7 +31,7 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
   return ctx.db.select().from(schema.feedback).where(eq(schema.feedback.ownerId, ownerId)).orderBy(desc(schema.feedback.createdAt)).limit(limit).all().map((f) => ({ targetType: f.targetType, reason: f.reason, note: f.note ?? undefined }));
 }
 
-export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string): PromptSpec {
+export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
   const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
   const settings = getSettings(ctx, ownerId);
@@ -39,13 +40,19 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
-  return draftPrompt(c, channel, lang, examplesFor(ctx, ownerId, channel, lang, 4), angle);
+  // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
+  const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).orderBy(desc(schema.drafts.version)).get();
+  return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
+    guide: voiceGuideFor(settings.voice, lang),
+    instruction: opts.instruction?.trim() || undefined,
+    previous: opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
+  });
 }
 
 /** 한 단계 실행. 직접 프로바이더면 호출 후 반영, local-agent면 큐잉. */
-export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string): Promise<RunResult> {
+export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string } = {}): Promise<RunResult> {
   const settings = getSettings(ctx, ownerId);
-  const prompt = buildPrompt(ctx, ownerId, kind, candidateId, channel, lang);
+  const prompt = buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts);
   if (settings.llm.provider === "local-agent") {
     enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, prompt);
     return { queued: true };

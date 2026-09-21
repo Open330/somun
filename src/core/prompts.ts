@@ -5,6 +5,7 @@
  * 판단과 초안은 다이제스트가 추린 highlights + 기본 사실만 본다. 전체를 넘기지 않는다.
  */
 import { CHANNELS, langInstruction, langName, type Channel } from "./channels.js";
+import { KO_FLUENCY_RULES } from "./voice.js";
 
 export type EvidenceLike = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
@@ -134,7 +135,9 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
-export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string): PromptSpec {
+export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string } };
+
+export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
@@ -149,7 +152,8 @@ Hard rules:
 - Include exactly one real limitation from Facts when the channel asks for one. If Facts lists no limitation, use the version status (e.g. "still 0.x, API may change") as the limitation. Never write "none stated".
 - Use the numbers from "Numbers you may use" directly. Write [number needed] only when that line has no matching number.
 - No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.
-- Match the voice of the Examples: sentence length, register, how they open and close. Examples are for voice, not for facts.
+- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.
+- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.
 - title must be an empty string if the channel has no title.`,
     user: [
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
@@ -158,6 +162,11 @@ Hard rules:
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.hasTitle ? `A title is required (max ${spec.titleMaxChars} chars).` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
+      "",
+      opts.guide ? `## Voice guide\n${opts.guide}` : "",
+      lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
+      opts.previous ? `\n## Previous version (rewrite this; do not repeat it verbatim)\n${opts.previous.title ? `Title: ${opts.previous.title}\n` : ""}${opts.previous.body}` : "",
+      opts.instruction ? `\n## Editor instruction for this rewrite\n${opts.instruction}` : "",
       "",
       "## Facts",
       factsBlock(c),

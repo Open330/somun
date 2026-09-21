@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { DEFAULT_CHANNEL_LANGS, type Channel } from "../core/channels.js";
 import { DEFAULT_BANNED_PHRASES } from "../core/lint.js";
+import { DEFAULT_VOICE_PRESET } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
 import type { Settings, SettingsView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bannedPhrases: DEFAULT_BANNED_PHRASES,
   llm: { provider: "gemini", model: "gemini-3.5-flash-lite" },
   watch: { mode: "manual", recentDays: 30 },
+  voice: { preset: DEFAULT_VOICE_PRESET, guide: "", useExamples: false },
 };
 
 /** 구 설정(enabledChannels: x_en, x_ko, ...)을 channelLangs로 옮긴다. */

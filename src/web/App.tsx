@@ -14,6 +14,7 @@ import TokenLogin from "./pages/TokenLogin";
 import Voice from "./pages/Voice";
 import GithubSetup from "./pages/GithubSetup";
 import Pick from "./pages/Pick";
+import { GithubButton } from "./components/GithubButton";
 import SetupGithubApp from "./pages/SetupGithubApp";
 import type { ConnectorsView } from "@shared/types";
 import { Lockup, Mark } from "./components/Mark";
@@ -94,7 +95,7 @@ function Consent({ installUrl, user, onSwitch }: { installUrl: string; user?: { 
       )}
       <div className="toolbar" style={{ marginTop: 16 }}>
         <a className="btn primary" href={installUrl}>GitHub 권한 허용</a>
-        {notGithub && <button className="btn" onClick={onSwitch}>GitHub 계정으로 다시 로그인</button>}
+        {notGithub && <GithubButton onClick={onSwitch} label="GitHub 계정으로 다시 로그인" />}
         <a className="btn ghost" href="/connectors">저장소를 직접 지정할래요</a>
       </div>
     </div>
