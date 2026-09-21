@@ -39,12 +39,15 @@ export function getSettings(ctx: AppContext, ownerId: string): Settings {
 export function getSettingsView(ctx: AppContext, ownerId: string): SettingsView {
   const s = getSettings(ctx, ownerId);
   const { apiKey, ...llm } = s.llm;
-  return { ...s, llm: { ...llm, apiKeySet: Boolean(apiKey), apiKeyHint: apiKey ? apiKey.slice(-4) : undefined } };
+  const notify = s.notify ? { weekly: s.notify.weekly, lastSentAt: s.notify.lastSentAt, discordWebhookSet: Boolean(s.notify.discordWebhookUrl) } : undefined;
+  return { ...s, notify, llm: { ...llm, apiKeySet: Boolean(apiKey), apiKeyHint: apiKey ? apiKey.slice(-4) : undefined } };
 }
 
 export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<Settings>, keepApiKey = true): SettingsView {
   const current = getSettings(ctx, ownerId);
   const next: Settings = { ...current, ...patch };
+  // 웹훅 URL은 빈 문자열이면 지우고, 없으면 기존 값을 지킨다.
+  if (patch.notify) next.notify = { ...current.notify, weekly: patch.notify.weekly, discordWebhookUrl: patch.notify.discordWebhookUrl === "" ? undefined : patch.notify.discordWebhookUrl ?? current.notify?.discordWebhookUrl, lastSentAt: current.notify?.lastSentAt };
   if (patch.llm) next.llm = { ...patch.llm, apiKey: patch.llm.apiKey || (keepApiKey ? current.llm.apiKey : undefined) };
   ctx.db.insert(schema.settings).values({ ownerId, data: next as unknown as Record<string, unknown>, updatedAt: Date.now() })
     .onConflictDoUpdate({ target: schema.settings.ownerId, set: { data: next as unknown as Record<string, unknown>, updatedAt: Date.now() } }).run();

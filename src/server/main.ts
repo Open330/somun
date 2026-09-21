@@ -13,7 +13,7 @@ import { loadConfig } from "./config.js";
 const config = loadConfig();
 const db = openDb(config.dbFile);
 const usage = new UsageReporter(db, logger, { apiUrl: config.JIUN_API_URL, serviceId: config.JIUN_USAGE_SERVICE_ID, serviceKey: config.JIUN_USAGE_KEY });
-const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS }, bus: new EventEmitter(), usage };
+const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, publicUrl: config.SOMUN_PUBLIC_URL }, bus: new EventEmitter(), usage };
 // 글감 단위 변경(신호별 → 저장소 × 10일 창). 한 번만 실제로 일한다.
 {
   const r = migrateLegacyCandidates(ctx);

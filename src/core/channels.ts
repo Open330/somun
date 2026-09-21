@@ -27,7 +27,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     rules: "Exactly three short lines separated by blank lines. Line 1: the concrete problem, first person, past tense, no adjectives. Line 2: what the tool does about it, one sentence. Line 3: one number or one limitation, then the link. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
     mediaHint: "터미널 GIF 또는 실제 출력 스크린샷 1장 (홈 경로·내부 브랜치명 가리기)",
     composeUrl: "https://x.com/compose/post",
-    runbook: ["이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
+    runbook: ["영어 글은 화~목 미국 동부 오전 9~11시(한국 22~24시), 한국어 글은 평일 오전 8~9시나 저녁 21~22시", "이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
   },
   threads: {
     id: "threads", label: "Threads", defaultLangs: ["ko"], maxChars: 500, hasTitle: false,
@@ -41,7 +41,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     rules: "First line is the result or the problem in one sentence, under 40 characters so it ends above the fold. Then 3-5 paragraphs: problem → what was built → numbers or before/after → what was learned → link. 2-3 sentences per paragraph. No emoji bullets. Hashtags only on the last line, at most 3. No 'excited to share' phrasing.",
     mediaHint: "실제 데이터가 보이는 스크린샷 1장 (대시보드, 터미널 출력, 전후 비교)",
     composeUrl: "https://www.linkedin.com/feed/?shareActive=true",
-    runbook: ["첫 줄이 접힘선 위에서 끝나는지 확인 (40자)", "실제 데이터가 보이는 스크린샷 1장", "해시태그는 마지막 줄 최대 3개"],
+    runbook: ["화~목 오전 7~9시가 도달이 가장 좋음. 주말은 피함", "첫 줄이 접힘선 위에서 끝나는지 확인 (40자)", "실제 데이터가 보이는 스크린샷 1장", "해시태그는 마지막 줄 최대 3개"],
   },
   show_hn: {
     id: "show_hn", label: "Show HN", fixedLang: "en", defaultLangs: ["en"], maxChars: 2000, hasTitle: true, titleMaxChars: 80,
@@ -55,7 +55,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
     rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Sections in order, each a one-line heading plus 2-4 items: 무엇을 만들었나 / 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 / 듣고 싶은 피드백. Facts only, no marketing words. Include one runnable command. Never ask for votes or comments.",
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
-    runbook: ["사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],
+    runbook: ["평일 오전 9~11시 등록이 첫 화면에 오래 남음", "사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],
   },
   blog: {
     id: "blog", label: "블로그 개요", defaultLangs: ["ko"], maxChars: 2000, hasTitle: true, titleMaxChars: 60,

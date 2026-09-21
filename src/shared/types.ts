@@ -40,6 +40,8 @@ export type Settings = {
   voice: VoiceSettings;
   /** 화면 상태. 온보딩 체크리스트를 닫은 시각 등. */
   ui?: { onboardingDismissedAt?: number };
+  /** 알림. Discord 웹훅 하나. weekly면 월요일 09:00 KST에 요약을 보낸다. */
+  notify?: { discordWebhookUrl?: string; weekly: boolean; lastSentAt?: number };
 };
 export type WatchSettings = { mode: "manual" | "auto"; recentDays: number };
 export type VoiceSettings = { preset: string; guide: string; useExamples: boolean; chosenAt?: number };
@@ -47,7 +49,7 @@ export type VoiceSettings = { preset: string; guide: string; useExamples: boolea
 /** GitHub App 설치가 볼 수 있는 저장소 하나. 고르기 화면용. */
 export type InstallationRepo = { fullName: string; description?: string; pushedAt?: number; stars: number; language?: string; fork: boolean; archived: boolean; isPrivate: boolean; watched: boolean };
 /** 화면에 주는 설정. 키 원문 대신 설정 여부와 끝자리만. */
-export type SettingsView = Omit<Settings, "llm"> & { llm: Omit<LlmConfig, "apiKey"> & { apiKeySet: boolean; apiKeyHint?: string } };
+export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmConfig, "apiKey"> & { apiKeySet: boolean; apiKeyHint?: string }; notify?: { weekly: boolean; lastSentAt?: number; discordWebhookSet: boolean } };
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 

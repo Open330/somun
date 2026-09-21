@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CHANNELS, enabledTargets, targetKey, type Channel } from "@core/channels";
 import { voicePreset } from "@core/voice";
-import type { CandidateDetail, Draft, RepoProfileView, SettingsView } from "@shared/types";
+import type { CandidateDetail, Draft, KeyStatus, RepoProfileView, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, ChannelIcon, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, targetLabel, useToast } from "../components/ui";
 import { ChannelPreview, WordDiff } from "../components/preview";
 import { patch, post, useResource } from "../lib/api";
@@ -19,6 +19,7 @@ export default function Candidate() {
   const cid = Number(id);
   const { data } = useResource<CandidateDetail>(`/candidates/${cid}`, ["candidates", "drafts", "publications"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: keys } = useResource<KeyStatus[]>("/keys", ["keys"]);
   const [busy, setBusy] = useState<string | null>(null);
   const [tab, setTab] = useState<string | null>(null); // channel
   const [langByCh, setLangByCh] = useState<Record<string, string>>({});
@@ -158,7 +159,7 @@ export default function Candidate() {
             })}
           </div>
           {current && curKey && (
-            <DraftPanel key={curKey} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onLang={(l) => setLangByCh({ ...langByCh, [current.channel]: l })}
+            <DraftPanel key={curKey} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onLang={(l) => setLangByCh({ ...langByCh, [current.channel]: l })} expectedModel={settings?.llm.provider === "gemini" ? (settings.llm.draftModel || "gemini-3.7-flash") : undefined} draftModelResetAt={keys ? keys.filter((k) => k.label.endsWith(settings?.llm.draftModel || "gemini-3.7-flash") && k.cooldownUntil).map((k) => k.cooldownUntil!).sort()[0] : undefined}
               drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url}
               busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
           )}
@@ -173,7 +174,7 @@ const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자�
 
 const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="tablist" aria-label="언어">{langs.map((l) => <button key={l} role="tab" className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : null;
 
-function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: string; busy: boolean; onRedraft: (instruction?: string) => Promise<void>; showToast: (m: string) => void }) {
+function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: string; busy: boolean; onRedraft: (instruction?: string) => Promise<void>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number }) {
   const versions = [...drafts].sort((a, b) => b.version - a.version);
   const latest = versions.find((d) => d.status !== "dropped") ?? null;
   const [viewId, setViewId] = useState<number | null>(null);
@@ -233,6 +234,9 @@ function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy
         <div className="meta">
           <LangSeg langs={langs} lang={lang} onLang={onLang} />
           <LintBadges lint={latest.lint} />
+          {expectedModel && !latest.model.includes(expectedModel) && latest.model.startsWith("gemini/") && (
+            <span className="badge warn" title={`초안 모델(${expectedModel}) 한도가 소진돼 분석 모델로 썼습니다. 문장이 거칠 수 있습니다.`}>폴백 모델{draftModelResetAt ? ` · ${new Date(draftModelResetAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 이후 다시 쓰기 권장` : ""}</span>
+          )}
           <span className={`badge ${spec.maxChars && count > spec.maxChars ? "bad" : "outline"}`}>{count}{spec.maxChars ? ` / ${spec.maxChars}` : ""}자</span>
           {versions.length > 1 ? (
             <select className="ver" value={shown?.id ?? latest.id} onChange={(ev) => setViewId(Number(ev.target.value))} title="버전">

@@ -6,6 +6,8 @@ import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } f
 import { collectAll, collectGithubSource, profileMaterialFor } from "../../app/collect.js";
 import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, listSuggestions } from "../../app/learning.js";
+import { sendWeeklySummary } from "../../app/notify.js";
+import { deleteAccount, exportAccount } from "../../app/account.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
 import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
@@ -52,6 +54,7 @@ export function apiRoutes(ctx: AppContext) {
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
       ui: z.object({ onboardingDismissedAt: z.number().optional() }).optional(),
+      notify: z.object({ discordWebhookUrl: z.string().url().startsWith("https://discord.com/api/webhooks/").or(z.literal("")).optional(), weekly: z.boolean() }).optional(),
       voice: z.object({ preset: z.string().max(40), guide: z.string().max(2000), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
     }));
     const { keepApiKey, ...patch } = input;
@@ -101,6 +104,13 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
   app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(6).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(8).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(12).optional() })))));
   app.post("/profiles/:owner/:name/regenerate", async (c) => { const repo = `${c.req.param("owner")}/${c.req.param("name")}`; return c.json(await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo))); });
+
+  // 계정: 내보내기(JSON), 삭제(확인 문구 필요)
+  app.get("/account/export", (c) => { c.header("Content-Disposition", `attachment; filename="somun-export-${new Date().toISOString().slice(0, 10)}.json"`); return c.json(exportAccount(ctx, c.get("ownerId"))); });
+  app.post("/account/delete", async (c) => { const { confirm } = await body(c, z.object({ confirm: z.literal("삭제") })); void confirm; return c.json(deleteAccount(ctx, c.get("ownerId"))); });
+
+  // 알림 시험 발송
+  app.post("/notify/test", async (c) => { const r = await sendWeeklySummary(ctx, c.get("ownerId"), true); return r.ok ? c.json(r) : c.json(r, 400); });
 
   // 지침 제안 (학습 루프)
   app.get("/suggestions", (c) => c.json(listSuggestions(ctx, c.get("ownerId"))));

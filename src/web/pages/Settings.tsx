@@ -2,14 +2,21 @@ import { useEffect, useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import type { KeyStatus, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, CRITERIA, Skeleton, Toast, fmtDate, useToast } from "../components/ui";
-import { patch, useResource } from "../lib/api";
+import { api, patch, post, useResource } from "../lib/api";
 
-type Tab = "judge" | "channels" | "model";
+type Tab = "judge" | "channels" | "model" | "notify" | "account";
 
 export default function Settings() {
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: keyStatus } = useResource<KeyStatus[]>("/keys", ["keys"]);
   const update = (p: Record<string, unknown>) => patch("/settings", p);
+  const [webhook, setWebhook] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const exportJson = async () => {
+    const data = await api<unknown>("/account/export");
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `somun-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+  };
   const [tab, setTab] = useState<Tab>("judge");
   const [toast, showToast] = useToast();
   const [banned, setBanned] = useState("");
@@ -29,7 +36,7 @@ export default function Settings() {
     <>
       <div className="page-head"><div><h1>설정</h1><p className="lede">판단 기준, 채널, 모델. 소스 연결은 <a href="/connectors">연결</a>, 문체 예시는 <a href="/voice">문체</a>에 있습니다.</p></div></div>
       <div className="settabs">
-        {([["judge", "판단"], ["channels", "채널"], ["model", "모델 · 키"]] as const).map(([k, l]) => <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>)}
+        {([["judge", "판단"], ["channels", "채널"], ["model", "모델 · 키"], ["notify", "알림"], ["account", "계정"]] as const).map(([k, l]) => <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>)}
       </div>
 
       {tab === "judge" && (
@@ -72,6 +79,41 @@ export default function Settings() {
         <div className="card stack" style={{ maxWidth: 760 }}>
           <p className="small muted">채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).</p>
           {ALL_CHANNELS.map((ch) => <ChannelLangRow key={ch} ch={ch} langs={settings.channelLangs[ch] ?? []} onChange={(l) => setLangs(ch, l)} />)}
+        </div>
+      )}
+
+      {tab === "notify" && (
+        <div className="card stack" style={{ gap: 12, maxWidth: 720 }}>
+          <div>
+            <h3>주간 요약</h3>
+            <p className="small muted">수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 09:00에 검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.</p>
+            <label className="field"><span>Discord 웹훅 URL {settings.notify?.discordWebhookSet && <span className="badge ok">설정됨</span>}</span><input type="password" placeholder={settings.notify?.discordWebhookSet ? "저장된 URL 유지 (바꾸려면 새로 입력)" : "https://discord.com/api/webhooks/…"} value={webhook} onChange={(ev) => setWebhook(ev.target.value)} /></label>
+            <label className="row small" style={{ gap: 6, marginTop: 8 }}><input type="checkbox" checked={settings.notify?.weekly ?? false} onChange={(ev) => void update({ notify: { weekly: ev.target.checked } })} /> 월요일 09:00 KST 주간 요약 보내기</label>
+            <div className="toolbar" style={{ marginTop: 10 }}>
+              <button className="primary" disabled={!webhook.trim()} onClick={async () => { await update({ notify: { weekly: settings.notify?.weekly ?? true, discordWebhookUrl: webhook.trim() } }); setWebhook(""); showToast("저장했습니다"); }}>웹훅 저장</button>
+              <button disabled={!settings.notify?.discordWebhookSet} onClick={async () => { try { await post("/notify/test"); showToast("보냈습니다. Discord를 확인하세요."); } catch (e) { showToast(`실패: ${(e as Error).message}`); } }}>지금 시험 발송</button>
+              {settings.notify?.discordWebhookSet && <button className="ghost" onClick={async () => { await update({ notify: { weekly: false, discordWebhookUrl: "" } }); showToast("웹훅을 지웠습니다"); }}>웹훅 지우기</button>}
+            </div>
+            {settings.notify?.lastSentAt && <div className="tiny muted" style={{ marginTop: 6 }}>마지막 발송 {new Date(settings.notify.lastSentAt).toLocaleString("ko-KR")}</div>}
+          </div>
+        </div>
+      )}
+
+      {tab === "account" && (
+        <div className="card stack" style={{ gap: 14, maxWidth: 720 }}>
+          <div>
+            <h3>내 데이터 내보내기</h3>
+            <p className="small muted">글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.</p>
+            <button onClick={() => { void exportJson(); }}>JSON 내려받기</button>
+          </div>
+          <div>
+            <h3 style={{ color: "var(--danger)" }}>계정 데이터 삭제</h3>
+            <p className="small muted">이 계정의 모든 데이터를 지웁니다. 되돌릴 수 없습니다. GitHub App 설치 자체는 GitHub 설정에서 따로 제거해야 합니다.</p>
+            <div className="row">
+              <input placeholder='확인하려면 "삭제"라고 입력' value={confirmText} onChange={(ev) => setConfirmText(ev.target.value)} style={{ width: 220 }} />
+              <button className="danger" disabled={confirmText !== "삭제"} onClick={async () => { await post("/account/delete", { confirm: "삭제" }); showToast("삭제했습니다."); window.location.assign("/"); }}>모두 삭제</button>
+            </div>
+          </div>
         </div>
       )}
 

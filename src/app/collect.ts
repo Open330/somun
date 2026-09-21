@@ -6,6 +6,7 @@ import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
 import { ensureProfile } from "./profiles.js";
 import { lastDigestAt } from "./ledger.js";
+import { collectBlogSource } from "./collect-blog.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
@@ -34,7 +35,8 @@ async function expandTargets(gh: GitHubClient, targets: string[]): Promise<GhRep
       if (list.length < 100) break;
     }
   }
-  return repos.filter((r) => !r.fork && !r.archived && Date.now() - Date.parse(r.pushed_at) < 60 * DAY);
+  // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
+  return repos.filter((r) => !r.fork && !r.archived && Date.now() - Date.parse(r.pushed_at) < 60 * DAY).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
@@ -183,9 +185,10 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 
 export async function collectAll(ctx: AppContext, ownerId?: string): Promise<Record<number, Record<string, number> | { error: string }>> {
   const out: Record<number, Record<string, number> | { error: string }> = {};
-  for (const s of listEnabledSources(ctx, { ownerId, kind: "github" })) {
+  for (const s of listEnabledSources(ctx, { ownerId })) {
+    if (s.kind !== "github" && s.kind !== "blog") continue;
     try {
-      out[s.id] = await collectGithubSource(ctx, s.id);
+      out[s.id] = s.kind === "blog" ? await collectBlogSource(ctx, s.id) : await collectGithubSource(ctx, s.id);
     } catch (e) {
       ctx.log.error({ sourceId: s.id, err: (e as Error).message }, "collect failed");
       out[s.id] = { error: (e as Error).message };

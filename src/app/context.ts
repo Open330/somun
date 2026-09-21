@@ -8,7 +8,7 @@ import type { UsageReporter } from "../infra/usage.js";
 export type AppContext = {
   db: Db;
   log: Logger;
-  env: { githubToken?: string; geminiKeys?: string };
+  env: { githubToken?: string; geminiKeys?: string; publicUrl?: string };
   bus: EventEmitter;
   usage: UsageReporter;
 };

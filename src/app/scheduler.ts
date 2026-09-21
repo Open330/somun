@@ -2,6 +2,7 @@ import { Cron } from "croner";
 import { collectAll } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
+import { sendWeeklySummaries } from "./notify.js";
 
 /** 매일 수집 → (수집 안에서) 다이제스트·판단·초안. 기본 00:00 UTC = 09:00 KST. */
 export function startScheduler(ctx: AppContext, pattern: string): { stop: () => void } {
@@ -15,5 +16,10 @@ export function startScheduler(ctx: AppContext, pattern: string): { stop: () => 
     const n = await processNewCandidates(ctx);
     if (n) ctx.log.info({ n }, "hourly sweep processed new candidates");
   });
-  return { stop: () => { daily.stop(); sweep.stop(); } };
+  // 월요일 09:00 KST = 일요일 24:00 UTC. 주간 요약.
+  const weekly = new Cron("0 0 * * 1", { protect: true, timezone: "UTC" }, async () => {
+    const n = await sendWeeklySummaries(ctx);
+    if (n) ctx.log.info({ n }, "weekly summaries sent");
+  });
+  return { stop: () => { daily.stop(); sweep.stop(); weekly.stop(); } };
 }

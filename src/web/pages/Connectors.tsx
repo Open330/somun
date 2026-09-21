@@ -12,6 +12,8 @@ export default function Connectors() {
   const [busy, setBusy] = useState(false);
   if (!v) return <div className="empty">불러오는 중…</div>;
   const manualSources = (sources ?? []).filter((s) => s.kind === "github" && !s.options?.installationId);
+  const blogSources = (sources ?? []).filter((s) => s.kind === "blog");
+  const [feed, setFeed] = useState("");
   const origin = window.location.origin;
   const token = (() => { try { return localStorage.getItem("somun.token"); } catch { return null; } })();
 
@@ -47,6 +49,25 @@ export default function Connectors() {
             ))}
           </div>
         </details>
+      </div>
+
+      <h2>블로그</h2>
+      <div className="card">
+        <p className="small muted" style={{ marginTop: 0 }}>RSS나 Atom 피드 URL을 넣으면 최근 30일 안의 글이 "블로그" 글감이 됩니다. 긴 글을 X·LinkedIn용으로 줄여 알리는 데 씁니다.</p>
+        <div className="row">
+          <input placeholder="https://blog.example.com/feed.xml" value={feed} onChange={(ev) => setFeed(ev.target.value)} />
+          <button disabled={!/^https?:\/\//.test(feed.trim()) || busy} onClick={async () => { setBusy(true); try { await post("/sources", { kind: "blog", targets: [feed.trim()], enabled: true }); setFeed(""); await post("/collect"); } finally { setBusy(false); } }}>추가하고 읽기</button>
+        </div>
+        {blogSources.length > 0 && (
+          <div className="list" style={{ marginTop: 8 }}>
+            {blogSources.map((s) => (
+              <div key={s.id} className="row between small">
+                <span>{s.targets.join(", ")}{s.lastPolledAt && <span className="muted"> · 마지막 확인 {fmtDate(s.lastPolledAt)}</span>}{s.lastError && <span className="badge bad" title={s.lastError}>오류</span>}</span>
+                <span className="toolbar"><button className="sm" onClick={() => void post("/sources", { id: s.id, kind: s.kind, targets: s.targets, options: s.options, enabled: !s.enabled })}>{s.enabled ? "끄기" : "켜기"}</button><button className="sm danger" onClick={() => void del(`/sources/${s.id}`)}>삭제</button></span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <h2>코딩 에이전트 세션</h2>
