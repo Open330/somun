@@ -49,6 +49,7 @@ export function apiRoutes(ctx: AppContext) {
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
+      ui: z.object({ onboardingDismissedAt: z.number().optional() }).optional(),
     }));
     const { keepApiKey, ...patch } = input;
     return c.json(updateSettings(ctx, c.get("ownerId"), patch, keepApiKey ?? true));
@@ -71,6 +72,9 @@ export function apiRoutes(ctx: AppContext) {
   app.post("/candidates/:id/redraft", async (c) => {
     const { targets } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1) }));
     const out: Record<string, unknown> = {};
+    // 아직 다이제스트가 없는 새 글감이면 초안만 쓸 수 없다. 다이제스트→판단을 먼저 돌린다 (판단이 draft면 초안까지 이어진다).
+    const cand = getCandidateDetail(ctx, c.get("ownerId"), id(c.req.param("id"))).candidate;
+    if (!cand.evidence.highlightsAt) { out.digest = await runStep(ctx, c.get("ownerId"), "digest", cand.id); }
     for (const t of targets) out[`${t.channel}:${t.lang}`] = await runStep(ctx, c.get("ownerId"), "draft", id(c.req.param("id")), t.channel, t.lang);
     return c.json(out);
   });

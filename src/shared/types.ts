@@ -34,6 +34,8 @@ export type Settings = {
   llm: LlmConfig;
   /** 새 글감 처리 방식. manual: 모아만 두고 사용자가 고른 것만 판단. auto: 최근 recentDays 안에 갱신된 글감은 자동으로 판단·초안. */
   watch: WatchSettings;
+  /** 화면 상태. 온보딩 체크리스트를 닫은 시각 등. */
+  ui?: { onboardingDismissedAt?: number };
 };
 export type WatchSettings = { mode: "manual" | "auto"; recentDays: number };
 

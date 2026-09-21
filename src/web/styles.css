@@ -289,3 +289,44 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 .pick-row:hover { background: var(--surface-2); }
 .pick-row input[type="checkbox"] { width: 16px; height: 16px; }
 @media (max-width: 640px) { .pick-row { grid-template-columns: auto minmax(0, 1fr); } .pick-row > :last-child { grid-column: 2; text-align: left; } }
+
+/* ── motion ─────────────────────────────────────────────── */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.hero-copy > * { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
+.hero-copy > :nth-child(2) { animation-delay: .08s; }
+.hero-copy > :nth-child(3) { animation-delay: .16s; }
+.hero .demo { animation: rise .7s cubic-bezier(.2,.7,.2,1) .18s both; }
+[data-reveal].pending { opacity: 0; transform: translateY(16px); }
+[data-reveal].in { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
+.flow .st { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; position: relative; }
+.flow .st:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
+[data-reveal].in .flow .st { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.flow .st b::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: 2px; }
+.principle, .shots img { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.principle:hover { transform: translateY(-2px); border-color: var(--accent); }
+.shots img:hover { transform: translateY(-3px); }
+.demo .post { animation: fadein .45s ease both; }
+.demo .body { position: relative; }
+.demo-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform-origin: left; animation: bar 4.2s linear both; opacity: .7; }
+.main > * { animation: fadein .25s ease both; }
+.btn, button { transition: background .15s ease, border-color .15s ease, transform .1s ease, box-shadow .15s ease; }
+button.primary:active, .btn.primary:active { transform: translateY(1px); }
+
+/* ── onboarding checklist ───────────────────────────────── */
+.onb { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 14px 16px; margin-bottom: 20px; }
+.onb-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.onb-head h2 { font-size: 15px; margin: 0; text-transform: none; letter-spacing: 0; }
+.onb-bar { height: 4px; background: var(--surface-2); border-radius: 2px; overflow: hidden; margin-bottom: 12px; }
+.onb-bar i { display: block; height: 100%; background: var(--accent); transition: width .5s cubic-bezier(.2,.7,.2,1); }
+.onb-list { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.onb-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; text-decoration: none; color: var(--ink); transition: border-color .2s ease, transform .2s ease; }
+.onb-item:hover { border-color: var(--accent); transform: translateY(-1px); }
+.onb-item.done { opacity: .7; }
+.onb-item .tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 11px; color: var(--paper, #fff); }
+.onb-item.done .tick { background: var(--accent); border-color: var(--accent); }
+.onb-item.next { border-color: var(--accent); background: var(--accent-soft); }
+.onb-item b { display: block; font-size: 13px; }
+.onb-item span { color: var(--muted); font-size: 12px; }
+@media (max-width: 860px) { .onb-list { grid-template-columns: 1fr 1fr; } }

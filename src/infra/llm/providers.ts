@@ -146,7 +146,7 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   for (let round = 0; round < 3; round++) {
     if (round > 0) await new Promise((r) => setTimeout(r, 4000 * round));
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
-    if (labels.length === 0) throw new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true);
+    if (labels.length === 0) { lastErr = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true); break; }
     for (const label of labels) {
       const key = byLabel.get(label)!;
       try {
@@ -166,9 +166,10 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
       }
     }
   }
-  // 상위 모델이 수요 폭주(503)로 계속 막히면 기본 모델로 한 번 더. 판단·초안이 아예 멈추는 것보다 낫다.
+  // 상위 모델이 수요 폭주(503)나 일일 상한(429)으로 막히면 기본 모델로 한 번 더. 초안 품질은 조금 떨어져도 아예 멈추는 것보다 낫다.
+  // (3.7-flash 무료 한도는 키당 하루 20회 안팎이라 저녁이면 흔히 닿는다.)
   const base = config.model?.trim() || DEFAULT_MODEL.gemini;
-  if (lastErr instanceof LlmError && lastErr.status === 503 && model !== base) {
+  if (lastErr instanceof LlmError && (lastErr.status === 503 || lastErr.status === 429) && model !== base) {
     return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys);
   }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");

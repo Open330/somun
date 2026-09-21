@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { CandidateListItem, SettingsView, Source } from "@shared/types";
 import { Section, Skeleton, StageChip, TYPE_LABEL, Toast, relTime, stageOf, useToast } from "../components/ui";
 import { post, useResource } from "../lib/api";
+import { Onboarding } from "../components/Onboarding";
 
 /**
  * 트리아지. 위에서부터 "지금 할 것" 순서: 검수할 초안 → 판단 대기·처리 중 → 보류.
@@ -56,7 +57,7 @@ export default function Inbox() {
         </div>
       </div>
 
-      {!github.length && <Onboarding hasCandidates={Boolean(rows?.length)} />}
+      <Onboarding rows={rows} />
       {rows === undefined ? <Skeleton rows={5} /> : (
         <>
           <Section title="검수할 초안" count={groups.review.length} hint="초안이 준비된 글감. 열어서 복사하거나 고쳐서 올리세요.">
@@ -68,7 +69,7 @@ export default function Inbox() {
                 <span className="muted">{groups.fresh.length}개 중 어떤 걸 만들어볼까요?</span>
                 <button className="sm" disabled={busy} onClick={async () => { setBusy(true); try { await post("/candidates/judge", { ids: groups.fresh.slice(0, 50).map((c) => c.id) }); showToast("판단을 시작했습니다. 끝나면 검수할 초안에 나타납니다."); } finally { setBusy(false); } }}>모두 판단 ({Math.min(50, groups.fresh.length)})</button>
               </div>
-              <Rows items={groups.fresh} flat={flat} focus={focus} onFocus={setFocus} onJudge={async (id) => { await post("/candidates/judge", { ids: [id] }); showToast("판단을 시작했습니다."); }} />
+              <Rows items={groups.fresh} flat={flat} focus={focus} onFocus={setFocus} onJudge={async (id) => { try { await post("/candidates/judge", { ids: [id] }); showToast("판단을 시작했습니다."); } catch (e) { showToast(`시작 실패: ${(e as Error).message}`); } }} />
             </Section>
           )}
           {groups.working.length > 0 && (
@@ -117,12 +118,3 @@ function Rows({ items, flat, focus, onFocus, onJudge }: { items: CandidateListIt
   );
 }
 
-function Onboarding({ hasCandidates }: { hasCandidates: boolean }) {
-  return (
-    <div className="steps" style={{ marginBottom: 24 }}>
-      <div className="step"><div className="n">1 · 연결</div><h3>GitHub를 연결합니다</h3><p className="small muted">App을 설치하거나 조직·저장소를 지정하면 릴리스, PR, 커밋, 스타를 읽습니다.</p><Link to="/connectors" className="btn primary sm">연결 열기</Link></div>
-      <div className={`step ${hasCandidates ? "done" : ""}`}><div className="n">2 · 첫 스캔</div><h3>최근 14일을 훑습니다</h3><p className="small muted">글감 후보를 묶고, 다이제스트와 판단이 자동으로 이어집니다.</p></div>
-      <div className="step"><div className="n">3 · 검수</div><h3>초안을 고쳐 올립니다</h3><p className="small muted">복사하거나 고쳐서 올리고 URL을 등록하면, 다음 초안이 그 문체를 따릅니다.</p></div>
-    </div>
-  );
-}
