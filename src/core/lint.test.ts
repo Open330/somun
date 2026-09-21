@@ -32,3 +32,18 @@ describe("cluster", () => {
     expect(crossedThreshold(60, 70, [10, 25, 50, 100])).toBeNull();
   });
 });
+
+describe("lintDraft facts checks", () => {
+  it("flags a distorted repo name", () => {
+    const r = lintDraft("x", undefined, "ja/settings 엔진은 맥 전용 항목을 지정합니다. 릴리스 100회. https://github.com/jiunbae/settings", undefined, { repo: "jiunbae/settings", limitations: [] });
+    expect(r.find((x) => x.rule === "repo_name")?.ok).toBe(false);
+  });
+  it("accepts the exact repo name and paths", () => {
+    const r = lintDraft("x", undefined, "jiunbae/settings에 scripts/sync.sh를 추가했습니다. 릴리스 100회. https://github.com/jiunbae/settings", undefined, { repo: "jiunbae/settings", limitations: [] });
+    expect(r.find((x) => x.rule === "repo_name")?.ok).toBe(true);
+  });
+  it("flags an invented limitation when facts have none", () => {
+    const r = lintDraft("x", undefined, "설정 동기화를 고쳤습니다. 릴리스 100회. 아직 v2026.09.21.2, API가 바뀔 수 있습니다. https://github.com/jiunbae/settings", undefined, { repo: "jiunbae/settings", limitations: [] });
+    expect(r.find((x) => x.rule === "no_invented_limit")?.ok).toBe(false);
+  });
+});

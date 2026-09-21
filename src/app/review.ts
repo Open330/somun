@@ -37,8 +37,9 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
     ctx.db.insert(schema.examples).values({ ownerId, channel: d.channel, lang, title: input.title ?? null, body: input.body, source: "approved", active: true, createdAt: now }).run();
     retireSeeds(ctx, ownerId, d.channel, lang);
   }
+  const cand = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.id, d.candidateId)).get();
   const status = input.markCopied ? "copied" : changed ? "edited" : d.status;
-  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint: lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases), status, updatedAt: now }).where(eq(schema.drafts.id, id)).run();
+  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint: lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { repo: (cand?.evidence as { repo?: string } | undefined)?.repo }), status, updatedAt: now }).where(eq(schema.drafts.id, id)).run();
   emit(ctx, ownerId, { resource: "drafts", id });
   emit(ctx, ownerId, { resource: "examples" });
   return toDraft(getDraftRow(ctx, ownerId, id));

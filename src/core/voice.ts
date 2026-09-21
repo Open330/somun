@@ -65,4 +65,5 @@ export const KO_FLUENCY_RULES = `Korean fluency rules (violations make the text 
 - Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.
 - Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.
 - One register throughout. Never mix 합니다체 and 한다체 in one post.
-- Product names, APIs, paths and env vars stay in their original spelling.`;
+- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).
+- Translate technical terms by their established Korean term or keep the English word; never replace them with a looser everyday word.`;

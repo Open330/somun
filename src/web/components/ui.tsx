@@ -78,7 +78,7 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
 export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail?: string }[] }) {
   const bad = lint.filter((l) => !l.ok);
   if (bad.length === 0) return <span className="badge ok">린트 통과</span>;
-  const label: Record<string, string> = { banned_phrases: "금지 표현", no_emoji_bullets: "이모지 목록", has_number: "숫자 없음", has_limitation: "한계 없음", has_number_or_limit: "숫자·한계 없음", has_link: "링크 없음", no_exclamation: "감탄부호", length: "길이 초과", title_length: "제목 길이", no_vote_request: "투표 요청", no_placeholder: "빈 숫자" };
+  const label: Record<string, string> = { banned_phrases: "금지 표현", no_emoji_bullets: "이모지 목록", has_number: "숫자 없음", has_limitation: "한계 없음", has_number_or_limit: "숫자·한계 없음", has_link: "링크 없음", no_exclamation: "감탄부호", length: "길이 초과", title_length: "제목 길이", no_vote_request: "투표 요청", no_placeholder: "빈 숫자", repo_name: "이름 왜곡", no_invented_limit: "지어낸 한계" };
   return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={l.detail}>{label[l.rule] ?? l.rule}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
 }
 

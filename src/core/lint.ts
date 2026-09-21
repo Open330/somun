@@ -35,7 +35,9 @@ const LIMITATION_HINT = /(limit|doesn'?t|does not|not yet|no windows|beta|0\.\d+
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /!/;
 
-export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES): LintResult[] {
+export type LintFacts = { repo?: string; limitations?: string[] };
+
+export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}): LintResult[] {
   const spec = CHANNELS[channel];
   const text = `${title ?? ""}\n${body}`;
   const lower = text.toLowerCase();
@@ -54,6 +56,19 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "has_limitation", ok: LIMITATION_HINT.test(body), detail: LIMITATION_HINT.test(body) ? undefined : "한계 하나가 필요합니다" });
   }
   results.push({ rule: "no_placeholder", ok: !/\[(number needed|숫자 확인)\]/i.test(body), detail: "채우지 못한 숫자가 있습니다" });
+
+  // 저장소 이름 왜곡: 사실의 repo가 owner/name일 때, 같은 name을 다른 owner로 쓴 토큰 (예: ja/settings) 을 잡는다.
+  if (facts.repo && facts.repo.includes("/")) {
+    const [owner, name] = facts.repo.split("/");
+    const re = new RegExp(`(?<![\\w./-])([\\w.-]+)/${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w.-])`, "g");
+    const wrong = [...text.matchAll(re)].map((m) => m[1]).filter((o) => o !== owner);
+    results.push({ rule: "repo_name", ok: wrong.length === 0, detail: wrong.length ? `${wrong[0]}/${name} ≠ ${facts.repo}` : undefined });
+  }
+  // 지어낸 한계: 사실에 한계가 없는데 "API가 바뀔 수 있다" 류를 쓴 경우.
+  if (facts.limitations !== undefined && facts.limitations.length === 0) {
+    const invented = /(API가 바뀔|API may (still )?change|아직 (0\.x|베타)|still (0\.x|beta)|not yet tested)/i.test(body);
+    results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? "사실에 없는 한계를 지어냈습니다" : undefined });
+  }
 
   if (channel === "x" || channel === "linkedin") {
     results.push({ rule: "has_link", ok: LINK.test(body) });

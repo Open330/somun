@@ -149,7 +149,10 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
 Hard rules:
 - Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, write [number needed] (or [숫자 확인] in Korean) in its place.
 - Never mention that the code was written with AI or agents unless the tool itself is about agents.
-- Include exactly one real limitation from Facts when the channel asks for one. If Facts lists no limitation, use the version status (e.g. "still 0.x, API may change") as the limitation. Never write "none stated".
+- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.
+- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.
+- Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.
+- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).
 - Use the numbers from "Numbers you may use" directly. Write [number needed] only when that line has no matching number.
 - No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.
 - Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.

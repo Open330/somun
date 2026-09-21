@@ -165,7 +165,7 @@ export async function applyResult(ctx: AppContext, ownerId: string, args: { kind
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases), status: "proposed", model: args.model, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, { repo: ev.repo, limitations: ev.limitations ?? [] }), status: "proposed", model: args.model, createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });
