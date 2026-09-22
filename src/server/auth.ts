@@ -9,7 +9,7 @@ import type { Config } from "./config.js";
  *  - jwt: jiun-api 등 외부 발급자의 RS256 JWT (JWKS). ownerId = sub 또는 tokenIdentifier.
  * 세 모드는 동시에 켜질 수 있고, 어느 하나만 통과하면 된다.
  */
-export type AuthVars = { ownerId: string };
+export type AuthVars = { ownerId: string; authMethod: "token" | "jwt" | "anonymous" };
 
 export function authMiddleware(config: Config): MiddlewareHandler<{ Variables: AuthVars }> {
   const jwks = config.AUTH_JWKS_URL ? createRemoteJWKSet(new URL(config.AUTH_JWKS_URL)) : null;
@@ -20,6 +20,7 @@ export function authMiddleware(config: Config): MiddlewareHandler<{ Variables: A
     const bearer = header.startsWith("Bearer ") ? header.slice(7) : queryToken;
     if (bearer && config.SOMUN_TOKEN && bearer === config.SOMUN_TOKEN) {
       c.set("ownerId", config.SOMUN_TOKEN_OWNER_ID || "local");
+      c.set("authMethod", "token");
       return next();
     }
     if (bearer && jwks) {
@@ -28,6 +29,7 @@ export function authMiddleware(config: Config): MiddlewareHandler<{ Variables: A
         const id = String(payload.sub ?? "");
         if (id) {
           c.set("ownerId", `${config.AUTH_ISSUER ?? "jwt"}|${id}`);
+          c.set("authMethod", "jwt");
           return next();
         }
       } catch {
@@ -36,6 +38,7 @@ export function authMiddleware(config: Config): MiddlewareHandler<{ Variables: A
     }
     if (config.anonymous) {
       c.set("ownerId", "local");
+      c.set("authMethod", "anonymous");
       return next();
     }
     return c.json({ error: "unauthorized" }, 401);

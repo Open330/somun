@@ -1,131 +1,88 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { CandidateListItem, SettingsView, Source } from "@shared/types";
-import { Section, Skeleton, StageChip, TYPE_LABEL, Toast, relTime, stageOf, useToast } from "../components/ui";
+import { ErrorState, Section, Skeleton, StageChip, TYPE_LABEL, relTime, stageOf } from "../components/ui";
 import { post, useResource } from "../lib/api";
+import { GenerationStatus } from "../components/GenerationStatus";
 import { Onboarding } from "../components/Onboarding";
 
-/**
- * 트리아지. 위에서부터 "지금 할 것" 순서: 검수할 초안 → 판단 대기·처리 중 → 보류.
- * 키보드: j/k 이동, Enter 열기, l 보류.
- */
+type Filter = "all" | "review" | "fresh" | "attention" | "deferred" | "archived";
+const FILTERS: [Filter, string][] = [["all", "전체"], ["review", "검토할 초안"], ["fresh", "새 글감"], ["attention", "확인 필요"], ["deferred", "보류"], ["archived", "보관"]];
+const category = (c: CandidateListItem): Exclude<Filter, "all"> => {
+  const key = stageOf(c).key;
+  return key === "published" || key === "dropped" ? "archived" : key === "working" || key === "ask" ? "attention" : key;
+};
+
 export default function Inbox() {
-  const nav = useNavigate();
-  const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts"]);
-  const { data: sources } = useResource<Source[]>("/sources", ["sources"]);
+  const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts"]);
+  const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState(false);
-  const [focus, setFocus] = useState(0);
-  const [toast, showToast] = useToast();
-  const github = (sources ?? []).filter((s) => s.kind === "github");
-  // 계정별 분리: 저장소 owner(또는 blog:host)로 나눈다. 조직과 개인이 섞이지 않게 고를 수 있다.
-  const accountOf = (repo: string) => (repo.startsWith("blog:") ? "블로그" : repo.split("/")[0]);
-  const accounts = useMemo(() => [...new Set((rows ?? []).filter((c) => !["dropped", "published"].includes(c.status)).map((c) => accountOf(c.repo)))].sort(), [rows]);
-  const [account, setAccount] = useState<string>(() => { try { return localStorage.getItem("somun.inbox.account") ?? "all"; } catch { return "all"; } });
-  useEffect(() => { try { localStorage.setItem("somun.inbox.account", account); } catch { /* ignore */ } }, [account]);
+  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
+  const [requested, setRequested] = useState<number[]>([]);
+  const collectable = (sources ?? []).filter((s) => s.enabled && s.targets.length && ["github", "blog"].includes(s.kind));
+  const latestPoll = Math.max(0, ...collectable.map((s) => s.lastPolledAt ?? 0));
+  const counts = useMemo(() => {
+    const result = { all: 0, review: 0, fresh: 0, attention: 0, deferred: 0, archived: 0 };
+    for (const c of rows ?? []) { const key = category(c); result[key]++; if (key !== "archived") result.all++; }
+    return result;
+  }, [rows]);
+  const visible = useMemo(() => (rows ?? []).filter((c) => (filter === "all" ? category(c) !== "archived" : category(c) === filter) && `${c.title} ${c.repo}`.toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => b.updatedAt - a.updatedAt), [rows, filter, query]);
 
-  const groups = useMemo(() => {
-    const open = (rows ?? []).filter((c) => !["dropped", "published"].includes(c.status) && (account === "all" || accountOf(c.repo) === account));
-    const by = (k: string[]) => open.filter((c) => k.includes(stageOf(c).key)).sort((a, b) => (b.judgment?.total ?? -1) - (a.judgment?.total ?? -1) || b.updatedAt - a.updatedAt);
-    return { review: by(["review"]), fresh: by(["fresh"]), working: by(["working", "ask"]), deferred: by(["deferred"]) };
-  }, [rows, account]);
-  const flat = [...groups.review, ...groups.fresh, ...groups.working, ...groups.deferred];
+  async function collect() {
+    setBusy(true); setMessage(null);
+    try {
+      const result = await post<Record<string, Record<string, number> | { error: string }>>("/collect");
+      const values = Object.values(result).flatMap((r) => Object.values(r));
+      const failed = values.some((v) => typeof v === "string" || v < 0);
+      const count = values.reduce<number>((n, value) => n + (typeof value === "number" && value > 0 ? value : 0), 0);
+      setMessage({ text: failed ? "일부 소스를 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요." : count ? `새 변경 ${count}건을 가져왔습니다. 아래에서 글감을 골라보세요.` : "확인을 마쳤습니다. 새로 가져올 변경은 없습니다.", error: failed });
+      reload(); reloadSources();
+    } catch (err) { setMessage({ text: `변경을 가져오지 못했습니다. ${(err as Error).message}`, error: true }); }
+    finally { setBusy(false); }
+  }
+  async function judge(id: number) {
+    setRequested((ids) => [...ids, id]); setMessage(null);
+    try {
+      await post("/candidates/judge", { ids: [id] });
+      setMessage({ text: "초안 준비를 요청했습니다. 결과가 도착하면 목록이 갱신됩니다. 오래 기다리면 글감을 열어 상태를 확인해 주세요." });
+      reload();
+    } catch (err) { setMessage({ text: `요청하지 못했습니다. ${(err as Error).message}`, error: true }); }
+    finally { setRequested((ids) => ids.filter((value) => value !== id)); }
+  }
 
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      const tag = (ev.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || ev.metaKey || ev.ctrlKey) return;
-      if (ev.key === "j") setFocus((f) => Math.min(flat.length - 1, f + 1));
-      if (ev.key === "k") setFocus((f) => Math.max(0, f - 1));
-      if (ev.key === "Enter" && flat[focus]) nav(`/c/${flat[focus].id}`);
-      if (ev.key === "l" && flat[focus] && flat[focus].status !== "deferred") { void post(`/candidates/${flat[focus].id}/status`, { status: "deferred" }); showToast("보류했습니다"); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [flat, focus, nav, showToast]);
-
-  const lastPolled = github.map((s) => s.lastPolledAt ?? 0).sort().at(-1);
-
+  if (error || sourceError) return <ErrorState title="글감을 불러오지 못했습니다" message={error ?? sourceError!} onRetry={() => { reload(); reloadSources(); }} />;
+  if (!rows || !sources) return <Skeleton rows={4} />;
+  const firstDraft = rows.find((c) => category(c) === "review");
+  const firstUse = rows.length === 0;
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>글감</h1>
-          <p className="lede">{groups.review.length ? `검수할 초안 ${groups.review.length}개` : "검수할 초안이 없습니다"}{groups.working.length ? ` · ${groups.working.length}개 처리 중` : ""}{lastPolled ? ` · 마지막 확인 ${relTime(lastPolled)}` : ""}</p>
-        </div>
-        <div className="toolbar">
-          <span className="tiny muted"><span className="kbd">j</span><span className="kbd">k</span> 이동 · <span className="kbd">↵</span> 열기 · <span className="kbd">l</span> 보류</span>
-          <button className="primary" disabled={busy || !github.length} title={!github.length ? "연결에서 GitHub를 먼저 연결하세요" : ""}
-            onClick={async () => { setBusy(true); try { await post("/collect"); showToast(settings?.watch.mode === "auto" ? "확인했습니다. 새 글감은 판단이 끝나면 나타납니다." : "확인했습니다. 새 글감은 \"새 글감\"에 쌓입니다."); } finally { setBusy(false); } }}>
-            {busy ? "확인 중…" : "지금 확인"}
-          </button>
-        </div>
-      </div>
-
-      <Onboarding rows={rows} />
-      {accounts.length > 1 && (
-        <div className="tabs" style={{ marginBottom: 14 }}>
-          <button className={`sm ${account === "all" ? "active" : ""}`} onClick={() => setAccount("all")}>전체</button>
-          {accounts.map((a) => <button key={a} className={`sm ${account === a ? "active" : ""}`} onClick={() => setAccount(a)}>{a}</button>)}
-        </div>
-      )}
-      {rows === undefined ? <Skeleton rows={5} /> : (
-        <>
-          <Section title="검수할 초안" count={groups.review.length} hint="초안이 준비된 글감. 열어서 복사하거나 고쳐서 올리세요.">
-            {groups.review.length ? <Rows items={groups.review} flat={flat} focus={focus} onFocus={setFocus} /> : <div className="empty small">지금은 없습니다. 처리 중인 후보의 판단이 끝나면 여기 쌓입니다.</div>}
-          </Section>
-          {groups.fresh.length > 0 && (
-            <Section title="새 글감" count={groups.fresh.length} hint={settings?.watch.mode === "auto" ? "자동 모드: 곧 판단이 시작됩니다. 오래된 것은 직접 판단을 눌러야 합니다." : "아직 판단하지 않았습니다. 볼 만한 것만 골라 판단하세요. 모델 호출은 이때 일어납니다."}>
-              <div className="row between small" style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
-                <span className="muted">{groups.fresh.length}개 중 어떤 걸 만들어볼까요?</span>
-                <button className="sm" disabled={busy} onClick={async () => { setBusy(true); try { await post("/candidates/judge", { ids: groups.fresh.slice(0, 50).map((c) => c.id) }); showToast("판단을 시작했습니다. 끝나면 검수할 초안에 나타납니다."); } finally { setBusy(false); } }}>모두 판단 ({Math.min(50, groups.fresh.length)})</button>
-              </div>
-              <Rows items={groups.fresh} flat={flat} focus={focus} onFocus={setFocus} onJudge={async (id) => { try { await post("/candidates/judge", { ids: [id] }); showToast("판단을 시작했습니다."); } catch (e) { showToast(`시작 실패: ${(e as Error).message}`); } }} />
-            </Section>
-          )}
-          {groups.working.length > 0 && (
-            <Section title="처리 중" count={groups.working.length} hint="다이제스트 → 판단 → 초안이 자동으로 이어집니다.">
-              <Rows items={groups.working} flat={flat} focus={focus} onFocus={setFocus} />
-            </Section>
-          )}
-          {groups.deferred.length > 0 && (
-            <Section title="보류" count={groups.deferred.length} hint="점수가 낮거나 나중으로 미룬 것. 언제든 열어 초안을 요청할 수 있습니다.">
-              <Rows items={groups.deferred} flat={flat} focus={focus} onFocus={setFocus} />
-            </Section>
-          )}
-          {flat.length === 0 && github.length > 0 && <div className="empty">아직 후보가 없습니다. 매일 09:00에 확인하거나 "지금 확인"을 누르세요.</div>}
-        </>
-      )}
-      <Toast msg={toast} />
+      <header className="page-head workspace-head">
+        <div><span className="eyebrow">내 작업 공간</span><h1>글감</h1><p className="lede">{firstUse ? "작은 변화도, 전할 이야기가 됩니다." : counts.review ? `검토할 초안 ${counts.review}개가 준비되어 있어요.` : counts.fresh ? `새 글감 ${counts.fresh}개 중 알리고 싶은 변화를 골라보세요.` : "모아둔 이야기를 살펴보고 다음 게시글을 준비하세요."}</p></div>
+        {!firstUse && <div className="toolbar">{collectable.length > 0 && <button disabled={busy} onClick={() => void collect()}>{busy ? "변경 가져오는 중…" : "새 변경 가져오기"}</button>}{firstDraft && <Link className="btn primary" to={`/c/${firstDraft.id}`}>초안 검토하기 <span aria-hidden>→</span></Link>}</div>}
+      </header>
+      {message && <div className={`inline-notice ${message.error ? "is-error" : ""}`} role={message.error ? "alert" : "status"}><span>{message.text}</span>{message.error && <Link to="/connectors">연결 확인</Link>}<button className="ghost sm" aria-label="알림 닫기" onClick={() => setMessage(null)}>×</button></div>}
+      <GenerationStatus candidateTitles={Object.fromEntries(rows.map((row) => [row.id, row.title]))} onChange={reload} />
+      {firstUse ? <>
+        <Onboarding rows={rows} sources={sources} />
+        {collectable.length > 0 && <div className="next-action"><div><h2>연결 준비가 끝났어요</h2><p>최근 변경을 가져와 첫 글감을 찾아보세요.</p></div><button className="primary" disabled={busy} onClick={() => void collect()}>{busy ? "변경 가져오는 중…" : "첫 글감 가져오기 →"}</button></div>}
+      </> : <>
+        <div className="inbox-controls"><div className="filter-strip" role="group" aria-label="글감 상태 필터">{FILTERS.map(([key, label]) => <button key={key} aria-pressed={filter === key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}<span>{counts[key]}</span></button>)}</div><label className="search-field"><span className="sr-only">글감 제목 또는 저장소 검색</span><input type="search" placeholder="제목 또는 저장소 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></label></div>
+        <div className="list-meta"><span>{visible.length}개 글감</span><span>{settings?.watch.mode === "auto" ? "자동 준비 켜짐" : "선택한 글감만 초안 준비"}{latestPoll ? ` · 마지막 수집 ${relTime(latestPoll)}` : ""}</span></div>
+        {visible.length === 0 ? <div className="state-panel"><span className="state-symbol" aria-hidden>⌕</span><h2>{query ? "검색 결과가 없어요" : "이 상태의 글감은 아직 없어요"}</h2><p>{query ? "다른 검색어를 입력하거나 필터를 초기화해 보세요." : "다른 글감을 살펴보거나 새 변경을 가져와 보세요."}</p><button onClick={() => { setQuery(""); setFilter("all"); }}>전체 글감 보기</button></div> : (
+          (filter === "all" ? FILTERS.filter(([key]) => !["all", "archived"].includes(key)) : FILTERS.filter(([key]) => key === filter)).map(([key, label]) => {
+            const items = visible.filter((c) => category(c) === key);
+            if (!items.length) return null;
+            return <Section key={key} title={label} count={items.length}><div className="story-list">{items.map((c) => <article className="story-row" key={c.id}>
+              <div className="story-content"><div className="story-meta"><span>{c.repo}</span><span>·</span><span>{TYPE_LABEL[c.type] ?? c.type}</span><span>· {relTime(c.updatedAt)}</span></div><Link className="story-title" to={`/c/${c.id}`}>{c.title}</Link><p>{c.judgment?.reasoning.split("\n")[0] || c.evidence.highlights?.[0] || "이 변화에서 알릴 만한 내용을 찾아 초안으로 정리할 수 있어요."}</p></div>
+              <div className="story-actions"><StageChip stage={stageOf(c)} />{c.judgment && <span className="story-score" title="설정한 판단 기준의 가중 합계">추천점수 {c.judgment.total}</span>}<div className="toolbar">{category(c) === "fresh" && <button className="sm" disabled={requested.includes(c.id)} onClick={() => void judge(c.id)}>{requested.includes(c.id) ? "요청 중…" : "초안 준비"}</button>}<Link className="btn sm" to={`/c/${c.id}`}>{category(c) === "review" ? "초안 검토" : "자세히 보기"}<span aria-hidden> →</span></Link></div></div>
+            </article>)}</div></Section>;
+          })
+        )}
+      </>}
     </>
   );
 }
-
-function Rows({ items, flat, focus, onFocus, onJudge }: { items: CandidateListItem[]; flat: CandidateListItem[]; focus: number; onFocus: (i: number) => void; onJudge?: (id: number) => Promise<void> }) {
-  const nav = useNavigate();
-  return (
-    <div className="rows">
-      {items.map((c) => {
-        const idx = flat.indexOf(c);
-        const st = stageOf(c);
-        const reason = c.judgment ? c.judgment.reasoning.split("\n")[0] : c.evidence.highlights?.[0] ?? "";
-        return (
-          <div key={c.id} className={`rowi ${idx === focus ? "focus" : ""}`} onClick={() => nav(`/c/${c.id}`)} onMouseEnter={() => onFocus(idx)}>
-            <span className="ty">{TYPE_LABEL[c.type] ?? c.type}</span>
-            <div style={{ minWidth: 0 }}>
-              <div className="t">{c.title}</div>
-              <div className="r">{reason}</div>
-            </div>
-            <span className={`sc ${(c.judgment?.total ?? 0) < 4 ? "low" : ""}`}>{c.judgment ? c.judgment.total : ""}</span>
-            <div className="row" style={{ gap: 8 }}>
-              <StageChip stage={st} />
-              {onJudge && st.key === "fresh" && <button className="sm primary" onClick={(e) => { e.stopPropagation(); void onJudge(c.id); }}>판단</button>}
-              <Link to={`/c/${c.id}`} className="btn sm" onClick={(e) => e.stopPropagation()}>{st.key === "review" ? "검수" : "열기"}</Link>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-

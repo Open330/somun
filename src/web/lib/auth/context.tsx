@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { resetEvents } from "../events";
 import { isAuthEnabled, type AuthProviderName } from "./config";
 import { getAuthManager, type AuthSnapshot, type AuthUser } from "./manager";
 
@@ -22,6 +23,7 @@ function useAuthSnapshot(): AuthSnapshot {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const m = getAuthManager();
   const snap = useAuthSnapshot();
+  useEffect(() => { resetEvents(); }, [snap.status, snap.user?.id]);
   useEffect(() => {
     void m?.restore();
   }, [m]);

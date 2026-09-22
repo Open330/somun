@@ -2,7 +2,7 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppConfig } from "../infra/github/app.js";
 import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
-import { emit, type AppContext } from "./context.js";
+import { emit, GenerationConflictError, type AppContext } from "./context.js";
 import { listSources, upsertSource } from "./sources.js";
 
 /**
@@ -18,9 +18,9 @@ export function githubAppConfig(ctx: AppContext): GitHubAppConfig | null {
   return { appId: String(j.id), privateKeyPem: j.pem, slug: j.slug, webhookSecret: j.webhook_secret };
 }
 
-export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string }): void {
+export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string }): boolean {
   const value = JSON.stringify(app);
-  ctx.db.insert(schema.appState).values({ key: "github_app", value, updatedAt: Date.now() }).onConflictDoUpdate({ target: schema.appState.key, set: { value, updatedAt: Date.now() } }).run();
+  return ctx.db.insert(schema.appState).values({ key: "github_app", value, updatedAt: Date.now() }).onConflictDoNothing().run().changes > 0;
 }
 
 export function listInstallations(ctx: AppContext, ownerId: string) {
@@ -31,10 +31,13 @@ export function listInstallations(ctx: AppContext, ownerId: string) {
 export async function recordInstallation(ctx: AppContext, ownerId: string, installationId: number): Promise<{ account: string; repos: string[] }> {
   const cfg = githubAppConfig(ctx);
   if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+  const existingOwner = ownerOfInstallation(ctx, installationId);
+  if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError("이미 다른 계정에 연결된 설치입니다.");
   const info = await installationInfo(cfg, installationId);
   const now = Date.now();
-  ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
-    .onConflictDoUpdate({ target: schema.githubInstallations.installationId, set: { ownerId, account: info.account, accountType: info.accountType, repos: info.repos, updatedAt: now } }).run();
+  const saved = ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: schema.githubInstallations.installationId, set: { account: info.account, accountType: info.accountType, repos: info.repos, updatedAt: now }, setWhere: eq(schema.githubInstallations.ownerId, ownerId) }).run();
+  if (!saved.changes) throw new GenerationConflictError("이미 다른 계정에 연결된 설치입니다.");
   // 설치 저장소 → 소스. 이미 있는 github 소스는 대상만 갱신.
   const existing = listSources(ctx, ownerId).find((s) => s.kind === "github" && s.options?.installationId === String(installationId));
   // 처음 설치면 아무것도 지켜보지 않는다. 무엇을 볼지는 고르기 화면(/github/pick)에서 사용자가 정한다.

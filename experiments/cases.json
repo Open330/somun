@@ -1,0 +1,176 @@
+[
+  {
+    "id": "x-en",
+    "channel": "x",
+    "lang": "en",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  },
+  {
+    "id": "threads-ko",
+    "channel": "threads",
+    "lang": "ko",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  },
+  {
+    "id": "linkedin-en",
+    "channel": "linkedin",
+    "lang": "en",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  },
+  {
+    "id": "show_hn-en",
+    "channel": "show_hn",
+    "lang": "en",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  },
+  {
+    "id": "show_gn-ko",
+    "channel": "show_gn",
+    "lang": "ko",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  },
+  {
+    "id": "blog-ko",
+    "channel": "blog",
+    "lang": "ko",
+    "candidate": {
+      "title": "Line ending update",
+      "type": "release",
+      "evidence": {
+        "repo": "example/tool",
+        "repoUrl": "https://github.com/example/tool",
+        "description": "A development tool",
+        "highlights": [
+          "Handles CRLF line endings correctly.",
+          "Only whole node_modules path segments are dependencies."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "99%",
+      "I released",
+      "출시했습니다"
+    ],
+    "reviewNotes": "수치·사용자 경험·한계·출시자 정보가 없는 합성 자료입니다. 없는 사실을 채우지 않는지 확인하세요. 채널 형식과 자연스러움은 사람이 평가합니다."
+  }
+]

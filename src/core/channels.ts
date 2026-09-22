@@ -24,7 +24,7 @@ export type ChannelSpec = {
 export const CHANNELS: Record<Channel, ChannelSpec> = {
   x: {
     id: "x", label: "X", defaultLangs: ["en", "ko"], maxChars: 280, hasTitle: false,
-    rules: "Exactly three short lines separated by blank lines. Line 1: the concrete problem, first person, past tense, no adjectives. Line 2: what the tool does about it, one sentence. Line 3: one number or one limitation, then the link. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
+    rules: "Exactly three short lines separated by blank lines. Line 1: the concrete change or a problem explicitly supported by Facts, no adjectives. Use first-person experience only if Facts explicitly describes the author having that experience. Line 2: what changed for the user, one sentence. Line 3: a supplied number or limitation if available, then the link. Omit missing evidence rather than inventing it or inserting placeholders. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
     mediaHint: "터미널 GIF 또는 실제 출력 스크린샷 1장 (홈 경로·내부 브랜치명 가리기)",
     composeUrl: "https://x.com/compose/post",
     runbook: ["영어 글은 화~목 미국 동부 오전 9~11시(한국 22~24시), 한국어 글은 평일 오전 8~9시나 저녁 21~22시", "이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
@@ -45,14 +45,14 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   show_hn: {
     id: "show_hn", label: "Show HN", fixedLang: "en", defaultLangs: ["en"], maxChars: 2000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is the author's first comment posted right after submission. Paragraph 1: the specific problem and who has it. Paragraph 2: what it does and the mechanism, 2-3 sentences. Paragraph 3: design choices worth arguing about. Paragraph 4: 'Limitations:' followed by 2-3 honest ones. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
+    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
     mediaHint: "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
     composeUrl: "https://news.ycombinator.com/submit",
     runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁", "제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함", "제출 직후 위 본문을 첫 댓글로", "48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게", "어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
   },
   show_gn: {
     id: "show_gn", label: "Show GN", fixedLang: "ko", defaultLangs: ["ko"], maxChars: 3000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Sections in order, each a one-line heading plus 2-4 items: 무엇을 만들었나 / 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 / 듣고 싶은 피드백. Facts only, no marketing words. Include one runnable command. Never ask for votes or comments.",
+    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.",
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
     runbook: ["평일 오전 9~11시 등록이 첫 화면에 오래 남음", "사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],

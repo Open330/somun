@@ -18,7 +18,7 @@ describe("repo-window candidates", () => {
   it("folds release, milestones and PRs of one repo into a single candidate", () => {
     const ctx = makeCtx();
     const now = Date.now();
-    ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true, createdAt: now }).run();
+    ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
     ingestSignals(ctx, "o", 1, [
       { kind: "star_milestone", repo: "a/x", ref: "gh:stars:a/x#25", title: "a/x stars 25", payload: { threshold: 25 }, occurredAt: now },
       { kind: "release", repo: "a/x", ref: "gh:release:a/x@v1.2.0", title: "a/x v1.2.0", payload: { tag: "v1.2.0" }, occurredAt: now },
@@ -36,7 +36,7 @@ describe("repo-window candidates", () => {
   it("opens a new window after 10 days", () => {
     const ctx = makeCtx();
     const now = Date.now();
-    ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true, createdAt: now }).run();
+    ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
     ingestSignals(ctx, "o", 1, [{ kind: "release", repo: "a/x", ref: "r1", title: "a/x v1", payload: { tag: "v1" }, occurredAt: now }], {}, ev("a/x"));
     ctx.db.update(schema.candidates).set({ createdAt: now - 11 * DAY }).run();
     ingestSignals(ctx, "o", 1, [{ kind: "release", repo: "a/x", ref: "r2", title: "a/x v2", payload: { tag: "v2" }, occurredAt: now }], {}, ev("a/x"));

@@ -1,0 +1,245 @@
+{
+  "status": 202,
+  "acknowledgedMs": 34,
+  "accepted": {
+    "started": "queued",
+    "jobs": [
+      1,
+      2
+    ]
+  },
+  "duplicate": {
+    "started": "queued",
+    "jobs": [
+      1,
+      2
+    ]
+  },
+  "elapsedMs": 61119,
+  "timeline": [
+    {
+      "elapsedMs": 22,
+      "states": [
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 24,
+      "states": [
+        {
+          "id": 2,
+          "kind": "draft",
+          "channel": "threads",
+          "status": "pending"
+        },
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 54,
+      "states": [
+        {
+          "id": 2,
+          "kind": "draft",
+          "channel": "threads",
+          "status": "pending"
+        },
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "claimed"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 35952,
+      "states": [
+        {
+          "id": 2,
+          "kind": "draft",
+          "channel": "threads",
+          "status": "pending"
+        },
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 35955,
+      "states": [
+        {
+          "id": 2,
+          "kind": "draft",
+          "channel": "threads",
+          "status": "claimed"
+        },
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "done"
+        }
+      ]
+    },
+    {
+      "elapsedMs": 61049,
+      "states": [
+        {
+          "id": 2,
+          "kind": "draft",
+          "channel": "threads",
+          "status": "done"
+        },
+        {
+          "id": 1,
+          "kind": "draft",
+          "channel": "x",
+          "status": "done"
+        }
+      ]
+    }
+  ],
+  "states": [
+    {
+      "id": 2,
+      "candidateId": 1,
+      "kind": "draft",
+      "channel": "threads",
+      "lang": "ko",
+      "executor": "server",
+      "status": "done",
+      "createdAt": 1790073691404,
+      "finishedAt": 1790073752429
+    },
+    {
+      "id": 1,
+      "candidateId": 1,
+      "kind": "draft",
+      "channel": "x",
+      "lang": "en",
+      "executor": "server",
+      "status": "done",
+      "createdAt": 1790073691402,
+      "finishedAt": 1790073727332
+    }
+  ],
+  "drafts": [
+    {
+      "channel": "x",
+      "lang": "en",
+      "body": "vitejs/vite v8.3.0 pre-compiles proxy context matchers at server creation and avoids settling seen preload dependencies.\n\nLine endings and node_modules path segments are now handled correctly during builds.\n\nhttps://github.com/vitejs/vite",
+      "model": "gemini/gemini-3.5-flash-lite@free-1",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "has_number_or_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "238/280"
+        }
+      ]
+    },
+    {
+      "channel": "threads",
+      "lang": "ko",
+      "body": "vitejs/vite v8.3.0에서 서버 생성 시 프록시 컨텍스트 매처를 미리 컴파일하고 빌드 중 프리로드 의존성 처리를 최적화했습니다. 이번 업데이트를 적용한 뒤 개발 서버 구동 속도에 차이를 체감하셨습니까?",
+      "model": "gemini/gemini-3.7-flash@free-5",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "118/500"
+        }
+      ]
+    }
+  ],
+  "usage": [
+    {
+      "occurredAt": "2026-09-22T10:41:31.435Z",
+      "provider": "google",
+      "model": "gemini-3.5-flash-lite",
+      "latencyMs": 35898,
+      "status": "success",
+      "inputTokens": 784,
+      "outputTokens": 75,
+      "cachedInputTokens": 0,
+      "totalTokens": 859
+    },
+    {
+      "occurredAt": "2026-09-22T10:42:07.336Z",
+      "provider": "google",
+      "model": "gemini-3.7-flash",
+      "latencyMs": 25093,
+      "status": "success",
+      "inputTokens": 989,
+      "outputTokens": 78,
+      "cachedInputTokens": 0,
+      "totalTokens": 1823
+    }
+  ]
+}

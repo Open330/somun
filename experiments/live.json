@@ -1,0 +1,12 @@
+{
+  "name": "live-quality",
+  "cases": "historical-cases.json",
+  "repeats": 1,
+  "variants": [
+    {
+      "id": "current",
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    }
+  ]
+}

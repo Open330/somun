@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import { SAMPLE_WORK, VOICE_PRESETS } from "@core/voice";
 import type { Example, GuideSuggestion, SettingsView } from "@shared/types";
-import { CHANNEL_LABEL, Skeleton, Toast, relTime, useToast } from "../components/ui";
+import { CHANNEL_LABEL, ErrorState, Skeleton, Toast, relTime, useToast } from "../components/ui";
 import { del, patch, post, useResource } from "../lib/api";
 
 /**
@@ -12,8 +12,8 @@ import { del, patch, post, useResource } from "../lib/api";
 const CAT_LABEL: Record<string, string> = { voice: "말투", structure: "구성", facts: "사실", format: "형식" };
 
 export default function Voice() {
-  const { data: examples } = useResource<Example[]>("/examples", ["examples"]);
-  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: examples, error: examplesError, reload: reloadExamples } = useResource<Example[]>("/examples", ["examples"]);
+  const { data: settings, error, reload } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: suggestions } = useResource<GuideSuggestion[]>("/suggestions", ["settings"]);
   const [guide, setGuide] = useState<string | null>(null);
   const [sampleLang, setSampleLang] = useState<"ko" | "en">("ko");
@@ -23,6 +23,7 @@ export default function Voice() {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<{ channel: Channel; lang: string; title: string; body: string }>({ channel: "x", lang: "en", title: "", body: "" });
   const [toast, showToast] = useToast();
+  if (error || examplesError) return <ErrorState message={error ?? examplesError!} onRetry={() => { reload(); reloadExamples(); }} />;
   if (!examples) return <Skeleton rows={4} />;
   const list = examples.filter((e) => ch === "all" || e.channel === ch);
   const own = examples.filter((e) => e.source !== "seed" && e.active).length;

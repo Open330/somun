@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { EventEmitter } from "node:events";
 import type { AppContext } from "../app/context.js";
+import { startGenerationWorker } from "../app/generation-worker.js";
 import { startScheduler } from "../app/scheduler.js";
 import { openDb } from "../infra/db/index.js";
 import { migrateLegacyCandidates } from "../app/candidates.js";
@@ -25,6 +26,7 @@ const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOK
 const usageFlush = setInterval(() => void usage.flush(), 5 * 60_000);
 ctx.bus.setMaxListeners(100);
 
+const generationWorker = startGenerationWorker(ctx);
 const cron = startScheduler(ctx, config.CRON);
 const app = createApp(ctx, config);
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
@@ -36,6 +38,6 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
     cron.stop();
     clearInterval(usageFlush);
-    void usage.flush().finally(() => server.close(() => process.exit(0)));
+    void generationWorker.stop().then(() => usage.flush()).finally(() => server.close(() => process.exit(0)));
   });
 }

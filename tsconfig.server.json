@@ -1,6 +1,29 @@
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": { "lib": ["ES2022"], "types": ["node"], "outDir": "dist/server", "rootDir": ".", "noEmit": false, "sourceMap": true, "module": "NodeNext", "moduleResolution": "NodeNext" },
-  "include": ["src/server", "src/app", "src/infra", "src/core", "src/shared", "scripts"],
-  "exclude": ["**/*.test.ts"]
+  "compilerOptions": {
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ],
+    "outDir": "dist/server",
+    "rootDir": ".",
+    "noEmit": false,
+    "sourceMap": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": [
+    "src/server",
+    "src/app",
+    "src/infra",
+    "src/core",
+    "src/shared",
+    "scripts",
+    "src/experiments"
+  ],
+  "exclude": [
+    "**/*.test.ts"
+  ]
 }

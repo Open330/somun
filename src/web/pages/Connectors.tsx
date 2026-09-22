@@ -1,90 +1,39 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { ConnectorsView, Source } from "@shared/types";
-import { fmtDate, relTime } from "../components/ui";
+import { ErrorState, Skeleton, relTime } from "../components/ui";
 import { del, post, useResource } from "../lib/api";
 
-/** 무엇을 읽는가. GitHub(권한 허용 또는 저장소 지정), 세션 업로더. 앱 자체는 운영자가 준비한다. */
 export default function Connectors() {
-  const { data: v } = useResource<ConnectorsView>("/connectors", ["sources", "candidates"]);
-  const { data: sources } = useResource<Source[]>("/sources", ["sources"]);
-  const { data: app } = useResource<{ configured: boolean; slug?: string; installUrl?: string }>("/github/app", []);
+  const { data: view, error, reload } = useResource<ConnectorsView>("/connectors", ["sources", "candidates"]);
+  const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
+  const { data: app } = useResource<{ configured: boolean; installUrl?: string }>("/github/app", []);
   const [targets, setTargets] = useState("");
-  const [busy, setBusy] = useState(false);
-  if (!v) return <div className="empty">불러오는 중…</div>;
-  const manualSources = (sources ?? []).filter((s) => s.kind === "github" && !s.options?.installationId);
-  const blogSources = (sources ?? []).filter((s) => s.kind === "blog");
   const [feed, setFeed] = useState("");
-  const origin = window.location.origin;
-  const token = (() => { try { return localStorage.getItem("somun.token"); } catch { return null; } })();
-
-  return (
-    <>
-      <div className="page-head"><div><h1>연결</h1><p className="lede">소문이 읽는 곳. 프롬프트 원문은 사용자의 컴퓨터를 떠나지 않습니다.</p></div></div>
-
-      <h2>GitHub</h2>
-      <div className="card stack" style={{ gap: 14 }}>
-        <div className="row between wrap">
-          <div>
-            <h3>저장소 읽기 권한 {v.github.installations.length ? <span className="badge ok">허용됨</span> : v.github.mode === "token" ? <span className="badge warn">서버 토큰</span> : <span className="badge">아직</span>}</h3>
-            <p className="small muted" style={{ margin: 0 }}>조직이나 저장소에 읽기 권한을 주면 릴리스·PR·커밋·스타를 읽고, push와 release가 생기는 즉시 글감을 갱신합니다. 쓰기 권한은 요청하지 않습니다.</p>
-          </div>
-          {app?.installUrl && <a className="btn primary" href={app.installUrl}>{v.github.installations.length ? "다른 계정·저장소 추가" : "GitHub 권한 허용"}</a>}
-        </div>
-        {v.github.installations.length > 0 && (
-          <div className="list">{v.github.installations.map((i) => <div key={i.id} className="row between small"><span><span className="badge outline">{i.account}</span> 접근 가능 {i.repos}개 · 지켜보는 중 {i.watched}개</span><span className="row" style={{ gap: 8 }}><span className="muted">갱신 {relTime(i.updatedAt)}</span><a className="btn sm" href={`/github/pick?installation_id=${i.id}`}>저장소 고르기</a></span></div>)}</div>
-        )}
-        {!app?.configured && <p className="small muted">이 서버는 아직 GitHub 연동이 준비되지 않았습니다. 운영자가 설정하면 여기에 "GitHub 권한 허용" 버튼이 나타납니다. 그때까지는 아래에 저장소를 직접 지정할 수 있습니다.</p>}
-        <details className="raw">
-          <summary>저장소 직접 지정 (권한 허용 없이, 서버 토큰으로 읽기)</summary>
-          <div className="row" style={{ marginTop: 8 }}>
-            <input placeholder="Open330, you/repo" value={targets} onChange={(ev) => setTargets(ev.target.value)} />
-            <button disabled={!targets.trim() || busy} onClick={async () => { setBusy(true); try { await post("/sources", { kind: "github", targets: targets.split(",").map((t) => t.trim()).filter(Boolean), enabled: true }); setTargets(""); } finally { setBusy(false); } }}>추가</button>
-          </div>
-          <div className="list" style={{ marginTop: 8 }}>
-            {manualSources.map((s) => (
-              <div key={s.id} className="row between small">
-                <span>{s.targets.join(", ")}{s.lastPolledAt && <span className="muted"> · 마지막 확인 {fmtDate(s.lastPolledAt)}</span>}{s.lastError && <span className="badge bad" title={s.lastError}>오류</span>}</span>
-                <span className="toolbar"><button className="sm" onClick={() => void post("/sources", { id: s.id, kind: s.kind, targets: s.targets, options: s.options, enabled: !s.enabled })}>{s.enabled ? "끄기" : "켜기"}</button><button className="sm danger" onClick={() => void del(`/sources/${s.id}`)}>삭제</button></span>
-              </div>
-            ))}
-          </div>
-        </details>
-      </div>
-
-      <h2>블로그</h2>
-      <div className="card">
-        <p className="small muted" style={{ marginTop: 0 }}>RSS나 Atom 피드 URL을 넣으면 최근 30일 안의 글이 "블로그" 글감이 됩니다. 긴 글을 X·LinkedIn용으로 줄여 알리는 데 씁니다.</p>
-        <div className="row">
-          <input placeholder="https://blog.example.com/feed.xml" value={feed} onChange={(ev) => setFeed(ev.target.value)} />
-          <button disabled={!/^https?:\/\//.test(feed.trim()) || busy} onClick={async () => { setBusy(true); try { await post("/sources", { kind: "blog", targets: [feed.trim()], enabled: true }); setFeed(""); await post("/collect"); } finally { setBusy(false); } }}>추가하고 읽기</button>
-        </div>
-        {blogSources.length > 0 && (
-          <div className="list" style={{ marginTop: 8 }}>
-            {blogSources.map((s) => (
-              <div key={s.id} className="row between small">
-                <span>{s.targets.join(", ")}{s.lastPolledAt && <span className="muted"> · 마지막 확인 {fmtDate(s.lastPolledAt)}</span>}{s.lastError && <span className="badge bad" title={s.lastError}>오류</span>}</span>
-                <span className="toolbar"><button className="sm" onClick={() => void post("/sources", { id: s.id, kind: s.kind, targets: s.targets, options: s.options, enabled: !s.enabled })}>{s.enabled ? "끄기" : "켜기"}</button><button className="sm danger" onClick={() => void del(`/sources/${s.id}`)}>삭제</button></span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <h2>코딩 에이전트 세션</h2>
-      <div className="card stack" style={{ gap: 12 }}>
-        <div className="row between wrap">
-          <div>
-            <h3>세션 업로더 {v.sessions.lastUploadAt ? <span className="badge ok">마지막 {relTime(v.sessions.lastUploadAt)}</span> : <span className="badge">아직 없음</span>}</h3>
-            <p className="small muted" style={{ margin: 0 }}>Claude Code, Codex, oh-my-prompt 세션을 <b>로컬에서 요약</b>해 요약만 올립니다. 저장소별 세션 수, 재시도 흔적, 가장 긴 세션의 주제. 원문은 올라가지 않습니다.</p>
-          </div>
-          <div className="small muted">최근 14일 세션 {v.sessions.sessionCount14d}개{v.sessions.sources.length ? ` · ${v.sessions.sources.join(", ")}` : ""}</div>
-        </div>
-        <pre className="evidence">{`# 내 컴퓨터에서
-git clone https://github.com/Open330/somun && cd somun && npm install
-SOMUN_URL=${origin} SOMUN_TOKEN=${token ?? "<접근 토큰>"} npm run push -- --days 14
-# 미리 보기만: npm run push -- --dry-run`}</pre>
-        <p className="tiny muted">매일 자동으로 올리려면 위 명령을 cron이나 launchd에 넣으세요.</p>
-      </div>
-    </>
-  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const refresh = () => { reload(); reloadSources(); };
+  async function run(key: string, action: () => Promise<unknown>, message: string) {
+    setBusy(key); setNotice(null);
+    try { await action(); refresh(); setNotice({ text: message }); }
+    catch (err) { setNotice({ text: `연결을 변경하지 못했습니다. ${(err as Error).message}`, error: true }); }
+    finally { setBusy(null); }
+  }
+  if (error || sourceError) return <ErrorState title="연결 정보를 불러오지 못했습니다" message={error ?? sourceError!} onRetry={refresh} />;
+  if (!view || !sources) return <Skeleton rows={3} />;
+  const linked = sources.filter((s) => ["github", "blog"].includes(s.kind));
+  return <>
+    <header className="page-head workspace-head"><div><span className="eyebrow">글감이 시작되는 곳</span><h1>연결 관리</h1><p className="lede">저장소나 블로그 하나부터 시작하세요. 연결한 소스에서 변경을 모읍니다.</p></div>{linked.some((s) => s.enabled && s.targets.length) && <Link className="btn primary" to="/">글감 가져오러 가기 →</Link>}</header>
+    {notice && <div className={`inline-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}><span>{notice.text}</span>{!notice.error && <Link to="/">글감으로 이동 →</Link>}</div>}
+    <div className="connection-grid">
+      <section className="card connection-card"><div className="connection-label"><span className="connection-symbol" aria-hidden>↗</span><span className="badge outline">릴리스 · 커밋 · PR</span></div><h2>GitHub 저장소</h2><p>프로젝트에서 바뀐 내용을 게시글의 근거로 가져옵니다. 앱 연결 시 읽기 권한만 요청합니다.</p>
+        {app?.installUrl && <a className="btn primary" href={app.installUrl}>{view.github.installations.length ? "다른 저장소 연결" : "GitHub 연결하기 →"}</a>}
+        {view.github.installations.map((installation) => <div className="installation-summary" key={installation.id}><div><b>{installation.account}</b><span className="small muted"> · {installation.watched}개 저장소 선택됨</span></div><Link to={`/github/pick?installation_id=${installation.id}`} className="btn sm">저장소 {installation.watched ? "변경" : "선택"}</Link></div>)}
+        <details className="manual-connect" open={!app?.configured}><summary>저장소 직접 지정</summary><p className="small muted">공개 저장소는 주소 대신 <code>소유자/저장소</code>를 입력해도 됩니다. 비공개 저장소는 서버에 읽기 권한이 필요합니다.</p><form onSubmit={(event) => { event.preventDefault(); void run("github", async () => { await post("/sources", { kind: "github", targets: targets.split(",").map((t) => t.trim()).filter(Boolean), enabled: true }); setTargets(""); }, "저장소를 연결했습니다. 글감 화면에서 첫 변경을 가져와 보세요."); }}><label className="field"><span>GitHub 소유자 또는 소유자/저장소</span><input placeholder="예: Open330/somun" required value={targets} onChange={(event) => setTargets(event.target.value)} /></label><button type="submit" disabled={busy !== null || !targets.trim()}>{busy === "github" ? "연결 중…" : "저장소 연결"}</button></form></details>
+      </section>
+      <section className="card connection-card"><div className="connection-label"><span className="connection-symbol" aria-hidden>≋</span><span className="badge outline">RSS · Atom</span></div><h2>블로그</h2><p>이미 쓴 긴 글을 짧은 소셜 게시글로 이어가세요. 피드에서 최근 30일의 글을 가져옵니다.</p><form onSubmit={(event) => { event.preventDefault(); void run("blog", async () => { await post("/sources", { kind: "blog", targets: [feed.trim()], enabled: true }); setFeed(""); }, "블로그를 연결했습니다. 글감 화면에서 첫 글을 가져와 보세요."); }}><label className="field"><span>블로그 피드 주소</span><input type="url" required placeholder="https://blog.example.com/feed.xml" value={feed} onChange={(event) => setFeed(event.target.value)} /></label><button type="submit" disabled={busy !== null || !/^https?:\/\//.test(feed.trim())}>{busy === "blog" ? "연결 중…" : "블로그 연결"}</button></form></section>
+    </div>
+    {linked.length > 0 && <section className="connected-sources"><h2>연결한 소스 <span className="badge">{linked.length}</span></h2><div className="story-list">{linked.map((source) => <article className="source-row" key={source.id}><div><div className="row wrap"><b>{source.targets.join(", ") || "저장소 선택이 필요해요"}</b><span className={`badge ${source.enabled ? "ok" : "outline"}`}>{source.enabled ? "수집 켜짐" : "일시 중지"}</span></div><p className="tiny muted">{source.kind === "blog" ? "블로그" : "GitHub"} · {source.lastPolledAt ? `마지막 수집 ${relTime(source.lastPolledAt)}` : "아직 수집하지 않았어요"}</p>{source.lastError && <p className="small source-error" role="status">최근 수집에 실패했습니다. 주소와 접근 권한을 확인해 주세요.</p>}</div><div className="toolbar"><button className="sm" disabled={busy !== null} onClick={() => void run(`toggle-${source.id}`, () => post("/sources", { id: source.id, kind: source.kind, targets: source.targets, options: source.options, enabled: !source.enabled }), source.enabled ? "수집을 일시 중지했습니다." : "수집을 다시 켰습니다.")}>{source.enabled ? "일시 중지" : "수집 켜기"}</button><button className="ghost sm danger" disabled={busy !== null} onClick={() => { if (window.confirm("이 소스의 연결을 해제할까요? 다시 연결하려면 소스를 추가해야 합니다.")) void run(`delete-${source.id}`, () => del(`/sources/${source.id}`), "소스 연결을 해제했습니다."); }}>연결 해제</button></div></article>)}</div></section>}
+    <details className="advanced-connection"><summary>코딩 에이전트 세션도 글감으로 활용하기</summary><p className="small muted">로컬에서 요약한 세션을 업로드할 수 있습니다. 프롬프트 원문 대신 요약을 전송합니다.</p><pre className="evidence">{`# 소문 프로젝트 폴더에서 실행\nSOMUN_URL=${window.location.origin} SOMUN_TOKEN=<접근-토큰> npm run push -- --days 14\n# 전송 전 확인: npm run push -- --dry-run`}</pre><p className="tiny muted">최근 14일 세션 {view.sessions.sessionCount14d}개{view.sessions.lastUploadAt ? ` · 마지막 업로드 ${relTime(view.sessions.lastUploadAt)}` : ""}</p></details>
+  </>;
 }

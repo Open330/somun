@@ -1,0 +1,97 @@
+{
+  "tests": {
+    "files": 25,
+    "passed": 126
+  },
+  "replay": {
+    "referencePassed": 6,
+    "referenceTotal": 6,
+    "stressDetected": 6,
+    "stressTotal": 6,
+    "historicalBeforePassed": 0,
+    "historicalAfterPassed": 2,
+    "historicalCasesPerVariant": 2
+  },
+  "humanReview": {
+    "completed": 0,
+    "scoresImputed": false
+  },
+  "liveRuns": [
+    {
+      "mode": "live",
+      "startedAt": "2026-09-22T11:57:09.810Z",
+      "expectedRows": 2,
+      "results": [
+        {
+          "caseId": "show_hn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "error",
+          "requestedModel": "gemini-3.7-flash",
+          "actualModel": null,
+          "elapsedMs": 3867,
+          "error": "generation_failed",
+          "httpStatus": null,
+          "usage": null,
+          "failedChecks": []
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "ok",
+          "requestedModel": "gemini-3.7-flash",
+          "actualModel": "gemini-3.7-flash",
+          "elapsedMs": 16272,
+          "error": null,
+          "httpStatus": null,
+          "usage": {
+            "inputTokens": 1120,
+            "outputTokens": 145,
+            "cachedInputTokens": 0,
+            "totalTokens": 2091
+          },
+          "failedChecks": []
+        }
+      ]
+    },
+    {
+      "mode": "live",
+      "startedAt": "2026-09-22T11:59:51.567Z",
+      "expectedRows": 2,
+      "results": [
+        {
+          "caseId": "show_hn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "error",
+          "requestedModel": "gemini-3.7-flash",
+          "actualModel": null,
+          "elapsedMs": 90012,
+          "error": "timeout",
+          "httpStatus": null,
+          "usage": null,
+          "failedChecks": []
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "ok",
+          "requestedModel": "gemini-3.7-flash",
+          "actualModel": "gemini-3.7-flash",
+          "elapsedMs": 38730,
+          "error": null,
+          "httpStatus": null,
+          "usage": {
+            "inputTokens": 1120,
+            "outputTokens": 187,
+            "cachedInputTokens": 0,
+            "totalTokens": 2428
+          },
+          "failedChecks": []
+        }
+      ]
+    }
+  ]
+}

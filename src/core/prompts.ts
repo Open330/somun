@@ -46,7 +46,7 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     e.firstReleaseAt ? `first release: ${e.firstReleaseAt}` : "",
     e.releaseCount !== undefined ? `releases: ${e.releaseCount}` : "",
     e.commitCount !== undefined ? `commits: ${e.commitCount}` : "",
-    e.stars !== undefined ? `stars: ${e.stars}, forks: ${e.forks ?? 0}` : "",
+    e.stars !== undefined ? `stars: ${e.stars}${e.forks !== undefined ? `, forks: ${e.forks}` : ""}` : "",
     e.milestones?.length ? `milestones crossed this window: ${e.milestones.map((m) => `${m.metric} ${m.threshold}`).join(", ")}` : "",
     e.language ? `language: ${e.language}, license: ${e.license ?? "?"}` : "",
     e.homepage ? `homepage: ${e.homepage}` : "",
@@ -69,7 +69,7 @@ export function numbersLine(e: EvidenceLike): string {
     e.firstReleaseAt ? `first_release=${e.firstReleaseAt}` : "",
     e.npmMonthlyDownloads !== undefined ? `npm_downloads_last_month=${e.npmMonthlyDownloads}` : "",
   ].filter(Boolean);
-  return items.length ? items.join(", ") : "(none — write [number needed] where a number would go)";
+  return items.length ? items.join(", ") : "(none — omit numeric claims; do not insert placeholders)";
 }
 
 /** 다이제스트만 원자료를 본다. */
@@ -143,10 +143,10 @@ export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; 
     system: `You are the editor for a developer who builds far more than they announce.
 Decide whether this unit of work is worth a public post, and say why in a way the developer can argue with.
 You are skeptical of hype and of "AI-made" as a selling point. Score five criteria 0, 1, or 2 each. Be stingy with 2s:
-- runnable: can a reader try it within a minute from a link?
+- runnable: can a reader try it within a minute from a link? A repo URL is a supplied link: never claim there is no link when repo or homepage includes a URL. If installation or demo steps are absent, explain that specific gap instead.
 - numbers: is there a real measurement, count, or before/after?
 - lesson: is there a failure, reversal, or non-obvious finding?
-- novelty: is it new relative to what was published in the last 30 days?
+- novelty: is this change new relative to what was published in the last 30 days? Judge the change, not whether the project itself is already famous.
 - audience: can you name who cares and on which channel?
 reasoning: 3-5 plain sentences in Korean, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
@@ -164,6 +164,14 @@ export const DRAFT_SCHEMA = {
 
 export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[] };
 
+/** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
+export function draftCoverageGuide(c: CandidateLike, channel: Channel): string {
+  const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
+  if (!highlights.length) return "";
+  if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
+  return ["## Required change checklist", "Preserve every distinct change below, including its component and operation. Shorten background and repetition rather than omit changes. Use compact sentences or a list within the channel character limit. Before returning, check every item against the draft. Do not add new effects or measurements.", ...highlights.map((text) => `- ${text}`)].join("\n");
+}
+
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
   const exampleText = examples.length
@@ -174,16 +182,20 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     schema: DRAFT_SCHEMA,
     system: `You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.
 Hard rules:
-- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, write [number needed] (or [숫자 확인] in Korean) in its place.
+- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.
 - Never mention that the code was written with AI or agents unless the tool itself is about agents.
 - Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.
 - Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.
 - Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.
+- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", or "출시했습니다" without that evidence.
+- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.
+- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.
 - Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).
-- Use the numbers from "Numbers you may use" directly. Write [number needed] only when that line has no matching number.
+- Use the numbers from "Numbers you may use" directly. If that line has no matching number, omit the claim.
 - No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.
 - Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.
 - If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.
+- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.
 - title must be an empty string if the channel has no title.`,
     user: [
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
@@ -203,6 +215,7 @@ Hard rules:
       factsBlock(c, opts.profile),
       "",
       exampleText,
+      draftCoverageGuide(c, channel),
     ].filter((l) => l !== undefined).join("\n"),
   };
 }

@@ -1,4 +1,5 @@
 import { CHANNELS, type Channel } from "./channels.js";
+import { factsBlock, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
  * 슬롭 린트. 초안 저장 전에 돌리고 결과를 함께 저장한다.
@@ -30,12 +31,15 @@ export const DEFAULT_BANNED_PHRASES = [
 ];
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
-const NUMBER = /\d/;
-const LIMITATION_HINT = /(limit|doesn'?t|does not|not yet|no windows|beta|0\.\d+|may change|아직|안 됨|안 됩니다|한계|미지원|않습니다|못합니다|바뀔 수)/i;
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /!/;
 
-export type LintFacts = { repo?: string; limitations?: string[] };
+export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string };
+
+/** 생성과 사용자 수정에 같은 근거를 적용한다. */
+export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike): LintFacts {
+  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: factsBlock(candidate, profile) };
+}
 
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}): LintResult[] {
   const spec = CHANNELS[channel];
@@ -48,14 +52,16 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
 
-  if (channel === "x") {
-    const ok = NUMBER.test(body) || LIMITATION_HINT.test(body);
-    results.push({ rule: "has_number_or_limit", ok, detail: ok ? undefined : "숫자 하나 또는 한계 하나가 필요합니다" });
-  } else if (channel !== "threads" && channel !== "blog") {
-    results.push({ rule: "has_number", ok: NUMBER.test(body), detail: NUMBER.test(body) ? undefined : "숫자 하나가 필요합니다" });
-    results.push({ rule: "has_limitation", ok: LIMITATION_HINT.test(body), detail: LIMITATION_HINT.test(body) ? undefined : "한계 하나가 필요합니다" });
+  if (facts.sourceText !== undefined) {
+    // 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다.
+    const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "");
+    const canonical = (value: string) => value.replace(/^v/, "");
+    const supported = new Set(numberTokens(prose(facts.sourceText)).map(canonical));
+    const missing = numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
+    results.push({ rule: "numbers_need_review", ok: missing.length === 0, detail: missing.length ? `제공된 근거에서 찾지 못한 수치: ${missing.join(", ")}. 원문과 단위를 확인해 주세요.` : undefined });
   }
-  results.push({ rule: "no_placeholder", ok: !/\[(number needed|숫자 확인)\]/i.test(body), detail: "채우지 못한 숫자가 있습니다" });
+  const placeholder = /\[(number needed|숫자 확인)\]/i.test(body);
+  results.push({ rule: "no_placeholder", ok: !placeholder, detail: placeholder ? "채우지 못한 숫자가 있습니다" : undefined });
 
   // 저장소 이름 왜곡: 사실의 repo가 owner/name일 때, 같은 name을 다른 owner로 쓴 토큰 (예: ja/settings) 을 잡는다.
   if (facts.repo && facts.repo.includes("/")) {
@@ -67,7 +73,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   // 지어낸 한계: 사실에 한계가 없는데 "API가 바뀔 수 있다" 류를 쓴 경우.
   if (facts.limitations !== undefined && facts.limitations.length === 0) {
     const invented = /(API가 바뀔|API may (still )?change|아직 (0\.x|베타)|still (0\.x|beta)|not yet tested)/i.test(body);
-    results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? "사실에 없는 한계를 지어냈습니다" : undefined });
+    results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? "제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요." : undefined });
   }
 
   if (channel === "x" || channel === "linkedin") {

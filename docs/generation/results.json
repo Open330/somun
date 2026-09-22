@@ -1,0 +1,499 @@
+{
+  "negative_before": {
+    "source": "https://github.com/vitejs/vite/releases/tag/create-vite%409.2.1",
+    "highlights": [],
+    "judgments": [
+      {
+        "scores": {
+          "runnable": 2,
+          "numbers": 1,
+          "lesson": 0,
+          "novelty": 0,
+          "audience": 1
+        },
+        "total": 4,
+        "decision": "defer",
+        "reasoning": "Vite의 마이너 버전 릴리즈는 개발자들 사이에서 친숙하지만 특별한 서사나 인사이트가 없어 공개 포스팅 가치가 낮습니다. 링크를 통해 즉시 사용해볼 수 있지만 실패나 배움의 과정이 없고 최근의 독창적인 발견도 부족합니다. 따라서 소규모 릴리즈 소식은 굳이 알리지 않고 넘어가는 편이 좋습니다.",
+        "model": "gemini/gemini-3.5-flash-lite@free-2"
+      }
+    ],
+    "drafts": [
+      {
+        "channel": "x",
+        "lang": "en",
+        "body": "I needed to scaffold a project.\n\nvitejs/vite provides create-vite@9.2.1 for frontend build tooling and development servers.\n\nhttps://github.com/vitejs/vite",
+        "model": "gemini/gemini-3.5-flash-lite@free-3",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "has_number_or_limit",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true,
+            "detail": "채우지 못한 숫자가 있습니다"
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "has_link",
+            "ok": true
+          },
+          {
+            "rule": "no_exclamation",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "155/280"
+          }
+        ]
+      },
+      {
+        "channel": "threads",
+        "lang": "ko",
+        "body": "vitejs/vite에서 create-vite@9.2.1 버전을 릴리스했습니다. 새 프론트엔드 프로젝트를 시작할 때 create-vite를 주로 사용하시나요?",
+        "model": "gemini/gemini-3.7-flash@free-5",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true,
+            "detail": "채우지 못한 숫자가 있습니다"
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "88/500"
+          }
+        ]
+      }
+    ],
+    "usage": [
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1223,
+        "status": "success",
+        "inputTokens": 562,
+        "outputTokens": 36,
+        "totalTokens": 598
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1556,
+        "status": "success",
+        "inputTokens": 347,
+        "outputTokens": 158,
+        "totalTokens": 505
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1122,
+        "status": "success",
+        "inputTokens": 674,
+        "outputTokens": 61,
+        "totalTokens": 735
+      },
+      {
+        "model": "gemini-3.7-flash",
+        "latencyMs": 20927,
+        "status": "success",
+        "inputTokens": 909,
+        "outputTokens": 56,
+        "totalTokens": 1571
+      }
+    ]
+  },
+  "positive_before": {
+    "source": "https://github.com/vitejs/vite/releases/tag/v8.3.0",
+    "highlights": [
+      "The build process avoids settling seen preload dependencies for performance.",
+      "CRLF line endings are correctly handled in code frame positions.",
+      "Only whole node_modules path segments are treated as dependencies.",
+      "Proxy context matchers are pre-compiled at server creation."
+    ],
+    "judgments": [
+      {
+        "scores": {
+          "runnable": 2,
+          "numbers": 0,
+          "lesson": 0,
+          "novelty": 1,
+          "audience": 2
+        },
+        "total": 5,
+        "decision": "defer",
+        "reasoning": "이 작업은 대중적인 프론트엔드 빌드 도구인 Vite의 마이너 업데이트로 공개할 가치가 낮습니다. 구체적인 성능 수치나 독창적인 인사이트가 부족하여 단순 버전 업데이트 이상의 관심을 끌기 어렵습니다. 타겟 오디언스인 프론트엔드 개발자들에게는 이미 널리 알려진 툴이므로 굳이 별도의 포스트를 작성할 필요는 없습니다.",
+        "model": "gemini/gemini-3.5-flash-lite@free-2"
+      }
+    ],
+    "drafts": [
+      {
+        "channel": "x",
+        "lang": "en",
+        "body": "I needed faster dependency loading during builds.\nvitejs/vite avoids settling seen preload dependencies for performance.\nv8.3.0 https://github.com/vitejs/vite",
+        "model": "gemini/gemini-3.5-flash-lite@free-3",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "has_number_or_limit",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true,
+            "detail": "채우지 못한 숫자가 있습니다"
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "has_link",
+            "ok": true
+          },
+          {
+            "rule": "no_exclamation",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "158/280"
+          }
+        ]
+      },
+      {
+        "channel": "threads",
+        "lang": "ko",
+        "body": "vitejs/vite v8.3.0에서 이미 확인한 프리로드 의존성을 다시 처리하지 않도록 빌드 과정을 개선했습니다. 프로젝트 빌드 속도에 변화가 체감되시나요?",
+        "model": "gemini/gemini-3.7-flash@free-5",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true,
+            "detail": "채우지 못한 숫자가 있습니다"
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "88/500"
+          }
+        ]
+      }
+    ],
+    "usage": [
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1355,
+        "status": "success",
+        "inputTokens": 781,
+        "outputTokens": 106,
+        "totalTokens": 887
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1790,
+        "status": "success",
+        "inputTokens": 397,
+        "outputTokens": 168,
+        "totalTokens": 565
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1006,
+        "status": "success",
+        "inputTokens": 724,
+        "outputTokens": 53,
+        "totalTokens": 777
+      },
+      {
+        "model": "gemini-3.7-flash",
+        "latencyMs": 3963,
+        "status": "success",
+        "inputTokens": 959,
+        "outputTokens": 59,
+        "totalTokens": 1435
+      }
+    ]
+  },
+  "positive_after": {
+    "source": "https://github.com/vitejs/vite/releases/tag/v8.3.0",
+    "highlights": [
+      "The build process avoids settling seen preload dependencies for performance.",
+      "CRLF line endings are correctly handled in code frame positions.",
+      "Only whole node_modules path segments are treated as dependencies.",
+      "Proxy context matchers are pre-compiled at server creation."
+    ],
+    "judgments": [
+      {
+        "scores": {
+          "runnable": 0,
+          "numbers": 0,
+          "lesson": 0,
+          "novelty": 0,
+          "audience": 1
+        },
+        "total": 1,
+        "decision": "ask",
+        "reasoning": "이 작업은 메이저 프론트엔드 도구의 마이너 릴리즈로, 독자가 즉시 실행해 볼 수 있는 링크나 구체적인 성능 수치가 부족합니다. 또한 평이한 버그 수정과 최적화 위주여서 독자에게 전달할 만한 비고유적 교훈이나 새로운 발견이 없습니다. 따라서 별도의 공개 포스트를 작성할 필요는 없으며 개발자 커뮤니티의 자동 업데이트 노이즈로 남겨두는 편이 좋습니다.",
+        "model": "gemini/gemini-3.5-flash-lite@free-2"
+      }
+    ],
+    "drafts": [
+      {
+        "channel": "x",
+        "lang": "en",
+        "body": "Vite now avoids settling seen preload dependencies during builds.\n\nCode frame positions handle CRLF line endings and proxy context matchers are pre-compiled at server creation.\n\nv8.3.0: https://github.com/vitejs/vite",
+        "model": "gemini/gemini-3.7-flash@free-3",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "has_number_or_limit",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "has_link",
+            "ok": true
+          },
+          {
+            "rule": "no_exclamation",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "216/280"
+          }
+        ]
+      },
+      {
+        "channel": "threads",
+        "lang": "ko",
+        "body": "vitejs/vite v8.3.0 버전을 발표했습니다. 빌드 과정에서 이미 확인된 프리로드 의존성을 다시 처리하지 않도록 수정하여 성능을 높였습니다.",
+        "model": "gemini/gemini-3.5-flash-lite@free-3",
+        "lint": [
+          {
+            "rule": "banned_phrases",
+            "ok": true
+          },
+          {
+            "rule": "no_emoji_bullets",
+            "ok": true
+          },
+          {
+            "rule": "no_placeholder",
+            "ok": true
+          },
+          {
+            "rule": "repo_name",
+            "ok": true
+          },
+          {
+            "rule": "no_invented_limit",
+            "ok": true
+          },
+          {
+            "rule": "length",
+            "ok": true,
+            "detail": "83/500"
+          }
+        ]
+      }
+    ],
+    "usage": [
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1435,
+        "status": "success",
+        "inputTokens": 781,
+        "outputTokens": 106,
+        "totalTokens": 887
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1512,
+        "status": "success",
+        "inputTokens": 397,
+        "outputTokens": 183,
+        "totalTokens": 580
+      },
+      {
+        "model": "gemini-3.7-flash",
+        "latencyMs": 85735,
+        "status": "success",
+        "inputTokens": 784,
+        "outputTokens": 70,
+        "totalTokens": 1733
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 51801,
+        "status": "success",
+        "inputTokens": 989,
+        "outputTokens": 54,
+        "totalTokens": 1043
+      }
+    ]
+  },
+  "negative_after": {
+    "source": "https://github.com/vitejs/vite/releases/tag/create-vite%409.2.1",
+    "highlights": [],
+    "judgments": [
+      {
+        "scores": {
+          "runnable": 2,
+          "numbers": 1,
+          "lesson": 0,
+          "novelty": 0,
+          "audience": 1
+        },
+        "total": 4,
+        "decision": "ask",
+        "reasoning": "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.",
+        "model": "gemini/gemini-3.5-flash-lite@free-2"
+      }
+    ],
+    "drafts": [],
+    "usage": [
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1199,
+        "status": "success",
+        "inputTokens": 562,
+        "outputTokens": 38,
+        "totalTokens": 600
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "latencyMs": 1468,
+        "status": "success",
+        "inputTokens": 397,
+        "outputTokens": 165,
+        "totalTokens": 562
+      }
+    ]
+  },
+  "judge_recheck": {
+    "json": {
+      "scores": {
+        "runnable": 2,
+        "numbers": 0,
+        "lesson": 0,
+        "novelty": 0,
+        "audience": 1
+      },
+      "reasoning": "이 작업은 메이저 오픈소스 프로젝트의 마이너 버그픽스 및 최적화 업데이트로 단독 공개 포스팅을 할 만큼의 독창적 배움이나 수치가 없습니다. 링크는 존재하나 이번 변경점 자체만으로는 개발자 커뮤니티의 이목을 끌기 어렵습니다. 따라서 이번 업데이트는 별도의 홍보 글 없이 릴리스 노트로 갈음하는 것이 좋습니다.",
+      "suggestedChannels": [],
+      "angle": ""
+    },
+    "model": "gemini-3.5-flash-lite",
+    "latencyMs": 1663
+  },
+  "browser": [
+    {
+      "width": 1440,
+      "channel": "X",
+      "errors": [],
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 1440,
+      "channel": "Threads",
+      "errors": [],
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 390,
+      "channel": "X",
+      "errors": [],
+      "overflow": false,
+      "violations": []
+    },
+    {
+      "width": 390,
+      "channel": "Threads",
+      "errors": [],
+      "overflow": false,
+      "violations": []
+    }
+  ]
+}

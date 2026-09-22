@@ -74,7 +74,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-async function openaiCompatible(baseUrl: string, apiKey: string, model: string, req: LlmRequest, keyLabel?: string): Promise<LlmResult> {
+async function openaiCompatible(baseUrl: string, apiKey: string, model: string, req: LlmRequest, keyLabel?: string, signal?: AbortSignal): Promise<LlmResult> {
   const t0 = Date.now();
   const body = {
     model,
@@ -86,7 +86,7 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
     max_tokens: req.maxTokens ?? 4000,
   };
   const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
+    method: "POST", signal,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   });
@@ -102,7 +102,7 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
   return { json: extractJson(content), provider: baseUrl === GEMINI_OPENAI_BASE ? "gemini" : "openai", model, keyLabel, usage, latencyMs: Date.now() - t0 };
 }
 
-async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Promise<LlmResult> {
+async function anthropicCall(apiKey: string, model: string, req: LlmRequest, signal?: AbortSignal): Promise<LlmResult> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
   const t0 = Date.now();
@@ -112,7 +112,7 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Pr
     system: req.system,
     messages: [{ role: "user", content: req.user }],
     output_config: { format: { type: "json_schema", schema: req.schema } },
-  } as never);
+  } as never, { signal });
   if (res.stop_reason === "refusal") throw new LlmError("anthropic refusal");
   const text = res.content.find((b) => b.type === "text")?.text ?? "";
   const cached = (res.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0;
@@ -123,21 +123,22 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest): Pr
  * 설정에 따라 호출. gemini 서버 키 풀은 429/5xx 때 다음 키로 넘어간다.
  * local-agent는 여기 오면 안 된다 (호출자가 큐로 보낸다).
  */
-export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string): Promise<LlmResult> {
+export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000)): Promise<LlmResult> {
+  signal.throwIfAborted();
   const provider = config.provider;
   if (provider === "local-agent") throw new LlmError("local-agent는 워커가 처리합니다");
   const model = modelFor(config, kind);
 
   if (provider === "anthropic") {
     if (!config.apiKey) throw new LlmError("Anthropic API 키가 설정에 없습니다 (BYOK)");
-    return await anthropicCall(config.apiKey, model, req);
+    return await anthropicCall(config.apiKey, model, req, signal);
   }
   if (provider === "openai") {
     if (!config.apiKey) throw new LlmError("OpenAI API 키가 설정에 없습니다 (BYOK)");
-    return await openaiCompatible(config.baseUrl?.trim() || OPENAI_BASE, config.apiKey, model, req);
+    return await openaiCompatible(config.baseUrl?.trim() || OPENAI_BASE, config.apiKey, model, req, undefined, signal);
   }
   // gemini
-  if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok");
+  if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok", signal);
   const all = freeGeminiKeys(serverGeminiKeys);
   if (all.length === 0) throw new LlmError("GEMINI_API_KEYS가 서버에 없고 사용자 키도 없습니다");
   const byLabel = new Map(all.map((k) => [k.label, k.key]));
@@ -145,15 +146,17 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
   for (let round = 0; round < 3; round++) {
     if (round > 0) await new Promise((r) => setTimeout(r, 4000 * round));
+    signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
     if (labels.length === 0) { lastErr = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true); break; }
     for (const label of labels) {
       const key = byLabel.get(label)!;
       try {
-        const res = await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label);
+        const res = await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label, signal);
         await pool?.report({ label, model, ok: true });
         return res;
       } catch (e) {
+        signal.throwIfAborted();
         lastErr = e;
         if (e instanceof LlmError) {
           await pool?.report({ label, model, ok: false, status: e.status, body: e.body });
@@ -170,7 +173,7 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   // (3.7-flash 무료 한도는 키당 하루 20회 안팎이라 저녁이면 흔히 닿는다.)
   const base = config.model?.trim() || DEFAULT_MODEL.gemini;
   if (lastErr instanceof LlmError && (lastErr.status === 503 || lastErr.status === 429) && model !== base) {
-    return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys);
+    return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal);
   }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
 }

@@ -1,15 +1,34 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
 import type { KeyStatus, SettingsView } from "@shared/types";
-import { CHANNEL_LABEL, CRITERIA, Skeleton, Toast, fmtDate, useToast } from "../components/ui";
+import { CHANNEL_LABEL, CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast } from "../components/ui";
 import { api, patch, post, useResource } from "../lib/api";
+
+type ModelForm = { provider: "gemini" | "anthropic" | "openai" | "local-agent"; model: string; draftModel: string; apiKey: string; baseUrl: string; agentCli: "claude" | "codex" };
+const modelForm = (settings: SettingsView): ModelForm => ({ provider: settings.llm.provider, model: settings.llm.model ?? "", draftModel: settings.llm.draftModel ?? "", apiKey: "", baseUrl: settings.llm.baseUrl ?? "", agentCli: settings.llm.agentCli ?? "claude" });
 
 type Tab = "judge" | "channels" | "model" | "notify" | "account";
 
 export default function Settings() {
-  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: remoteSettings, error, reload } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: keyStatus } = useResource<KeyStatus[]>("/keys", ["keys"]);
-  const update = (p: Record<string, unknown>) => patch("/settings", p);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const remoteRef = useRef(remoteSettings);
+  remoteRef.current = remoteSettings;
+  const [saved, setSaved] = useState<{ source: SettingsView | undefined; value: SettingsView } | null>(null);
+  const settings = saved && saved.source === remoteSettings ? saved.value : remoteSettings;
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const update = async (p: Record<string, unknown>) => {
+    if (savingRef.current) return false;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    try {
+      const value = await patch<SettingsView>("/settings", p);
+      setSaved({ source: remoteRef.current, value }); reload(); return true;
+    } catch (err) { setSaveError(`설정을 저장하지 못했습니다. ${(err as Error).message}`); return false; }
+    finally { savingRef.current = false; setSaving(false); }
+  };
   const [webhook, setWebhook] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const exportJson = async () => {
@@ -17,28 +36,42 @@ export default function Settings() {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `somun-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
   };
-  const [tab, setTab] = useState<Tab>("judge");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: Tab = ["judge", "channels", "model", "notify", "account"].includes(requestedTab ?? "") ? requestedTab as Tab : "channels";
+  const setTab = (value: Tab) => setSearchParams((params) => { params.set("tab", value); return params; });
   const [toast, showToast] = useToast();
-  const [banned, setBanned] = useState("");
-  const [thresholds, setThresholds] = useState({ draft: 6, defer: 4 });
-  const [llm, setLlm] = useState<{ provider: "gemini" | "anthropic" | "openai" | "local-agent"; model: string; draftModel: string; apiKey: string; baseUrl: string; agentCli: "claude" | "codex" }>({ provider: "gemini", model: "", draftModel: "", apiKey: "", baseUrl: "", agentCli: "claude" });
-  useEffect(() => {
-    if (!settings) return;
-    setBanned(settings.bannedPhrases.join("\n"));
-    setThresholds({ draft: settings.draftThreshold, defer: settings.deferThreshold });
-    setLlm({ provider: settings.llm.provider, model: settings.llm.model ?? "", draftModel: settings.llm.draftModel ?? "", apiKey: "", baseUrl: settings.llm.baseUrl ?? "", agentCli: settings.llm.agentCli ?? "claude" });
-  }, [settings]);
+  const [bannedEdit, setBanned] = useState<string | null>(null);
+  const [thresholdsEdit, setThresholds] = useState<{ draft: number; defer: number } | null>(null);
+  const [llmEdit, setLlm] = useState<ModelForm | null>(null);
+  const accountRef = useRef(false);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const accountAction = async (action: () => Promise<void>) => {
+    if (accountRef.current) return;
+    accountRef.current = true; setAccountBusy(true); setSaveError(null);
+    try { await action(); } catch (err) { setSaveError(`작업을 완료하지 못했습니다. ${(err as Error).message}`); }
+    finally { accountRef.current = false; setAccountBusy(false); }
+  };
+  if (error && !settings) return <ErrorState message={error} onRetry={reload} />;
   if (!settings) return <Skeleton rows={4} />;
+
+  const banned = bannedEdit ?? settings.bannedPhrases.join("\n");
+  const thresholds = thresholdsEdit ?? { draft: settings.draftThreshold, defer: settings.deferThreshold };
+  const llm = llmEdit ?? modelForm(settings);
 
   const setLangs = (ch: Channel, langs: string[]) => void update({ channelLangs: { ...settings.channelLangs, [ch]: langs } });
 
   return (
     <>
-      <div className="page-head"><div><h1>설정</h1><p className="lede">판단 기준, 채널, 모델. 소스 연결은 <a href="/connectors">연결</a>, 문체 예시는 <a href="/voice">문체</a>에 있습니다.</p></div></div>
-      <div className="settabs">
-        {([["judge", "판단"], ["channels", "채널"], ["model", "모델 · 키"], ["notify", "알림"], ["account", "계정"]] as const).map(([k, l]) => <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>)}
+      <div className="page-head"><div><h1>설정</h1><p className="lede settings-intro">판단 기준, 채널, 모델. 소스 연결은 <a href="/connectors">연결</a>, 문체 예시는 <a href="/voice">문체</a>에 있습니다.</p></div></div>
+      {error && <ErrorState title="최신 설정을 불러오지 못했습니다" message={error} onRetry={reload} />}
+      {saveError && <div className="inline-notice is-error" role="alert">{saveError}</div>}
+      <div className="settabs" role="group" aria-label="설정 항목">
+        {([["judge", "판단"], ["channels", "채널"], ["model", "모델 · 키"], ["notify", "알림"], ["account", "계정"]] as const).map(([k, l]) => <button key={k} aria-pressed={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>)}
       </div>
 
+      <fieldset className="settings-fields" disabled={saving || accountBusy} aria-busy={saving || accountBusy}>
+      {saving && <p role="status" className="small muted">설정을 저장하고 있습니다…</p>}
       {tab === "judge" && (
         <div className="card stack" style={{ gap: 14, maxWidth: 720 }}>
           <div>
@@ -69,9 +102,9 @@ export default function Settings() {
           <div>
             <h3>금지 표현</h3>
             <p className="small muted">초안에 이 표현이 있으면 린트에 걸립니다. 한 줄에 하나.</p>
-            <textarea value={banned} onChange={(ev) => setBanned(ev.target.value)} style={{ minHeight: 120 }} />
+            <textarea aria-label="금지 표현" value={banned} onChange={(ev) => setBanned(ev.target.value)} style={{ minHeight: 120 }} />
           </div>
-          <div><button className="primary" onClick={async () => { await update({ draftThreshold: thresholds.draft, deferThreshold: thresholds.defer, bannedPhrases: banned.split("\n").map((s) => s.trim()).filter(Boolean) }); showToast("저장했습니다"); }}>저장</button></div>
+          <div><button className="primary" onClick={async () => { if (!await update({ draftThreshold: thresholds.draft, deferThreshold: thresholds.defer, bannedPhrases: banned.split("\n").map((s) => s.trim()).filter(Boolean) })) return; setBanned(null); setThresholds(null); showToast("저장했습니다"); }}>저장</button></div>
         </div>
       )}
 
@@ -90,9 +123,9 @@ export default function Settings() {
             <label className="field"><span>Discord 웹훅 URL {settings.notify?.discordWebhookSet && <span className="badge ok">설정됨</span>}</span><input type="password" placeholder={settings.notify?.discordWebhookSet ? "저장된 URL 유지 (바꾸려면 새로 입력)" : "https://discord.com/api/webhooks/…"} value={webhook} onChange={(ev) => setWebhook(ev.target.value)} /></label>
             <label className="row small" style={{ gap: 6, marginTop: 8 }}><input type="checkbox" checked={settings.notify?.weekly ?? false} onChange={(ev) => void update({ notify: { weekly: ev.target.checked } })} /> 월요일 09:00 KST 주간 요약 보내기</label>
             <div className="toolbar" style={{ marginTop: 10 }}>
-              <button className="primary" disabled={!webhook.trim()} onClick={async () => { await update({ notify: { weekly: settings.notify?.weekly ?? true, discordWebhookUrl: webhook.trim() } }); setWebhook(""); showToast("저장했습니다"); }}>웹훅 저장</button>
+              <button className="primary" disabled={!webhook.trim()} onClick={async () => { if (!await update({ notify: { weekly: settings.notify?.weekly ?? true, discordWebhookUrl: webhook.trim() } })) return; setWebhook(""); showToast("저장했습니다"); }}>웹훅 저장</button>
               <button disabled={!settings.notify?.discordWebhookSet} onClick={async () => { try { await post("/notify/test"); showToast("보냈습니다. Discord를 확인하세요."); } catch (e) { showToast(`실패: ${(e as Error).message}`); } }}>지금 시험 발송</button>
-              {settings.notify?.discordWebhookSet && <button className="ghost" onClick={async () => { await update({ notify: { weekly: false, discordWebhookUrl: "" } }); showToast("웹훅을 지웠습니다"); }}>웹훅 지우기</button>}
+              {settings.notify?.discordWebhookSet && <button className="ghost" onClick={async () => { if (!await update({ notify: { weekly: false, discordWebhookUrl: "" } })) return; showToast("웹훅을 지웠습니다"); }}>웹훅 지우기</button>}
             </div>
             {settings.notify?.lastSentAt && <div className="tiny muted" style={{ marginTop: 6 }}>마지막 발송 {new Date(settings.notify.lastSentAt).toLocaleString("ko-KR")}</div>}
           </div>
@@ -104,14 +137,14 @@ export default function Settings() {
           <div>
             <h3>내 데이터 내보내기</h3>
             <p className="small muted">글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.</p>
-            <button onClick={() => { void exportJson(); }}>JSON 내려받기</button>
+            <button onClick={() => void accountAction(exportJson)}>JSON 내려받기</button>
           </div>
           <div>
             <h3 style={{ color: "var(--danger)" }}>계정 데이터 삭제</h3>
             <p className="small muted">이 계정의 모든 데이터를 지웁니다. 되돌릴 수 없습니다. GitHub App 설치 자체는 GitHub 설정에서 따로 제거해야 합니다.</p>
             <div className="row">
-              <input placeholder='확인하려면 "삭제"라고 입력' value={confirmText} onChange={(ev) => setConfirmText(ev.target.value)} style={{ width: 220 }} />
-              <button className="danger" disabled={confirmText !== "삭제"} onClick={async () => { await post("/account/delete", { confirm: "삭제" }); showToast("삭제했습니다."); window.location.assign("/"); }}>모두 삭제</button>
+              <input aria-label="계정 데이터 삭제 확인" placeholder='확인하려면 "삭제"라고 입력' value={confirmText} onChange={(ev) => setConfirmText(ev.target.value)} style={{ width: 220 }} />
+              <button className="danger" disabled={confirmText !== "삭제"} onClick={() => void accountAction(async () => { await post("/account/delete", { confirm: "삭제" }); window.location.assign("/"); })}>모두 삭제</button>
             </div>
           </div>
         </div>
@@ -130,7 +163,7 @@ export default function Settings() {
                 <pre className="evidence">{`# 내 컴퓨터에서 (본인 구독으로 처리, 키 불필요)\nSOMUN_URL=${window.location.origin} SOMUN_TOKEN=<토큰> npm run agent-worker -- --cli ${llm.agentCli}`}</pre>
               </>
             ) : (
-              <div className="row wrap">
+              <div className="model-fields">
                 <label className="field" style={{ flex: 1 }}><span>분석 모델 (다이제스트·판단)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.5-flash-lite" : llm.provider === "anthropic" ? "claude-opus-5" : "gpt-5"} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
                 <label className="field" style={{ flex: 1 }}><span>초안 모델 (글 생성만)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.7-flash" : "위와 같음"} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
                 <label className="field" style={{ flex: 1 }}><span>API 키 {llm.provider === "gemini" ? "(비우면 서버 키)" : "(필수)"}</span><input type="password" placeholder={settings.llm.apiKeySet ? "저장됨 — 바꾸려면 입력" : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
@@ -138,8 +171,8 @@ export default function Settings() {
               </div>
             )}
             <div className="toolbar">
-              <button className="primary" onClick={async () => { await update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, apiKey: llm.apiKey || undefined, baseUrl: llm.baseUrl || undefined, agentCli: llm.agentCli }, keepApiKey: !llm.apiKey }); showToast("저장했습니다"); }}>저장</button>
-              {settings.llm.apiKeySet && <button className="danger" onClick={() => void update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, agentCli: llm.agentCli }, keepApiKey: false })}>저장된 키 삭제</button>}
+              <button className="primary" onClick={async () => { if (!await update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, apiKey: llm.apiKey || undefined, baseUrl: llm.baseUrl || undefined, agentCli: llm.agentCli }, keepApiKey: !llm.apiKey })) return; setLlm(null); showToast("저장했습니다"); }}>저장</button>
+              {settings.llm.apiKeySet && <button className="danger" onClick={async () => { if (await update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, agentCli: llm.agentCli }, keepApiKey: false })) { setLlm(null); showToast("저장된 키를 삭제했습니다."); } }}>저장된 키 삭제</button>}
             </div>
           </div>
           {llm.provider === "gemini" && (keyStatus?.length ?? 0) > 0 && (
@@ -151,6 +184,7 @@ export default function Settings() {
           )}
         </div>
       )}
+      </fieldset>
       <Toast msg={toast} />
     </>
   );
@@ -171,9 +205,9 @@ function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[];
         <span className="badge outline">{langName(spec.fixedLang)}</span>
       ) : (
         <div className="row wrap" style={{ gap: 6, maxWidth: 420, justifyContent: "flex-end" }}>
-          {common.map((code) => <button key={code} className={`sm ${langs.includes(code) ? "active" : "ghost"}`} onClick={() => onChange(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code])}>{LANGS[code].nativeName}</button>)}
+          {common.map((code) => <button key={code} aria-pressed={langs.includes(code)} className={`sm ${langs.includes(code) ? "active" : "ghost"}`} onClick={() => onChange(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code])}>{LANGS[code].nativeName}</button>)}
           {langs.filter((l) => !common.includes(l)).map((code) => <button key={code} className="sm active" onClick={() => onChange(langs.filter((l) => l !== code))}>{code} ×</button>)}
-          <input placeholder="코드 추가" value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
+          <input aria-label={`${CHANNEL_LABEL[ch]} 언어 코드 추가`} placeholder="코드 추가" value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
         </div>
       )}
     </div>

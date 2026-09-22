@@ -12,10 +12,14 @@ on:
       - "drizzle/**"
       - "seeds/**"
       - "docker/**"
+      - ".dockerignore"
+      - "experiments/**"
       - "package.json"
       - "package-lock.json"
       - "tsconfig*.json"
       - "vite.config.ts"
+      - "eslint.config.js"
+      - ".nvmrc"
       - ".gitea/workflows/**"
 
 env:
@@ -33,12 +37,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Verify source
         run: |
           npm ci
+          npm run lint
           npm run typecheck
           npm test
 

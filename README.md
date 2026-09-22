@@ -118,7 +118,7 @@ Every draft passes a **slop lint** before you see it: banned phrases, emoji bull
 The local agent mode queues each judgment and draft as a job. Run the worker where your CLI is logged in:
 
 ```bash
-node scripts/agent-worker.mjs --cli claude    # or --cli codex
+npm run agent-worker -- --cli claude    # or --cli codex
 ```
 
 <br />
@@ -128,21 +128,26 @@ node scripts/agent-worker.mjs --cli claude    # or --cli codex
 One process, one SQLite file. No external services.
 
 ```bash
-npm install
+nvm install && nvm use          # .nvmrc: Node 22 (same major as CI/Docker)
+npm ci
 cp .env.example .env            # set GITHUB_TOKEN and GEMINI_API_KEYS; SOMUN_ALLOW_ANONYMOUS=true for local
 npm run dev                     # API on :8790, web on :5180
 
 npm run seed                    # best-practice voice examples (once)
-npm run omp-sync -- --days 14   # optional: attach oh-my-prompt session summaries
+npm run push -- --sources omp --days 14   # optional: attach oh-my-prompt session summaries
 ```
 
 Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.
 
 ```bash
-npm run typecheck && npm test
+npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 <br />
+
+To register a GitHub App through the UI, set `SOMUN_ADMIN_OWNER_ID` to the administrator’s `ownerId` from `/api/me` (`local` by default for shared-token auth). Anonymous sessions cannot register apps. Behind a reverse proxy, set `SOMUN_PUBLIC_URL` to the public HTTPS URL. Existing app installations do not require these settings.
+
+Update and restart local workers together with the server: completion now requires a claim token. Claims expire after 10 minutes; abandoned jobs are reclaimed on the next poll, up to 3 attempts. Invalid results and explicit worker failures are not automatically retried. SQL migrations run on server startup, or manually with `npm run db:migrate`.
 
 ## Deploy
 
@@ -175,12 +180,12 @@ src/
     signals    clustering, back-to-back release merging, PR attachment
     pipeline   digest → judge → draft; provider call or local-agent queue; result application
     review     copy / edit / drop → voice examples and feedback
-    publications · candidates · sources · settings · keys · jobs · omp · scheduler
+    publications · candidates · sources · settings · keys · jobs · sessions · scheduler
   infra/       adapters — SQLite (Drizzle), GitHub REST, LLM providers, logger
   server/      Hono — auth middleware (token · JWT · anonymous), /api routes, SSE, static web
   shared/      types shared by server and web
   web/         Vite + React — Inbox · Candidate · Published · Settings
-scripts/       seed · omp-sync · agent-worker (talk to the HTTP API only)
+scripts/       seed · push-sessions · agent-worker (talk to the HTTP API only)
 drizzle/       SQL migrations, applied on start
 seeds/         38 real Show HN first comments that landed, plus per-channel rules
 ```
@@ -192,3 +197,7 @@ The web never touches the database: it reads `/api/*` and subscribes to `/api/ev
 <div align="center">
 <sub>Built by <a href="https://github.com/Open330">Open330</a>. First launch it will run: <a href="https://github.com/Open330/muxa">muxa</a>.</sub>
 </div>
+
+### Draft quality experiments
+
+Run `npm run experiment` to replay fixed cases without model calls. See the [experiment guide](experiments/README.md) for explicit live runs, repeated prompt comparisons, blinded human review, and paired regression checks. Automatic checks and publishability are reported separately.

@@ -1,0 +1,78 @@
+{
+  "reviewer": "Codex (AI)",
+  "method": "Captured release notes and generated drafts were compared. This is not an independent human evaluation or a statistically blinded study. No editing time was measured.",
+  "findings": [
+    {
+      "blindId": "0cd5a023ad5c9f2c",
+      "coreChangesPreserved": true,
+      "needsEditing": true,
+      "notes": "주요 변경 네 가지는 보존됐다. 'build performance during server operations'는 빌드와 서버 동작 범위를 혼동할 수 있는 추가 요약이다. TypeScript 소개 문단도 변경 설명에 비해 중복적이다.",
+      "caseId": "show_hn",
+      "variantId": "baseline",
+      "sample": 2
+    },
+    {
+      "blindId": "62e1ab5b01af7740",
+      "coreChangesPreserved": true,
+      "needsEditing": false,
+      "notes": "원문 변경 네 가지를 한 문단에 압축했다. 새 수치나 작성자 경험을 추가하지 않았다. 마지막 build times 질문은 측정 결과를 주장하지 않는 질문이다. 실제 게시 적합성과 채널 자격은 별도 확인이 필요하다.",
+      "caseId": "show_hn",
+      "variantId": "concise",
+      "sample": 1
+    },
+    {
+      "blindId": "96e8a734b4c27951",
+      "coreChangesPreserved": true,
+      "needsEditing": true,
+      "notes": "변경 네 가지를 유지했지만 settling을 '정산'으로 옮긴 표현이 개발 문맥에서 모호하다. CRLF line endings, path segments, dependencies 등 불필요한 영어 혼용으로 한국어 자연스러움이 떨어진다.",
+      "caseId": "show_gn",
+      "variantId": "baseline",
+      "sample": 1
+    },
+    {
+      "blindId": "aba25ac90b7a11a1",
+      "coreChangesPreserved": true,
+      "needsEditing": false,
+      "notes": "주요 변경 네 가지를 간결하게 보존했다. 새 측정값이나 개인 경험은 보이지 않는다. 마지막 질문은 다소 일반적이며 실제 게시 적합성은 별도 확인이 필요하다.",
+      "caseId": "show_hn",
+      "variantId": "concise",
+      "sample": 2
+    },
+    {
+      "blindId": "d0fe4449ee6d4aad",
+      "coreChangesPreserved": true,
+      "needsEditing": true,
+      "notes": "주요 변경은 보존했다. development and builds라는 포괄 설명은 원문 항목별 범위를 흐리며 중복적이다. larger codebases 질문 자체는 성능 사실 주장이 아니지만 입력에서 다룬 범위보다 넓다.",
+      "caseId": "show_hn",
+      "variantId": "baseline",
+      "sample": 1
+    },
+    {
+      "blindId": "09515cc5518af59f",
+      "coreChangesPreserved": false,
+      "needsEditing": true,
+      "notes": "node_modules 경로 판정과 프록시 컨텍스트 매처 사전 컴파일이라는 두 변경이 누락됐다. 네 가지 변경 중 두 가지만 남았다. 줄바꿈 대신 라인 엔딩을 쓰는 등 한국어 다듬기도 필요하다.",
+      "caseId": "show_gn",
+      "variantId": "concise",
+      "sample": 2
+    },
+    {
+      "blindId": "59f0ed8713060d56",
+      "coreChangesPreserved": true,
+      "needsEditing": true,
+      "notes": "변경 네 가지를 유지했다. code frame, line endings, path segments, dependencies, context matchers 등의 영어 혼용이 많아 한국어 검토 부담이 남는다.",
+      "caseId": "show_gn",
+      "variantId": "baseline",
+      "sample": 2
+    },
+    {
+      "blindId": "b027d6a775f5081d",
+      "coreChangesPreserved": false,
+      "needsEditing": true,
+      "notes": "node_modules 경로 판정과 프록시 컨텍스트 매처 사전 컴파일 변경이 누락됐다. settling의 정산 번역과 code frame positions 등 영어 혼용도 수정이 필요하다.",
+      "caseId": "show_gn",
+      "variantId": "concise",
+      "sample": 1
+    }
+  ]
+}

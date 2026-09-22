@@ -1,0 +1,198 @@
+{
+  "rubric": "experiments/coverage-cases-v3.json",
+  "rubricHash": "c19d552b228c904e0d4d40e740d72149bf71f269e0b7e268ed162da3873380f8",
+  "note": "Post-hoc re-evaluation under a refined alias rubric. Original scores and reports are preserved; these are not independent new generations.",
+  "runs": [
+    {
+      "label": "instruction-ab",
+      "requested": 8,
+      "rows": [
+        {
+          "caseId": "show_hn",
+          "variantId": "concise",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 is out. The build process avoids settling seen preload dependencies for performance, and proxy context matchers are now pre-compiled at server creation. Additionally, CRLF line endings are correctly handled in code frame positions, and only whole node_modules path segments are treated as dependencies.\n\nHow do these changes affect your current build setups?"
+        },
+        {
+          "caseId": "show_hn",
+          "variantId": "complete",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 changes the build process to avoid settling seen preload dependencies for performance. CRLF line endings are now correctly handled in code frame positions. Only whole node_modules path segments are treated as dependencies, and proxy context matchers are pre-compiled at server creation.\n\nHow do these changes affect your build times?"
+        },
+        {
+          "caseId": "show_hn",
+          "variantId": "complete",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "Vite v8.3.0 is out. The build process now avoids settling seen preload dependencies for performance. CRLF line endings are correctly handled in code frame positions. Only whole node_modules path segments are treated as dependencies, and proxy context matchers are pre-compiled at server creation. How do these changes affect your build times?"
+        },
+        {
+          "caseId": "show_hn",
+          "variantId": "concise",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 updates the build process to avoid settling seen preload dependencies for performance and pre-compiles proxy context matchers at server creation. It also handles CRLF line endings in code frame positions and treats only whole node_modules path segments as dependencies.\n\nHow do these changes affect your current build setups?"
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "concise",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": false,
+          "reevaluatedPass": false,
+          "failures": [
+            {
+              "rule": "required:node_modules",
+              "ok": false,
+              "detail": "필수 사실: node_modules"
+            },
+            {
+              "rule": "required_any:proxy",
+              "ok": false,
+              "detail": "필수 개념: 프록시 / proxy"
+            },
+            {
+              "rule": "forbidden:line endings",
+              "ok": false,
+              "detail": "금지 주장: line endings"
+            },
+            {
+              "rule": "forbidden:code frame",
+              "ok": false,
+              "detail": "금지 주장: code frame"
+            }
+          ],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 빌드 과정에서 이미 확인한 preload dependencies를 다시 처리하지 않도록 변경하여 성능을 개선했습니다. code frame position에서 CRLF line endings를 올바르게 처리합니다."
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "complete",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": false,
+          "reevaluatedPass": false,
+          "failures": [
+            {
+              "rule": "forbidden:정산",
+              "ok": false,
+              "detail": "금지 주장: 정산"
+            }
+          ],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 빌드 과정에서 미리 로드된 의존성을 정산하는 과정을 생략하여 성능을 개선했습니다. 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다. 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다. 서버 생성 시 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "complete",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": false,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 무엇이 달라졌나. 빌드 과정에서 미리 로드된 의존성을 처리하는 방식을 변경하여 성능을 개선했습니다. 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다. 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다. 서버 생성 시 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "concise",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": false,
+          "reevaluatedPass": false,
+          "failures": [
+            {
+              "rule": "forbidden:context matchers",
+              "ok": false,
+              "detail": "금지 주장: context matchers"
+            }
+          ],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 빌드 과정에서 이미 확인한 preload dependencies를 다시 처리하지 않도록 변경하여 성능을 개선했습니다. 코드 프레임 위치에서 CRLF 라인 엔딩을 올바르게 처리하며, node_modules 경로 세그먼트 전체를 의존성으로 취급합니다. 또한 서버 생성 시점에 proxy context matchers를 미리 컴파일하도록 수정했습니다."
+        }
+      ]
+    },
+    {
+      "label": "coverage-checklist",
+      "requested": 4,
+      "rows": [
+        {
+          "caseId": "show_hn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 is now available. This release updates the build process to avoid settling seen preload dependencies for performance and ensures CRLF line endings are correctly handled in code frame positions. In addition, only whole node_modules path segments are treated as dependencies, and proxy context matchers are pre-compiled at server creation.\n\nHow do these changes affect your current build setups?"
+        },
+        {
+          "caseId": "show_hn",
+          "variantId": "current",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 has been released. The build process avoids settling seen preload dependencies for performance, and CRLF line endings are correctly handled in code frame positions. Additionally, only whole node_modules path segments are treated as dependencies, and proxy context matchers are pre-compiled at server creation. What edge cases have you encountered with pre-compiled proxy matchers in large projects?"
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": false,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 무엇이 달라졌나. 빌드 과정에서 이미 확인된 프리로드 의존성을 중복 처리하지 않도록 개선하여 성능을 높였습니다. 코드 프레임 위치 계산에서 CRLF 줄바꿈 문자를 올바르게 처리하도록 수정했습니다. node_modules 경로 세그먼트 전체만 의존성으로 처리하도록 제한했습니다. 서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일하도록 변경했습니다."
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "무엇이 달라졌나\n\n- 빌드 과정에서 이미 확인한 preload dependency를 다시 처리하지 않아 성능을 개선했습니다.\n- 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다.\n- 전체 node_modules 경로 세그먼트만 dependency로 취급합니다.\n- 프록시 context matcher를 서버 생성 시점에 미리 컴파일합니다."
+        }
+      ]
+    },
+    {
+      "label": "korean-final",
+      "requested": 2,
+      "rows": [
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 1,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 버전을 공개했습니다. 무엇이 달라졌나. 빌드 과정에서 이미 확인된 preload 의존성의 settling 과정을 피하여 성능을 개선했습니다. 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다. 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다. 서버 생성 시 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        },
+        {
+          "caseId": "show_gn",
+          "variantId": "current",
+          "sample": 2,
+          "status": "ok",
+          "originalPass": true,
+          "reevaluatedPass": true,
+          "failures": [],
+          "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 무엇이 달라졌나. 빌드 과정에서 이미 확인한 preload 의존성을 다시 처리하지 않도록 수정하여 성능을 개선했습니다. 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다. 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다. 서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        }
+      ]
+    }
+  ]
+}

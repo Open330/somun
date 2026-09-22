@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { resolve } from "node:path";
 import * as schema from "./schema.js";
 
-export type Db = BetterSQLite3Database<typeof schema>;
+export type Db = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
 
 /**
  * SQLite 연결. WAL 모드, 외래키 켬. ":memory:"는 테스트용.

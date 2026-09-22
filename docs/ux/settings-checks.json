@@ -1,0 +1,122 @@
+[
+  {
+    "tab": "channels",
+    "width": 1440,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "judge",
+    "width": 1440,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "model",
+    "width": 1440,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "notify",
+    "width": 1440,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "account",
+    "width": 1440,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "channels",
+    "width": 390,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "judge",
+    "width": 390,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "model",
+    "width": 390,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "notify",
+    "width": 390,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "account",
+    "width": 390,
+    "color": "light",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "channels",
+    "width": 1440,
+    "color": "dark",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "judge",
+    "width": 1440,
+    "color": "dark",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "model",
+    "width": 1440,
+    "color": "dark",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "notify",
+    "width": 1440,
+    "color": "dark",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  },
+  {
+    "tab": "account",
+    "width": 1440,
+    "color": "dark",
+    "overflow": false,
+    "errors": [],
+    "violations": []
+  }
+]

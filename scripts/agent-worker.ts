@@ -62,14 +62,14 @@ async function runAgent(job: Job): Promise<{ json: unknown; model: string }> {
 async function tick(): Promise<number> {
   const jobs = await call<Job[]>("/jobs/pending");
   for (const job of jobs) {
-    const { claimed } = await call<{ claimed: boolean }>(`/jobs/${job.id}/claim`, { runner });
-    if (!claimed) continue;
+    const { claimed, claimToken } = await call<{ claimed: boolean; claimToken?: string }>(`/jobs/${job.id}/claim`, { runner });
+    if (!claimed || !claimToken) continue;
     try {
       const { json, model } = await runAgent(job);
-      await call(`/jobs/${job.id}/complete`, { resultJson: JSON.stringify(json), model });
-      console.log(`done ${job.kind}${job.channel ? `/${job.channel}` : ""} #${job.id}`);
+      const { applied } = await call<{ applied: boolean }>(`/jobs/${job.id}/complete`, { claimToken, resultJson: JSON.stringify(json), model });
+      console.log(`${applied ? "done" : "not applied"} ${job.kind}${job.channel ? `/${job.channel}` : ""} #${job.id}`);
     } catch (e) {
-      await call(`/jobs/${job.id}/complete`, { error: String((e as Error).message ?? e).slice(0, 500) });
+      await call(`/jobs/${job.id}/complete`, { claimToken, error: String((e as Error).message ?? e).slice(0, 500) });
       console.error(`failed #${job.id}: ${(e as Error).message}`);
     }
   }

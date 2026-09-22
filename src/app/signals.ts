@@ -23,7 +23,7 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       let candidateId: number | null = null;
       if (ck) {
         // 블로그 글은 저장소가 아니라 글 단위. 나머지는 저장소 × 10일 창 하나에 모은다.
-        let existing = ck.type === "blog"
+        const existing = ck.type === "blog"
           ? tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, ck.key))).get()
           : tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, s.repo))).all()
               .filter((c) => !["published", "dropped"].includes(c.status) && inWindow(c.createdAt, now))

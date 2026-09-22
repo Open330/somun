@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq, lt } from "drizzle-orm";
+import { and, asc, eq, lt } from "drizzle-orm";
 import type { Db } from "./db/index.js";
 import { schema } from "./db/index.js";
 import type { Logger } from "./logger.js";
@@ -22,6 +22,7 @@ const BATCH = 100;
 const MAX_ATTEMPTS = 20;
 
 export class UsageReporter {
+  private inFlight: Promise<{ sent: number; failed: number }> | null = null;
   private timer: NodeJS.Timeout | null = null;
   constructor(private readonly db: Db, private readonly log: Logger, private readonly cfg: { apiUrl: string; serviceId: string; serviceKey?: string }) {}
 
@@ -56,10 +57,16 @@ export class UsageReporter {
   }
 
   /** 대기열을 보낸다. 성공한 행은 지우고, 실패한 행은 지수 백오프로 미룬다. */
-  async flush(): Promise<{ sent: number; failed: number }> {
+  flush(): Promise<{ sent: number; failed: number }> {
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    if (!this.inFlight) this.inFlight = this.sendBatch().finally(() => { this.inFlight = null; });
+    return this.inFlight;
+  }
+
+  private async sendBatch(): Promise<{ sent: number; failed: number }> {
     if (!this.enabled) return { sent: 0, failed: 0 };
     const now = Date.now();
-    const rows = this.db.select().from(schema.usageOutbox).where(lt(schema.usageOutbox.nextAt, now + 1)).orderBy(desc(schema.usageOutbox.createdAt)).limit(BATCH).all().filter((r) => r.attempts < MAX_ATTEMPTS);
+    const rows = this.db.select().from(schema.usageOutbox).where(and(lt(schema.usageOutbox.nextAt, now + 1), lt(schema.usageOutbox.attempts, MAX_ATTEMPTS))).orderBy(asc(schema.usageOutbox.createdAt)).limit(BATCH).all();
     if (rows.length === 0) return { sent: 0, failed: 0 };
     try {
       const res = await fetch(`${this.cfg.apiUrl}/usage/events`, {

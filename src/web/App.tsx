@@ -14,12 +14,10 @@ import TokenLogin from "./pages/TokenLogin";
 import Voice from "./pages/Voice";
 import GithubSetup from "./pages/GithubSetup";
 import Pick from "./pages/Pick";
-import { GithubButton } from "./components/GithubButton";
 import SetupGithubApp from "./pages/SetupGithubApp";
-import type { ConnectorsView } from "@shared/types";
 import { Lockup, Mark } from "./components/Mark";
 
-const NAV = [["/", "글감"], ["/published", "발행"], ["/connectors", "연결"], ["/voice", "문체"], ["/settings", "설정"]] as const;
+const NAV = [["/", "글감"], ["/published", "발행 기록"], ["/connectors", "연결 관리"], ["/voice", "문체"], ["/settings", "설정"]] as const;
 
 export default function App() {
   const auth = useAuth();
@@ -39,28 +37,23 @@ export default function App() {
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
-  const auth = useAuth();
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
-  const { data: conn } = useResource<ConnectorsView>("/connectors", ["sources"]);
-  const { data: app } = useResource<{ configured: boolean; installUrl?: string }>("/github/app", []);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
-  // 첫 실행 동의: 앱이 준비돼 있고 아직 아무 연결도 없으면 권한 허용을 먼저 묻는다.
-  const needConsent = conn && app?.configured && app.installUrl && conn.github.installations.length === 0 && conn.github.manualTargets.length === 0 && !window.location.pathname.startsWith("/github/") && !window.location.pathname.startsWith("/connectors");
   const review = (rows ?? []).filter((c) => c.status === "drafted").length;
   const pending = suggestions?.length ?? 0;
   const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{label}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title="지침 제안">{pending}</span> : null}</NavLink>);
   return (
     <div className="layout">
+      <a className="skip-link" href="#main-content">본문으로 바로 가기</a>
       <aside className="sidebar">
         <div className="brand"><Lockup size={30} /></div>
-        <nav className="nav">{links}</nav>
-        <div className="spacer" />
+        <span className="nav-caption">워크스페이스</span><nav className="nav" aria-label="주 메뉴">{links}</nav>
+        <div className="spacer" /><div className="sidebar-note"><b>만드는 일에 집중하세요.</b><p>알릴 이야기는 여기 모아둘게요.</p></div>
         <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>나가기</button></div>
       </aside>
       <div>
-        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}</div>
-        <main className="main">
-          {needConsent ? <Consent installUrl={app!.installUrl!} user={auth.user ?? undefined} onSwitch={async () => { await auth.signOut(); auth.signIn("github"); }} /> : (
+        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<button className="ghost sm mobile-signout" onClick={() => void onSignOut()}>나가기</button></div>
+        <main className="main" id="main-content" tabIndex={-1}>
           <Routes>
             <Route path="/" element={<Inbox />} />
             <Route path="/c/:id" element={<Candidate />} />
@@ -74,31 +67,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
             <Route path="/setup/github-app" element={<SetupGithubApp />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
           </Routes>
-          )}
         </main>
-      </div>
-    </div>
-  );
-}
-
-function Consent({ installUrl, user, onSwitch }: { installUrl: string; user?: { username: string; provider?: string; email?: string }; onSwitch: () => void }) {
-  // 설치 기록은 로그인 계정(제공자별로 다른 계정)에 묶인다. GitHub가 아닌 계정으로 들어오면 그 사실을 먼저 알린다.
-  const notGithub = user?.provider !== undefined && user.provider !== "github";
-  return (
-    <div className="card lift" style={{ maxWidth: 560, margin: "48px auto", padding: 28 }}>
-      <div style={{ marginBottom: 14 }}><Mark size={44} /></div>
-      <h1 style={{ marginBottom: 8 }}>저장소 읽기 권한이 필요합니다</h1>
-      <p className="muted">소문은 GitHub의 릴리스, 머지된 PR, 커밋, 스타를 읽어 글감을 찾습니다. 쓰기 권한은 요청하지 않고, 어느 조직·저장소를 허용할지는 GitHub 화면에서 고릅니다.</p>
-      {user && (
-        <p className="small muted" style={{ marginTop: 12 }}>
-          지금 로그인: <b style={{ color: "var(--ink)" }}>{user.email ?? user.username}</b>{user.provider ? ` (${user.provider})` : ""}.
-          {notGithub ? " 권한은 로그인 계정마다 따로 기록됩니다. 이미 GitHub 계정으로 허용했다면 그 계정으로 다시 들어오세요." : " 이미 허용했는데 이 화면이 보이면 다른 계정으로 허용한 것입니다."}
-        </p>
-      )}
-      <div className="toolbar" style={{ marginTop: 16 }}>
-        <a className="btn primary" href={installUrl}>GitHub 권한 허용</a>
-        {notGithub && <GithubButton onClick={onSwitch} label="GitHub 계정으로 다시 로그인" />}
-        <a className="btn ghost" href="/connectors">저장소를 직접 지정할래요</a>
       </div>
     </div>
   );

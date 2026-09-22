@@ -1,0 +1,64 @@
+{
+  "name": "checker-regression",
+  "cases": "cases.json",
+  "variants": [
+    {
+      "id": "reference",
+      "replay": {
+        "x-en": {
+          "title": "",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies.\n\nhttps://github.com/example/tool"
+        },
+        "threads-ko": {
+          "title": "",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다."
+        },
+        "linkedin-en": {
+          "title": "",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies.\n\nhttps://github.com/example/tool"
+        },
+        "show_hn-en": {
+          "title": "Show HN: Tool – line ending handling",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies."
+        },
+        "show_gn-ko": {
+          "title": "Show GN: Tool - 줄바꿈 처리",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다."
+        },
+        "blog-ko": {
+          "title": "줄바꿈 처리 변경 개요",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다."
+        }
+      }
+    },
+    {
+      "id": "stress",
+      "replay": {
+        "x-en": {
+          "title": "",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies.\n\nhttps://github.com/example/tool\n\n99% faster. I released this. API may change."
+        },
+        "threads-ko": {
+          "title": "",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다.\n\n99% faster. I released this. API may change."
+        },
+        "linkedin-en": {
+          "title": "",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies.\n\nhttps://github.com/example/tool\n\n99% faster. I released this. API may change."
+        },
+        "show_hn-en": {
+          "title": "Show HN: Tool – line ending handling",
+          "body": "Handles CRLF line endings correctly.\n\nOnly whole node_modules path segments are dependencies.\n\n99% faster. I released this. API may change."
+        },
+        "show_gn-ko": {
+          "title": "Show GN: Tool - 줄바꿈 처리",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다.\n\n99% faster. I released this. API may change."
+        },
+        "blog-ko": {
+          "title": "줄바꿈 처리 변경 개요",
+          "body": "CRLF 줄바꿈을 올바르게 처리합니다.\n\n전체 node_modules 경로 세그먼트만 의존성으로 취급합니다.\n\n99% faster. I released this. API may change."
+        }
+      }
+    }
+  ]
+}

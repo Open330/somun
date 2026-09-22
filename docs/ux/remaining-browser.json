@@ -1,0 +1,18 @@
+[
+  {
+    "width": 1440,
+    "backCancelledPreservesText": true,
+    "backConfirmedNavigates": true,
+    "errors": [],
+    "violations": [],
+    "overflow": false
+  },
+  {
+    "width": 390,
+    "backCancelledPreservesText": true,
+    "backConfirmedNavigates": true,
+    "errors": [],
+    "violations": [],
+    "overflow": false
+  }
+]

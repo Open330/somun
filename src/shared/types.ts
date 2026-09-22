@@ -79,6 +79,9 @@ export type Example = { id: number; channel: Channel; lang: string; title?: stri
 
 export type KeyStatus = { label: string; todayCount: number; cap: number; cooldownUntil?: number; cooldownReason?: string; lastUsedAt?: number; lastQuotaId?: string };
 
+export type GenerationPlan = { targets: { channel: Channel; lang: string }[]; instruction?: string };
+export type JobProgress = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };
+
 export type Job = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
 
 /** 저장소 프로필: 정체성의 기준선. 다이제스트·판단·초안이 "이 프로젝트는 이런 것"으로 받는다. */

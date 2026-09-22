@@ -1,0 +1,162 @@
+{
+  "source": "https://github.com/vitejs/vite/releases/tag/v8.3.0",
+  "evidence": {
+    "repo": "vitejs/vite",
+    "repoUrl": "https://github.com/vitejs/vite",
+    "description": "Frontend build tooling and development server",
+    "version": "v8.3.0",
+    "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+    "language": "TypeScript",
+    "highlights": [
+      "The build process avoids settling seen preload dependencies for performance.",
+      "CRLF line endings are correctly handled in code frame positions.",
+      "Only whole node_modules path segments are treated as dependencies.",
+      "Proxy context matchers are pre-compiled at server creation."
+    ],
+    "highlightsAt": 1790072543200,
+    "limitations": [],
+    "limitationsSource": "digest"
+  },
+  "results": [
+    {
+      "channel": "show_hn",
+      "lang": "en",
+      "elapsedMs": 12863,
+      "result": {
+        "applied": {
+          "kind": "draft",
+          "draftId": 1
+        }
+      }
+    },
+    {
+      "channel": "show_gn",
+      "lang": "ko",
+      "elapsedMs": 37867,
+      "result": {
+        "applied": {
+          "kind": "draft",
+          "draftId": 2
+        }
+      }
+    }
+  ],
+  "drafts": [
+    {
+      "id": 1,
+      "ownerId": "quality-check",
+      "candidateId": 1,
+      "channel": "show_hn",
+      "lang": "en",
+      "version": 1,
+      "title": "Show HN: vite – Frontend build tooling and development server",
+      "body": "vite v8.3.0 includes updates to the build process, development server, and path handling.\n\nThe build process now avoids settling seen preload dependencies for performance. Proxy context matchers are pre-compiled at server creation, and only whole node_modules path segments are treated as dependencies. Additionally, code frame positions correctly handle CRLF line endings.\n\nHow do you currently handle preload dependency resolution in your build setups?",
+      "mediaHint": "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "454/2000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "61/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        }
+      ],
+      "status": "proposed",
+      "model": "gemini/gemini-3.7-flash@free-1",
+      "voice": "plain",
+      "createdAt": 1790077552607,
+      "updatedAt": 1790077552607
+    },
+    {
+      "id": 2,
+      "ownerId": "quality-check",
+      "candidateId": 1,
+      "channel": "show_gn",
+      "lang": "ko",
+      "version": 1,
+      "title": "Show GN: vite - 프론트엔드 빌드 도구 및 개발 서버 v8.3.0",
+      "body": "vitejs/vite v8.3.0 변경 사항입니다.\n\n### 변경 내용\n- 빌드 과정에서 이미 확인한 preload 종속성 처리를 건너뜁니다.\n- 코드 프레임 위치 계산 시 CRLF 줄바꿈을 정상적으로 처리합니다.\n- 전체 node_modules 경로 세그먼트만 의존성으로 처리합니다.\n- 서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일합니다.",
+      "mediaHint": "링크는 GitHub 저장소 또는 데모 페이지",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "195/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "42/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        }
+      ],
+      "status": "proposed",
+      "model": "gemini/gemini-3.7-flash@free-4",
+      "voice": "plain",
+      "createdAt": 1790077590386,
+      "updatedAt": 1790077590386
+    }
+  ]
+}

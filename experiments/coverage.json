@@ -1,0 +1,19 @@
+{
+  "name": "coverage-and-korean",
+  "cases": "coverage-cases.json",
+  "repeats": 2,
+  "variants": [
+    {
+      "id": "concise",
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "instruction": "Keep only the concrete changes supported by Facts. Use at most three short paragraphs. Do not add background or implied benefits."
+    },
+    {
+      "id": "complete",
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "instruction": "Preserve every distinct change in the Facts digest, including each changed component and operation. Shorten introductions and repeated explanations, not the changes. Use a compact list or short sentences if paragraphs would omit facts. Do not invent causes, effects, author experience or measurements. Keep within the channel character limit. For Korean, use established Korean terms for ordinary technical prose: code frame = 코드 프레임, line endings = 줄바꿈, path segments = 경로 구성 요소, dependencies = 의존성, proxy context matchers = 프록시 컨텍스트 매처. Preserve identifiers such as CRLF and node_modules. If an operation such as settling is ambiguous, preserve that original operation instead of substituting a financial or everyday verb such as 정산. Before returning the draft, check that every digest change is still represented."
+    }
+  ]
+}

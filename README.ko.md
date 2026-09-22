@@ -118,7 +118,7 @@
 로컬 에이전트 모드는 판단과 초안을 작업 큐에 넣습니다. CLI가 로그인된 컴퓨터에서 워커를 켭니다.
 
 ```bash
-node scripts/agent-worker.mjs --cli claude    # 또는 --cli codex
+npm run agent-worker -- --cli claude    # 또는 --cli codex
 ```
 
 <br />
@@ -128,21 +128,26 @@ node scripts/agent-worker.mjs --cli claude    # 또는 --cli codex
 프로세스 하나, SQLite 파일 하나. 외부 서비스 없음.
 
 ```bash
-npm install
+nvm install && nvm use          # .nvmrc: CI/Docker와 같은 Node 22 계열
+npm ci
 cp .env.example .env            # GITHUB_TOKEN, GEMINI_API_KEYS 채우기. 로컬은 SOMUN_ALLOW_ANONYMOUS=true
 npm run dev                     # API :8790, 웹 :5180
 
 npm run seed                    # best-practice 문체 예시 (1회)
-npm run omp-sync -- --days 14   # 선택: oh-my-prompt 세션 요약 부착
+npm run push -- --sources omp --days 14   # 선택: oh-my-prompt 세션 요약 부착
 ```
 
 Settings에서 GitHub 소스(`Open330`, `you/repo`)를 추가하고 Inbox의 **지금 확인**을 누르세요.
 
 ```bash
-npm run typecheck && npm test
+npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 <br />
+
+GitHub App을 웹에서 처음 등록하려면 `SOMUN_ADMIN_OWNER_ID`에 운영자의 `/api/me` 응답 `ownerId`를 지정합니다. 공유 토큰의 기본값은 `local`입니다. 익명 로그인으로는 등록할 수 없습니다. 리버스 프록시 뒤에서는 `SOMUN_PUBLIC_URL`에 실제 HTTPS 주소를 지정하세요. 기존에 등록된 앱 사용에는 이 설정이 필요하지 않습니다.
+
+로컬 워커는 서버와 같은 버전으로 업데이트한 후 재시작하세요. 완료 요청에 점유 토큰이 필요합니다. 점유는 10분 뒤 만료되며, 중단된 작업은 다음 폴링 때 최대 3회까지 재할당됩니다. 결과 형식 오류나 명시적 워커 실패는 자동 재시도하지 않습니다. 서버 시작 시 SQL 마이그레이션이 적용되며, 수동 적용은 `npm run db:migrate`입니다.
 
 ## 배포
 
@@ -175,12 +180,12 @@ src/
     signals    묶기, 연속 릴리스 병합, PR 부착
     pipeline   다이제스트 → 판단 → 초안. 프로바이더 호출 또는 로컬 에이전트 큐. 결과 반영
     review     복사 / 수정 / 버림 → 문체 예시와 피드백
-    publications · candidates · sources · settings · keys · jobs · omp · scheduler
+    publications · candidates · sources · settings · keys · jobs · sessions · scheduler
   infra/       어댑터 — SQLite(Drizzle), GitHub REST, LLM 프로바이더, 로거
   server/      Hono — 인증 미들웨어(토큰 · JWT · 익명), /api 라우트, SSE, 정적 웹
   shared/      서버와 웹이 공유하는 타입
   web/         Vite + React — Inbox · Candidate · Published · Settings
-scripts/       seed · omp-sync · agent-worker (HTTP API만 사용)
+scripts/       seed · push-sessions · agent-worker (HTTP API만 사용)
 drizzle/       SQL 마이그레이션, 시작 시 적용
 seeds/         실제로 통한 Show HN 첫 댓글 38건과 채널별 규칙
 ```
@@ -192,3 +197,7 @@ seeds/         실제로 통한 Show HN 첫 댓글 38건과 채널별 규칙
 <div align="center">
 <sub><a href="https://github.com/Open330">Open330</a>이 만들었습니다. 첫 런칭 대상: <a href="https://github.com/Open330/muxa">muxa</a>.</sub>
 </div>
+
+### 초안 품질 실험
+
+`npm run experiment`로 모델 호출 없이 고정 사례를 재검사합니다. 실제 모델 반복 실행, 프롬프트 A/B 비교, 모델명을 가린 사람 평가와 회귀 비교는 [실험 안내](experiments/README.md)를 참고하세요. 자동 규칙 통과와 게시 가능한 품질은 별도로 평가합니다.

@@ -1,0 +1,12 @@
+{
+  "name": "coverage-production",
+  "cases": "coverage-cases-v2.json",
+  "repeats": 2,
+  "variants": [
+    {
+      "id": "current",
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite"
+    }
+  ]
+}

@@ -1,0 +1,1005 @@
+{
+  "version": 1,
+  "name": "conciseness-ab-lite",
+  "mode": "live",
+  "datasetHash": "9ec0beb50eb44a723d821f207569305ea623ee589cdbc5e5c319abd1c14af947",
+  "startedAt": "2026-09-22T13:00:44.170Z",
+  "evaluatorHash": "91d0a39acdc2e29e2db478a3c2fba57d907e9ab8a281bc69d14ce4b5d296af5f",
+  "revision": "b07adab946978e3c86209d792d1aab01a865d13f",
+  "dirty": true,
+  "expectedRows": 8,
+  "cases": [
+    {
+      "id": "show_hn",
+      "channel": "show_hn",
+      "lang": "en",
+      "candidate": {
+        "title": "Vite v8.3.0",
+        "type": "release",
+        "evidence": {
+          "repo": "vitejs/vite",
+          "repoUrl": "https://github.com/vitejs/vite",
+          "description": "Frontend build tooling and development server",
+          "version": "v8.3.0",
+          "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+          "highlights": [
+            "The build process avoids settling seen preload dependencies for performance.",
+            "CRLF line endings are correctly handled in code frame positions.",
+            "Only whole node_modules path segments are treated as dependencies.",
+            "Proxy context matchers are pre-compiled at server creation."
+          ],
+          "limitations": [],
+          "language": "TypeScript"
+        }
+      },
+      "required": [
+        "CRLF",
+        "node_modules"
+      ],
+      "forbidden": [
+        "large codebases",
+        "bottlenecks",
+        "출시했습니다",
+        "기존 도구와 다른 점"
+      ],
+      "reviewNotes": "공개 릴리스 기록입니다. 작성자의 소유권, 대규모 사용자 병목, 다른 도구와의 비교를 추정하지 않았는지 확인하세요."
+    },
+    {
+      "id": "show_gn",
+      "channel": "show_gn",
+      "lang": "ko",
+      "candidate": {
+        "title": "Vite v8.3.0",
+        "type": "release",
+        "evidence": {
+          "repo": "vitejs/vite",
+          "repoUrl": "https://github.com/vitejs/vite",
+          "description": "Frontend build tooling and development server",
+          "version": "v8.3.0",
+          "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+          "highlights": [
+            "The build process avoids settling seen preload dependencies for performance.",
+            "CRLF line endings are correctly handled in code frame positions.",
+            "Only whole node_modules path segments are treated as dependencies.",
+            "Proxy context matchers are pre-compiled at server creation."
+          ],
+          "limitations": [],
+          "language": "TypeScript"
+        }
+      },
+      "required": [
+        "CRLF",
+        "node_modules"
+      ],
+      "forbidden": [
+        "large codebases",
+        "bottlenecks",
+        "출시했습니다",
+        "기존 도구와 다른 점"
+      ],
+      "reviewNotes": "공개 릴리스 기록입니다. 작성자의 소유권, 대규모 사용자 병목, 다른 도구와의 비교를 추정하지 않았는지 확인하세요."
+    }
+  ],
+  "results": [
+    {
+      "caseId": "show_hn",
+      "variantId": "baseline",
+      "sample": 1,
+      "blindId": "d0fe4449ee6d4aad",
+      "status": "ok",
+      "promptHash": "7905e77e0b99ca760a78591c7e1c1589591ee311ac1311c21fd7f76afae79482",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show HN · Language: English\nWrite in English. Plain, direct, no exclamation marks.\nRules: Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.\nMax length: 2000 characters.\nA title is required (max 80 chars).\n\n\n\n\n\n\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 22526,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "531/2000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "68/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 906,
+        "outputTokens": 136,
+        "cachedInputTokens": 0,
+        "totalTokens": 1042
+      },
+      "draft": {
+        "title": "Show HN: vitejs/vite – frontend build tooling and development server",
+        "body": "vitejs/vite has been updated to v8.3.0. The build process now avoids settling seen preload dependencies for performance, and proxy context matchers are pre-compiled at server creation.\n\nThis release also correctly handles CRLF line endings in code frame positions and ensures that only whole node_modules path segments are treated as dependencies. These changes affect how dependency paths and preload modules are handled during development and builds.\n\nHow do these pre-compiled proxy context matchers perform in larger codebases?"
+      }
+    },
+    {
+      "caseId": "show_hn",
+      "variantId": "concise",
+      "sample": 1,
+      "blindId": "62e1ab5b01af7740",
+      "status": "ok",
+      "promptHash": "11878150999f2913885a74a9b55207abae1f7a3cc75031d656257ccc26e25c35",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show HN · Language: English\nWrite in English. Plain, direct, no exclamation marks.\nRules: Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.\nMax length: 2000 characters.\nA title is required (max 80 chars).\n\n\n\n\n\n\n## Editor instruction for this rewrite\nKeep only the concrete changes supported by Facts. Use at most three short paragraphs. Do not add background or implied benefits.\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 21290,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "377/2000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "75/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 938,
+        "outputTokens": 114,
+        "cachedInputTokens": 0,
+        "totalTokens": 1052
+      },
+      "draft": {
+        "title": "Show HN: vitejs/vite v8.3.0 – frontend build tooling and development server",
+        "body": "vitejs/vite v8.3.0 has been released. The build process now avoids settling seen preload dependencies for performance, and proxy context matchers are pre-compiled at server creation. In addition, CRLF line endings are correctly handled in code frame positions and only whole node_modules path segments are treated as dependencies.\n\nHow do these changes affect your build times?"
+      }
+    },
+    {
+      "caseId": "show_hn",
+      "variantId": "concise",
+      "sample": 2,
+      "blindId": "aba25ac90b7a11a1",
+      "status": "ok",
+      "promptHash": "11878150999f2913885a74a9b55207abae1f7a3cc75031d656257ccc26e25c35",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show HN · Language: English\nWrite in English. Plain, direct, no exclamation marks.\nRules: Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.\nMax length: 2000 characters.\nA title is required (max 80 chars).\n\n\n\n\n\n\n## Editor instruction for this rewrite\nKeep only the concrete changes supported by Facts. Use at most three short paragraphs. Do not add background or implied benefits.\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 21478,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "452/2000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "52/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 938,
+        "outputTokens": 121,
+        "cachedInputTokens": 0,
+        "totalTokens": 1059
+      },
+      "draft": {
+        "title": "Show HN: vitejs/vite v8.3.0 – frontend build tooling",
+        "body": "vitejs/vite v8.3.0 is available with several changes to the build process and development server. The build process avoids settling seen preload dependencies for performance, and proxy context matchers are now pre-compiled at server creation. In addition, CRLF line endings are correctly handled in code frame positions and only whole node_modules path segments are treated as dependencies.\n\nHow do these changes affect your current development setups?"
+      }
+    },
+    {
+      "caseId": "show_hn",
+      "variantId": "baseline",
+      "sample": 2,
+      "blindId": "0cd5a023ad5c9f2c",
+      "status": "ok",
+      "promptHash": "7905e77e0b99ca760a78591c7e1c1589591ee311ac1311c21fd7f76afae79482",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show HN · Language: English\nWrite in English. Plain, direct, no exclamation marks.\nRules: Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.\nMax length: 2000 characters.\nA title is required (max 80 chars).\n\n\n\n\n\n\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 18312,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "589/2000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "29/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 906,
+        "outputTokens": 142,
+        "cachedInputTokens": 0,
+        "totalTokens": 1048
+      },
+      "draft": {
+        "title": "Show HN: vitejs/vite – v8.3.0",
+        "body": "vitejs/vite v8.3.0 is available. The build process now avoids settling seen preload dependencies for performance, and CRLF line endings are correctly handled in code frame positions. Additionally, only whole node_modules path segments are treated as dependencies, and proxy context matchers are pre-compiled at server creation.\n\nThis release uses TypeScript for frontend build tooling and development server tasks. The changes target dependency resolution and build performance during server operations.\n\nHow do these pre-compiled proxy context matchers affect your current routing setups?"
+      }
+    },
+    {
+      "caseId": "show_gn",
+      "variantId": "baseline",
+      "sample": 1,
+      "blindId": "96e8a734b4c27951",
+      "status": "ok",
+      "promptHash": "7c84be1990b22c346617a6ab51aeb21998c4694e1e28437310e62f5e1e399a02",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show GN · Language: 한국어\nWrite in Korean. 존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장.\nRules: Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.\nMax length: 3000 characters.\nA title is required (max 80 chars).\n\n\n\n\nKorean fluency rules (violations make the text read as machine-written):\n- Every sentence ends with a full predicate. Keep subjects and objects explicit: say what was wrong with what, and what you did to it. Not \"설정이 꼬여서 다시 잡았습니다\" but \"기기마다 설정 파일 경로가 달라 동기화가 실패해서, 경로를 한 곳으로 모았습니다\".\n- Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.\n- Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.\n- One register throughout. Never mix 합니다체 and 한다체 in one post.\n- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).\n- Translate technical terms by their established Korean term or keep the English word; never replace them with a looser everyday word.\n\n\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 17646,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "264/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "34/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 1120,
+        "outputTokens": 132,
+        "cachedInputTokens": 0,
+        "totalTokens": 1252
+      },
+      "draft": {
+        "title": "Show GN: vitejs/vite - Vite v8.3.0",
+        "body": "vitejs/vite 저장소에서 v8.3.0 버전을 공개했습니다.\n\n무엇이 달라졌나\n- 빌드 과정에서 이미 확인한 preload dependencies를 다시 정산하지 않도록 수정하여 성능을 개선했습니다.\n- code frame 위치에서 CRLF line endings를 올바르게 처리합니다.\n- 전체 node_modules path segments만 dependencies로 취급합니다.\n- proxy context matchers를 서버 생성 시점에 미리 컴파일합니다."
+      }
+    },
+    {
+      "caseId": "show_gn",
+      "variantId": "concise",
+      "sample": 1,
+      "blindId": "b027d6a775f5081d",
+      "status": "ok",
+      "promptHash": "defd46edad1cc5b1f830c618686a41b641758efc0ec5afb5993b976db22e0897",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show GN · Language: 한국어\nWrite in Korean. 존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장.\nRules: Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.\nMax length: 3000 characters.\nA title is required (max 80 chars).\n\n\n\n\nKorean fluency rules (violations make the text read as machine-written):\n- Every sentence ends with a full predicate. Keep subjects and objects explicit: say what was wrong with what, and what you did to it. Not \"설정이 꼬여서 다시 잡았습니다\" but \"기기마다 설정 파일 경로가 달라 동기화가 실패해서, 경로를 한 곳으로 모았습니다\".\n- Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.\n- Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.\n- One register throughout. Never mix 합니다체 and 한다체 in one post.\n- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).\n- Translate technical terms by their established Korean term or keep the English word; never replace them with a looser everyday word.\n\n\n## Editor instruction for this rewrite\nKeep only the concrete changes supported by Facts. Use at most three short paragraphs. Do not add background or implied benefits.\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 22920,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "159/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "68/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": false,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 1152,
+        "outputTokens": 86,
+        "cachedInputTokens": 0,
+        "totalTokens": 1238
+      },
+      "draft": {
+        "title": "Show GN: vitejs/vite - Frontend build tooling and development server",
+        "body": "vitejs/vite에서 v8.3.0 버전을 공개했습니다. 빌드 과정에서 이미 확인한 preload dependencies를 다시 정산하지 않도록 수정하여 성능을 개선했습니다. code frame positions에서 CRLF line endings를 올바르게 처리하도록 변경했습니다."
+      }
+    },
+    {
+      "caseId": "show_gn",
+      "variantId": "concise",
+      "sample": 2,
+      "blindId": "09515cc5518af59f",
+      "status": "ok",
+      "promptHash": "defd46edad1cc5b1f830c618686a41b641758efc0ec5afb5993b976db22e0897",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show GN · Language: 한국어\nWrite in Korean. 존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장.\nRules: Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.\nMax length: 3000 characters.\nA title is required (max 80 chars).\n\n\n\n\nKorean fluency rules (violations make the text read as machine-written):\n- Every sentence ends with a full predicate. Keep subjects and objects explicit: say what was wrong with what, and what you did to it. Not \"설정이 꼬여서 다시 잡았습니다\" but \"기기마다 설정 파일 경로가 달라 동기화가 실패해서, 경로를 한 곳으로 모았습니다\".\n- Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.\n- Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.\n- One register throughout. Never mix 합니다체 and 한다체 in one post.\n- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).\n- Translate technical terms by their established Korean term or keep the English word; never replace them with a looser everyday word.\n\n\n## Editor instruction for this rewrite\nKeep only the concrete changes supported by Facts. Use at most three short paragraphs. Do not add background or implied benefits.\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 21064,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "133/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "29/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": false,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 1152,
+        "outputTokens": 86,
+        "cachedInputTokens": 0,
+        "totalTokens": 1238
+      },
+      "draft": {
+        "title": "Show GN: vitejs/vite - v8.3.0",
+        "body": "vitejs/vite v8.3.0 버전이 공개되었습니다. 빌드 프로세스에서 이미 확인한 preload dependency를 다시 처리하지 않아 성능을 높였습니다. 코드 프레임 위치에서 CRLF 라인 엔딩을 올바르게 처리하도록 수정했습니다."
+      }
+    },
+    {
+      "caseId": "show_gn",
+      "variantId": "baseline",
+      "sample": 2,
+      "blindId": "59f0ed8713060d56",
+      "status": "ok",
+      "promptHash": "7c84be1990b22c346617a6ab51aeb21998c4694e1e28437310e62f5e1e399a02",
+      "prompt": {
+        "schemaName": "draft",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "system": "You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.\nHard rules:\n- Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.\n- Never mention that the code was written with AI or agents unless the tool itself is about agents.\n- Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no \"API may change\", \"still beta\", \"not tested\" unless Facts says so.\n- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.\n- Do not invent a backstory, a problem the author \"hit\", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.\n- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with \"we released\", \"I built\", or \"출시했습니다\" without that evidence.\n- Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.\n- When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.\n- Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).\n- Use the numbers from \"Numbers you may use\" directly. If that line has no matching number, omit the claim.\n- No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.\n- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.\n- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.\n- Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.\n- title must be an empty string if the channel has no title.",
+        "user": "## Channel: Show GN · Language: 한국어\nWrite in Korean. 존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장.\nRules: Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.\nMax length: 3000 characters.\nA title is required (max 80 chars).\n\n\n\n\nKorean fluency rules (violations make the text read as machine-written):\n- Every sentence ends with a full predicate. Keep subjects and objects explicit: say what was wrong with what, and what you did to it. Not \"설정이 꼬여서 다시 잡았습니다\" but \"기기마다 설정 파일 경로가 달라 동기화가 실패해서, 경로를 한 곳으로 모았습니다\".\n- Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.\n- Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.\n- One register throughout. Never mix 합니다체 and 한다체 in one post.\n- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).\n- Translate technical terms by their established Korean term or keep the English word; never replace them with a looser everyday word.\n\n\n\n\n## Facts\n# Vite v8.3.0 (release)\nrepo: vitejs/vite — https://github.com/vitejs/vite\nwhat it is: Frontend build tooling and development server\nlatest version: v8.3.0\nlanguage: TypeScript, license: ?\ndemo asset: none found in README\nlimitations: none stated in README\n\n## What changed, PR-worthy only (digest)\n- The build process avoids settling seen preload dependencies for performance.\n- CRLF line endings are correctly handled in code frame positions.\n- Only whole node_modules path segments are treated as dependencies.\n- Proxy context matchers are pre-compiled at server creation.\n\n## Numbers you may use (verbatim, nothing else)\nversion=v8.3.0\n\n"
+      },
+      "requestedModel": "gemini-3.5-flash-lite",
+      "provider": "gemini",
+      "elapsedMs": 13733,
+      "checks": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "no_invented_limit",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "256/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "34/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        },
+        {
+          "rule": "required:CRLF",
+          "ok": true,
+          "detail": "필수 사실: CRLF"
+        },
+        {
+          "rule": "required:node_modules",
+          "ok": true,
+          "detail": "필수 사실: node_modules"
+        },
+        {
+          "rule": "forbidden:large codebases",
+          "ok": true,
+          "detail": "금지 주장: large codebases"
+        },
+        {
+          "rule": "forbidden:bottlenecks",
+          "ok": true,
+          "detail": "금지 주장: bottlenecks"
+        },
+        {
+          "rule": "forbidden:출시했습니다",
+          "ok": true,
+          "detail": "금지 주장: 출시했습니다"
+        },
+        {
+          "rule": "forbidden:기존 도구와 다른 점",
+          "ok": true,
+          "detail": "금지 주장: 기존 도구와 다른 점"
+        }
+      ],
+      "actualModel": "gemini-3.5-flash-lite",
+      "usage": {
+        "inputTokens": 1120,
+        "outputTokens": 130,
+        "cachedInputTokens": 0,
+        "totalTokens": 1250
+      },
+      "draft": {
+        "title": "Show GN: vitejs/vite - Vite v8.3.0",
+        "body": "vitejs/vite 저장소의 v8.3.0 버전이 공개되었습니다.\n\n무엇이 달라졌나\n- 빌드 과정에서 이미 확인한 preload dependencies를 다시 처리하지 않아 성능을 개선했습니다.\n- code frame 위치에서 CRLF line endings를 올바르게 처리합니다.\n- 전체 node_modules path segments만 dependencies로 취급합니다.\n- 프록시 context matchers를 서버 생성 시점에 미리 컴파일합니다."
+      }
+    }
+  ]
+}

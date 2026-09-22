@@ -1,0 +1,138 @@
+{
+  "testDate": "2026-09-22",
+  "unitTests": {
+    "files": 25,
+    "passed": 126
+  },
+  "replay": {
+    "normalPassed": 6,
+    "normalTotal": 6,
+    "adversarialDetected": 6,
+    "adversarialTotal": 6,
+    "historicalBeforePassed": 0,
+    "historicalAfterPassed": 2,
+    "historicalTotalPerVariant": 2
+  },
+  "humanEvaluationsCompleted": 0,
+  "agentReviewer": "Codex (AI)",
+  "runs": {
+    "flash": {
+      "startedAt": "2026-09-22T12:59:34.188Z",
+      "datasetHash": "9ec0beb50eb44a723d821f207569305ea623ee589cdbc5e5c319abd1c14af947",
+      "variants": [
+        {
+          "variant": "baseline",
+          "attempted": 4,
+          "generated": 0,
+          "autoPassed": 0,
+          "errors": {
+            "503": 3,
+            "429": 1
+          },
+          "meanSuccessfulLatencyMs": null,
+          "meanSuccessfulBodyCharacters": null,
+          "actualModels": [],
+          "channels": [
+            {
+              "channel": "show_hn",
+              "generated": 0,
+              "autoPassed": 0,
+              "meanBodyCharacters": null
+            },
+            {
+              "channel": "show_gn",
+              "generated": 0,
+              "autoPassed": 0,
+              "meanBodyCharacters": null
+            }
+          ]
+        },
+        {
+          "variant": "concise",
+          "attempted": 4,
+          "generated": 0,
+          "autoPassed": 0,
+          "errors": {
+            "503": 3,
+            "429": 1
+          },
+          "meanSuccessfulLatencyMs": null,
+          "meanSuccessfulBodyCharacters": null,
+          "actualModels": [],
+          "channels": [
+            {
+              "channel": "show_hn",
+              "generated": 0,
+              "autoPassed": 0,
+              "meanBodyCharacters": null
+            },
+            {
+              "channel": "show_gn",
+              "generated": 0,
+              "autoPassed": 0,
+              "meanBodyCharacters": null
+            }
+          ]
+        }
+      ]
+    },
+    "lite": {
+      "startedAt": "2026-09-22T13:00:44.170Z",
+      "datasetHash": "9ec0beb50eb44a723d821f207569305ea623ee589cdbc5e5c319abd1c14af947",
+      "variants": [
+        {
+          "variant": "baseline",
+          "attempted": 4,
+          "generated": 4,
+          "autoPassed": 4,
+          "errors": {},
+          "meanSuccessfulLatencyMs": 18054,
+          "meanSuccessfulBodyCharacters": 410,
+          "actualModels": [
+            "gemini-3.5-flash-lite"
+          ],
+          "channels": [
+            {
+              "channel": "show_hn",
+              "generated": 2,
+              "autoPassed": 2,
+              "meanBodyCharacters": 560
+            },
+            {
+              "channel": "show_gn",
+              "generated": 2,
+              "autoPassed": 2,
+              "meanBodyCharacters": 260
+            }
+          ]
+        },
+        {
+          "variant": "concise",
+          "attempted": 4,
+          "generated": 4,
+          "autoPassed": 2,
+          "errors": {},
+          "meanSuccessfulLatencyMs": 21688,
+          "meanSuccessfulBodyCharacters": 280,
+          "actualModels": [
+            "gemini-3.5-flash-lite"
+          ],
+          "channels": [
+            {
+              "channel": "show_hn",
+              "generated": 2,
+              "autoPassed": 2,
+              "meanBodyCharacters": 414
+            },
+            {
+              "channel": "show_gn",
+              "generated": 2,
+              "autoPassed": 0,
+              "meanBodyCharacters": 146
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

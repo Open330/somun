@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
 
 export const CHANNEL_LABEL: Record<string, string> = { x: "X", threads: "Threads", linkedin: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog: "블로그 개요" };
@@ -52,10 +52,10 @@ export function stageOf(c: Pick<Candidate, "status" | "evidence" | "latestJudgme
   if (c.status === "deferred") return { key: "deferred", label: "보류", tone: "warn" };
   // 수동 모드에서는 새 후보가 판단 없이 쌓인다. 판단이 시작되면 highlights가 생기며 "처리 중"으로 넘어간다.
   if (!c.evidence.highlightsAt) return { key: "fresh", label: "새 글감", tone: "" };
-  if (!c.latestJudgmentId) return { key: "working", label: "판단 중", tone: "", busy: true };
+  if (!c.latestJudgmentId) return { key: "working", label: "판단 결과 없음", tone: "warn" };
   const d = c.judgment?.overriddenDecision ?? c.judgment?.decision;
-  if (d === "ask") return { key: "ask", label: "묻기만", tone: "" };
-  return { key: "working", label: "초안 작성 중", tone: "", busy: true };
+  if (d === "ask") return { key: "ask", label: "추가 근거 필요", tone: "" };
+  return { key: "working", label: "초안 없음", tone: "warn" };
 }
 export function StageChip({ stage }: { stage: Stage }) {
   return <span className={`badge ${stage.tone}`}>{stage.busy && <i className="dot" />}{stage.label}</span>;
@@ -76,9 +76,10 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
 }
 
 export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail?: string }[] }) {
+  if (!lint.length) return <span className="badge outline">문장 점검 전</span>;
   const bad = lint.filter((l) => !l.ok);
-  if (bad.length === 0) return <span className="badge ok">린트 통과</span>;
-  const label: Record<string, string> = { banned_phrases: "금지 표현", no_emoji_bullets: "이모지 목록", has_number: "숫자 없음", has_limitation: "한계 없음", has_number_or_limit: "숫자·한계 없음", has_link: "링크 없음", no_exclamation: "감탄부호", length: "길이 초과", title_length: "제목 길이", no_vote_request: "투표 요청", no_placeholder: "빈 숫자", repo_name: "이름 왜곡", no_invented_limit: "지어낸 한계" };
+  if (bad.length === 0) return <span className="badge ok" title="길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.">형식 점검 통과</span>;
+  const label: Record<string, string> = { banned_phrases: "금지 표현", no_emoji_bullets: "이모지 목록", has_number: "숫자 없음", has_limitation: "한계 없음", has_number_or_limit: "숫자·한계 없음", has_link: "링크 없음", no_exclamation: "감탄부호", length: "길이 초과", title_length: "제목 길이", no_vote_request: "투표 요청", no_placeholder: "빈 숫자", repo_name: "이름 왜곡", no_invented_limit: "한계 확인", numbers_need_review: "수치 확인" };
   return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={l.detail}>{label[l.rule] ?? l.rule}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
 }
 
@@ -112,22 +113,28 @@ export function MetricChart({ series, publishedAt, baseline }: { series: { at: n
 }
 
 export function Skeleton({ rows = 3 }: { rows?: number }) {
-  return <div className="stack">{Array.from({ length: rows }, (_, i) => <div key={i} className="skel" />)}</div>;
+  return <div className="stack" role="status" aria-label="불러오는 중">{Array.from({ length: rows }, (_, i) => <div key={i} className="skel" />)}</div>;
 }
 
 /** 간단한 오버플로 메뉴 (⋯). */
-export function Menu({ items }: { items: { label: string; onClick: () => void; danger?: boolean }[] }) {
+export function Menu({ items }: { items: { label: string; onClick: () => unknown; danger?: boolean }[] }) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { close(); trigger.current?.focus(); } };
     window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
+    window.addEventListener("keydown", escape);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("keydown", escape); };
   }, [open]);
   return (
     <span className="menu-wrap" onClick={(e) => e.stopPropagation()}>
-      <button className="ghost sm" aria-label="더 보기" onClick={() => setOpen((o) => !o)}>⋯</button>
-      {open && <div className="menu">{items.map((it) => <button key={it.label} className={`menu-item ${it.danger ? "danger" : ""}`} onClick={() => { setOpen(false); it.onClick(); }}>{it.label}</button>)}</div>}
+      <button ref={trigger} disabled={busy} aria-expanded={open} className="ghost sm" aria-label="더 보기" onClick={() => setOpen((o) => !o)}>⋯</button>
+      {error && <span className="menu-error" role="alert">{error}</span>}
+      {open && <div className="menu">{items.map((it) => <button key={it.label} className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`작업을 완료하지 못했습니다. ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
     </span>
   );
 }
@@ -137,7 +144,18 @@ export function Toast({ msg }: { msg: string | null }) {
 }
 export function useToast(): [string | null, (m: string) => void] {
   const [msg, setMsg] = useState<string | null>(null);
-  return [msg, (m) => { setMsg(m); setTimeout(() => setMsg(null), 1800); }];
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const show = useCallback((message: string) => {
+    clearTimeout(timer.current);
+    setMsg(message);
+    timer.current = setTimeout(() => setMsg(null), 4500);
+  }, []);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return [msg, show];
+}
+
+export function ErrorState({ title = "화면을 불러오지 못했습니다", message, onRetry }: { title?: string; message: string; onRetry: () => void }) {
+  return <div className="state-panel error-state" role="alert"><span className="state-symbol" aria-hidden>!</span><h2>{title}</h2><p>연결 상태를 확인하고 다시 시도해 주세요. 계속되면 잠시 후 다시 접속해 주세요.</p><details><summary>오류 내용</summary><p>{message}</p></details><button onClick={onRetry}>다시 시도</button></div>;
 }
 
 export function Section({ title, count, children, hint }: { title: string; count?: number; hint?: string; children: ReactNode }) {

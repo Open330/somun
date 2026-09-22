@@ -1,0 +1,107 @@
+[
+  {
+    "id": "show_hn",
+    "channel": "show_hn",
+    "lang": "en",
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules",
+      "proxy"
+    ],
+    "forbidden": [
+      "large codebases",
+      "bottlenecks",
+      "출시했습니다",
+      "기존 도구와 다른 점"
+    ],
+    "reviewNotes": "공개 릴리스 기록입니다. 작성자의 소유권, 대규모 사용자 병목, 다른 도구와의 비교를 추정하지 않았는지 확인하세요. 네 가지 변경을 모두 유지해야 합니다. 한국어의 일상 기술 용어 혼용과 정산 같은 모호한 동사를 확인합니다. 키워드 검사는 의미 보존을 보장하지 않습니다.",
+    "requiredAny": [
+      {
+        "id": "preload",
+        "phrases": [
+          "preload",
+          "미리 로드",
+          "사전 로드",
+          "프리로드"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "show_gn",
+    "channel": "show_gn",
+    "lang": "ko",
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "required": [
+      "CRLF",
+      "node_modules"
+    ],
+    "forbidden": [
+      "large codebases",
+      "bottlenecks",
+      "출시했습니다",
+      "기존 도구와 다른 점",
+      "정산",
+      "line endings",
+      "path segments",
+      "context matchers",
+      "code frame"
+    ],
+    "reviewNotes": "공개 릴리스 기록입니다. 작성자의 소유권, 대규모 사용자 병목, 다른 도구와의 비교를 추정하지 않았는지 확인하세요. 네 가지 변경을 모두 유지해야 합니다. 한국어의 일상 기술 용어 혼용과 정산 같은 모호한 동사를 확인합니다. 키워드 검사는 의미 보존을 보장하지 않습니다.",
+    "requiredAny": [
+      {
+        "id": "preload",
+        "phrases": [
+          "preload",
+          "미리 로드",
+          "사전 로드",
+          "프리로드"
+        ]
+      },
+      {
+        "id": "proxy",
+        "phrases": [
+          "프록시",
+          "proxy"
+        ]
+      }
+    ]
+  }
+]

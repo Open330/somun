@@ -2,20 +2,24 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { PerformanceSummary, PublicationWithMetrics } from "@shared/types";
 import { VOICE_PRESETS } from "@core/voice";
-import { CHANNEL_LABEL, MetricChart, Skeleton, fmtDate } from "../components/ui";
+import { CHANNEL_LABEL, ErrorState, MetricChart, Skeleton, fmtDate } from "../components/ui";
 import { post, useResource } from "../lib/api";
 
 export default function Published() {
-  const { data: rows } = useResource<PublicationWithMetrics[]>("/publications", ["publications", "candidates"]);
+  const { data: rows, error, reload } = useResource<PublicationWithMetrics[]>("/publications", ["publications", "candidates"]);
   const { data: summary } = useResource<PerformanceSummary>("/publications/summary", ["publications", "candidates"]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  if (error) return <ErrorState title="발행 기록을 불러오지 못했습니다" message={error} onRetry={reload} />;
   return (
     <>
-      <div className="page-head"><div><h1>발행</h1><p className="lede">올린 글과 그 뒤의 스타·방문자 변화. 세로선이 발행 시점, 점선이 발행 전 기준선입니다. X와 Show HN 반응은 매일 자동으로 받고, LinkedIn·Threads·GeekNews는 직접 입력합니다.</p></div>{rows && rows.length > 0 && <div className="toolbar"><button className="sm" onClick={async () => { await post("/publications/refresh"); }}>반응 새로 받기</button></div>}</div>
+      <div className="page-head"><div><h1>발행 기록</h1><p className="lede">직접 게시한 글을 모아보고, 게시 후 어떤 변화가 있었는지 확인하세요.</p></div>{rows && rows.length > 0 && <div className="toolbar"><button disabled={refreshing} onClick={async () => { setRefreshing(true); setRefreshError(null); try { await post("/publications/refresh"); reload(); } catch (err) { setRefreshError(`반응을 가져오지 못했습니다. ${(err as Error).message}`); } finally { setRefreshing(false); } }}>{refreshing ? "확인 중…" : "반응 새로 받기"}</button></div>}</div>
+      {refreshError && <div className="inline-notice is-error" role="alert">{refreshError}</div>}
       {rows === undefined ? <Skeleton rows={3} /> : rows.length === 0 ? (
-        <div className="empty">
+        <div className="state-panel">
           <p style={{ marginBottom: 12 }}>아직 발행한 글이 없습니다.</p>
-          <p className="small muted" style={{ marginBottom: 14 }}>검수할 초안을 열어 복사하고, 올린 뒤 "올렸어요"에 URL을 붙여 넣으면 여기서 추이가 보입니다.</p>
-          <Link to="/" className="btn primary">검수할 초안 보기</Link>
+          <p className="small muted" style={{ marginBottom: 14 }}>초안을 검토해 원하는 채널에 올리고, 초안 화면에 게시 링크를 남겨주세요. 여기에 발행 기록과 지표가 쌓입니다.</p>
+          <Link to="/" className="btn primary">글감에서 초안 고르기</Link>
         </div>
       ) : (
         <>

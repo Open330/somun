@@ -1,0 +1,32 @@
+{
+  "name": "historical-quality",
+  "cases": "historical-cases.json",
+  "variants": [
+    {
+      "id": "before",
+      "replay": {
+        "show_hn": {
+          "title": "Show HN: vitejs/vite – v8.3.0",
+          "body": "Frontend builds and development servers can suffer from performance overhead when settling seen preload dependencies or handling line endings. Developers working with large codebases experience these bottlenecks during regular build processes.\n\nVite v8.3.0 addresses these areas by avoiding the settling of seen preload dependencies during the build process and correctly handling CRLF line endings in code frame positions. Additionally, proxy context matchers are now pre-compiled at server creation, and only whole node_modules path segments are treated as dependencies.\n\nPermanently pre-compiling proxy context matchers at server creation is a design choice worth discussing for routing behavior. Restricting dependency matching to whole node_modules path segments also changes how nested paths are resolved.\n\nWhat other edge cases have you run into with proxy context matchers?"
+        },
+        "show_gn": {
+          "title": "Show GN: vitejs/vite - Frontend build tooling and development server",
+          "body": "무엇을 만들었나\nvitejs/vite v8.3.0 버전을 출시했습니다. Frontend build tooling and development server입니다.\n\n왜\n빌드 공정과 서버 생성 과정의 성능을 개선하기 위해 변경 사항을 적용했습니다.\n\n기존 도구와 다른 점\n빌드 과정에서 이미 확인한 preload 의존성 정렬 과정을 생략하여 성능을 높였습니다. 코드 프레임 위치에서 CRLF 줄바꿈 문자를 올바르게 처리합니다. 전체 node_modules 경로 세그먼트만 의존성으로 취급합니다. 프록시 컨텍스트 매처를 서버 생성 시점에 미리 컴파일합니다."
+        }
+      }
+    },
+    {
+      "id": "after",
+      "replay": {
+        "show_hn": {
+          "title": "Show HN: vite – Frontend build tooling and development server",
+          "body": "vite v8.3.0 includes updates to the build process, development server, and path handling.\n\nThe build process now avoids settling seen preload dependencies for performance. Proxy context matchers are pre-compiled at server creation, and only whole node_modules path segments are treated as dependencies. Additionally, code frame positions correctly handle CRLF line endings.\n\nHow do you currently handle preload dependency resolution in your build setups?"
+        },
+        "show_gn": {
+          "title": "Show GN: vite - 프론트엔드 빌드 도구 및 개발 서버 v8.3.0",
+          "body": "vitejs/vite v8.3.0 변경 사항입니다.\n\n### 변경 내용\n- 빌드 과정에서 이미 확인한 preload 종속성 처리를 건너뜁니다.\n- 코드 프레임 위치 계산 시 CRLF 줄바꿈을 정상적으로 처리합니다.\n- 전체 node_modules 경로 세그먼트만 의존성으로 처리합니다.\n- 서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crossLangNumberDiff, lintDraft, lintPassed, numberTokens } from "./lint.js";
+import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberTokens } from "./lint.js";
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
 
 describe("lintDraft", () => {
@@ -61,4 +61,40 @@ describe("cross-language numbers", () => {
     expect(r).toHaveLength(1);
     expect(r[0].onlyIn).toEqual([{ lang: "en", numbers: ["0.x"] }]);
   });
+});
+
+describe("placeholder diagnostics", () => {
+  it("does not report missing numbers on a passing rule", () => {
+    const rule = lintDraft("threads", undefined, "CRLF 위치 계산을 고쳤습니다.").find((r) => r.rule === "no_placeholder");
+    expect(rule).toEqual({ rule: "no_placeholder", ok: true, detail: undefined });
+  });
+  it("still flags unresolved number placeholders", () => {
+    expect(lintDraft("threads", undefined, "[숫자 확인]만큼 빨라졌습니다.").find((r) => r.rule === "no_placeholder")?.ok).toBe(false);
+  });
+});
+
+describe("evidence-aware review", () => {
+  it.each(["x", "threads", "linkedin", "show_hn", "show_gn", "blog"] as const)("does not require fabricated numbers or limitations for %s", (channel) => {
+    const results = lintDraft(channel, "Show HN: Tool", "Fixes line endings. https://github.com/test/tool", undefined, { limitations: [], sourceText: "Fixes line endings." });
+    expect(results.some((r) => ["has_number", "has_limitation", "has_number_or_limit"].includes(r.rule))).toBe(false);
+    expect(results.find((r) => r.rule === "numbers_need_review")?.ok).toBe(true);
+  });
+  it("flags unsupported measurements while ignoring link IDs and numbered lists", () => {
+    const results = lintDraft("x", undefined, "2. Handles line endings 40% faster. https://github.com/test/tool/pull/999", undefined, { sourceText: "Handles line endings." });
+    expect(results.find((r) => r.rule === "numbers_need_review")).toMatchObject({ ok: false, detail: expect.stringContaining("40%") });
+    expect(results.find((r) => r.rule === "numbers_need_review")?.detail).not.toContain("999");
+  });
+  it("accepts supplied versions and counts but does not treat counts as percentages", () => {
+    const facts = { sourceText: "version: v2.3.0; downloads: 4,102; stars: 40" };
+    expect(lintDraft("threads", undefined, "2.3.0 has 4102 downloads", undefined, facts).find((r) => r.rule === "numbers_need_review")?.ok).toBe(true);
+    expect(lintDraft("threads", undefined, "40% faster", undefined, facts).find((r) => r.rule === "numbers_need_review")?.ok).toBe(false);
+  });
+});
+
+it("uses project profile evidence during numeric and limitation review", () => {
+  const facts = draftLintFacts({ title: "Tool", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", stars: 8 } }, { what: "Tool", audience: "developers", claims: ["Handles 64 tasks"], stage: "beta", limitations: ["API may change"], naming: "Tool", avoid: [] });
+  expect(facts.sourceText).not.toContain("forks: 0");
+  const checks = lintDraft("threads", undefined, "Handles 64 tasks; API may change", undefined, facts);
+  expect(checks.find((r) => r.rule === "numbers_need_review")?.ok).toBe(true);
+  expect(checks.find((r) => r.rule === "no_invented_limit")?.ok).not.toBe(false);
 });

@@ -22,3 +22,5 @@ export class NotFoundError extends Error {
     super(`${what} not found`);
   }
 }
+
+export class GenerationConflictError extends Error {}

@@ -4,3 +4,6 @@ data
 .env
 .env.local
 .DS_Store
+
+# Raw experiment prompts and outputs stay local unless explicitly selected.
+experiments/runs/

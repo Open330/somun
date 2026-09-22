@@ -1,10 +1,11 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Channel } from "../core/channels.js";
-import { lintDraft } from "../core/lint.js";
+import { draftLintFacts, lintDraft } from "../core/lint.js";
 import { schema } from "../infra/db/index.js";
-import type { Draft, Example, FeedbackReason } from "../shared/types.js";
+import type { Draft, Evidence, Example, FeedbackReason } from "../shared/types.js";
 import { toDraft } from "./candidates.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
+import { getProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { disputeCandidateFacts, learnFromEdit } from "./learning.js";
 
@@ -42,7 +43,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   }
   const cand = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.id, d.candidateId)).get();
   const status = input.markCopied ? "copied" : changed ? "edited" : d.status;
-  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint: lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { repo: (cand?.evidence as { repo?: string } | undefined)?.repo }), status, updatedAt: now }).where(eq(schema.drafts.id, id)).run();
+  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint: lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile) : {}), status, updatedAt: now }).where(eq(schema.drafts.id, id)).run();
   emit(ctx, ownerId, { resource: "drafts", id });
   emit(ctx, ownerId, { resource: "examples" });
   return toDraft(getDraftRow(ctx, ownerId, id));

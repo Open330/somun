@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
@@ -10,12 +11,13 @@ import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
 import { refreshReactions } from "../../app/reactions.js";
 import { NotFoundError, type AppContext } from "../../app/context.js";
-import { claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
+import { retryGeneration, generationStatus, claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
 import { connectorsView, githubAppConfig, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
-import { appManifest } from "../../infra/github/app.js";
-import { judgeCandidates, runStep } from "../../app/pipeline.js";
+import type { Config } from "../config.js";
+import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
+import { queueStep } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, setManualStats } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
@@ -32,15 +34,19 @@ const id = (v: string) => {
   return n;
 };
 
-function publicBase(url: string, proto?: string, host?: string): string {
-  const u = new URL(url);
-  return `${proto ?? u.protocol.replace(":", "")}://${host ?? u.host}`;
-}
-
 /** /api 아래 전부. 얇은 층: 검증 → 유스케이스 → JSON. */
-export function apiRoutes(ctx: AppContext) {
+export function apiRoutes(ctx: AppContext, config: Config) {
   const app = new Hono<{ Variables: AuthVars }>();
-  const body = async <T>(c: { req: { json: () => Promise<unknown> } }, schema: z.ZodType<T>): Promise<T> => schema.parse(await c.req.json());
+  const body = async <T>(c: { req: { json: () => Promise<unknown> } }, schema: z.ZodType<T>): Promise<T> => {
+    let input: unknown;
+    try {
+      input = await c.req.json();
+    } catch (err) {
+      if (err instanceof SyntaxError) throw new HTTPException(400, { message: "invalid JSON" });
+      throw err;
+    }
+    return schema.parse(input);
+  };
 
   app.get("/me", (c) => c.json({ ownerId: c.get("ownerId") }));
 
@@ -73,27 +79,29 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/candidates/:id", (c) => c.json(getCandidateDetail(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.post("/candidates/:id/status", async (c) => { setCandidateStatus(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ status: z.enum(["new", "judged", "drafted", "published", "dropped", "deferred"]) }))).status); return c.body(null, 204); });
   app.post("/candidates/:id/override", async (c) => { const i = await body(c, z.object({ decision: z.enum(["draft", "drop"]), reason, note: z.string().optional() })); overrideJudgment(ctx, c.get("ownerId"), id(c.req.param("id")), i.decision, i.reason, i.note); return c.body(null, 204); });
-  // 수동 모드: 고른 글감만 판단. 오래 걸리므로 시작만 알리고 진행은 SSE로.
-  app.post("/candidates/judge", async (c) => { const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) })); void judgeCandidates(ctx, c.get("ownerId"), ids); return c.json({ started: ids.length }); });
-  app.post("/candidates/:id/rejudge", async (c) => c.json(await runStep(ctx, c.get("ownerId"), "digest", id(c.req.param("id")))));
+  // Persist first, acknowledge immediately; clients follow the status resource.
+  app.post("/candidates/judge", async (c) => {
+    const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) }));
+    const jobs = ctx.db.$client.transaction(() => [...new Set(ids)].map((cid) => queueStep(ctx, c.get("ownerId"), "digest", cid))).immediate();
+    c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5");
+    return c.json({ started: jobs.length, jobs }, 202);
+  });
+  app.post("/candidates/:id/rejudge", (c) => {
+    const cid = id(c.req.param("id"));
+    const job = queueStep(ctx, c.get("ownerId"), "digest", cid);
+    c.header("Location", `/api/jobs/status?candidateId=${cid}`); c.header("Retry-After", "5");
+    return c.json({ started: "queued", jobs: [job] }, 202);
+  });
   app.post("/candidates/:id/redraft", async (c) => {
-    const { targets, instruction } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1), instruction: z.string().max(600).optional() }));
-    const out: Record<string, unknown> = {};
-    // 아직 다이제스트가 없는 새 글감이면 초안만 쓸 수 없다. 다이제스트(→판단은 안에서 이어짐) 뒤 요청한 초안을 쓴다.
-    // 세 단계를 합치면 Cloudflare 100초를 넘기므로 시작만 알리고 뒤에서 돌린다. 진행은 SSE로 화면에 보인다.
-    const ownerId = c.get("ownerId");
-    const cand = getCandidateDetail(ctx, ownerId, id(c.req.param("id"))).candidate;
-    if (!cand.evidence.highlightsAt) {
-      void (async () => {
-        try {
-          await runStep(ctx, ownerId, "digest", cand.id);
-          for (const t of targets) await runStep(ctx, ownerId, "draft", cand.id, t.channel, t.lang, { instruction });
-        } catch (e) { ctx.log.warn({ id: cand.id, err: (e as Error).message }, "chain from fresh failed"); }
-      })();
-      return c.json({ started: "chain", targets: targets.length });
-    }
-    for (const t of targets) out[`${t.channel}:${t.lang}`] = await runStep(ctx, c.get("ownerId"), "draft", id(c.req.param("id")), t.channel, t.lang, { instruction });
-    return c.json(out);
+    const { targets, instruction } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1).max(30), instruction: z.string().max(600).optional() }));
+    const ownerId = c.get("ownerId"), cid = id(c.req.param("id"));
+    const cand = getCandidateDetail(ctx, ownerId, cid).candidate;
+    const unique = targets.filter((t, i) => targets.findIndex((o) => o.channel === t.channel && o.lang === t.lang) === i);
+    const jobs = ctx.db.$client.transaction(() => cand.evidence.highlightsAt
+      ? unique.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction }))
+      : [queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: unique, instruction } })]).immediate();
+    c.header("Location", `/api/jobs/status?candidateId=${cid}`); c.header("Retry-After", "5");
+    return c.json({ started: "queued", jobs }, 202);
   });
 
   // drafts
@@ -134,9 +142,11 @@ export function apiRoutes(ctx: AppContext) {
 
   // keys · jobs · omp
   app.get("/keys", (c) => c.json(keyStatus(ctx)));
+  app.post("/jobs/:id/retry", (c) => { const job = retryGeneration(ctx, c.get("ownerId"), id(c.req.param("id"))); c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5"); return c.json({ started: "queued", jobs: [job] }, 202); });
+  app.get("/jobs/status", (c) => c.json(generationStatus(ctx, c.get("ownerId"), c.req.query("candidateId") === undefined ? undefined : id(c.req.query("candidateId")!))));
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));
-  app.post("/jobs/:id/claim", async (c) => c.json({ claimed: claimJob(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ runner: z.string() }))).runner) }));
-  app.post("/jobs/:id/complete", async (c) => c.json(await completeJob(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional() })))));
+  app.post("/jobs/:id/claim", async (c) => c.json(claimJob(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ runner: z.string().min(1).max(200) }))).runner)));
+  app.post("/jobs/:id/complete", async (c) => c.json(await completeJob(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional() })))));
   const sessionsBody = z.object({ repos: z.array(z.object({ repo: z.string(), summary: z.string(), sessions: z.array(z.object({ sessionId: z.string(), source: z.string(), startedAt: z.number(), promptCount: z.number(), retries: z.number().optional(), topic: z.string() })) })) });
   app.post("/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
   app.post("/omp/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
@@ -145,9 +155,9 @@ export function apiRoutes(ctx: AppContext) {
   app.get("/connectors", (c) => c.json(connectorsView(ctx, c.get("ownerId"))));
   app.get("/github/app", (c) => {
     const cfg = githubAppConfig(ctx);
-    const base = publicBase(c.req.url, c.req.header("x-forwarded-proto"), c.req.header("host"));
-    return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, manifest: cfg ? undefined : appManifest(base), createUrl: "https://github.com/settings/apps/new" });
+    return c.json({ configured: Boolean(cfg), slug: cfg?.slug, installUrl: cfg?.slug ? `https://github.com/apps/${cfg.slug}/installations/new` : undefined, canConfigure: canConfigureGithubApp(c, config) });
   });
+  app.post("/github/app/setup", startGithubAppSetup(ctx, config));
   /** 설치 완료 후 GitHub가 보내는 곳. 로그인된 브라우저에서 열리므로 ownerId를 안다. */
   app.get("/github/installations/:id/repos", async (c) => c.json(await listInstallationRepos(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.post("/github/installations/:id/watch", async (c) => {
@@ -158,9 +168,8 @@ export function apiRoutes(ctx: AppContext) {
     return c.json(r);
   });
   app.get("/github/setup", async (c) => {
-    const id = Number(c.req.query("installation_id"));
-    if (!id) return c.json({ error: "installation_id required" }, 400);
-    const r = await recordInstallation(ctx, c.get("ownerId"), id);
+    const installationId = id(c.req.query("installation_id") ?? "");
+    const r = await recordInstallation(ctx, c.get("ownerId"), installationId);
     return c.json({ ok: true, ...r });
   });
   // SSE: 내 자원이 바뀌면 알려준다. 화면은 다시 fetch.
