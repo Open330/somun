@@ -43,8 +43,8 @@ export function ChannelPreview({ channel, title, body, author }: { channel: Chan
 }
 
 /** 단어 단위 diff (LCS). 수정 전후를 한 줄로 보여줄 때 쓴다. */
-/** LCS 표가 커지는 긴 글은 줄 단위로 비교한다(블로그 개요 길이에서 단어 단위는 수백만 칸이 된다). */
-const WORD_DIFF_MAX_CELLS = 250_000;
+/** 단어 단위 LCS 표가 이보다 크면 줄 단위로 비교한다. 200만 칸(Uint32 8MB, 수십 ms)은 LinkedIn·Show HN 길이를 넉넉히 덮는다. */
+const WORD_DIFF_MAX_CELLS = 2_000_000;
 
 export type DiffPart = { t: "eq" | "del" | "ins"; s: string };
 

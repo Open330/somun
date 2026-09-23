@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { enabledTargets, targetKey, type Channel } from "@core/channels";
-import { splitJudgment } from "@core/judgment";
 import { DEFAULT_DRAFT_MODEL } from "@core/models";
 import { voicePreset } from "@core/voice";
 import type { CandidateDetail, Draft, KeyStatus, SettingsView } from "@shared/types";
@@ -22,7 +21,7 @@ export default function Candidate() {
   const { id } = useParams<{ id: string }>();
   const cid = Number(id);
   const validId = Number.isInteger(cid) && cid > 0;
-  const { data, error, reload } = useResource<CandidateDetail>(validId ? `/candidates/${cid}` : null, ["candidates", "drafts", "publications"]);
+  const { data, error, status, reload } = useResource<CandidateDetail>(validId ? `/candidates/${cid}` : null, ["candidates", "drafts", "publications"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: keys } = useResource<KeyStatus[]>("/keys", ["keys"]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -49,14 +48,14 @@ export default function Candidate() {
   const langsOf = (ch: Channel) => targets.filter((t) => t.channel === ch).map((t) => t.lang);
   useEffect(() => { if ((!tab || !channels.includes(tab as Channel)) && channels.length) setTab(channels.find((ch) => targets.some((t) => t.channel === ch && draftsByTarget.get(targetKey(t.channel, t.lang))?.some((d) => d.status !== "dropped"))) ?? channels[0]); }, [channels, tab, targets, draftsByTarget]);
 
-  if (!validId || error === "candidate not found") return <NotFound what="글감" />;
+  if (!validId || status === 404) return <NotFound what="글감" />;
   if (error) return <ErrorState title="글감을 열지 못했습니다" message={error} onRetry={reload} />;
   if (!data) return <Skeleton rows={6} />;
   const { candidate: c, judgments, publications, profile, told, consistency } = data;
   const j = judgments[0];
   const e = c.evidence;
   const stage = stageOf({ ...c, judgment: j });
-  const { reasoning, angle } = j ? splitJudgment(j) : { reasoning: undefined, angle: undefined };
+  const reasoning = j?.reasoning, angle = j?.angle;
   const decision = j?.overriddenDecision ?? j?.decision;
   const curLangs = tab ? langsOf(tab as Channel) : [];
   const curLang = tab ? (langByCh[tab] && curLangs.includes(langByCh[tab]) ? langByCh[tab] : curLangs[0]) : undefined;

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ALL_CHANNELS, CHANNELS, LANGS, langName, type Channel } from "@core/channels";
-import { DEFAULT_DRAFT_MODEL } from "@core/models";
+import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "@core/models";
 import type { KeyStatus, SettingsView } from "@shared/types";
 import { CHANNEL_LABEL, CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast } from "../components/ui";
 import { api, patch, post, useResource } from "../lib/api";
@@ -165,7 +165,7 @@ export default function Settings() {
               </>
             ) : (
               <div className="model-fields">
-                <label className="field" style={{ flex: 1 }}><span>분석 모델 (다이제스트·판단)</span><input placeholder={llm.provider === "gemini" ? "gemini-3.5-flash-lite" : llm.provider === "anthropic" ? "claude-opus-5" : "gpt-5"} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
+                <label className="field" style={{ flex: 1 }}><span>분석 모델 (다이제스트·판단)</span><input placeholder={DEFAULT_MODEL[llm.provider]} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
                 <label className="field" style={{ flex: 1 }}><span>초안 모델 (글 생성만)</span><input placeholder={llm.provider === "gemini" ? DEFAULT_DRAFT_MODEL.gemini : "위와 같음"} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
                 <label className="field" style={{ flex: 1 }}><span>API 키 {llm.provider === "gemini" ? "(비우면 서버 키)" : "(필수)"}</span><input type="password" placeholder={settings.llm.apiKeySet ? "저장됨 — 바꾸려면 입력" : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
                 {llm.provider === "openai" && <label className="field" style={{ flex: 1 }}><span>Base URL (선택)</span><input placeholder="https://api.openai.com/v1" value={llm.baseUrl} onChange={(ev) => setLlm({ ...llm, baseUrl: ev.target.value })} /></label>}

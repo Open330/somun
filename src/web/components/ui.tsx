@@ -134,11 +134,14 @@ export function Menu({ items }: { items: { label: string; onClick: () => unknown
     return () => { window.removeEventListener("click", close); window.removeEventListener("keydown", escape); };
   }, [open]);
   const move = (event: ReactKeyboardEvent) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
+    // Tab은 메뉴를 닫고 초점을 원래 흐름으로 보낸다. 화살표·Home·End는 항목 사이를 옮긴다.
+    if (event.key === "Tab") { setOpen(false); return; }
     const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    buttons[(at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus();
+    const next = event.key === "ArrowDown" ? (at + 1) % buttons.length : event.key === "ArrowUp" ? (at - 1 + buttons.length) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    buttons[next]?.focus();
   };
   return (
     <span className="menu-wrap" onClick={(e) => e.stopPropagation()}>

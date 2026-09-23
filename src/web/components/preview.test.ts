@@ -6,7 +6,7 @@ it("diffs word by word and keeps whitespace", () => {
 });
 
 it("falls back to line diff for long texts so typing stays responsive", () => {
-  const long = Array.from({ length: 400 }, (_, i) => `line ${i} has some words`).join("\n");
+  const long = Array.from({ length: 1200 }, (_, i) => `line ${i} has some words`).join("\n");
   const parts = diffParts(long, long.replace("line 5 has", "line 5 had"));
   expect(parts.filter((p) => p.t !== "eq").map((p) => p.s)).toEqual(["line 5 has some words", "line 5 had some words"]);
 });

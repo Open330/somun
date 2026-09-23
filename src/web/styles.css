@@ -370,7 +370,6 @@ button.primary:active, .btn.primary:active { transform: translateY(1px); }
 .rewrite textarea { min-height: 70px; }
 .chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; }
 button.active { border-color: var(--accent); color: var(--accent); }
-@media (max-width: 1100px) { .cand-layout { grid-template-columns: 1fr; } .cand-side { position: static; max-height: none; } }
 
 /* ── 문체 프리셋 ────────────────────────────────────────── */
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
@@ -545,6 +544,8 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 .advanced-connection { margin-top: 30px; padding: 20px 0; border-top: 1px solid var(--line); }
 .advanced-connection > p { margin-top: 14px; }
 .cand-layout { grid-template-columns: minmax(0, 1.9fr) minmax(260px, 1fr); gap: 28px; }
+/* 좁은 화면은 한 칸. 위의 두 칸 규칙보다 뒤에 있어야 이긴다. */
+@media (max-width: 1100px) { .cand-layout { grid-template-columns: 1fr; } .cand-side { position: static; max-height: none; } }
 .cand-main { min-width: 0; }
 .cand-side { padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
 .cand-judge { font-size: 12px; }
