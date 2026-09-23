@@ -71,6 +71,13 @@
       "when": 1790171880387,
       "tag": "0009_learning-metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790185286161,
+      "tag": "0010_judgment-angle",
+      "breakpoints": true
     }
   ]
 }
