@@ -2,6 +2,7 @@ name: Build and Deploy
 
 # GitHub(Open330/somun)이 origin, Gitea는 빌드용 미러. 이미지는 registry.jiun.dev/somun:<sha>,
 # 배포는 IaC 레포의 overlay newTag 커밋으로만 (prod는 ArgoCD 수동 sync).
+# 실험 사례·결과(experiments/**)와 문서는 이미지에 들어가지 않으므로 배포를 일으키지 않는다.
 on:
   workflow_dispatch:
   push:
@@ -13,7 +14,6 @@ on:
       - "seeds/**"
       - "docker/**"
       - ".dockerignore"
-      - "experiments/**"
       - "package.json"
       - "package-lock.json"
       - "tsconfig*.json"
