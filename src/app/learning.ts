@@ -46,7 +46,7 @@ export function queueLesson(ctx: AppContext, ownerId: string, input: { draftId: 
   try {
     const settings = getSettings(ctx, ownerId);
     const prompt = editLessonPrompt({ channel: input.channel, lang: input.lang, before: input.before, after: input.after, dropReason: input.dropReason, note: input.note, currentGuide: settings.voice.guide || undefined });
-    return Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId: input.candidateId, draftId: input.draftId, channel: input.channel, lang: input.lang, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: settings.llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+    return Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId: input.candidateId, draftId: input.draftId, lessonKind: input.after !== undefined ? "edit" : "drop", channel: input.channel, lang: input.lang, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: settings.llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
   } catch (e) {
     ctx.log.warn({ err: (e as Error).message }, "queueLesson failed");
     return undefined;
@@ -54,12 +54,11 @@ export function queueLesson(ctx: AppContext, ownerId: string, input: { draftId: 
 }
 
 /** lesson 결과 반영. 뽑을 게 없으면 undefined. */
-export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, result: { rule?: string; category?: string }): GuideSuggestion | undefined {
+export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, kind: "edit" | "drop", result: { rule?: string; category?: string }): GuideSuggestion | undefined {
   const rule = String(result.rule ?? "").trim();
   const category = String(result.category ?? "none");
   if (!rule || category === "none" || rule.length > 160) return undefined;
-  const dropped = ctx.db.select({ status: schema.drafts.status }).from(schema.drafts).where(and(eq(schema.drafts.id, draftId), eq(schema.drafts.ownerId, ownerId))).get()?.status === "dropped";
-  return upsertSuggestion(ctx, ownerId, rule, category, { kind: dropped ? "drop" : "edit", draftId, at: Date.now() });
+  return upsertSuggestion(ctx, ownerId, rule, category, { kind, draftId, at: Date.now() });
 }
 
 /** 승인: 지침 끝에 한 줄 붙인다. */

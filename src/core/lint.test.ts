@@ -140,3 +140,9 @@ describe("multiplier false positives", () => {
     expect(numberTokens("속도가 두 배가 됐다")).toContain("2x");
   });
 });
+
+it("compares numbers with attached units the same as spaced ones", () => {
+  expect(unsupportedNumbers("Cold start went from 800 ms to 200 ms.", "Cold start 800ms → 200ms")).toEqual([]);
+  expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150"]);
+  expect(unsupportedNumbers("3x faster", "3x faster builds")).toEqual([]);
+});

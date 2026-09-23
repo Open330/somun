@@ -79,8 +79,8 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
         return { applied: false };
       }
       let applied: ReturnType<typeof applyResult> | undefined;
-      if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, parsed as { rule?: string; category?: string }); }
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as Exclude<JobKind, "lesson">, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, j.continuation ?? undefined);
+      if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as Exclude<JobKind, "lesson">, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, promptText: j.user, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
@@ -108,6 +108,14 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     const job = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
     if (!job) throw new NotFoundError("job");
     if (job.status !== "failed") throw new GenerationConflictError("실패한 작업만 다시 시도할 수 있습니다.");
+    // lesson은 발행된 글감에도 쓰이고 초안 id가 있어야 반영된다. 같은 입력으로 새 행을 만든다.
+    if (job.kind === "lesson") {
+      const { id: _id, status: _s, runner: _r, claimToken: _t, attempts: _a, resultJson: _res, error: _e, claimedAt: _c, finishedAt: _f, ...rest } = job;
+      void [_id, _s, _r, _t, _a, _res, _e, _c, _f];
+      const newId = Number(ctx.db.insert(schema.llmJobs).values({ ...rest, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+      emit(ctx, ownerId, { resource: "jobs", id: newId });
+      return newId;
+    }
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
     if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError("보관되거나 발행된 글감은 다시 생성할 수 없습니다.");
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind }, job.continuation ?? undefined);

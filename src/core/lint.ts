@@ -41,8 +41,12 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike):
   return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile) };
 }
 
-/** 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다. "40 percent", "40 퍼센트"는 40%와 같다. */
-const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "").replace(/(\d)\s*(?:percent|퍼센트|%)/gi, "$1%");
+/**
+ * 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다. "40 percent", "40 퍼센트"는 40%와 같다.
+ * 단위가 붙은 숫자(800ms, 3GB, 12개)는 단위를 떼어 "800 ms"와 같게 본다. 배수(3x, 3배)는 그대로 둔다.
+ */
+const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "").replace(/(\d)\s*(?:percent|퍼센트|%)/gi, "$1%")
+  .replace(/(?<![\w.])(v?\d+(?:[.,]\d+)*)(?![x×](?![\w-])|배)([a-wyzA-WYZ가-힣]+)/g, "$1 $2");
 /** v1.2 = 1.2 */
 const canonical = (value: string) => value.replace(/^v/, "");
 

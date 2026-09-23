@@ -68,7 +68,9 @@ if (command === "compare") {
     // 이전 내보내기를 덮어쓰지 않는다.
     if (existsSync(outDir)) throw new Error(`이미 있는 경로입니다: ${outDir}. --out으로 새 경로를 지정하세요.`);
     mkdirSync(outDir, { recursive: true, mode: 0o700 });
-    const { cases, config, skipped } = exportHoldout(db, owner, { max: Number(values.max ?? 30) });
+    const max = Number(values.max ?? 30);
+    if (!Number.isInteger(max) || max < 1 || max > 100) throw new Error("--max는 1~100 사이 정수입니다.");
+    const { cases, config, skipped } = exportHoldout(db, owner, { max });
     writeFileSync(resolve(outDir, "cases.json"), `${JSON.stringify(cases, null, 2)}\n`, { mode: 0o600 });
     writeFileSync(resolve(outDir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
     console.log(`Exported ${cases.length} cases (${skipped} skipped: no digest) to ${outDir}`);

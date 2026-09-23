@@ -40,6 +40,22 @@ export function parseFeed(xml: string): FeedItem[] {
 
 const MAX_FEED_BYTES = 5_000_000;
 
+/** 본문을 max 바이트까지만 읽는다. Content-Length가 없는(청크·압축) 응답도 묶는다. 넘으면 null. */
+export async function readCapped(r: Response, max: number): Promise<string | null> {
+  if (!r.body) return "";
+  const reader = r.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel(); return null; }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export async function collectBlogSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx, { kind: "blog" }).find((s) => s.id === sourceId);
   if (!source) return {};
@@ -51,7 +67,9 @@ export async function collectBlogSource(ctx: AppContext, sourceId: number): Prom
       // 타임아웃은 본문 읽기까지 묶는다. 피드가 비정상적으로 크면 읽지 않는다.
       const r = await fetch(feedUrl, { headers: { "User-Agent": "somun/1.0 (+https://somun.jiun.dev)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(15_000) }).catch((e: Error) => { ctx.log.warn({ feedUrl, err: e.message }, "feed fetch failed"); return null; });
       if (!r?.ok || Number(r.headers.get("content-length") ?? 0) > MAX_FEED_BYTES) { summary[feedUrl] = -1; if (r) ctx.log.warn({ feedUrl, status: r.status }, "feed fetch failed"); continue; }
-      const items = parseFeed(await r.text()).filter((i) => i.publishedAt >= since);
+      const text = await readCapped(r, MAX_FEED_BYTES);
+      if (text === null) { summary[feedUrl] = -1; ctx.log.warn({ feedUrl }, "feed too large"); continue; }
+      const items = parseFeed(text).filter((i) => i.publishedAt >= since);
       const host = new URL(feedUrl).host;
       const signals: IncomingSignal[] = items.map((i) => ({ kind: "blog_post", repo: `blog:${host}`, ref: `blog:${i.url}`, title: i.title, payload: { title: i.title, url: i.url, summary: i.summary }, occurredAt: i.publishedAt }));
       let inserted = 0;

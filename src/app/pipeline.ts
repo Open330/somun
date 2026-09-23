@@ -75,7 +75,9 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     settingsByOwner.set(c.ownerId, s);
     if (s.watch.mode !== "auto") continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
-    const kind: JobKind = (c.evidence as Evidence).highlightsAt ? "judge" : "digest";
+    // 다이제스트 뒤에 새 신호가 합쳐졌으면(updatedAt이 더 늦음) 요약이 낡았으므로 다이제스트부터 다시 한다.
+    const digestedAt = (c.evidence as Evidence).highlightsAt;
+    const kind: JobKind = digestedAt && c.updatedAt <= digestedAt ? "judge" : "digest";
     const jobs = ctx.db.select({ status: schema.llmJobs.status, finishedAt: schema.llmJobs.finishedAt }).from(schema.llmJobs).where(and(eq(schema.llmJobs.candidateId, c.id), eq(schema.llmJobs.kind, kind))).all();
     if (jobs.some((j) => j.status === "pending" || j.status === "claimed")) continue;
     const failed = jobs.filter((j) => j.status === "failed");
@@ -121,7 +123,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Exclude<JobKind, "lesson">; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Exclude<JobKind, "lesson">; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
@@ -132,9 +134,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Excl
     const r = args.result as { highlights?: unknown; limitations?: unknown };
     const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
     // 요약도 원자료와 맞춰 본다. 원자료에 없는 수치를 담은 요약은 판단·초안에 넘기지 않는다.
-    const grounding = groundingText({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile);
-    const checked = strs(r.highlights, 8).map((text) => ({ text, numbers: unsupportedNumbers(text, grounding) }));
-    const highlights = checked.filter((h) => h.numbers.length === 0).map((h) => h.text);
+    // 기준은 지금의 근거 + 이 다이제스트가 실제로 본 프롬프트. 작업이 대기하는 사이 수집이 근거를 바꿔도 모델이 본 원자료로 맞춰 본다.
+    const grounding = [groundingText({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile), args.promptText ?? ""].join("\n\n");
+    // 먼저 거르고 나서 8개로 자른다. 앞쪽이 걸러져도 뒤쪽의 근거 있는 요약을 살린다.
+    const checked = strs(r.highlights, 20).map((text) => ({ text, numbers: unsupportedNumbers(text, grounding) }));
+    const highlights = checked.filter((h) => h.numbers.length === 0).map((h) => h.text).slice(0, 8);
     const unverifiedHighlights = checked.filter((h) => h.numbers.length > 0);
     if (unverifiedHighlights.length) ctx.log.info({ candidateId: c.id, dropped: unverifiedHighlights.length }, "digest highlights with unsupported numbers");
     const fromReadme = Boolean(ev.limitations?.length);

@@ -4,7 +4,7 @@
  *   npm run agent-worker -- --cli claude   # 또는 --cli codex, --once, --interval 30
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Job } from "../src/shared/types.js";
@@ -36,6 +36,8 @@ const once = argv.includes("--once");
 const intervalSec = Number(arg("--interval", "30"));
 const runner = `${cli}@${hostname()}`;
 const workDir = mkdtempSync(join(tmpdir(), "somun-agent-"));
+process.on("exit", () => rmSync(workDir, { recursive: true, force: true }));
+for (const sig of ["SIGINT", "SIGTERM"] as const) process.on(sig, () => process.exit(0));
 
 function extractJson(text: string): unknown {
   const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3b075f86-266d-4d77-9af7-183ccfa61648",
+  "id": "f4719f59-d434-4a33-9987-9370ca40fcbb",
   "prevId": "c848bdb3-4509-41fb-b0d4-6c91c5e58256",
   "tables": {
     "app_state": {
@@ -1005,6 +1005,13 @@
         "draft_id": {
           "name": "draft_id",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lesson_kind": {
+          "name": "lesson_kind",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
