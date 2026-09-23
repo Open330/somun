@@ -96,7 +96,7 @@ export type Example = { id: number; channel: Channel; lang: string; title?: stri
 export type KeyStatus = { label: string; todayCount: number; cap: number; cooldownUntil?: number; cooldownReason?: string; lastUsedAt?: number; lastQuotaId?: string };
 
 export type GenerationPlan = { targets: { channel: Channel; lang: string }[]; instruction?: string };
-export type JobProgress = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };
+export type JobProgress = { id: number; kind: JobKind; candidateId: number; /** profile 작업의 저장소. */ repo?: string; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };
 
 export type Job = { id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
 

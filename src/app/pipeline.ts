@@ -7,7 +7,7 @@ import type { Decision, Evidence, GenerationKind, GenerationPlan, JobKind } from
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, GenerationConflictError, type AppContext } from "./context.js";
 import { getSettings, styleKeyOf } from "./settings.js";
-import { getProfile } from "./profiles.js";
+import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge } from "./publications.js";
@@ -74,6 +74,8 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
     settingsByOwner.set(c.ownerId, s);
     if (s.watch.mode !== "auto") continue;
+    // 로컬 워커가 이 저장소의 프로필을 만드는 중이면 기다린다. 프로필이 반영되면 jobs.completeJob이 다시 부른다.
+    if (s.llm.provider === "local-agent" && pendingProfileJob(ctx, c.ownerId, c.repo)) continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
     // 다이제스트 뒤에 새 신호가 합쳐졌으면(updatedAt이 더 늦음) 요약이 낡았으므로 다이제스트부터 다시 한다.
     const digestedAt = (c.evidence as Evidence).highlightsAt;

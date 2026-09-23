@@ -15,7 +15,7 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
   const [claims, setClaims] = useState((p?.claims ?? []).join("\n"));
   const [avoid, setAvoid] = useState((p?.avoid ?? []).join(", "));
   useEffect(() => { setWhat(p?.what ?? ""); setAudience(p?.audience ?? ""); setClaims((p?.claims ?? []).join("\n")); setAvoid((p?.avoid ?? []).join(", ")); }, [p?.what, p?.audience, p?.claims, p?.avoid]);
-  const regen = async () => { setBusy(true); try { const r = await post<{ queued: boolean }>(`/profiles/${repo}/regenerate`); showToast(r?.queued ? "로컬 워커에 프로필 만들기를 요청했습니다. 워커가 끝내면 여기 반영됩니다." : "프로필을 다시 만들었습니다."); } catch (e) { showToast(`실패: ${(e as Error).message}`); } finally { setBusy(false); } };
+  const regen = async () => { setBusy(true); try { const r = await post<{ queued: boolean; busy?: boolean }>(`/profiles/${repo}/regenerate`); showToast(r?.busy ? "로컬 워커가 이 저장소의 프로필을 만들고 있습니다. 끝난 뒤 다시 요청해 주세요." : r?.queued ? "로컬 워커에 프로필 만들기를 요청했습니다. 글감 목록의 생성 상태에서 진행을 볼 수 있습니다." : "프로필을 다시 만들었습니다."); } catch (e) { showToast(`실패: ${(e as Error).message}`); } finally { setBusy(false); } };
   return (
     <section className="side-block profile">
       <div className="row between" style={{ alignItems: "baseline" }}>
