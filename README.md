@@ -85,6 +85,8 @@ Paste the URL after you post (you can fix or remove it later). From then on: sta
 **Settings**
 Sources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.
 
+The interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.
+
 </td>
 </tr>
 </table>

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
+import { LANGS } from "@core/channels";
+import { dateLocale, getLocale, t } from "../i18n";
 
+/** 라벨 표는 한국어 원문(번역 키)이다. 화면에 쓸 때는 channelLabel·typeLabel처럼 t()를 거친다. */
 export const CHANNEL_LABEL: Record<string, string> = { x: "X", threads: "Threads", linkedin: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog: "블로그 개요" };
+export const channelLabel = (channel: string): string => t(CHANNEL_LABEL[channel] ?? channel);
 
 /** 채널 아이콘. 단색 SVG. HN·GN은 사이트 색 사각형 안에 글자. */
 export function ChannelIcon({ channel, size = 16 }: { channel: string; size?: number }) {
@@ -17,10 +21,13 @@ export function ChannelIcon({ channel, size = 16 }: { channel: string; size?: nu
 }
 /** "X · EN" 처럼 채널과 언어를 함께. 고정 언어 채널은 채널 이름만. */
 export function targetLabel(channel: string, lang?: string, fixed?: boolean): string {
-  const base = CHANNEL_LABEL[channel] ?? channel;
+  const base = channelLabel(channel);
   return lang && !fixed ? `${base} · ${lang.toUpperCase()}` : base;
 }
 export const TYPE_LABEL: Record<string, string> = { release: "릴리스", "new-repo": "새 저장소", milestone: "마일스톤", blog: "블로그", "in-progress": "진행 중" };
+export const typeLabel = (type: string): string => t(TYPE_LABEL[type] ?? type);
+/** 언어 이름. 영어 화면은 영어 이름(Korean), 한국어 화면은 원어 이름(한국어). 목록에 없는 코드는 코드 그대로. */
+export const langLabel = (code: string): string => (getLocale() === "en" ? LANGS[code]?.name : LANGS[code]?.nativeName) ?? code;
 export const CRITERIA: [keyof Judgment["scores"], string, string][] = [
   ["runnable", "실행 가능", "링크 눌러 1분 안에 써볼 수 있는가"],
   ["numbers", "숫자", "측정치, 전후 비교가 있는가"],
@@ -29,33 +36,34 @@ export const CRITERIA: [keyof Judgment["scores"], string, string][] = [
   ["audience", "청중", "누가 어느 채널에서 관심 가질지 말할 수 있는가"],
 ];
 export const REASONS = [["wrong_facts", "사실이 틀림"], ["voice", "문체가 아님"], ["wrong_channel", "채널이 안 맞음"], ["not_yet", "아직 이름"], ["not_worth", "글감 아님"], ["other", "기타"]] as const;
+export const reasonLabel = (key: string): string => t(REASONS.find(([k]) => k === key)?.[1] ?? key);
 
 export function fmtDate(ts: number): string {
   const d = new Date(ts), now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
-  return sameDay ? d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+  return sameDay ? d.toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString(dateLocale(), { month: "numeric", day: "numeric" });
 }
 export function relTime(ts: number): string {
   const s = Math.max(0, (Date.now() - ts) / 1000);
-  if (s < 60) return "방금";
-  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
-  if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
-  return `${Math.floor(s / 86400)}일 전`;
+  if (s < 60) return t("방금");
+  if (s < 3600) return t("{n}분 전", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("{n}시간 전", { n: Math.floor(s / 3600) });
+  return t("{n}일 전", { n: Math.floor(s / 86400) });
 }
 
 /** 후보의 한 가지 상태. 배지 하나로 끝낸다. */
 export type Stage = { key: "review" | "fresh" | "working" | "deferred" | "ask" | "published" | "dropped"; label: string; tone: "ok" | "warn" | "" | "bad"; busy?: boolean };
 export function stageOf(c: Pick<Candidate, "status" | "evidence" | "latestJudgmentId"> & { judgment?: Judgment | null }): Stage {
-  if (c.status === "dropped") return { key: "dropped", label: "버림", tone: "bad" };
-  if (c.status === "published") return { key: "published", label: "발행됨", tone: "ok" };
-  if (c.status === "drafted") return { key: "review", label: "검수 대기", tone: "ok" };
-  if (c.status === "deferred") return { key: "deferred", label: "보류", tone: "warn" };
+  if (c.status === "dropped") return { key: "dropped", label: t("버림"), tone: "bad" };
+  if (c.status === "published") return { key: "published", label: t("발행됨"), tone: "ok" };
+  if (c.status === "drafted") return { key: "review", label: t("검수 대기"), tone: "ok" };
+  if (c.status === "deferred") return { key: "deferred", label: t("보류"), tone: "warn" };
   // 수동 모드에서는 새 후보가 판단 없이 쌓인다. 판단이 시작되면 highlights가 생기며 "처리 중"으로 넘어간다.
-  if (!c.evidence.highlightsAt) return { key: "fresh", label: "새 글감", tone: "" };
-  if (!c.latestJudgmentId) return { key: "working", label: "판단 결과 없음", tone: "warn" };
+  if (!c.evidence.highlightsAt) return { key: "fresh", label: t("새 글감"), tone: "" };
+  if (!c.latestJudgmentId) return { key: "working", label: t("판단 결과 없음"), tone: "warn" };
   const d = c.judgment?.overriddenDecision ?? c.judgment?.decision;
-  if (d === "ask") return { key: "ask", label: "추가 근거 필요", tone: "" };
-  return { key: "working", label: "초안 없음", tone: "warn" };
+  if (d === "ask") return { key: "ask", label: t("추가 근거 필요"), tone: "" };
+  return { key: "working", label: t("초안 없음"), tone: "warn" };
 }
 export function StageChip({ stage }: { stage: Stage }) {
   return <span className={`badge ${stage.tone}`}>{stage.busy && <i className="dot" />}{stage.label}</span>;
@@ -66,8 +74,8 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
   return (
     <div className={`meter ${compact ? "compact" : ""}`}>
       {CRITERIA.map(([k, label, hint]) => (
-        <div key={k} className="meter-item" title={hint}>
-          <span className="meter-label">{label}</span>
+        <div key={k} className="meter-item" title={t(hint)}>
+          <span className="meter-label">{t(label)}</span>
           <span className="meter-bar"><i className={scores[k] >= 1 ? "on" : ""} /><i className={scores[k] >= 2 ? "on" : ""} /></span>
         </div>
       ))}
@@ -75,12 +83,21 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
   );
 }
 
-export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail?: string }[] }) {
-  if (!lint.length) return <span className="badge outline">문장 점검 전</span>;
+/**
+ * 린트 설명. 서버가 인자(args)를 함께 저장한 규칙은 화면 언어로 다시 쓴다.
+ * 인자가 없는 예전 결과는 저장된 설명을 그대로(사전에 있으면 번역해) 보여준다.
+ */
+export function lintDetail(l: { rule: string; detail?: string; args?: Record<string, string> }): string | undefined {
+  if (l.rule === "numbers_need_review" && l.args?.numbers) return t("제공된 근거에서 찾지 못한 수치: {numbers}. 원문과 단위를 확인해 주세요.", { numbers: l.args.numbers });
+  return l.detail === undefined ? undefined : t(l.detail);
+}
+
+export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail?: string; args?: Record<string, string> }[] }) {
+  if (!lint.length) return <span className="badge outline">{t("문장 점검 전")}</span>;
   const bad = lint.filter((l) => !l.ok);
-  if (bad.length === 0) return <span className="badge ok" title="길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.">형식 점검 통과</span>;
-  const label: Record<string, string> = { banned_phrases: "금지 표현", no_emoji_bullets: "이모지 목록", has_number: "숫자 없음", has_limitation: "한계 없음", has_number_or_limit: "숫자·한계 없음", has_link: "링크 없음", no_exclamation: "감탄부호", length: "길이 초과", title_length: "제목 길이", no_vote_request: "투표 요청", no_placeholder: "빈 숫자", repo_name: "이름 왜곡", no_invented_limit: "한계 확인", numbers_need_review: "수치 확인" };
-  return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={l.detail}>{label[l.rule] ?? l.rule}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
+  if (bad.length === 0) return <span className="badge ok" title={t("길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.")}>{t("형식 점검 통과")}</span>;
+  const label: Record<string, string> = { banned_phrases: t("금지 표현"), no_emoji_bullets: t("이모지 목록"), has_number: t("숫자 없음"), has_limitation: t("한계 없음"), has_number_or_limit: t("숫자·한계 없음"), has_link: t("링크 없음"), no_exclamation: t("감탄부호"), length: t("길이 초과"), title_length: t("제목 길이"), no_vote_request: t("투표 요청"), no_placeholder: t("빈 숫자"), repo_name: t("이름 왜곡"), no_invented_limit: t("한계 확인"), numbers_need_review: t("수치 확인") };
+  return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={lintDetail(l)}>{t(label[l.rule] ?? l.rule)}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
 }
 
 export function Spark({ values }: { values: number[] }) {
@@ -91,7 +108,7 @@ export function Spark({ values }: { values: number[] }) {
 
 /** 발행 전후 스타 추이. 한 축, 발행 시점 세로선, 기준선(발행 전 마지막 값) 점선. */
 export function MetricChart({ series, publishedAt, baseline }: { series: { at: number; stars: number }[]; publishedAt: number; baseline?: number }) {
-  if (series.length < 2) return <div className="chart empty-chart tiny muted">지표 2개 이상 쌓이면 그래프가 보입니다</div>;
+  if (series.length < 2) return <div className="chart empty-chart tiny muted">{t("지표 2개 이상 쌓이면 그래프가 보입니다")}</div>;
   const W = 260, H = 72, px = 6, py = 8;
   const xs = series.map((s) => s.at), ys = series.map((s) => s.stars);
   const x0 = Math.min(...xs, publishedAt), x1 = Math.max(...xs, publishedAt);
@@ -101,7 +118,7 @@ export function MetricChart({ series, publishedAt, baseline }: { series: { at: n
   const d = series.map((s, i) => `${i ? "L" : "M"}${sx(s.at).toFixed(1)},${sy(s.stars).toFixed(1)}`).join(" ");
   const last = series[series.length - 1];
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={`스타 ${ys[0]}에서 ${last.stars}`}>
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={t("스타 {from}에서 {to}", { from: ys[0], to: last.stars })}>
       {baseline !== undefined && <line x1={px} x2={W - px} y1={sy(baseline)} y2={sy(baseline)} className="base" />}
       <line x1={sx(publishedAt)} x2={sx(publishedAt)} y1={py / 2} y2={H - py / 2} className="pub-line" />
       <path d={d} className="line" />
@@ -113,7 +130,7 @@ export function MetricChart({ series, publishedAt, baseline }: { series: { at: n
 }
 
 export function Skeleton({ rows = 3 }: { rows?: number }) {
-  return <div className="stack" role="status" aria-label="불러오는 중">{Array.from({ length: rows }, (_, i) => <div key={i} className="skel" />)}</div>;
+  return <div className="stack" role="status" aria-label={t("불러오는 중")}>{Array.from({ length: rows }, (_, i) => <div key={i} className="skel" />)}</div>;
 }
 
 /** 간단한 오버플로 메뉴 (⋯). */
@@ -145,9 +162,9 @@ export function Menu({ items }: { items: { label: string; onClick: () => unknown
   };
   return (
     <span className="menu-wrap" onClick={(e) => e.stopPropagation()}>
-      <button ref={trigger} disabled={busy} aria-haspopup="menu" aria-expanded={open} className="ghost sm" aria-label="더 보기" onClick={() => setOpen((o) => !o)}>⋯</button>
+      <button ref={trigger} disabled={busy} aria-haspopup="menu" aria-expanded={open} className="ghost sm" aria-label={t("더 보기")} onClick={() => setOpen((o) => !o)}>⋯</button>
       {error && <span className="menu-error" role="alert">{error}</span>}
-      {open && <div className="menu" role="menu" ref={list} onKeyDown={move}>{items.map((it) => <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`작업을 완료하지 못했습니다. ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
+      {open && <div className="menu" role="menu" ref={list} onKeyDown={move}>{items.map((it) => <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`${t("작업을 완료하지 못했습니다.")} ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
     </span>
   );
 }
@@ -167,8 +184,8 @@ export function useToast(): [string | null, (m: string) => void] {
   return [msg, show];
 }
 
-export function ErrorState({ title = "화면을 불러오지 못했습니다", message, onRetry }: { title?: string; message: string; onRetry: () => void }) {
-  return <div className="state-panel error-state" role="alert"><span className="state-symbol" aria-hidden>!</span><h2>{title}</h2><p>연결 상태를 확인하고 다시 시도해 주세요. 계속되면 잠시 후 다시 접속해 주세요.</p><details><summary>오류 내용</summary><p>{message}</p></details><button onClick={onRetry}>다시 시도</button></div>;
+export function ErrorState({ title = t("화면을 불러오지 못했습니다"), message, onRetry }: { title?: string; message: string; onRetry: () => void }) {
+  return <div className="state-panel error-state" role="alert"><span className="state-symbol" aria-hidden>!</span><h2>{title}</h2><p>{t("연결 상태를 확인하고 다시 시도해 주세요. 계속되면 잠시 후 다시 접속해 주세요.")}</p><details><summary>{t("오류 내용")}</summary><p>{message}</p></details><button onClick={onRetry}>{t("다시 시도")}</button></div>;
 }
 
 export function Section({ title, count, children, hint }: { title: string; count?: number; hint?: string; children: ReactNode }) {

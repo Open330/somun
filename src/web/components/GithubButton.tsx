@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 /** GitHub 로그인 버튼. GitHub 브랜드 가이드대로: 검정 바탕, 흰 마크, 마크는 항상 왼쪽. */
 export function GithubMark({ size = 18 }: { size?: number }) {
   return (
@@ -7,7 +8,7 @@ export function GithubMark({ size = 18 }: { size?: number }) {
   );
 }
 
-export function GithubButton({ onClick, label = "GitHub로 계속하기", size = "md" }: { onClick: () => void; label?: string; size?: "md" | "lg" }) {
+export function GithubButton({ onClick, label = t("GitHub로 계속하기"), size = "md" }: { onClick: () => void; label?: string; size?: "md" | "lg" }) {
   return (
     <button type="button" className={`gh-btn ${size}`} onClick={onClick}>
       <GithubMark size={size === "lg" ? 20 : 18} />

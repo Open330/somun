@@ -1,15 +1,17 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import type { CandidateListItem } from "@shared/types";
+import type { CandidateListItem, SettingsView } from "@shared/types";
 import { api, clearStoredToken, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
 import { useAuth } from "./lib/auth/context";
 import { Skeleton } from "./components/ui";
 import { ChunkBoundary } from "./components/ChunkBoundary";
+import { LocaleSwitch } from "./components/LocaleSwitch";
 import AuthCallback from "./pages/AuthCallback";
 import Landing from "./pages/Landing";
 import TokenLogin from "./pages/TokenLogin";
 import NotFound from "./pages/NotFound";
 import { Lockup, Mark } from "./components/Mark";
+import { t } from "./i18n";
 
 // 로그인 뒤 화면은 필요할 때 받는다. 첫 화면(랜딩·로그인)이 가벼워진다.
 const Candidate = lazy(() => import("./pages/Candidate"));
@@ -23,7 +25,7 @@ const Pick = lazy(() => import("./pages/Pick"));
 const SetupGithubApp = lazy(() => import("./pages/SetupGithubApp"));
 
 /** 인증 확인 중. 빈 화면 대신 로고와 상태를 보여준다. */
-const Booting = () => <div className="booting" role="status" aria-live="polite"><Mark size={32} /><span>불러오는 중…</span></div>;
+const Booting = () => <div className="booting" role="status" aria-live="polite"><Mark size={32} /><span>{t("불러오는 중…")}</span></div>;
 
 const NAV = [["/", "글감"], ["/published", "발행 기록"], ["/connectors", "연결 관리"], ["/voice", "문체"], ["/settings", "설정"]] as const;
 
@@ -50,27 +52,29 @@ export default function App() {
   if (auth.enabled && !auth.isAuthenticated) {
     return <Routes><Route path="/auth/callback" element={<AuthCallback />} /><Route path="*" element={<Landing />} /></Routes>;
   }
-  return <Shell onSignOut={async () => { if (auth.enabled) await auth.signOut(); else { clearStoredToken(); setTokenState("need"); } }} who={auth.enabled ? auth.user?.displayName ?? auth.user?.username ?? "" : "토큰 세션"} />;
+  return <Shell onSignOut={async () => { if (auth.enabled) await auth.signOut(); else { clearStoredToken(); setTokenState("need"); } }} who={auth.enabled ? auth.user?.displayName ?? auth.user?.username ?? "" : t("토큰 세션")} />;
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
   const location = useLocation();
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
+  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const review = (rows ?? []).filter((c) => c.status === "drafted").length;
   const pending = suggestions?.length ?? 0;
-  const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{label}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title="지침 제안">{pending}</span> : null}</NavLink>);
+  const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{t(label)}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title={t("지침 제안")}>{pending}</span> : null}</NavLink>);
   return (
     <div className="layout">
-      <a className="skip-link" href="#main-content">본문으로 바로 가기</a>
+      <a className="skip-link" href="#main-content">{t("본문으로 바로 가기")}</a>
       <aside className="sidebar">
         <div className="brand"><Lockup size={30} /></div>
-        <span className="nav-caption">워크스페이스</span><nav className="nav" aria-label="주 메뉴">{links}</nav>
-        <div className="spacer" /><div className="sidebar-note"><b>만드는 일에 집중하세요.</b><p>알릴 이야기는 여기 모아둘게요.</p></div>
-        <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>나가기</button></div>
+        <span className="nav-caption">{t("워크스페이스")}</span><nav className="nav" aria-label={t("주 메뉴")}>{links}</nav>
+        <div className="spacer" /><div className="sidebar-note"><b>{t("만드는 일에 집중하세요.")}</b><p>{t("알릴 이야기는 여기 모아둘게요.")}</p></div>
+        <div className="who-locale"><LocaleSwitch settings={settings} compact /></div>
+        <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>{t("나가기")}</button></div>
       </aside>
       <div>
-        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<button className="ghost sm mobile-signout" onClick={() => void onSignOut()}>나가기</button></div>
+        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<span className="mobile-locale"><LocaleSwitch compact /></span><button className="ghost sm mobile-signout" onClick={() => void onSignOut()}>{t("나가기")}</button></div>
         <main className="main" id="main-content" tabIndex={-1}>
           <ChunkBoundary resetKey={location.pathname}>
           <Suspense fallback={<Skeleton rows={4} />}>

@@ -590,3 +590,10 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 
 /* 인증 확인 중 */
 .booting { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; }
+
+/* 화면 언어 선택 */
+.locale-switch { display: inline-flex; align-items: center; gap: 8px; }
+.locale-switch select { padding: 4px 8px; font-size: 13px; }
+.sidebar .who-locale { padding: 4px 10px 8px; }
+.topbar .mobile-locale { display: none; }
+@media (max-width: 860px) { .topbar .mobile-locale { display: inline-flex; } }

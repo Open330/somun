@@ -62,7 +62,7 @@ export class AuthManager {
 
   async exchangeCode(code: string): Promise<void> {
     const res = await authFetch("/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-    if (!res.ok) throw new Error(`code 교환 실패 (${res.status})`);
+    if (!res.ok) throw new Error(`code exchange failed (${res.status})`);
     const body = (await res.json()) as { accessToken: string };
     this.accessToken = body.accessToken;
     this.accessTokenFetchedAt = Date.now();
