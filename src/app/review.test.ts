@@ -9,7 +9,7 @@ import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
 import { examplesFor } from "./pipeline.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
-import { ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
+import { editProfile, ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
 import { processNewCandidates } from "./pipeline.js";
 
 let ctx: AppContext;
@@ -196,7 +196,7 @@ describe("repository profiles in local-agent mode", () => {
     updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
     await ensureProfile(ctx, OWNER, material);
     const old = ctx.db.select().from(schema.llmJobs).get()!;
-    ctx.db.insert(schema.repoProfiles).values({ ownerId: OWNER, repo: "me/tool", readmeHash: "newer", profile: P("newer"), model: "gemini", createdAt: Date.now() + 1000, updatedAt: Date.now() + 1000 }).run();
+    ctx.db.insert(schema.repoProfiles).values({ ownerId: OWNER, repo: "me/tool", readmeHash: "newer", profile: P("newer"), model: "gemini", generatedAt: Date.now() + 1000, createdAt: Date.now() + 1000, updatedAt: Date.now() + 1000 }).run();
     expect(complete(old.id, P("older"))).toEqual({ applied: true });
     expect(getProfile(ctx, OWNER, "me/tool")?.profile.what).toBe("newer");
   });
@@ -219,5 +219,25 @@ describe("repository profiles in local-agent mode", () => {
     complete(ctx.db.select().from(schema.llmJobs).get()!.id, P("A tool"));
     await vi.waitFor(() => expect(ctx.db.select().from(schema.llmJobs).all().some((j) => j.kind === "digest")).toBe(true));
     expect(ctx.db.select().from(schema.llmJobs).all().find((j) => j.kind === "digest")?.user).toContain("A tool");
+  });
+
+  it("still applies the worker's profile when the user edited a field while it was running", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    await ensureProfile(ctx, OWNER, material);
+    editProfile(ctx, OWNER, "me/tool", { audience: "my team" });
+    complete(ctx.db.select().from(schema.llmJobs).get()!.id, P("from the worker"));
+    expect(getProfile(ctx, OWNER, "me/tool")?.profile).toMatchObject({ what: "from the worker", audience: "my team" });
+  });
+
+  it("keeps the original request time on retry, so an old README cannot overwrite a newer profile", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    await ensureProfile(ctx, OWNER, material);
+    const first = ctx.db.select().from(schema.llmJobs).get()!;
+    const { claimToken } = claimJob(ctx, OWNER, first.id, "t");
+    completeJob(ctx, OWNER, first.id, { claimToken: claimToken!, error: "cli failed" });
+    ctx.db.insert(schema.repoProfiles).values({ ownerId: OWNER, repo: "me/tool", readmeHash: "b", profile: P("from README B"), model: "gemini", generatedAt: Date.now() + 1000, createdAt: 1, updatedAt: 1 }).run();
+    const retried = retryGeneration(ctx, OWNER, first.id);
+    complete(retried, P("from README A"));
+    expect(getProfile(ctx, OWNER, "me/tool")?.profile.what).toBe("from README B");
   });
 });
