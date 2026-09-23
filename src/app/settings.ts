@@ -49,6 +49,8 @@ export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<
   const next: Settings = { ...current, ...patch };
   // 웹훅 URL은 빈 문자열이면 지우고, 없으면 기존 값을 지킨다.
   if (patch.notify) next.notify = { ...current.notify, weekly: patch.notify.weekly, discordWebhookUrl: patch.notify.discordWebhookUrl === "" ? undefined : patch.notify.discordWebhookUrl ?? current.notify?.discordWebhookUrl, lastSentAt: current.notify?.lastSentAt };
+  // 화면 상태는 항목별로 합친다(언어를 바꿔도 온보딩 닫은 시각이 지워지지 않게).
+  if (patch.ui) next.ui = { ...current.ui, ...patch.ui };
   if (patch.llm) next.llm = { ...patch.llm, apiKey: patch.llm.apiKey || (keepApiKey ? current.llm.apiKey : undefined) };
   ctx.db.insert(schema.settings).values({ ownerId, data: next as unknown as Record<string, unknown>, updatedAt: Date.now() })
     .onConflictDoUpdate({ target: schema.settings.ownerId, set: { data: next as unknown as Record<string, unknown>, updatedAt: Date.now() } }).run();

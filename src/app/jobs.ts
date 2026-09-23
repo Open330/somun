@@ -9,6 +9,7 @@ import { getCandidateRow } from "./candidates.js";
 import { applyResult, enqueueJob, processNewCandidates } from "./pipeline.js";
 import { applyLesson } from "./learning.js";
 import { applyProfile, pendingProfileJob } from "./profiles.js";
+import { localeOf, say } from "./i18n.js";
 
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
@@ -67,7 +68,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, j.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     // lesson은 발행 뒤에도 반영한다(수정 후 복사·발행이 가장 흔한 흐름).
     if (!input.error && !isSideJob(j.kind) && (!candidate || ["dropped", "published"].includes(candidate.status))) {
-      ctx.db.update(schema.llmJobs).set({ status: "failed", error: "글감이 삭제·보관·발행되어 생성 결과를 반영하지 않았습니다.", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
+      ctx.db.update(schema.llmJobs).set({ status: "failed", error: say(localeOf(ctx, ownerId), "글감이 삭제·보관·발행되어 생성 결과를 반영하지 않았습니다.", "The result was not applied because the candidate was deleted, archived, or published."), finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
       events.push({ ownerId, resource: "jobs", id });
       return { applied: false };
     }
@@ -95,7 +96,10 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
-      const error = !empty ? null : raw > 0 ? "요약에 원자료에서 확인되지 않은 숫자만 있어 초안을 쓰지 않았습니다. 글감의 '원자료에서 확인하지 못해 뺀 요약'을 확인해 주세요." : "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.";
+      const lc = localeOf(ctx, ownerId);
+      const error = !empty ? null : raw > 0
+        ? say(lc, "요약에 원자료에서 확인되지 않은 숫자만 있어 초안을 쓰지 않았습니다. 글감의 '원자료에서 확인하지 못해 뺀 요약'을 확인해 주세요.", "No draft was written: every digest line had numbers not found in the raw material. See the digest lines left out on the candidate page.")
+        : say(lc, "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again.");
       ctx.db.update(schema.llmJobs).set({ status: empty ? "failed" : "done", resultJson: input.resultJson, error, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
     }
     events.push({ ownerId, resource: "jobs", id });
@@ -120,11 +124,11 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
   return ctx.db.$client.transaction(() => {
     const job = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
     if (!job) throw new NotFoundError("job");
-    if (job.status !== "failed") throw new GenerationConflictError("실패한 작업만 다시 시도할 수 있습니다.");
+    if (job.status !== "failed") throw new GenerationConflictError(say(localeOf(ctx, ownerId), "실패한 작업만 다시 시도할 수 있습니다.", "Only failed jobs can be retried."));
     // lesson·profile은 글감 상태와 무관하고 draftId·meta가 있어야 반영된다. 같은 입력으로 새 행을 만든다.
     if (isSideJob(job.kind)) {
       // 같은 저장소의 프로필 작업이 이미 대기 중이면 하나만 둔다(늦게 끝난 옛 결과가 덮지 않도록).
-      if (job.kind === "profile" && job.meta?.repo && pendingProfileJob(ctx, ownerId, job.meta.repo)) throw new GenerationConflictError("이 저장소의 프로필 작업이 이미 대기 중입니다.");
+      if (job.kind === "profile" && job.meta?.repo && pendingProfileJob(ctx, ownerId, job.meta.repo)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "이 저장소의 프로필 작업이 이미 대기 중입니다.", "A profile job for this repository is already waiting."));
       const { id: _id, status: _s, runner: _r, claimToken: _t, attempts: _a, resultJson: _res, error: _e, claimedAt: _c, finishedAt: _f, ...rest } = job;
       void [_id, _s, _r, _t, _a, _res, _e, _c, _f];
       const newId = Number(ctx.db.insert(schema.llmJobs).values({ ...rest, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
@@ -132,7 +136,7 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
       return newId;
     }
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
-    if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError("보관되거나 발행된 글감은 다시 생성할 수 없습니다.");
+    if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind }, job.continuation ?? undefined);
   }).immediate();
 }

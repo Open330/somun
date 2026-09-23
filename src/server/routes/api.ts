@@ -61,7 +61,7 @@ export function apiRoutes(ctx: AppContext, config: Config) {
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
-      ui: z.object({ onboardingDismissedAt: z.number().optional() }).optional(),
+      ui: z.object({ onboardingDismissedAt: z.number().optional(), locale: z.enum(["ko", "en"]).optional() }).optional(),
       notify: z.object({ discordWebhookUrl: z.string().url().startsWith("https://discord.com/api/webhooks/").or(z.literal("")).optional(), weekly: z.boolean() }).optional(),
       voice: z.object({ preset: z.string().max(40), guide: z.string().max(GUIDE_MAX_CHARS), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
     }));
@@ -122,7 +122,7 @@ export function apiRoutes(ctx: AppContext, config: Config) {
 
   // 계정: 내보내기(JSON), 삭제(확인 문구 필요)
   app.get("/account/export", (c) => { c.header("Content-Disposition", `attachment; filename="somun-export-${new Date().toISOString().slice(0, 10)}.json"`); return c.json(exportAccount(ctx, c.get("ownerId"))); });
-  app.post("/account/delete", async (c) => { const { confirm } = await body(c, z.object({ confirm: z.literal("삭제") })); void confirm; return c.json(deleteAccount(ctx, c.get("ownerId"))); });
+  app.post("/account/delete", async (c) => { const { confirm } = await body(c, z.object({ confirm: z.enum(["삭제", "delete"]) })); void confirm; return c.json(deleteAccount(ctx, c.get("ownerId"))); });
 
   // 알림 시험 발송
   app.post("/notify/test", async (c) => { const r = await sendWeeklySummary(ctx, c.get("ownerId"), true); return r.ok ? c.json(r) : c.json(r, 400); });

@@ -132,7 +132,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         if (at >= since) signals.push({ kind: "pr_merged", repo: name, ref: `gh:pr:${name}#${p.number}`, title: p.title, payload: { number: p.number, url: p.html_url }, occurredAt: at });
       }
       const createdAt = Date.parse(repo.created_at);
-      if (createdAt >= since) signals.push({ kind: "repo_created", repo: name, ref: `gh:repo:${name}`, title: `새 저장소 ${name}`, payload: { description: repo.description }, occurredAt: createdAt });
+      if (createdAt >= since) signals.push({ kind: "repo_created", repo: name, ref: `gh:repo:${name}`, title: name, payload: { description: repo.description }, occurredAt: createdAt });
       const starT = crossedThreshold(prev.lastStarThreshold ?? last?.stars, repo.stargazers_count, STAR_THRESHOLDS);
       if (starT) signals.push({ kind: "star_milestone", repo: name, ref: `gh:stars:${name}#${starT}`, title: `${name} ${starT} stars`, payload: { threshold: starT, stars: repo.stargazers_count }, occurredAt: Date.now() });
 

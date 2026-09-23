@@ -6,11 +6,10 @@ import type { AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
 import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
-import { examplesFor } from "./pipeline.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
-import { updateSettings } from "./settings.js";
+import { getSettingsView, updateSettings } from "./settings.js";
 import { editProfile, ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
-import { processNewCandidates } from "./pipeline.js";
+import { buildPrompt, examplesFor, processNewCandidates } from "./pipeline.js";
 
 let ctx: AppContext;
 let candidateId: number;
@@ -239,5 +238,24 @@ describe("repository profiles in local-agent mode", () => {
     const retried = retryGeneration(ctx, OWNER, first.id);
     complete(retried, P("from README A"));
     expect(getProfile(ctx, OWNER, "me/tool")?.profile.what).toBe("from README B");
+  });
+});
+
+describe("account language", () => {
+  it("writes lint explanations, stored errors, and the judge's reasoning language in the account's language", () => {
+    updateSettings(ctx, OWNER, { ui: { locale: "en" } });
+    const id = draft("Now 3x faster https://github.com/me/tool");
+    const saved = saveDraftEdit(ctx, OWNER, id, { body: "Now 3x faster https://github.com/me/tool", markCopied: false });
+    expect(saved.lint.find((r) => r.rule === "numbers_need_review")).toMatchObject({ ok: false, detail: expect.stringContaining("Numbers not found"), args: { numbers: "3x" } });
+    ctx.db.update(schema.candidates).set({ evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+    expect(buildPrompt(ctx, OWNER, "judge", candidateId).system).toContain("sentences in English");
+    updateSettings(ctx, OWNER, { ui: { locale: "ko" } });
+    expect(buildPrompt(ctx, OWNER, "judge", candidateId).system).toContain("sentences in Korean");
+  });
+
+  it("keeps other ui settings when the language changes", () => {
+    updateSettings(ctx, OWNER, { ui: { onboardingDismissedAt: 123 } });
+    updateSettings(ctx, OWNER, { ui: { locale: "en" } });
+    expect(getSettingsView(ctx, OWNER).ui).toEqual({ onboardingDismissedAt: 123, locale: "en" });
   });
 });

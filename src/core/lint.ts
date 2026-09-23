@@ -6,7 +6,8 @@ import { groundingText, type CandidateLike, type ProfileLike } from "./prompts.j
  * 실패해도 저장은 되지만 화면에 표시되고, 판단 피드백의 근거가 된다.
  */
 
-export type LintResult = { rule: string; ok: boolean; detail?: string };
+/** detail은 만들 때 계정 언어로 쓴 설명. args가 있으면 화면이 자기 언어로 다시 쓴다(수치 목록 등). */
+export type LintResult = { rule: string; ok: boolean; detail?: string; args?: Record<string, string> };
 
 export const DEFAULT_BANNED_PHRASES = [
   "excited to announce",
@@ -56,7 +57,8 @@ export function unsupportedNumbers(text: string, source: string): string[] {
   return numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
 }
 
-export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}): LintResult[] {
+export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: "ko" | "en" = "ko"): LintResult[] {
+  const say = (ko: string, en: string) => (locale === "en" ? en : ko);
   const spec = CHANNELS[channel];
   const text = `${title ?? ""}\n${body}`;
   const lower = text.toLowerCase();
@@ -69,10 +71,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   if (facts.sourceText !== undefined) {
     const missing = unsupportedNumbers(text, facts.sourceText);
-    results.push({ rule: "numbers_need_review", ok: missing.length === 0, detail: missing.length ? `제공된 근거에서 찾지 못한 수치: ${missing.join(", ")}. 원문과 단위를 확인해 주세요.` : undefined });
+    results.push({ rule: "numbers_need_review", ok: missing.length === 0, detail: missing.length ? say(`제공된 근거에서 찾지 못한 수치: ${missing.join(", ")}. 원문과 단위를 확인해 주세요.`, `Numbers not found in the evidence: ${missing.join(", ")}. Check the source and units.`) : undefined, args: missing.length ? { numbers: missing.join(", ") } : undefined });
   }
   const placeholder = /\[(number needed|숫자 확인)\]/i.test(body);
-  results.push({ rule: "no_placeholder", ok: !placeholder, detail: placeholder ? "채우지 못한 숫자가 있습니다" : undefined });
+  results.push({ rule: "no_placeholder", ok: !placeholder, detail: placeholder ? say("채우지 못한 숫자가 있습니다", "There is an unfilled number placeholder") : undefined });
 
   // 저장소 이름 왜곡: 사실의 repo가 owner/name일 때, 같은 name을 다른 owner로 쓴 토큰 (예: ja/settings) 을 잡는다.
   if (facts.repo && facts.repo.includes("/")) {
@@ -84,7 +86,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   // 지어낸 한계: 사실에 한계가 없는데 "API가 바뀔 수 있다" 류를 쓴 경우.
   if (facts.limitations !== undefined && facts.limitations.length === 0) {
     const invented = /(API가 바뀔|API may (still )?change|아직 (0\.x|베타)|still (0\.x|beta)|not yet tested)/i.test(body);
-    results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? "제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요." : undefined });
+    results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? say("제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요.", "This limitation is not in the evidence. Check the source.") : undefined });
   }
 
   if (channel === "x" || channel === "linkedin") {

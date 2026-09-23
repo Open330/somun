@@ -9,6 +9,8 @@ export type CandidateStatus = "new" | "judged" | "drafted" | "published" | "drop
 export type Decision = "draft" | "defer" | "ask";
 export type DraftStatus = "proposed" | "edited" | "copied" | "dropped";
 export type FeedbackReason = "wrong_facts" | "voice" | "wrong_channel" | "not_yet" | "not_worth" | "other";
+/** 화면 언어. 서버가 만드는 사용자용 문장(오류, 판단 이유, 알림)과 모델에게 시키는 설명 언어도 따른다. */
+export type Locale = "ko" | "en";
 export type LlmProvider = "gemini" | "anthropic" | "openai" | "local-agent";
 /**
  * lesson: 수정·버림에서 문체 규칙 한 줄을 뽑는다. profile: 저장소 프로필을 만든다(local-agent 모드).
@@ -50,7 +52,7 @@ export type Settings = {
   /** 문체: 프리셋 + 자유 지침. useExamples가 꺼져 있으면 문체 예시는 프롬프트에 넣지 않는다. */
   voice: VoiceSettings;
   /** 화면 상태. 온보딩 체크리스트를 닫은 시각 등. */
-  ui?: { onboardingDismissedAt?: number };
+  ui?: { onboardingDismissedAt?: number; locale?: Locale };
   /** 알림. Discord 웹훅 하나. weekly면 월요일 09:00 KST에 요약을 보낸다. */
   notify?: { discordWebhookUrl?: string; weekly: boolean; lastSentAt?: number };
 };
