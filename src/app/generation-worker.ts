@@ -3,6 +3,7 @@ import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
 import type { AppContext } from "./context.js";
+import { SIDE_JOB_KINDS } from "../shared/types.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps } from "./keys.js";
@@ -24,15 +25,15 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     if (!claim.claimToken) continue;
     lastServed.set(ctx.db, ownerId);
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, job.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-    if (job.kind !== "lesson" && (!candidate || ["dropped", "published"].includes(candidate.status))) {
+    if (!(SIDE_JOB_KINDS as readonly string[]).includes(job.kind) && (!candidate || ["dropped", "published"].includes(candidate.status))) {
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error: "글감이 삭제·보관·발행되어 생성을 중단했습니다." }, "server");
       return true;
     }
     const started = Date.now(), config = getSettings(ctx, ownerId).llm;
     // lesson은 분석 모델(다이제스트와 같은 기본 모델)로 돌린다.
-    const modelKind = job.kind === "lesson" ? "digest" : job.kind;
+    const modelKind = job.kind === "lesson" || job.kind === "profile" ? "digest" : job.kind;
     try {
-      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
+      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: ({ judge: "judgment", lesson: "edit_lesson", profile: "repo_profile" } as Record<string, string>)[job.kind] ?? job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
       recordLlmUsage(ctx, ownerId, config, started, { res });
     } catch (err) {

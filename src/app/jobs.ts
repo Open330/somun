@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { schema } from "../infra/db/index.js";
-import type { Channel, ChangeEvent, Job, JobKind, JobProgress } from "../shared/types.js";
+import { SIDE_JOB_KINDS, type Channel, type ChangeEvent, type GenerationKind, type Job, type JobKind, type JobProgress } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getCandidateRow } from "./candidates.js";
 import { applyResult, enqueueJob } from "./pipeline.js";
 import { applyLesson } from "./learning.js";
+import { applyProfile } from "./profiles.js";
 
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
@@ -20,7 +21,9 @@ const results = {
   judge: z.object({ scores: z.object({ runnable: score, numbers: score, lesson: score, novelty: score, audience: score }), reasoning: z.string(), suggestedChannels: z.array(z.string()).optional(), angle: z.string().optional() }),
   draft: z.object({ title: z.string().optional(), body: z.string().trim().min(1) }),
   lesson: z.object({ rule: z.string().optional(), category: z.string().optional() }),
+  profile: z.record(z.string(), z.unknown()),
 };
+const isSideJob = (kind: string) => (SIDE_JOB_KINDS as readonly string[]).includes(kind);
 
 function recoverExpired(ctx: AppContext, ownerId: string, now: number) {
   const expired = and(eq(schema.llmJobs.ownerId, ownerId), eq(schema.llmJobs.status, "claimed"), or(isNull(schema.llmJobs.claimedAt), lte(schema.llmJobs.claimedAt, now - JOB_LEASE_MS)));
@@ -62,7 +65,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
     if (j.executor !== executor || j.claimToken !== input.claimToken || j.status !== "claimed" || j.claimedAt === null || j.claimedAt <= Date.now() - JOB_LEASE_MS) return { applied: false };
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, j.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     // lesson은 발행 뒤에도 반영한다(수정 후 복사·발행이 가장 흔한 흐름).
-    if (!input.error && j.kind !== "lesson" && (!candidate || ["dropped", "published"].includes(candidate.status))) {
+    if (!input.error && !isSideJob(j.kind) && (!candidate || ["dropped", "published"].includes(candidate.status))) {
       ctx.db.update(schema.llmJobs).set({ status: "failed", error: "글감이 삭제·보관·발행되어 생성 결과를 반영하지 않았습니다.", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
       events.push({ ownerId, resource: "jobs", id });
       return { applied: false };
@@ -80,7 +83,8 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       }
       let applied: ReturnType<typeof applyResult> | undefined;
       if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as Exclude<JobKind, "lesson">, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, promptText: j.user, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, j.continuation ?? undefined);
+      else if (j.kind === "profile") applyProfile({ ...ctx, bus }, ownerId, j.meta ?? {}, parsed, `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}`);
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, promptText: j.user, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
@@ -98,7 +102,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
 export function generationStatus(ctx: AppContext, ownerId: string, candidateId?: number): JobProgress[] {
   if (candidateId !== undefined) getCandidateRow(ctx, ownerId, candidateId);
   recoverExpired(ctx, ownerId, Date.now());
-  const rows = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), ne(schema.llmJobs.kind, "lesson"), candidateId === undefined ? undefined : eq(schema.llmJobs.candidateId, candidateId))).orderBy(sql`${schema.llmJobs.id} desc`).limit(200).all();
+  const rows = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), notInArray(schema.llmJobs.kind, [...SIDE_JOB_KINDS]), candidateId === undefined ? undefined : eq(schema.llmJobs.candidateId, candidateId))).orderBy(sql`${schema.llmJobs.id} desc`).limit(200).all();
   const seen = new Set<string>();
   return rows.filter((r) => { const key = `${r.candidateId}:${r.kind}:${r.channel}:${r.lang}`; if (seen.has(key)) return false; seen.add(key); return true; }).map((r) => ({ id: r.id, candidateId: r.candidateId, kind: r.kind as JobKind, channel: (r.channel ?? undefined) as Channel | undefined, lang: r.lang ?? undefined, executor: r.executor as "local" | "server", status: r.status as JobProgress["status"], error: r.error ?? undefined, createdAt: r.createdAt, finishedAt: r.finishedAt ?? undefined }));
 }
@@ -108,8 +112,8 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     const job = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
     if (!job) throw new NotFoundError("job");
     if (job.status !== "failed") throw new GenerationConflictError("실패한 작업만 다시 시도할 수 있습니다.");
-    // lesson은 발행된 글감에도 쓰이고 초안 id가 있어야 반영된다. 같은 입력으로 새 행을 만든다.
-    if (job.kind === "lesson") {
+    // lesson·profile은 글감 상태와 무관하고 draftId·meta가 있어야 반영된다. 같은 입력으로 새 행을 만든다.
+    if (isSideJob(job.kind)) {
       const { id: _id, status: _s, runner: _r, claimToken: _t, attempts: _a, resultJson: _res, error: _e, claimedAt: _c, finishedAt: _f, ...rest } = job;
       void [_id, _s, _r, _t, _a, _res, _e, _c, _f];
       const newId = Number(ctx.db.insert(schema.llmJobs).values({ ...rest, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);

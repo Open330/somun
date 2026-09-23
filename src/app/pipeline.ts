@@ -3,7 +3,7 @@ import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import type { Decision, Evidence, GenerationPlan, JobKind } from "../shared/types.js";
+import type { Decision, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, GenerationConflictError, type AppContext } from "./context.js";
 import { getSettings, styleKeyOf } from "./settings.js";
@@ -123,7 +123,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Exclude<JobKind, "lesson">; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; promptText?: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();

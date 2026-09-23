@@ -113,7 +113,12 @@ export function apiRoutes(ctx: AppContext, config: Config) {
   app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));
   app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
   app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(6).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(8).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(12).optional() })))));
-  app.post("/profiles/:owner/:name/regenerate", async (c) => { const repo = `${c.req.param("owner")}/${c.req.param("name")}`; return c.json(await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo))); });
+  app.post("/profiles/:owner/:name/regenerate", async (c) => {
+    const repo = `${c.req.param("owner")}/${c.req.param("name")}`;
+    const r = await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo));
+    // local-agent: 워커가 만들면 candidates 변경 이벤트로 화면이 갱신된다.
+    return r.queued ? c.json(r, 202) : c.json(r);
+  });
 
   // 계정: 내보내기(JSON), 삭제(확인 문구 필요)
   app.get("/account/export", (c) => { c.header("Content-Disposition", `attachment; filename="somun-export-${new Date().toISOString().slice(0, 10)}.json"`); return c.json(exportAccount(ctx, c.get("ownerId"))); });

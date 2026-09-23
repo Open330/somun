@@ -10,8 +10,16 @@ export type Decision = "draft" | "defer" | "ask";
 export type DraftStatus = "proposed" | "edited" | "copied" | "dropped";
 export type FeedbackReason = "wrong_facts" | "voice" | "wrong_channel" | "not_yet" | "not_worth" | "other";
 export type LlmProvider = "gemini" | "anthropic" | "openai" | "local-agent";
-/** lesson: 수정·버림에서 문체 규칙 한 줄을 뽑는다. 생성 진행 상태에는 보이지 않는다. */
-export type JobKind = "digest" | "judge" | "draft" | "lesson";
+/**
+ * lesson: 수정·버림에서 문체 규칙 한 줄을 뽑는다. profile: 저장소 프로필을 만든다(local-agent 모드).
+ * 둘은 글감에 딸린 생성 단계가 아니라서 생성 진행 상태에 보이지 않는다.
+ */
+export type JobKind = "digest" | "judge" | "draft" | "lesson" | "profile";
+/** 글감 생성 단계(digest → judge → draft)가 아닌 작업. */
+export const SIDE_JOB_KINDS = ["lesson", "profile"] as const;
+export type GenerationKind = Exclude<JobKind, (typeof SIDE_JOB_KINDS)[number]>;
+/** llm_jobs.meta. profile 작업이 만들 저장소와 그때의 README 해시. */
+export type JobMeta = { repo?: string; readmeHash?: string };
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };

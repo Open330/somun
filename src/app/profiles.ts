@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { DEFAULT_MODEL, modelFor, runLlm } from "../infra/llm/providers.js";
+import { modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
-import type { RepoProfile, RepoProfileView } from "../shared/types.js";
+import type { JobMeta, RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
 import { getSettings } from "./settings.js";
@@ -43,29 +43,61 @@ export function listProfiles(ctx: AppContext, ownerId: string): RepoProfileView[
   return ctx.db.select().from(schema.repoProfiles).where(eq(schema.repoProfiles.ownerId, ownerId)).all().map(merged);
 }
 
-/** 없거나 README가 바뀐 경우에만 생성. 반환값은 생성 여부. */
-export async function ensureProfile(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<"kept" | "created" | "refreshed"> {
+/** 프로필 저장. 사용자가 고친 필드(edits)는 건드리지 않는다. */
+function saveProfile(ctx: AppContext, ownerId: string, repo: string, hash: string, profile: RepoProfile, model: string): void {
+  const now = Date.now();
+  const row = ctx.db.select().from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, repo))).get();
+  if (row) ctx.db.update(schema.repoProfiles).set({ readmeHash: hash, profile: profile as Record<string, unknown>, model, updatedAt: now }).where(eq(schema.repoProfiles.id, row.id)).run();
+  else ctx.db.insert(schema.repoProfiles).values({ ownerId, repo, readmeHash: hash, profile: profile as Record<string, unknown>, edits: null, model, createdAt: now, updatedAt: now }).run();
+  emit(ctx, ownerId, { resource: "candidates" });
+}
+
+/** 이 저장소의 프로필 작업이 이미 대기·진행 중인가. */
+function pendingProfileJob(ctx: AppContext, ownerId: string, repo: string) {
+  return ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), eq(schema.llmJobs.kind, "profile"), inArray(schema.llmJobs.status, ["pending", "claimed"]))).all().find((j) => j.meta?.repo === repo);
+}
+
+/**
+ * local-agent 모드: 프로필 생성을 사용자의 워커에 맡긴다. 원자료(README 등)가 서버 모델로 가지 않는다.
+ * 같은 저장소의 작업이 이미 있으면 새로 만들지 않는다. 반환값은 새로 넣었는지.
+ */
+function queueProfile(ctx: AppContext, ownerId: string, material: ProfileMaterial, hash: string): boolean {
+  if (pendingProfileJob(ctx, ownerId, material.repo)) return false;
+  const prompt = profilePrompt(material);
+  const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "profile", candidateId: 0, meta: { repo: material.repo, readmeHash: hash }, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: "local", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+  emit(ctx, ownerId, { resource: "jobs", id });
+  return true;
+}
+
+/** 워커가 돌려준 프로필 반영. 작업을 넣을 때의 README 해시로 저장한다(그 뒤 README가 바뀌면 다음 수집이 다시 만든다). */
+export function applyProfile(ctx: AppContext, ownerId: string, meta: JobMeta, result: unknown, model: string): void {
+  if (!meta.repo || !meta.readmeHash) return;
+  saveProfile(ctx, ownerId, meta.repo, meta.readmeHash, normalize(result), model);
+}
+
+const isLocal = (ctx: AppContext, ownerId: string) => getSettings(ctx, ownerId).llm.provider === "local-agent";
+
+/** 없거나 README가 바뀐 경우에만 생성. 반환값은 생성 여부(local-agent면 큐에 넣은 것). */
+export async function ensureProfile(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<"kept" | "created" | "refreshed" | "queued"> {
   const hash = readmeHash(material.readme, material.description);
   const row = ctx.db.select().from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, material.repo))).get();
   if (row && row.readmeHash === hash) return "kept";
+  if (isLocal(ctx, ownerId)) return queueProfile(ctx, ownerId, material, hash) ? "queued" : "kept";
   const profile = await generate(ctx, ownerId, material);
-  const now = Date.now();
-  if (row) ctx.db.update(schema.repoProfiles).set({ readmeHash: hash, profile: profile.profile as Record<string, unknown>, model: profile.model, updatedAt: now }).where(eq(schema.repoProfiles.id, row.id)).run();
-  else ctx.db.insert(schema.repoProfiles).values({ ownerId, repo: material.repo, readmeHash: hash, profile: profile.profile as Record<string, unknown>, edits: null, model: profile.model, createdAt: now, updatedAt: now }).run();
-  emit(ctx, ownerId, { resource: "candidates" });
+  saveProfile(ctx, ownerId, material.repo, hash, profile.profile, profile.model);
   return row ? "refreshed" : "created";
 }
 
-/** 강제 재생성. 사용자가 고친 필드는 그대로 둔다. */
-export async function regenerateProfile(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<RepoProfileView> {
-  const profile = await generate(ctx, ownerId, material);
+/** 강제 재생성. 사용자가 고친 필드는 그대로 둔다. local-agent면 큐에 넣고 지금의 프로필을 돌려준다. */
+export async function regenerateProfile(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<{ queued: boolean; profile?: RepoProfileView }> {
   const hash = readmeHash(material.readme, material.description);
-  const now = Date.now();
-  const row = ctx.db.select().from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, material.repo))).get();
-  if (row) ctx.db.update(schema.repoProfiles).set({ readmeHash: hash, profile: profile.profile as Record<string, unknown>, model: profile.model, updatedAt: now }).where(eq(schema.repoProfiles.id, row.id)).run();
-  else ctx.db.insert(schema.repoProfiles).values({ ownerId, repo: material.repo, readmeHash: hash, profile: profile.profile as Record<string, unknown>, edits: null, model: profile.model, createdAt: now, updatedAt: now }).run();
-  emit(ctx, ownerId, { resource: "candidates" });
-  return getProfile(ctx, ownerId, material.repo)!;
+  if (isLocal(ctx, ownerId)) {
+    queueProfile(ctx, ownerId, material, hash);
+    return { queued: true, profile: getProfile(ctx, ownerId, material.repo) };
+  }
+  const profile = await generate(ctx, ownerId, material);
+  saveProfile(ctx, ownerId, material.repo, hash, profile.profile, profile.model);
+  return { queued: false, profile: getProfile(ctx, ownerId, material.repo) };
 }
 
 export function editProfile(ctx: AppContext, ownerId: string, repo: string, edits: Partial<RepoProfile>): RepoProfileView {
@@ -78,11 +110,10 @@ export function editProfile(ctx: AppContext, ownerId: string, repo: string, edit
   return getProfile(ctx, ownerId, repo)!;
 }
 
+/** 서버 모델로 바로 만든다(local-agent가 아닐 때만). 분석 모델(다이제스트와 같은 등급)을 쓴다. */
 async function generate(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<{ profile: RepoProfile; model: string }> {
-  const settings = getSettings(ctx, ownerId);
+  const cfg = getSettings(ctx, ownerId).llm;
   const startedAt = Date.now();
-  // 분석 모델(다이제스트와 같은 등급)로 만든다. local-agent 설정이어도 프로필은 서버 Gemini 키로 만든다: 워커 큐를 타기엔 너무 잦다.
-  const cfg = settings.llm.provider === "local-agent" ? { provider: "gemini" as const, model: DEFAULT_MODEL.gemini } : settings.llm;
   let res;
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
