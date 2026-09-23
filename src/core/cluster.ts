@@ -42,10 +42,10 @@ export function clusterKeyFor(signal: SignalLike, context: { latestReleaseAt?: n
       return { type: "release", key: `release:${repo}@${tag}`, title: `${repo} ${tag}` };
     }
     case "repo_created":
-      return { type: "new-repo", key: `new-repo:${repo}`, title: `새 저장소 ${repo}` };
+      return { type: "new-repo", key: `new-repo:${repo}`, title: repo };
     case "readme_changed": {
       const isNew = context.repoCreatedAt !== undefined && signal.occurredAt - context.repoCreatedAt < 30 * DAY;
-      return isNew ? { type: "new-repo", key: `new-repo:${repo}`, title: `새 저장소 ${repo}` } : null;
+      return isNew ? { type: "new-repo", key: `new-repo:${repo}`, title: repo } : null;
     }
     case "star_milestone":
     case "download_milestone": {
@@ -60,7 +60,7 @@ export function clusterKeyFor(signal: SignalLike, context: { latestReleaseAt?: n
       if (context.latestReleaseAt !== undefined && signal.occurredAt - context.latestReleaseAt < 30 * DAY) return null;
       if ((context.recentPrCount ?? 0) < 3) return null;
       const week = weekKey(signal.occurredAt);
-      return { type: "in-progress", key: `in-progress:${repo}:${week}`, title: `${repo} 진행 중 (${week})` };
+      return { type: "in-progress", key: `in-progress:${repo}:${week}`, title: `${repo} (${week})` };
     }
     case "omp_session":
       return null;

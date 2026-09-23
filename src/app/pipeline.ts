@@ -11,6 +11,7 @@ import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge } from "./publications.js";
+import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
 /**
@@ -40,7 +41,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId) });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.angle ?? undefined;
@@ -105,9 +106,9 @@ export async function judgeCandidates(ctx: AppContext, ownerId: string, ids: num
 export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string; continuation?: GenerationPlan } = {}): number {
   return ctx.db.$client.transaction(() => {
     const c = getCandidateRow(ctx, ownerId, candidateId);
-    if (["dropped", "published"].includes(c.status)) throw new GenerationConflictError("보관되거나 발행된 글감은 다시 생성할 수 없습니다. 먼저 글감을 복원해 주세요.");
+    if (["dropped", "published"].includes(c.status)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다. 먼저 글감을 복원해 주세요.", "Archived or published candidates cannot be generated again. Restore the candidate first."));
     const evidence = c.evidence as Evidence;
-    if (kind === "draft" && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError("알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.");
+    if (kind === "draft" && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again."));
     return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation);
   }).immediate();
 }
@@ -116,7 +117,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
   const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
     .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.lang ?? undefined) === lang && (j.status === "pending" || j.status === "claimed"));
   if (open) {
-    if (open.system !== prompt.system || open.user !== prompt.user || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError("진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.");
+    if (open.system !== prompt.system || open.user !== prompt.user || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.", "A job is already running. Wait for it to finish, then request again with different instructions."));
     return open.id;
   }
   const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
@@ -164,7 +165,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
-    const reasoning = noChanges ? "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요." : String(r.reasoning ?? "");
+    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : String(r.reasoning ?? "");
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
     const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
@@ -184,7 +185,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile)), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile), settings.ui?.locale), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

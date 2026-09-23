@@ -50,7 +50,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const changed = d.body !== input.body || (d.title ?? "") !== (input.title ?? "");
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile) : {});
+  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile) : {}, settings.ui?.locale);
   if (changed) {
     ctx.db.insert(schema.draftEdits).values({ ownerId, draftId: id, channel: d.channel, before: d.body, after: input.body, createdAt: now }).run();
     queueLesson(ctx, ownerId, { draftId: id, candidateId: d.candidateId, channel: d.channel, lang: d.lang, before: d.body, after: input.body });

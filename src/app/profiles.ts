@@ -8,6 +8,7 @@ import type { JobMeta, RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
 import { getSettings } from "./settings.js";
+import { localeOf, say } from "./i18n.js";
 
 /**
  * 저장소 프로필: 정체성의 기준선.
@@ -67,7 +68,7 @@ function queueProfile(ctx: AppContext, ownerId: string, material: ProfileMateria
   const open = pendingProfileJob(ctx, ownerId, material.repo);
   if (open?.meta?.readmeHash === hash) return "exists";
   if (open?.status === "claimed") return "busy";
-  if (open) ctx.db.update(schema.llmJobs).set({ status: "failed", error: "새 README로 다시 요청되어 대체되었습니다.", finishedAt: Date.now() }).where(and(eq(schema.llmJobs.id, open.id), eq(schema.llmJobs.status, "pending"))).run();
+  if (open) ctx.db.update(schema.llmJobs).set({ status: "failed", error: say(localeOf(ctx, ownerId), "새 README로 다시 요청되어 대체되었습니다.", "Replaced by a request for the new README."), finishedAt: Date.now() }).where(and(eq(schema.llmJobs.id, open.id), eq(schema.llmJobs.status, "pending"))).run();
   const prompt = profilePrompt(material);
   const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "profile", candidateId: 0, meta: { repo: material.repo, readmeHash: hash, queuedAt: Date.now() }, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: "local", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
   emit(ctx, ownerId, { resource: "jobs", id });
@@ -112,7 +113,7 @@ export async function regenerateProfile(ctx: AppContext, ownerId: string, materi
     // 같은 README여도 사용자가 다시 만들라고 한 것이므로, 아직 시작하지 않은 작업은 새로 넣는다.
     const open = pendingProfileJob(ctx, ownerId, material.repo);
     if (open?.status === "claimed") return { queued: false, busy: true, profile: getProfile(ctx, ownerId, material.repo) };
-    if (open) ctx.db.update(schema.llmJobs).set({ status: "failed", error: "새 요청으로 대체되었습니다.", finishedAt: Date.now() }).where(and(eq(schema.llmJobs.id, open.id), eq(schema.llmJobs.status, "pending"))).run();
+    if (open) ctx.db.update(schema.llmJobs).set({ status: "failed", error: say(localeOf(ctx, ownerId), "새 요청으로 대체되었습니다.", "Replaced by a newer request."), finishedAt: Date.now() }).where(and(eq(schema.llmJobs.id, open.id), eq(schema.llmJobs.status, "pending"))).run();
     queueProfile(ctx, ownerId, material, hash);
     return { queued: true, profile: getProfile(ctx, ownerId, material.repo) };
   }

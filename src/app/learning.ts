@@ -8,6 +8,7 @@ export const GUIDE_MAX_LINES = 20;
 export const GUIDE_MAX_CHARS = 2000;
 import { normalizeText, similar } from "./ledger.js";
 import { getSettings, updateSettings } from "./settings.js";
+import { localeOf, say } from "./i18n.js";
 
 /**
  * 학습 루프. 검수 행동(수정, 버림)을 다음 초안에 쓰일 것으로 바꾼다.
@@ -71,8 +72,8 @@ export function acceptSuggestion(ctx: AppContext, ownerId: string, id: number): 
   // 이미 비슷한 줄이 있으면 붙이지 않고 승인만 기록한다(한도와 무관).
   const duplicate = guide.split("\n").some((l) => similar(normalizeText(l), r.normalized));
   const lines = guide.split("\n").filter((l) => l.trim()).length;
-  if (!duplicate && lines >= GUIDE_MAX_LINES) throw new GenerationConflictError(`지침이 ${lines}줄로 한도(${GUIDE_MAX_LINES}줄)에 닿았습니다. 문체 화면에서 겹치거나 오래된 줄을 정리한 뒤 추가해 주세요.`);
-  if (!duplicate && guide.length + r.rule.length + 1 > GUIDE_MAX_CHARS) throw new GenerationConflictError(`지침이 ${guide.length}자로 한도(${GUIDE_MAX_CHARS}자)를 넘게 됩니다. 긴 줄을 줄이거나 정리한 뒤 추가해 주세요.`);
+  if (!duplicate && lines >= GUIDE_MAX_LINES) throw new GenerationConflictError(say(localeOf(ctx, ownerId), `지침이 ${lines}줄로 한도(${GUIDE_MAX_LINES}줄)에 닿았습니다. 문체 화면에서 겹치거나 오래된 줄을 정리한 뒤 추가해 주세요.`, `Your guide has ${lines} lines, the limit is ${GUIDE_MAX_LINES}. Remove overlapping or old lines on the Voice page, then add it.`));
+  if (!duplicate && guide.length + r.rule.length + 1 > GUIDE_MAX_CHARS) throw new GenerationConflictError(say(localeOf(ctx, ownerId), `지침이 ${guide.length}자로 한도(${GUIDE_MAX_CHARS}자)를 넘게 됩니다. 긴 줄을 줄이거나 정리한 뒤 추가해 주세요.`, `Your guide has ${guide.length} characters and would pass the ${GUIDE_MAX_CHARS}-character limit. Shorten or remove lines, then add it.`));
   if (!duplicate) updateSettings(ctx, ownerId, { voice: { ...settings.voice, guide: guide ? `${guide}\n${r.rule}` : r.rule, chosenAt: settings.voice.chosenAt ?? Date.now() } });
   ctx.db.update(schema.guideSuggestions).set({ status: "accepted", updatedAt: Date.now() }).where(eq(schema.guideSuggestions.id, id)).run();
   emit(ctx, ownerId, { resource: "settings" });

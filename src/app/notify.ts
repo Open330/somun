@@ -3,6 +3,7 @@ import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { listSuggestions } from "./learning.js";
+import { localeOf, say } from "./i18n.js";
 
 /**
  * 주간 요약 알림. Discord 웹훅 하나. 수동 모드에서 "들어와야 아는" 문제를 푼다.
@@ -11,8 +12,9 @@ import { listSuggestions } from "./learning.js";
 export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force = false): Promise<{ ok: boolean; reason?: string; sent?: string }> {
   const s = getSettings(ctx, ownerId);
   const url = s.notify?.discordWebhookUrl;
-  if (!url) return { ok: false, reason: "Discord 웹훅 URL이 없습니다." };
-  if (!force && !s.notify?.weekly) return { ok: false, reason: "주간 알림이 꺼져 있습니다." };
+  const lc = localeOf(ctx, ownerId);
+  if (!url) return { ok: false, reason: say(lc, "Discord 웹훅 URL이 없습니다.", "No Discord webhook URL is set.") };
+  if (!force && !s.notify?.weekly) return { ok: false, reason: say(lc, "주간 알림이 꺼져 있습니다.", "Weekly summaries are turned off.") };
   const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).all();
   const fresh = rows.filter((c) => c.status === "new" && !(c.evidence as { highlightsAt?: number }).highlightsAt);
   const review = rows.filter((c) => c.status === "drafted");
@@ -21,9 +23,9 @@ export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force 
   const base = ctx.env.publicUrl ?? "https://somun.jiun.dev";
   const top = [...review, ...fresh].slice(0, 5).map((c) => `• ${c.title}  <${base}/c/${c.id}>`).join("\n");
   const content = [
-    `**소문 주간 요약**`,
-    `검수할 초안 ${review.length}개 · 새 글감 ${fresh.length}개 · 보류 ${deferred.length}개${sugg ? ` · 지침 제안 ${sugg}개` : ""}`,
-    top || "이번 주는 알릴 게 없습니다. 정상입니다.",
+    say(lc, "**소문 주간 요약**", "**somun weekly summary**"),
+    say(lc, `검수할 초안 ${review.length}개 · 새 글감 ${fresh.length}개 · 보류 ${deferred.length}개${sugg ? ` · 지침 제안 ${sugg}개` : ""}`, `${review.length} drafts to review · ${fresh.length} new candidates · ${deferred.length} deferred${sugg ? ` · ${sugg} guide suggestions` : ""}`),
+    top || say(lc, "이번 주는 알릴 게 없습니다. 정상입니다.", "Nothing to announce this week. That is normal."),
     `<${base}/>`,
   ].join("\n");
   const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(10_000) });
