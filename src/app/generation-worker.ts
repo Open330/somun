@@ -31,9 +31,10 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     }
     const started = Date.now(), config = getSettings(ctx, ownerId).llm;
     // lesson은 분석 모델(다이제스트와 같은 기본 모델)로 돌린다.
-    const modelKind = job.kind === "lesson" || job.kind === "profile" ? "digest" : job.kind;
+    // profile 작업은 로컬 워커만 처리하므로(profiles.queueProfile) 여기에는 생성 단계와 lesson만 온다.
+    const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     try {
-      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: ({ judge: "judgment", lesson: "edit_lesson", profile: "repo_profile" } as Record<string, string>)[job.kind] ?? job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
+      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
       recordLlmUsage(ctx, ownerId, config, started, { res });
     } catch (err) {

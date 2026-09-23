@@ -5,6 +5,7 @@ import { githubAppConfig, ownerOfInstallation } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
 import { ensureProfile } from "./profiles.js";
+import { getSettings } from "./settings.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
 import { NotFoundError, type AppContext } from "./context.js";
@@ -62,6 +63,8 @@ export function limitationsFrom(readme: string): string[] {
 
 /** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
 export const PROFILE_BUDGET = 25;
+/** local-agent 모드의 상한. 워커가 CLI를 하나씩 돌리므로 작게 둔다. */
+export const PROFILE_BUDGET_LOCAL = 5;
 
 /**
  * 소유자가 GitHub를 읽을 토큰. 설치 토큰은 그 설치를 연결한 소유자만 쓴다.
@@ -96,7 +99,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   const ownerId = source.ownerId;
   const since = Date.now() - 14 * DAY;
   const summary: Record<string, number> = {};
-  let profileBudget = PROFILE_BUDGET;
+  const local = getSettings(ctx, ownerId).llm.provider === "local-agent";
+  let profileBudget = local ? PROFILE_BUDGET_LOCAL : PROFILE_BUDGET;
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
@@ -166,7 +170,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
       // 프로필: 없거나 README가 바뀐 저장소만, 수집 한 번에 최대 PROFILE_BUDGET개. 나머지는 다음 수집에.
-      if (profileBudget > 0) {
+      // local-agent는 사용자의 워커가 하나씩 처리하므로 이번에 새 활동이 있는 저장소만, 더 적게 넣는다(초안 작업이 밀리지 않게).
+      if (profileBudget > 0 && (!local || signals.length > 0)) {
         try {
           const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }

@@ -9,7 +9,8 @@ import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
 import { examplesFor } from "./pipeline.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
-import { ensureProfile, getProfile } from "./profiles.js";
+import { ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
+import { processNewCandidates } from "./pipeline.js";
 
 let ctx: AppContext;
 let candidateId: number;
@@ -174,7 +175,7 @@ describe("repository profiles in local-agent mode", () => {
     const jobs = ctx.db.select().from(schema.llmJobs).all();
     expect(jobs).toMatchObject([{ kind: "profile", executor: "local", meta: { repo: "me/tool" } }]);
     expect(jobs[0].user).toContain("Does things.");
-    expect(generationStatus(ctx, OWNER)).toEqual([]);
+    expect(generationStatus(ctx, OWNER)).toMatchObject([{ kind: "profile", repo: "me/tool", status: "pending", executor: "local" }]);
     expect(pendingJobs(ctx, OWNER).map((j) => j.kind)).toEqual(["profile"]);
   });
 
@@ -186,5 +187,37 @@ describe("repository profiles in local-agent mode", () => {
     completeJob(ctx, OWNER, job.id, { claimToken: claimToken!, resultJson: JSON.stringify({ what: "A tool that does things", audience: "devs", claims: [], stage: "beta", limitations: [], naming: "tool", avoid: [] }), model: "claude" });
     expect(getProfile(ctx, OWNER, "me/tool")?.profile).toMatchObject({ what: "A tool that does things", stage: "beta" });
     expect(await ensureProfile(ctx, OWNER, material)).toBe("kept");
+  });
+
+  const complete = (id: number, profile: Record<string, unknown>) => { const { claimToken } = claimJob(ctx, OWNER, id, "t"); return completeJob(ctx, OWNER, id, { claimToken: claimToken!, resultJson: JSON.stringify(profile) }); };
+  const P = (what: string) => ({ what, audience: "", claims: [], stage: "beta", limitations: [], naming: "", avoid: [] });
+
+  it("does not let an older job overwrite a newer profile", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    await ensureProfile(ctx, OWNER, material);
+    const old = ctx.db.select().from(schema.llmJobs).get()!;
+    ctx.db.insert(schema.repoProfiles).values({ ownerId: OWNER, repo: "me/tool", readmeHash: "newer", profile: P("newer"), model: "gemini", createdAt: Date.now() + 1000, updatedAt: Date.now() + 1000 }).run();
+    expect(complete(old.id, P("older"))).toEqual({ applied: true });
+    expect(getProfile(ctx, OWNER, "me/tool")?.profile.what).toBe("newer");
+  });
+
+  it("replaces a not-yet-started job when the README changes, and waits for one the worker already took", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    await ensureProfile(ctx, OWNER, material);
+    expect(await ensureProfile(ctx, OWNER, { ...material, readme: "# tool v2" })).toBe("queued");
+    expect(ctx.db.select().from(schema.llmJobs).all().map((j) => j.status)).toEqual(["failed", "pending"]);
+    claimJob(ctx, OWNER, 2, "t");
+    expect(await regenerateProfile(ctx, OWNER, material)).toMatchObject({ queued: false, busy: true });
+    expect(() => retryGeneration(ctx, OWNER, 1)).toThrow(/이미 대기 중/);
+  });
+
+  it("holds automatic digests for a repository until its profile arrives, then continues", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" }, watch: { mode: "auto", recentDays: 30 } });
+    ctx.db.update(schema.candidates).set({ status: "new", updatedAt: Date.now() }).run();
+    await ensureProfile(ctx, OWNER, material);
+    expect(await processNewCandidates(ctx)).toBe(0);
+    complete(ctx.db.select().from(schema.llmJobs).get()!.id, P("A tool"));
+    await vi.waitFor(() => expect(ctx.db.select().from(schema.llmJobs).all().some((j) => j.kind === "digest")).toBe(true));
+    expect(ctx.db.select().from(schema.llmJobs).all().find((j) => j.kind === "digest")?.user).toContain("A tool");
   });
 });
