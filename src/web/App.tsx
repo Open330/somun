@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import type { CandidateListItem } from "@shared/types";
 import { api, clearStoredToken, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
 import { useAuth } from "./lib/auth/context";
 import { Skeleton } from "./components/ui";
+import { ChunkBoundary } from "./components/ChunkBoundary";
 import AuthCallback from "./pages/AuthCallback";
 import Landing from "./pages/Landing";
 import TokenLogin from "./pages/TokenLogin";
@@ -53,6 +54,7 @@ export default function App() {
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
+  const location = useLocation();
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
   const review = (rows ?? []).filter((c) => c.status === "drafted").length;
@@ -70,6 +72,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
       <div>
         <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<button className="ghost sm mobile-signout" onClick={() => void onSignOut()}>나가기</button></div>
         <main className="main" id="main-content" tabIndex={-1}>
+          <ChunkBoundary resetKey={location.pathname}>
           <Suspense fallback={<Skeleton rows={4} />}>
           <Routes>
             <Route path="/" element={<Inbox />} />
@@ -86,6 +89,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          </ChunkBoundary>
         </main>
       </div>
     </div>

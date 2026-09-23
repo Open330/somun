@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { modelFor, runLlm } from "../infra/llm/providers.js";
+import { DEFAULT_MODEL, modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
 import type { RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
@@ -82,7 +82,7 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const settings = getSettings(ctx, ownerId);
   const startedAt = Date.now();
   // 분석 모델(다이제스트와 같은 등급)로 만든다. local-agent 설정이어도 프로필은 서버 Gemini 키로 만든다: 워커 큐를 타기엔 너무 잦다.
-  const cfg = settings.llm.provider === "local-agent" ? { provider: "gemini" as const, model: "gemini-3.5-flash-lite" } : settings.llm;
+  const cfg = settings.llm.provider === "local-agent" ? { provider: "gemini" as const, model: DEFAULT_MODEL.gemini } : settings.llm;
   let res;
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }

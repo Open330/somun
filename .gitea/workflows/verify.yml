@@ -1,0 +1,24 @@
+name: Verify
+
+# 실험 사례·결과만 바뀐 푸시. 이미지는 만들지 않고, 사례 파일을 읽는 테스트까지만 돌린다.
+# 코드가 함께 바뀌면 Build and Deploy가 같은 검사를 하므로 여기서는 experiments/**만 본다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "experiments/**"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test

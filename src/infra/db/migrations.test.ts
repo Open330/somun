@@ -58,3 +58,31 @@ it("restores an online SQLite backup including committed WAL data", async () => 
     } finally { restored.$client.close(); }
   } finally { source.$client.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+it("moves the legacy angle suffix out of judgment reasoning when upgrading to 0010", () => {
+  const dir = mkdtempSync(join(tmpdir(), "somun-angle-"));
+  const migrations = join(dir, "old-migrations");
+  mkdirSync(join(migrations, "meta"), { recursive: true });
+  const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
+  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 10);
+  writeFileSync(join(migrations, "meta/_journal.json"), JSON.stringify(journal));
+  for (const entry of journal.entries) copyFileSync(`drizzle/${entry.tag}.sql`, join(migrations, `${entry.tag}.sql`));
+  const file = join(dir, "somun.db");
+  try {
+    const old = openDb(file, migrations);
+    try {
+      const insert = old.$client.prepare("INSERT INTO judgments (owner_id, candidate_id, scores, total, reasoning, decision, suggested_channels, model, created_at) VALUES ('o', 1, '{}', 6, ?, 'draft', '[]', 'm', 1)");
+      insert.run("올릴 만합니다.\n\n각도: 기다리는 에이전트를 놓치던 문제");
+      insert.run("각도가 없는 판단.");
+      insert.run("빈 각도.\n\n각도: ");
+    } finally { old.$client.close(); }
+    const db = openDb(file);
+    try {
+      expect(db.select({ reasoning: schema.judgments.reasoning, angle: schema.judgments.angle }).from(schema.judgments).all()).toEqual([
+        { reasoning: "올릴 만합니다.", angle: "기다리는 에이전트를 놓치던 문제" },
+        { reasoning: "각도가 없는 판단.", angle: null },
+        { reasoning: "빈 각도.", angle: null },
+      ]);
+    } finally { db.$client.close(); }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

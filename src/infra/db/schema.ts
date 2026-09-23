@@ -52,7 +52,7 @@ export const judgments = sqliteTable("judgments", {
   scores: json<Record<string, number>>("scores").notNull(),
   total: integer("total").notNull(),
   reasoning: text("reasoning").notNull(),
-  /** 글이 잡을 한 문장 각도. 비어 있으면 없음. 예전 행은 reasoning 끝에 붙어 있다(core/judgment.ts). */
+  /** 글이 잡을 한 문장 각도. 비어 있으면 없음. 예전 행(reasoning 끝의 "각도: …")은 마이그레이션 0010이 옮겼다. */
   angle: text("angle"),
   decision: text("decision").notNull(),
   suggestedChannels: json<string[]>("suggested_channels").notNull(),
