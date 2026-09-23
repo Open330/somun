@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { Locale } from "@shared/locale";
 import { en } from "./en";
 
 /**
@@ -7,9 +8,11 @@ import { en } from "./en";
  *
  * 변수는 {이름}으로 끼운다: t("내 예시 {n}개", { n: 3 }).
  */
-export type Locale = "ko" | "en";
+export type { Locale };
 export const LOCALES: { id: Locale; label: string }[] = [{ id: "ko", label: "한국어" }, { id: "en", label: "English" }];
 const KEY = "somun.locale";
+/** 사용자가 직접 고른 언어가 아직 계정에 저장되지 않았다는 표시. 저장될 때까지 계정 값보다 우선한다. */
+const PENDING = "somun.locale.pending";
 
 function detect(): Locale {
   try {
@@ -26,8 +29,19 @@ if (typeof document !== "undefined") document.documentElement.lang = current;
 
 export const getLocale = (): Locale => current;
 
-/** 언어를 바꾼다. 화면은 useLocale을 쓰는 뿌리에서 다시 그린다. */
-export function setLocale(next: Locale): void {
+export function hasPendingChoice(): boolean {
+  try { return localStorage.getItem(PENDING) === "1"; } catch { return false; }
+}
+export function clearPendingChoice(): void {
+  try { localStorage.removeItem(PENDING); } catch { /* 저장소를 못 쓰는 환경 */ }
+}
+
+/**
+ * 언어를 바꾼다. 화면은 useLocale을 쓰는 뿌리에서 다시 그린다.
+ * choice: 사용자가 직접 고른 것(기본). 계정에서 받아 맞추는 것이면 false.
+ */
+export function setLocale(next: Locale, { choice = true }: { choice?: boolean } = {}): void {
+  if (choice) { try { localStorage.setItem(PENDING, "1"); } catch { /* 저장소를 못 쓰는 환경 */ } }
   if (next === current) return;
   current = next;
   try { localStorage.setItem(KEY, next); } catch { /* 저장소를 못 쓰는 환경 */ }

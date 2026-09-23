@@ -6,6 +6,7 @@ import { channelLabel, LintBadges, Menu, REASONS, lintDetail, targetLabel } from
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
 import { useAuth } from "../../lib/auth/context";
+import { setUnsaved } from "../../lib/unsaved";
 import { dateLocale, t } from "../../i18n";
 
 /**
@@ -44,7 +45,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
   const [actionError, setActionError] = useState<string | null>(null);
   const unsaved = editing && (body !== (latest?.body ?? "") || title !== (latest?.title ?? ""));
   const blocker = useBlocker(unsaved);
-  useEffect(() => { onDirty?.(unsaved); return () => onDirty?.(false); }, [unsaved, onDirty]);
+  useEffect(() => { onDirty?.(unsaved); setUnsaved(unsaved); return () => { onDirty?.(false); setUnsaved(false); }; }, [unsaved, onDirty]);
   // 새로고침·외부 링크는 브라우저의 이탈 확인으로 막는다(별도 확인 창을 더 띄우면 두 번 묻게 된다).
   useEffect(() => {
     if (!unsaved) return;
@@ -116,7 +117,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       {latest.lint.some((item) => !item.ok && item.detail) && <details className="raw">
         <summary>{t("초안에서 확인할 부분")}</summary>
         <p className="small muted">{t("저장된 초안의 자동 점검 결과입니다. 수정 후 저장하면 다시 점검합니다. 통과해도 사실 확인은 필요합니다.")}</p>
-        <ul className="small">{latest.lint.filter((item) => !item.ok && item.detail).map((item) => <li key={item.rule}>{item.detail}</li>)}</ul>
+        <ul className="small">{latest.lint.filter((item) => !item.ok && item.detail).map((item) => <li key={item.rule}>{lintDetail(item)}</li>)}</ul>
       </details>}
       <div className="draft-head">
         <div className="meta">

@@ -6,7 +6,7 @@ import { schema } from "../infra/db/index.js";
 import { SIDE_JOB_KINDS, type Channel, type ChangeEvent, type GenerationKind, type Job, type JobKind, type JobProgress } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getCandidateRow } from "./candidates.js";
-import { applyResult, enqueueJob, processNewCandidates } from "./pipeline.js";
+import { applyResult, buildPrompt, enqueueJob, processNewCandidates } from "./pipeline.js";
 import { applyLesson } from "./learning.js";
 import { applyProfile, pendingProfileJob } from "./profiles.js";
 import { localeOf, say } from "./i18n.js";
@@ -96,7 +96,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
-      const lc = localeOf(ctx, ownerId);
+      const lc = empty ? localeOf(ctx, ownerId) : "ko";
       const error = !empty ? null : raw > 0
         ? say(lc, "요약에 원자료에서 확인되지 않은 숫자만 있어 초안을 쓰지 않았습니다. 글감의 '원자료에서 확인하지 못해 뺀 요약'을 확인해 주세요.", "No draft was written: every digest line had numbers not found in the raw material. See the digest lines left out on the candidate page.")
         : say(lc, "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again.");
@@ -137,7 +137,9 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     }
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
     if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
-    return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind }, job.continuation ?? undefined);
+    // 다이제스트·판단은 지금의 근거와 계정 언어로 다시 만든다. 초안은 요청한 지침이 프롬프트에 들어 있으므로 저장된 것을 그대로 쓴다.
+    const prompt = job.kind === "draft" ? { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
+    return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();
 }
 

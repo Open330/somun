@@ -3,6 +3,7 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "저장하지 않은 수정 내용이 있습니다. 언어를 바꾸면 사라집니다. 바꿀까요?": "You have unsaved edits. Changing the language will discard them. Change anyway?",
   "새 초안을 준비했습니다. 내용을 확인해 주세요.": "New draft ready. Please review it.",
   "저장했습니다": "Saved",
   "웹훅을 지웠습니다": "Webhook removed",

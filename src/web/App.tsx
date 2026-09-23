@@ -5,7 +5,7 @@ import { api, clearStoredToken, UNAUTHORIZED_EVENT, useResource } from "./lib/ap
 import { useAuth } from "./lib/auth/context";
 import { Skeleton } from "./components/ui";
 import { ChunkBoundary } from "./components/ChunkBoundary";
-import { LocaleSwitch } from "./components/LocaleSwitch";
+import { LocaleSwitch, useAccountLocaleSync } from "./components/LocaleSwitch";
 import AuthCallback from "./pages/AuthCallback";
 import Landing from "./pages/Landing";
 import TokenLogin from "./pages/TokenLogin";
@@ -60,6 +60,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  useAccountLocaleSync(settings);
   const review = (rows ?? []).filter((c) => c.status === "drafted").length;
   const pending = suggestions?.length ?? 0;
   const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{t(label)}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title={t("지침 제안")}>{pending}</span> : null}</NavLink>);
@@ -70,7 +71,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
         <div className="brand"><Lockup size={30} /></div>
         <span className="nav-caption">{t("워크스페이스")}</span><nav className="nav" aria-label={t("주 메뉴")}>{links}</nav>
         <div className="spacer" /><div className="sidebar-note"><b>{t("만드는 일에 집중하세요.")}</b><p>{t("알릴 이야기는 여기 모아둘게요.")}</p></div>
-        <div className="who-locale"><LocaleSwitch settings={settings} compact /></div>
+        <div className="who-locale"><LocaleSwitch compact /></div>
         <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>{t("나가기")}</button></div>
       </aside>
       <div>

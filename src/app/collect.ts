@@ -6,6 +6,7 @@ import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
 import { ensureProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
+import { localeOf, say } from "./i18n.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
 import { NotFoundError, type AppContext } from "./context.js";
@@ -72,12 +73,12 @@ export const PROFILE_BUDGET_LOCAL = 5;
  */
 export async function githubAccess(ctx: AppContext, ownerId: string, installationId?: number): Promise<{ gh: GitHubClient; publicOnly: boolean }> {
   if (installationId) {
-    if (ownerOfInstallation(ctx, installationId) !== ownerId) throw new Error("이 계정에 연결된 GitHub 설치가 아닙니다.");
+    if (ownerOfInstallation(ctx, installationId) !== ownerId) throw new Error(say(localeOf(ctx, ownerId), "이 계정에 연결된 GitHub 설치가 아닙니다.", "This GitHub installation is not linked to this account."));
     const cfg = githubAppConfig(ctx);
-    if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+    if (!cfg) throw new Error(say(localeOf(ctx, ownerId), "GitHub App이 설정되지 않았습니다.", "The GitHub App is not configured."));
     return { gh: new GitHubClient(await installationToken(cfg, installationId)), publicOnly: false };
   }
-  if (!ctx.env.githubToken) throw new Error("GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.");
+  if (!ctx.env.githubToken) throw new Error(say(localeOf(ctx, ownerId), "GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.", "No GitHub token. Install the GitHub App or set GITHUB_TOKEN."));
   const allowed = ctx.env.githubTokenOwners;
   return { gh: new GitHubClient(ctx.env.githubToken), publicOnly: allowed !== undefined && !allowed.includes(ownerId) };
 }
