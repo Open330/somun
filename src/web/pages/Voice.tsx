@@ -71,8 +71,8 @@ export default function Voice() {
             <h3 style={{ marginBottom: 4 }}>내 지침 <span className="tiny muted">선택 · 프리셋보다 우선</span></h3>
             <p className="small muted" style={{ margin: "0 0 8px" }}>글마다 반복해서 고치던 것을 여기 적어 두세요. 예: "링크는 항상 마지막 줄에", "회사 이름은 쓰지 않기", "영어 글에서는 I 대신 we".</p>
             <textarea value={guide ?? voice.guide} onChange={(ev) => setGuide(ev.target.value)} placeholder="비워 두면 프리셋 지침만 씁니다." style={{ minHeight: 90 }} />
-            <div className="row between" style={{ marginTop: 8 }}>
-              <label className="row small" style={{ gap: 6, flex: 1, whiteSpace: "nowrap" }}><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> 내가 복사한 글을 문체 예시로 프롬프트에 붙이기</label>
+            <div className="row between wrap" style={{ marginTop: 8, gap: 8 }}>
+              <label className="row small" style={{ gap: 6, flex: "1 1 220px", minWidth: 0 }}><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> 내가 복사한 글을 문체 예시로 프롬프트에 붙이기</label>
               <button className="primary" disabled={guide === null || guide === voice.guide} onClick={async () => { if (await saveVoice({ guide: guide ?? "" })) setGuide(null); }}>지침 저장</button>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { useDeferredValue, useMemo } from "react";
 import type { Channel } from "@core/channels";
 
 /** 채널 모양대로 보여주는 미리보기. 글자 수와 줄바꿈이 실제 화면과 비슷하게 읽히도록. */
@@ -42,12 +43,19 @@ export function ChannelPreview({ channel, title, body, author }: { channel: Chan
 }
 
 /** 단어 단위 diff (LCS). 수정 전후를 한 줄로 보여줄 때 쓴다. */
-export function WordDiff({ before, after }: { before: string; after: string }) {
-  const a = before.split(/(\s+)/), b = after.split(/(\s+)/);
+/** LCS 표가 커지는 긴 글은 줄 단위로 비교한다(블로그 개요 길이에서 단어 단위는 수백만 칸이 된다). */
+const WORD_DIFF_MAX_CELLS = 250_000;
+
+export type DiffPart = { t: "eq" | "del" | "ins"; s: string };
+
+/** 단어(공백 보존) 단위 비교. 너무 길면 줄 단위로 바꿔 계산량을 묶는다. */
+export function diffParts(before: string, after: string): DiffPart[] {
+  let a = before.split(/(\s+)/), b = after.split(/(\s+)/);
+  if ((a.length + 1) * (b.length + 1) > WORD_DIFF_MAX_CELLS) { a = before.split(/(\n)/); b = after.split(/(\n)/); }
   const n = a.length, m = b.length;
-  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-  const out: { t: "eq" | "del" | "ins"; s: string }[] = [];
+  const out: DiffPart[] = [];
   let i = 0, j = 0;
   while (i < n && j < m) {
     if (a[i] === b[j]) { out.push({ t: "eq", s: a[i] }); i++; j++; }
@@ -56,5 +64,12 @@ export function WordDiff({ before, after }: { before: string; after: string }) {
   }
   while (i < n) out.push({ t: "del", s: a[i++] });
   while (j < m) out.push({ t: "ins", s: b[j++] });
+  return out;
+}
+
+/** 입력 중에는 이전 결과를 보여주고, 한가할 때 다시 계산한다. */
+export function WordDiff({ before, after }: { before: string; after: string }) {
+  const deferred = useDeferredValue(after);
+  const out = useMemo(() => diffParts(before, deferred), [before, deferred]);
   return <div className="draft-body diff">{out.map((x, k) => x.t === "eq" ? <span key={k}>{x.s}</span> : x.t === "del" ? <del key={k}>{x.s}</del> : <ins key={k}>{x.s}</ins>)}</div>;
 }

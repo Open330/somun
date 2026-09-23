@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
 
 export const CHANNEL_LABEL: Record<string, string> = { x: "X", threads: "Threads", linkedin: "LinkedIn", show_hn: "Show HN", show_gn: "Show GN", blog: "블로그 개요" };
@@ -117,24 +117,34 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 }
 
 /** 간단한 오버플로 메뉴 (⋯). */
+/** 더 보기 메뉴. 열면 첫 항목에 초점, 위·아래 화살표로 이동, Esc로 닫고 버튼으로 초점을 돌린다. */
 export function Menu({ items }: { items: { label: string; onClick: () => unknown; danger?: boolean }[] }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
+    list.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
     const close = () => setOpen(false);
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { close(); trigger.current?.focus(); } };
     window.addEventListener("click", close);
     window.addEventListener("keydown", escape);
     return () => { window.removeEventListener("click", close); window.removeEventListener("keydown", escape); };
   }, [open]);
+  const move = (event: ReactKeyboardEvent) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    buttons[(at + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus();
+  };
   return (
     <span className="menu-wrap" onClick={(e) => e.stopPropagation()}>
-      <button ref={trigger} disabled={busy} aria-expanded={open} className="ghost sm" aria-label="더 보기" onClick={() => setOpen((o) => !o)}>⋯</button>
+      <button ref={trigger} disabled={busy} aria-haspopup="menu" aria-expanded={open} className="ghost sm" aria-label="더 보기" onClick={() => setOpen((o) => !o)}>⋯</button>
       {error && <span className="menu-error" role="alert">{error}</span>}
-      {open && <div className="menu">{items.map((it) => <button key={it.label} className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`작업을 완료하지 못했습니다. ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
+      {open && <div className="menu" role="menu" ref={list} onKeyDown={move}>{items.map((it) => <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`작업을 완료하지 못했습니다. ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
     </span>
   );
 }

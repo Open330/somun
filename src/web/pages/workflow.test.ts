@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Draft, SettingsView } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../app/settings";
 import Inbox from "./Inbox";
-import { DraftPanel } from "./Candidate";
+import DraftPanel from "./candidate/DraftPanel";
 
 const { resources, post } = vi.hoisted(() => ({ resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(), post: vi.fn() }));
-vi.mock("../lib/api", () => ({ useResource: (path: string) => resources.get(path) ?? { reload() {} }, post, patch: vi.fn() }));
+vi.mock("../lib/api", () => ({ useResource: (path: string) => resources.get(path) ?? { reload() {} }, post, patch: vi.fn(), del: vi.fn() }));
 vi.mock("../lib/auth/context", () => ({ useAuth: () => ({ user: null }) }));
 const set = (path: string, data: unknown) => resources.set(path, { data, reload: vi.fn() });
 const wrap = (component: ReturnType<typeof createElement>) => createElement(RouterProvider, { router: createMemoryRouter([{ path: "*", element: component }]) });
