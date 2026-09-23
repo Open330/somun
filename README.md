@@ -48,19 +48,19 @@ It never posts for you. It never writes from thin air. It never says "excited to
    └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask
             ▼
    ┌─────────────────┐    one draft per channel, in that channel's shape and language,
-   │  4. draft        │    facts only from the digest, voice only from your examples,
-   └────────┬────────┘    slop-linted before it reaches you
+   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,
+   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you
             ▼
    ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · "posted, here's the URL"
    │  5. you          │
    └────────┬────────┘
             ▼
-   ┌─────────────────┐    edits → voice examples · drops → judge calibration
-   │  6. learn        │    URLs → stars, visitors, downloads vs. the 7-day baseline
+   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration
+   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks
    └─────────────────┘
 ```
 
-**Facts from the system, voice from you.** A draft may only use numbers that exist in the evidence. If a number is missing, it writes `[number needed]` instead of inventing one.
+**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like "3x" or "twice" — is flagged, and copying asks you to confirm.
 
 <br />
 
@@ -80,7 +80,7 @@ Evidence on the left (version, stars, downloads, demo asset, limitations, digest
 <td width="50%" valign="top">
 
 **Published**
-Paste the URL after you post. From then on: star and visitor deltas against the pre-post baseline, plus whatever reactions you type in.
+Paste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.
 
 **Settings**
 Sources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.
@@ -102,7 +102,9 @@ Sources, channels, rubric weights, banned phrases, voice examples, and which mod
 | Show GN (GeekNews) | what / why / how it differs / decisions / limits / feedback wanted | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
-Every draft passes a **slop lint** before you see it: banned phrases, emoji bullets, missing number, missing limitation, missing link, exclamation marks, vote requests.
+Every draft passes a **slop lint** before you see it: banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.
+
+**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. If the guide and examples work, the rewrite share goes down. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
 
 <br />
 
@@ -160,6 +162,8 @@ docker run -p 8790:8790 -v somun-data:/data \
 ```
 
 Auth is one of three modes, checked in order: a shared `SOMUN_TOKEN` bearer (single user), an RS256 JWT from an issuer you trust (`AUTH_ISSUER`, `AUTH_JWKS_URL`, `AUTH_AUDIENCE`; this is how `somun.jiun.dev` uses `api.jiun.dev`), or `SOMUN_ALLOW_ANONYMOUS=true` for local development only.
+
+With JWT, several people can sign in; each gets a separate workspace (sources, candidates, drafts, voice, publications). The server `GITHUB_TOKEN` reads private repositories only for `SOMUN_ADMIN_OWNER_ID` and the shared-token owner; everyone else reads public repositories with it, or connects their own GitHub App installation.
 
 <br />
 
