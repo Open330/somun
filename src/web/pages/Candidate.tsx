@@ -6,7 +6,7 @@ import type { CandidateDetail, Draft, KeyStatus, RepoProfileView, SettingsView }
 import { CHANNEL_LABEL, ChannelIcon, ErrorState, LintBadges, Menu, Meter, REASONS, Skeleton, StageChip, TYPE_LABEL, Toast, fmtDate, stageOf, targetLabel, useToast } from "../components/ui";
 import { GenerationStatus } from "../components/GenerationStatus";
 import { ChannelPreview, WordDiff } from "../components/preview";
-import { patch, post, useResource } from "../lib/api";
+import { del, patch, post, useResource } from "../lib/api";
 import { useAuth } from "../lib/auth/context";
 
 /**
@@ -130,7 +130,7 @@ export default function Candidate() {
           {!channels.length && <div className="state-panel"><h2>게시할 채널을 먼저 골라주세요</h2><p>초안을 만들 채널과 언어를 하나 이상 선택하면 시작할 수 있어요.</p><Link className="btn primary" to="/settings?tab=channels">채널 선택하기</Link></div>}
           {current && curKey && (
             <DraftPanel key={`${cid}:${curKey}`} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onDirty={setUnsaved} onLang={(l) => switchDraft(() => setLangByCh({ ...langByCh, [current.channel]: l }))} expectedModel={settings?.llm.provider === "gemini" ? (settings.llm.draftModel || "gemini-3.7-flash") : undefined} draftModelResetAt={keys ? keys.filter((k) => k.label.endsWith(settings?.llm.draftModel || "gemini-3.7-flash") && k.cooldownUntil).map((k) => k.cooldownUntil!).sort()[0] : undefined}
-              drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)?.url}
+              drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
               busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
           )}
         </section>
@@ -140,6 +140,10 @@ export default function Candidate() {
           <section className="side-block">
             <h2>무엇이 달라졌나</h2>
             {e.highlights?.length ? <ul className="hl check">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted" style={{ margin: 0 }}>{stage.busy ? "다이제스트를 만드는 중입니다." : "초안 만들기를 누르면 이 글감의 변경 내용을 먼저 정리합니다."}</p>}
+            {e.unverifiedHighlights?.length ? <details className="raw"><summary>원자료에서 확인하지 못해 뺀 요약 {e.unverifiedHighlights.length}개</summary>
+              <p className="tiny muted">요약에 원자료에 없는 수치가 있어 판단과 초안에 넘기지 않았습니다. 맞는 내용이면 원자료(릴리스 노트 등)에 수치를 적은 뒤 다시 분석해 주세요.</p>
+              <ul className="hl small">{e.unverifiedHighlights.map((h, i) => <li key={i}>{h.text} <span className="badge warn">{h.numbers.join(", ")}</span></li>)}</ul>
+            </details> : null}
             {e.ompSummary && <details className="raw"><summary>에이전트 세션 요약</summary><pre className="evidence">{e.ompSummary}</pre></details>}
             {told.length > 0 && (
               <details className="raw"><summary>이 저장소에서 이미 다룬 변경 {told.length}개 · 발행 {told.filter((t) => t.publishedAt).length}개</summary>
@@ -196,7 +200,7 @@ const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자�
 
 const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="group" aria-label="언어">{langs.map((l) => <button key={l} aria-pressed={l === lang} className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : <span className="badge outline">{lang.toUpperCase()}</span>;
 
-export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: string; busy: boolean; onRedraft: (instruction?: string) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void }) {
+export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: { id: number; url: string }; busy: boolean; onRedraft: (instruction?: string) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void }) {
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
   const merged = drafts.map((d) => savedDraft?.id === d.id && savedDraft.updatedAt >= d.updatedAt ? savedDraft : d);
   const versions = [...merged].sort((a, b) => b.version - a.version);
@@ -212,8 +216,9 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
   const [view, setView] = useState<"preview" | "text">("preview");
   const [step, setStep] = useState<"draft" | "post">("draft");
   const [url, setUrl] = useState("");
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
-  const publicationUrl = published ?? recordedUrl;
+  const [recorded, setRecorded] = useState<{ id: number; url: string } | null>(null);
+  const publication = published ?? recorded;
+  const [showDraft, setShowDraft] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
   const [dropReason, setDropReason] = useState<(typeof REASONS)[number][0]>("voice");
   const [rewriteOpen, setRewriteOpen] = useState(false);
@@ -238,8 +243,13 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
   useEffect(() => { if (editing) return; setTitle(latest?.title ?? ""); setBody(latest?.body ?? ""); setEditing(false); setViewId(null); setRewriteOpen(false); setStep(latest?.status === "copied" ? "post" : "draft"); }, [latest?.id, latest?.title, latest?.body, latest?.status, editing]);
 
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
+  const unsupported = (lint?: Draft["lint"]) => lint?.find((item) => item.rule === "numbers_need_review" && !item.ok);
   const save = async (copyAfter: boolean) => {
     if (!latest || action || !body.trim()) return;
+    // 원자료에서 찾지 못한 수치가 있으면 복사 전에 한 번 확인한다. 게시하면 되돌리기 어렵다.
+    const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
+    const check = !bodyChanged ? unsupported(latest.lint) : undefined;
+    if (copyAfter && check && !window.confirm(`${check.detail ?? "원자료에서 찾지 못한 수치가 있습니다."}\n\n확인했다면 그대로 복사할까요?`)) return;
     setAction(copyAfter ? "copy" : "save"); setActionError(null);
     let copied = false;
     try {
@@ -247,6 +257,8 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
       const saved = await post<Draft>(`/drafts/${latest.id}/edit`, { title: spec.hasTitle ? title : undefined, body, markCopied: copyAfter });
       if (saved?.id) setSavedDraft(saved);
       setEditing(false); if (copyAfter) setStep("post");
+      const after = bodyChanged ? unsupported(saved?.lint) : undefined;
+      if (after) setActionError(`${copyAfter ? "복사했습니다. " : ""}${after.detail ?? "원자료에서 찾지 못한 수치가 있습니다."}`);
       showToast(copyAfter ? "복사했습니다. 채널에 게시한 뒤 아래에 링크를 남겨주세요." : "수정한 내용을 저장했습니다.");
     } catch (err) {
       setActionError(copied ? "복사는 완료했지만 저장하지 못했습니다. 내용을 유지한 채 다시 저장해 주세요." : copyAfter ? "복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하거나 수정 화면에서 직접 복사해 주세요." : `저장하지 못했습니다. ${(err as Error).message}`);
@@ -265,7 +277,7 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (publicationUrl) return <div className="card"><h2 className="completed-title">게시 기록을 남겼어요</h2><p className="small"><span className="badge ok">올림</span> <a href={publicationUrl} target="_blank" rel="noreferrer">{publicationUrl}</a></p><p className="tiny muted">발행 기록에서 게시 후 변화를 확인할 수 있어요.</p><Link to="/published" className="btn primary">발행 기록 보기 →</Link></div>;
+  if (publication && !showDraft) return <PublishedCard publication={publication} showToast={showToast} onShowDraft={latest ? () => setShowDraft(true) : undefined} onRemoved={() => setRecorded(null)} />;
   if (!latest) {
     return (
       <div className="card draft-empty">
@@ -287,6 +299,7 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
         <button onClick={() => blocker.proceed()}>수정 내용 버리고 이동</button>
       </div>}
       {actionError && <div className="inline-notice is-error" role="alert">{actionError}</div>}
+      {publication && showDraft && <div className="inline-notice" role="status"><span>이미 게시한 초안입니다.</span><button className="ghost sm" onClick={() => setShowDraft(false)}>게시 기록으로</button></div>}
       {latest.lint.some((item) => !item.ok && item.detail) && <details className="raw">
         <summary>초안에서 확인할 부분</summary>
         <p className="small muted">저장된 초안의 자동 점검 결과입니다. 수정 후 저장하면 다시 점검합니다. 통과해도 사실 확인은 필요합니다.</p>
@@ -324,7 +337,7 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
           {spec.hasTitle && <input aria-label="초안 제목" value={title} onChange={(ev) => setTitle(ev.target.value)} style={{ marginBottom: 8 }} placeholder="제목" />}
           <textarea aria-label="초안 본문" value={body} onChange={(ev) => setBody(ev.target.value)} autoFocus />
           <div className="row between" style={{ marginTop: 6 }}><span className="tiny muted">{[...body].length}{spec.maxChars ? `/${spec.maxChars}` : ""}자</span></div>
-          {changed && <><div className="tiny muted" style={{ margin: "8px 0 4px" }}>바뀐 부분. 저장하면 이 문장이 내 문체 예시로 남습니다 (설정에서 예시 참고를 켠 경우에만 프롬프트에 들어갑니다).</div><WordDiff before={latest.body} after={body} /></>}
+          {changed && <><div className="tiny muted" style={{ margin: "8px 0 4px" }}>바뀐 부분. 복사하면 이 글이 내 문체 예시가 되고, 바꾼 이유는 문체 규칙 제안으로 돌아옵니다.</div><WordDiff before={latest.body} after={body} /></>}
           <div className="toolbar" style={{ marginTop: 10 }}>
             <button className="primary" disabled={action !== null || !body.trim()} onClick={() => void copy()}>{action === "copy" ? "저장 중…" : "저장하고 복사"}</button>
             <button disabled={action !== null || !body.trim()} onClick={() => void save(false)}>{action === "save" ? "저장 중…" : "변경 저장"}</button>
@@ -361,12 +374,17 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
       {dropOpen && (
         <div className="row wrap" style={{ marginTop: 10 }}>
           <select value={dropReason} onChange={(ev) => setDropReason(ev.target.value as never)}>{REASONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-          <button className="danger" onClick={async () => { await post(`/drafts/${latest.id}/drop`, { reason: dropReason }); setDropOpen(false); showToast("버렸습니다. 사유가 다음 초안에 반영됩니다."); }}>버리기</button>
+          <button className="danger" disabled={action !== null} onClick={async () => {
+            setAction("drop"); setActionError(null);
+            try { await post(`/drafts/${latest.id}/drop`, { reason: dropReason }); setDropOpen(false); showToast("버렸습니다. 사유가 다음 초안에 반영됩니다."); }
+            catch (err) { setActionError(`버리지 못했습니다. 사유는 학습에 쓰이니 다시 시도해 주세요. ${(err as Error).message}`); }
+            finally { setAction(null); }
+          }}>{action === "drop" ? "버리는 중…" : "버리기"}</button>
           <button className="ghost" onClick={() => setDropOpen(false)}>취소</button>
         </div>
       )}
 
-      {!editing && !isOld && (
+      {!editing && !isOld && !publication && (
         <div className="step-post">
           <p className="tiny muted">자동 점검은 사실 확인을 대신하지 않습니다. 변경 근거와 대조해 경험·수치·변경 내용을 확인하세요.</p>
           <div className="row between"><b>{step === "post" ? "복사 완료 · 이제 게시해 보세요" : "게시하고 링크 남기기"}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{spec.label} 작성 화면 열기 ↗</a>}</div>
@@ -374,7 +392,7 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
           <details className="raw"><summary>게시 전 확인할 점</summary><ol>{spec.runbook.map((r, i) => <li key={i}>{r}</li>)}{spec.mediaHint && <li>이미지: {spec.mediaHint}</li>}</ol></details>
           <form className="publication-form" onSubmit={async (event) => {
             event.preventDefault(); setAction("publish"); setActionError(null);
-            try { await post("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url: url.trim() }); setRecordedUrl(url.trim()); setUrl(""); showToast("발행 기록에 저장했습니다."); }
+            try { const r = await post<{ id: number }>("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url: url.trim() }); setRecorded({ id: r.id, url: url.trim() }); setShowDraft(false); setUrl(""); showToast("발행 기록에 저장했습니다."); }
             catch (err) { setActionError(`게시 링크를 저장하지 못했습니다. ${(err as Error).message}`); }
             finally { setAction(null); }
           }}>
@@ -385,6 +403,33 @@ export function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publishe
       )}
     </div>
   );
+}
+
+/** 게시 기록. 잘못 적은 링크는 고치거나 지울 수 있다. */
+function PublishedCard({ publication, showToast, onShowDraft, onRemoved }: { publication: { id: number; url: string }; showToast: (m: string) => void; onShowDraft?: () => void; onRemoved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [url, setUrl] = useState(publication.url);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true); setError(null);
+    try { await fn(); showToast(done); return true; } catch (err) { setError((err as Error).message); return false; } finally { setBusy(false); }
+  };
+  return <div className="card">
+    <h2 className="completed-title">게시 기록을 남겼어요</h2>
+    {error && <div className="inline-notice is-error" role="alert">저장하지 못했습니다. {error}</div>}
+    {editing ? <form className="publication-form" onSubmit={async (ev) => { ev.preventDefault(); if (await run(() => patch(`/publications/${publication.id}`, { url: url.trim() }), "링크를 고쳤습니다.")) setEditing(false); }}>
+      <label className="field"><span>게시글 링크</span><input type="url" required value={url} onChange={(ev) => setUrl(ev.target.value)} /></label>
+      <div className="toolbar"><button className="primary" type="submit" disabled={busy || !/^https?:\/\//.test(url.trim())}>{busy ? "저장 중…" : "링크 저장"}</button><button type="button" className="ghost" onClick={() => { setUrl(publication.url); setEditing(false); }}>취소</button></div>
+    </form> : <p className="small"><span className="badge ok">올림</span> <a href={publication.url} target="_blank" rel="noreferrer">{publication.url}</a></p>}
+    <p className="tiny muted">발행 기록에서 게시 후 변화를 확인할 수 있어요.</p>
+    <div className="toolbar">
+      <Link to="/published" className="btn primary">발행 기록 보기 →</Link>
+      {!editing && <button onClick={() => setEditing(true)}>링크 고치기</button>}
+      {onShowDraft && <button className="ghost" onClick={onShowDraft}>초안 다시 보기</button>}
+      <button className="ghost danger" disabled={busy} onClick={async () => { if (window.confirm("이 게시 기록을 지울까요? 게시글 자체는 지워지지 않습니다.")) { if (await run(() => del(`/publications/${publication.id}`), "게시 기록을 지웠습니다.")) onRemoved(); } }}>기록 지우기</button>
+    </div>
+  </div>;
 }
 
 const STAGE_LABEL: Record<string, string> = { experiment: "실험", beta: "베타", stable: "안정", archived: "보관", unknown: "단계 미상" };
@@ -424,7 +469,12 @@ function ProfileBlock({ repo, view, showToast }: { repo: string; view?: RepoProf
           <label className="field"><span>핵심 주장 (한 줄에 하나)</span><textarea value={claims} onChange={(ev) => setClaims(ev.target.value)} style={{ minHeight: 70 }} /></label>
           <label className="field"><span>글에 쓰지 않을 말 (쉼표로)</span><input value={avoid} onChange={(ev) => setAvoid(ev.target.value)} placeholder="회사명, 내부 호스트명…" /></label>
           <div className="toolbar">
-            <button className="primary" onClick={async () => { await patch(`/profiles/${repo}`, { what, audience, claims: claims.split("\n").map((x) => x.trim()).filter(Boolean), avoid: avoid.split(",").map((x) => x.trim()).filter(Boolean) }); setEditing(false); showToast("프로필을 저장했습니다. 다음 다이제스트부터 반영됩니다."); }}>저장</button>
+            <button className="primary" disabled={busy} onClick={async () => {
+              setBusy(true);
+              try { await patch(`/profiles/${repo}`, { what, audience, claims: claims.split("\n").map((x) => x.trim()).filter(Boolean), avoid: avoid.split(",").map((x) => x.trim()).filter(Boolean) }); setEditing(false); showToast("프로필을 저장했습니다. 다음 다이제스트부터 반영됩니다."); }
+              catch (err) { showToast(`저장하지 못했습니다. ${(err as Error).message}`); }
+              finally { setBusy(false); }
+            }}>저장</button>
             <button className="ghost" onClick={() => setEditing(false)}>취소</button>
           </div>
         </div>
