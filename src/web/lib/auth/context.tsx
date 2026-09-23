@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, ty
 import { resetEvents } from "../events";
 import { isAuthEnabled, type AuthProviderName } from "./config";
 import { getAuthManager, type AuthSnapshot, type AuthUser } from "./manager";
+import { t } from "../../i18n";
 
 export type AuthState = {
   enabled: boolean;
@@ -45,6 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthState {
   const s = useContext(AuthContext);
-  if (!s) throw new Error("useAuth는 AuthProvider 안에서만");
+  if (!s) throw new Error(t("useAuth는 AuthProvider 안에서만"));
   return s;
 }

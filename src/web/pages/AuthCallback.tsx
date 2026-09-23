@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAuthManager } from "../lib/auth/manager";
+import { t } from "../i18n";
 
 export default function AuthCallback() {
   const nav = useNavigate();
@@ -16,5 +17,5 @@ export default function AuthCallback() {
       .then(() => nav("/", { replace: true }))
       .catch((e: Error) => setError(e.message));
   }, [nav]);
-  return <div className="empty">{error ?? "로그인 처리 중…"}</div>;
+  return <div className="empty">{error ?? t("로그인 처리 중…")}</div>;
 }

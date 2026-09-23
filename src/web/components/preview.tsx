@@ -1,14 +1,15 @@
 import { useDeferredValue, useMemo } from "react";
 import type { Channel } from "@core/channels";
+import { t } from "../i18n";
 
 /** 채널 모양대로 보여주는 미리보기. 글자 수와 줄바꿈이 실제 화면과 비슷하게 읽히도록. */
 export function ChannelPreview({ channel, title, body, author }: { channel: Channel; title?: string; body: string; author: string }) {
   if (channel === "x" || channel === "threads") {
     return (
       <div className="pv pv-x">
-        <div className="pv-head"><span className="pv-avatar" /><b>{author}</b><span className="muted">@{author.toLowerCase().replace(/\s+/g, "")} · 지금</span></div>
+        <div className="pv-head"><span className="pv-avatar" /><b>{author}</b><span className="muted">@{author.toLowerCase().replace(/\s+/g, "")} · {t("지금")}</span></div>
         <div className="pv-body">{body}</div>
-        <div className="pv-foot muted">{channel === "threads" ? "답글 · 리포스트 · 좋아요" : "답글 · 리포스트 · 좋아요 · 조회"}</div>
+        <div className="pv-foot muted">{channel === "threads" ? t("답글 · 리포스트 · 좋아요") : t("답글 · 리포스트 · 좋아요 · 조회")}</div>
       </div>
     );
   }
@@ -33,9 +34,9 @@ export function ChannelPreview({ channel, title, body, author }: { channel: Chan
     const [first, ...rest] = body.split("\n");
     return (
       <div className="pv pv-li">
-        <div className="pv-head"><span className="pv-avatar sq" /><div><b>{author}</b><div className="tiny muted">지금 · 🌐</div></div></div>
+        <div className="pv-head"><span className="pv-avatar sq" /><div><b>{author}</b><div className="tiny muted">{t("지금 · 🌐")}</div></div></div>
         <div className="pv-body"><span style={{ fontWeight: 500 }}>{first}</span>{rest.length ? "\n" + rest.join("\n") : ""}</div>
-        <div className="tiny muted">…더 보기 접힘선은 첫 줄 아래에 옵니다</div>
+        <div className="tiny muted">{t("…더 보기 접힘선은 첫 줄 아래에 옵니다")}</div>
       </div>
     );
   }
