@@ -1,7 +1,7 @@
 import { and, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import type { AutoStats } from "../shared/types.js";
-import type { AppContext } from "./context.js";
+import { emit, type AppContext } from "./context.js";
 
 /**
  * 발행 글의 반응 수 자동 수집. 로그인 없이 되는 곳만.
@@ -25,7 +25,7 @@ export async function fetchReactions(channel: string, url: string): Promise<Auto
   if (channel === "x") {
     const p = parseXStatus(url);
     if (!p) return null;
-    const r = await fetch(`https://api.fxtwitter.com/${p.user}/status/${p.id}`, { headers: { "User-Agent": UA } });
+    const r = await fetch(`https://api.fxtwitter.com/${p.user}/status/${p.id}`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10_000) });
     if (!r.ok) return null;
     const j = (await r.json()) as { code?: number; tweet?: { likes?: number; retweets?: number; replies?: number; views?: number | null } };
     if (!j.tweet) return null;
@@ -34,7 +34,7 @@ export async function fetchReactions(channel: string, url: string): Promise<Auto
   if (channel === "show_hn") {
     const id = parseHnItem(url);
     if (!id) return null;
-    const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, { headers: { "User-Agent": UA } });
+    const r = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10_000) });
     if (!r.ok) return null;
     const j = (await r.json()) as { score?: number; descendants?: number } | null;
     if (!j) return null;
@@ -59,4 +59,15 @@ export async function refreshReactions(ctx: AppContext, ownerId?: string, force 
     } catch (e) { ctx.log.warn({ id: p.id, err: (e as Error).message }, "reactions fetch failed"); }
   }
   return n;
+}
+
+/** 발행 하나의 반응을 지금 받는다. 오래된 발행도 대상이다(링크를 고친 경우). */
+export async function refreshPublicationReactions(ctx: AppContext, ownerId: string, id: number): Promise<boolean> {
+  const p = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
+  if (!p) return false;
+  const stats = await fetchReactions(p.channel, p.url).catch((e: Error) => { ctx.log.warn({ id, err: e.message }, "reactions fetch failed"); return null; });
+  if (!stats) return false;
+  ctx.db.update(schema.publications).set({ autoStats: stats, autoStatsAt: Date.now() }).where(eq(schema.publications.id, id)).run();
+  emit(ctx, ownerId, { resource: "publications", id });
+  return true;
 }

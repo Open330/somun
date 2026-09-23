@@ -1,5 +1,5 @@
 import { CHANNELS, type Channel } from "./channels.js";
-import { factsBlock, type CandidateLike, type ProfileLike } from "./prompts.js";
+import { groundingText, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
  * 슬롭 린트. 초안 저장 전에 돌리고 결과를 함께 저장한다.
@@ -36,9 +36,20 @@ const EXCLAMATION = /!/;
 
 export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string };
 
-/** 생성과 사용자 수정에 같은 근거를 적용한다. */
+/** 생성과 사용자 수정에 같은 근거를 적용한다. 숫자는 요약이 아니라 원자료와 맞춰 본다. */
 export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike): LintFacts {
-  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: factsBlock(candidate, profile) };
+  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile) };
+}
+
+/** 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다. "40 percent", "40 퍼센트"는 40%와 같다. */
+const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "").replace(/(\d)\s*(?:percent|퍼센트|%)/gi, "$1%");
+/** v1.2 = 1.2 */
+const canonical = (value: string) => value.replace(/^v/, "");
+
+/** text의 수치 중 source에서 찾지 못한 것. 순수 함수라 다이제스트 검증과 초안 린트가 같이 쓴다. */
+export function unsupportedNumbers(text: string, source: string): string[] {
+  const supported = new Set(numberTokens(prose(source)).map(canonical));
+  return numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
 }
 
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}): LintResult[] {
@@ -53,11 +64,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
 
   if (facts.sourceText !== undefined) {
-    // 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다.
-    const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "");
-    const canonical = (value: string) => value.replace(/^v/, "");
-    const supported = new Set(numberTokens(prose(facts.sourceText)).map(canonical));
-    const missing = numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
+    const missing = unsupportedNumbers(text, facts.sourceText);
     results.push({ rule: "numbers_need_review", ok: missing.length === 0, detail: missing.length ? `제공된 근거에서 찾지 못한 수치: ${missing.join(", ")}. 원문과 단위를 확인해 주세요.` : undefined });
   }
   const placeholder = /\[(number needed|숫자 확인)\]/i.test(body);
@@ -109,14 +116,34 @@ export function lintPassed(results: LintResult[]): boolean {
  */
 export function numberTokens(text: string): string[] {
   const out = new Set<string>();
-  for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?![\w.])/g)) {
+  for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?![\w.])/gi)) {
+    // 배수(3x, 3×, 3배)의 숫자는 아래에서 배수 토큰으로만 센다.
+    if (MULTIPLIER_SUFFIX.test(text.slice((m.index ?? 0) + m[0].length))) continue;
     let t = m[0].toLowerCase();
     if (/^\d{1,2}$/.test(t) && Number(t) <= 1) continue; // 0, 1 은 문장 안 조사·순서일 때가 많다
     t = t.replace(/,/g, "");
     out.add(t);
   }
+  // 배수는 별도 토큰으로 본다. 원문에 없는 "3배 빨라짐"을 잡기 위해.
+  for (const m of text.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?=[x×](?![\w-])|배(?![포치열경송달너터정우려]))/g)) out.add(`${m[1]}x`);
+  for (const [re, token] of MULTIPLIER_WORDS) if (re.test(text)) out.add(token);
   return [...out];
 }
+
+/**
+ * 숫자 바로 뒤(띄어쓰기 없이)의 배수 표시. 소문자 x·× 뒤에 영숫자나 하이픈이 오면 배수가 아니다(1920x1080, 0x1F, 3 X-ray).
+ * "배" 뒤에 포·치·열처럼 다른 낱말이 이어지면 배수가 아니다(배포, 배치, 배열).
+ */
+const MULTIPLIER_SUFFIX = /^(?:[x×](?![\w-])|배(?![포치열경송달너터정우려]))/;
+
+/** 숫자 없이 쓰는 배수 표현. 원문에 같은 배수가 없으면 지어낸 주장이다. 합성어(twice-weekly, 스물두 배)는 배수로 보지 않는다. */
+const MULTIPLIER_WORDS: [RegExp, string][] = [
+  [/\b(?:twice|two-?fold)\b(?!-)/i, "2x"],
+  [/\b(?:tripled|three-?fold)\b(?!-)/i, "3x"],
+  [/(?<![가-힣])두\s?배(?![포치열경송달너터정우려])/, "2x"], [/(?<![가-힣])세\s?배(?![포치열경송달너터정우려])/, "3x"],
+  [/(?<![가-힣])네\s?배(?![포치열경송달너터정우려])/, "4x"], [/(?<![가-힣])다섯\s?배(?![포치열경송달너터정우려])/, "5x"],
+  [/(?<![가-힣])열\s?배(?![포치열경송달너터정우려])/, "10x"],
+];
 
 /**
  * 같은 채널의 최신 초안들(언어별)에서 숫자 집합이 다르면 알린다. EN에 "61 releases"가 있는데 KO에 없으면 잡힌다.

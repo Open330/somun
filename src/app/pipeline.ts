@@ -1,33 +1,32 @@
 import { and, desc, eq } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
-import { draftLintFacts, lintDraft } from "../core/lint.js";
-import { digestPrompt, draftPrompt, judgePrompt, type PromptSpec } from "../core/prompts.js";
+import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
+import { digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { LlmError, runLlm, usageProviderOf } from "../infra/llm/providers.js";
-import { UsageReporter } from "../infra/usage.js";
 import type { Decision, Evidence, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
 import { emit, GenerationConflictError, type AppContext } from "./context.js";
-import { keyPoolOps } from "./keys.js";
-import { getSettings } from "./settings.js";
+import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
+import { channelResultsForJudge } from "./publications.js";
 import { voiceGuideFor } from "../core/voice.js";
 
 /**
  * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
- * 프로바이더가 local-agent면 큐(llm_jobs)에 넣고 워커가 처리한다. 결과 반영은 applyResult 한 곳.
+ * 모든 단계는 큐(llm_jobs)를 거친다. local-agent면 사용자의 워커가, 아니면 서버 워커가 처리한다. 결과 반영은 applyResult 한 곳.
  */
 
-export type RunResult = { queued?: true; applied?: Applied; error?: string };
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
 
-function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number) {
-  const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt)).limit(50).all();
+/** 문체 예시. 내가 복사한 글이 2개 이상이면 그것만(최근 3개), 모자라면 참고 예시로 채운다. */
+export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number) {
+  const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt), desc(schema.examples.id)).limit(50).all();
   const own = rows.filter((r) => r.source !== "seed");
   const seed = rows.filter((r) => r.source === "seed");
-  return [...own, ...seed].slice(0, limit).map((e) => ({ source: e.source, title: e.title ?? undefined, body: e.body }));
+  const picked = own.length >= 2 ? own.slice(0, Math.min(3, limit)) : [...own, ...seed].slice(0, limit);
+  return picked.map((e) => ({ source: e.source, title: e.title ?? undefined, body: e.body }));
 }
 
 function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
@@ -41,7 +40,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo) });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
@@ -56,54 +55,32 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   });
 }
 
-/** 한 단계 실행. 직접 프로바이더면 호출 후 반영, local-agent면 큐잉. */
-export async function runStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string } = {}): Promise<RunResult> {
-  const settings = getSettings(ctx, ownerId);
-  if (kind === "draft") {
-    const evidence = getCandidateRow(ctx, ownerId, candidateId).evidence as Evidence;
-    if (evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) {
-      return { error: "알릴 만한 변경 근거가 없습니다. 변경 내용이 있는 소스를 수집한 뒤 다시 분석해 주세요." };
-    }
-  }
-  const prompt = buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts);
-  if (settings.llm.provider === "local-agent") {
-    enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, prompt);
-    return { queued: true };
-  }
-  const startedAt = Date.now();
-  try {
-    const res = await runLlm({ ...settings.llm }, prompt, kind, keyPoolOps(ctx), ctx.env.geminiKeys);
-    ctx.usage.record({
-      userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(res.provider, settings.llm.baseUrl), model: res.model,
-      apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: Date.now() - startedAt, status: "success",
-      inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0,
-    });
-    const applied = await applyResult(ctx, ownerId, { kind, candidateId, channel, lang, result: res.json, model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` });
-    return { applied };
-  } catch (e) {
-    ctx.usage.record({ userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(settings.llm.provider, settings.llm.baseUrl), model: settings.llm.model ?? "unknown", latencyMs: Date.now() - startedAt, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 });
-    const msg = e instanceof LlmError ? e.message : String((e as Error).message ?? e);
-    ctx.log.error({ kind, candidateId, channel, lang, err: msg }, "llm step failed");
-    return { error: msg };
-  }
-}
+/** 자동 재시도 간격과 상한. 모델 쿼터가 풀리길 기다리되, 같은 실패에 비용을 계속 쓰지 않는다. */
+export const SWEEP_BACKOFF_MS = 6 * 3600_000;
+export const SWEEP_MAX_FAILURES = 3;
 
-/** 새 후보 전부 다이제스트부터. 순차 실행(키 풀과 모델 수요를 아낀다). */
 /**
  * 아직 판단하지 않은 후보를 태운다. 자동 모드(watch.mode=auto)인 소유자의 것만, 그중 recentDays 안에 갱신된 것만.
+ * 다이제스트가 끝난 후보는 판단부터 잇는다(다이제스트를 반복하지 않는다). 최근에 실패했거나 여러 번 실패한 후보는 건너뛴다.
  * 수동 모드에서는 사용자가 고른 것만 judgeCandidates로 태운다.
  */
 export async function processNewCandidates(ctx: AppContext, ownerId?: string): Promise<number> {
   const where = ownerId ? and(eq(schema.candidates.status, "new"), eq(schema.candidates.ownerId, ownerId)) : eq(schema.candidates.status, "new");
   const rows = ctx.db.select().from(schema.candidates).where(where).all();
   const settingsByOwner = new Map<string, ReturnType<typeof getSettings>>();
+  const now = Date.now();
   let n = 0;
   for (const c of rows) {
     const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
     settingsByOwner.set(c.ownerId, s);
     if (s.watch.mode !== "auto") continue;
-    if (c.updatedAt < Date.now() - s.watch.recentDays * 86400e3) continue;
-    try { queueStep(ctx, c.ownerId, "digest", c.id); n++; }
+    if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
+    const kind: JobKind = (c.evidence as Evidence).highlightsAt ? "judge" : "digest";
+    const jobs = ctx.db.select({ status: schema.llmJobs.status, finishedAt: schema.llmJobs.finishedAt }).from(schema.llmJobs).where(and(eq(schema.llmJobs.candidateId, c.id), eq(schema.llmJobs.kind, kind))).all();
+    if (jobs.some((j) => j.status === "pending" || j.status === "claimed")) continue;
+    const failed = jobs.filter((j) => j.status === "failed");
+    if (failed.length >= SWEEP_MAX_FAILURES || failed.some((j) => (j.finishedAt ?? 0) > now - SWEEP_BACKOFF_MS)) continue;
+    try { queueStep(ctx, c.ownerId, kind, c.id); n++; }
     catch (err) { if (!(err instanceof GenerationConflictError)) throw err; }
   }
   return n;
@@ -143,27 +120,26 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
   return id;
 }
 
-/** 결과 반영. 판단이 draft면 채널별 초안을 이어서 실행한다 (await하지 않고 백그라운드). */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: JobKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string }, enqueueNext = false, continuation?: GenerationPlan): Applied {
+/** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Exclude<JobKind, "lesson">; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
   const ev = c.evidence as Evidence;
-  const next = (kind: JobKind, channel?: Channel, lang?: string) => {
-    if (enqueueNext) {
-      enqueueJob(ctx, ownerId, kind, c.id, channel, lang, buildPrompt(ctx, ownerId, kind, c.id, channel, lang));
-    } else {
-      void runStep(ctx, ownerId, kind, c.id, channel, lang).catch((err: Error) => ctx.log.error({ err: err.message, candidateId: c.id, kind }, "follow-up step failed"));
-    }
-  };
+  const next = (kind: JobKind, channel?: Channel, lang?: string) => enqueueJob(ctx, ownerId, kind, c.id, channel, lang, buildPrompt(ctx, ownerId, kind, c.id, channel, lang));
 
   if (args.kind === "digest") {
     const r = args.result as { highlights?: unknown; limitations?: unknown };
     const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
-    const highlights = strs(r.highlights, 8);
+    // 요약도 원자료와 맞춰 본다. 원자료에 없는 수치를 담은 요약은 판단·초안에 넘기지 않는다.
+    const grounding = groundingText({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile);
+    const checked = strs(r.highlights, 8).map((text) => ({ text, numbers: unsupportedNumbers(text, grounding) }));
+    const highlights = checked.filter((h) => h.numbers.length === 0).map((h) => h.text);
+    const unverifiedHighlights = checked.filter((h) => h.numbers.length > 0);
+    if (unverifiedHighlights.length) ctx.log.info({ candidateId: c.id, dropped: unverifiedHighlights.length }, "digest highlights with unsupported numbers");
     const fromReadme = Boolean(ev.limitations?.length);
     const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
-    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
@@ -188,13 +164,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: JobK
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {
       const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel)) : targets;
-      if (enqueueNext) {
-        for (const t of picked) next("draft", t.channel, t.lang);
-      } else {
-        void (async () => {
-          for (const t of picked) await runStep(ctx, ownerId, "draft", c.id, t.channel, t.lang);
-        })().catch((err: Error) => ctx.log.error({ err: err.message, candidateId: c.id }, "draft follow-up failed"));
-      }
+      for (const t of picked) next("draft", t.channel, t.lang);
     }
     return { kind: "judge", decision, total };
   }
@@ -207,7 +177,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: JobK
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile)), status: "proposed", model: args.model, voice: settings.voice.preset, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile)), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

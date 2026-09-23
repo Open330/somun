@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberTokens } from "./lint.js";
+import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberTokens, unsupportedNumbers } from "./lint.js";
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
 
 describe("lintDraft", () => {
@@ -97,4 +97,46 @@ it("uses project profile evidence during numeric and limitation review", () => {
   const checks = lintDraft("threads", undefined, "Handles 64 tasks; API may change", undefined, facts);
   expect(checks.find((r) => r.rule === "numbers_need_review")?.ok).toBe(true);
   expect(checks.find((r) => r.rule === "no_invented_limit")?.ok).not.toBe(false);
+});
+
+describe("grounded numbers", () => {
+  it("treats multipliers as claims that need the same multiplier in the source", () => {
+    expect(numberTokens("3x faster, 세 배 빨라짐, twice as small")).toEqual(expect.arrayContaining(["3x", "2x"]));
+    expect(numberTokens("3x faster")).not.toContain("3");
+    expect(unsupportedNumbers("now 3x faster", "cold start went from 900ms to 300ms")).toEqual(["3x"]);
+    expect(unsupportedNumbers("두 배 빨라졌습니다", "Build is 2x faster than 1.4")).toEqual([]);
+  });
+
+  it("matches percent spelled out in the source", () => {
+    expect(unsupportedNumbers("40% smaller", "bundle is 40 percent smaller")).toEqual([]);
+  });
+
+  it("checks drafts against the raw material, not the model-written digest", () => {
+    const evidence = { repo: "a/b", repoUrl: "https://github.com/a/b", releaseNotes: "Cold start is now 120ms.", highlights: ["Cold start dropped by 75%."] };
+    const facts = draftLintFacts({ title: "b", type: "release", evidence });
+    expect(facts.sourceText).not.toContain("75%");
+    expect(lintDraft("threads", undefined, "Cold start is 120ms, 75% faster", undefined, facts).find((r) => r.rule === "numbers_need_review")?.detail).toContain("75%");
+  });
+});
+
+describe("multiplier false positives", () => {
+  it.each([
+    ["1.4 배포했습니다", ["1.4"]],
+    ["v1.2 배포", ["v1.2"]],
+    ["Supports 3 X-ray formats", ["3"]],
+    ["twice-weekly releases", []],
+    ["1920x1080 screenshots", []],
+    ["0x1F flag", []],
+    ["스물두 배포", []],
+    ["배치 크기 32", ["32"]],
+  ])("%s", (text, expected) => {
+    expect(numberTokens(text).filter((t) => t.endsWith("x"))).toEqual([]);
+    for (const e of expected) expect(numberTokens(text)).toContain(e);
+  });
+
+  it("still catches real multipliers", () => {
+    expect(numberTokens("3배 빨라졌고 3x smaller, 2× less memory")).toEqual(expect.arrayContaining(["3x", "2x"]));
+    expect(numberTokens("3배 빨라졌고")).not.toContain("3");
+    expect(numberTokens("속도가 두 배가 됐다")).toContain("2x");
+  });
 });

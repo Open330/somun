@@ -1,11 +1,11 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { runLlm, usageProviderOf } from "../infra/llm/providers.js";
-import { UsageReporter } from "../infra/usage.js";
 import type { GuideSuggestion } from "../shared/types.js";
-import { emit, type AppContext } from "./context.js";
-import { keyPoolOps } from "./keys.js";
+import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
+
+export const GUIDE_MAX_LINES = 20;
+export const GUIDE_MAX_CHARS = 2000;
 import { normalizeText, similar } from "./ledger.js";
 import { getSettings, updateSettings } from "./settings.js";
 
@@ -37,38 +37,51 @@ function upsertSuggestion(ctx: AppContext, ownerId: string, rule: string, catego
   return toSuggestion(ctx.db.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.id, id)).get()!);
 }
 
-/** 수정 diff나 버린 초안에서 규칙 하나를 뽑는다. 뽑을 게 없으면 undefined. 실패는 삼킨다(검수 흐름을 막지 않기 위해). */
-export async function learnFromEdit(ctx: AppContext, ownerId: string, input: { draftId: number; channel: string; lang: string; before: string; after?: string; dropReason?: string; note?: string }): Promise<GuideSuggestion | undefined> {
+/**
+ * 수정 diff나 버린 초안에서 규칙 하나를 뽑는 작업을 큐에 넣는다. 생성과 같은 실행기를 쓴다:
+ * local-agent면 사용자의 워커가, 아니면 서버 워커가 처리한다(로컬 모드의 원문이 서버 모델로 새지 않는다).
+ * 실패는 삼킨다(검수 흐름을 막지 않기 위해).
+ */
+export function queueLesson(ctx: AppContext, ownerId: string, input: { draftId: number; candidateId: number; channel: string; lang: string; before: string; after?: string; dropReason?: string; note?: string }): number | undefined {
   try {
     const settings = getSettings(ctx, ownerId);
-    const cfg = settings.llm.provider === "local-agent" ? { provider: "gemini" as const, model: "gemini-3.5-flash-lite" } : settings.llm;
-    const startedAt = Date.now();
-    const res = await runLlm({ ...cfg }, editLessonPrompt({ channel: input.channel, lang: input.lang, before: input.before, after: input.after, dropReason: input.dropReason, note: input.note, currentGuide: settings.voice.guide || undefined }), "digest", keyPoolOps(ctx), ctx.env.geminiKeys);
-    ctx.usage.record({ userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(res.provider, cfg.baseUrl), model: res.model, apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: res.latencyMs, status: "success", inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0 });
-    const r = res.json as { rule?: string; category?: string };
-    const rule = String(r.rule ?? "").trim();
-    const category = String(r.category ?? "none");
-    if (!rule || category === "none" || rule.length > 160) return undefined;
-    return upsertSuggestion(ctx, ownerId, rule, category, { kind: input.after !== undefined ? "edit" : "drop", draftId: input.draftId, at: Date.now() });
+    const prompt = editLessonPrompt({ channel: input.channel, lang: input.lang, before: input.before, after: input.after, dropReason: input.dropReason, note: input.note, currentGuide: settings.voice.guide || undefined });
+    return Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId: input.candidateId, draftId: input.draftId, channel: input.channel, lang: input.lang, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: settings.llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
   } catch (e) {
-    ctx.log.warn({ err: (e as Error).message }, "learnFromEdit failed");
+    ctx.log.warn({ err: (e as Error).message }, "queueLesson failed");
     return undefined;
   }
+}
+
+/** lesson 결과 반영. 뽑을 게 없으면 undefined. */
+export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, result: { rule?: string; category?: string }): GuideSuggestion | undefined {
+  const rule = String(result.rule ?? "").trim();
+  const category = String(result.category ?? "none");
+  if (!rule || category === "none" || rule.length > 160) return undefined;
+  const dropped = ctx.db.select({ status: schema.drafts.status }).from(schema.drafts).where(and(eq(schema.drafts.id, draftId), eq(schema.drafts.ownerId, ownerId))).get()?.status === "dropped";
+  return upsertSuggestion(ctx, ownerId, rule, category, { kind: dropped ? "drop" : "edit", draftId, at: Date.now() });
 }
 
 /** 승인: 지침 끝에 한 줄 붙인다. */
 export function acceptSuggestion(ctx: AppContext, ownerId: string, id: number): void {
   const r = ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.id, id), eq(schema.guideSuggestions.ownerId, ownerId))).get();
-  if (!r) return;
+  if (!r) throw new NotFoundError("suggestion");
   const settings = getSettings(ctx, ownerId);
   const guide = settings.voice.guide.trim();
-  if (!guide.split("\n").some((l) => similar(normalizeText(l), r.normalized))) updateSettings(ctx, ownerId, { voice: { ...settings.voice, guide: guide ? `${guide}\n${r.rule}` : r.rule, chosenAt: settings.voice.chosenAt ?? Date.now() } });
+  // 지침은 모든 초안 프롬프트에 들어간다. 끝없이 붙지 않게 줄 수와 길이를 묶는다(설정 화면의 한도와 같다).
+  // 이미 비슷한 줄이 있으면 붙이지 않고 승인만 기록한다(한도와 무관).
+  const duplicate = guide.split("\n").some((l) => similar(normalizeText(l), r.normalized));
+  const lines = guide.split("\n").filter((l) => l.trim()).length;
+  if (!duplicate && lines >= GUIDE_MAX_LINES) throw new GenerationConflictError(`지침이 ${lines}줄로 한도(${GUIDE_MAX_LINES}줄)에 닿았습니다. 문체 화면에서 겹치거나 오래된 줄을 정리한 뒤 추가해 주세요.`);
+  if (!duplicate && guide.length + r.rule.length + 1 > GUIDE_MAX_CHARS) throw new GenerationConflictError(`지침이 ${guide.length}자로 한도(${GUIDE_MAX_CHARS}자)를 넘게 됩니다. 긴 줄을 줄이거나 정리한 뒤 추가해 주세요.`);
+  if (!duplicate) updateSettings(ctx, ownerId, { voice: { ...settings.voice, guide: guide ? `${guide}\n${r.rule}` : r.rule, chosenAt: settings.voice.chosenAt ?? Date.now() } });
   ctx.db.update(schema.guideSuggestions).set({ status: "accepted", updatedAt: Date.now() }).where(eq(schema.guideSuggestions.id, id)).run();
   emit(ctx, ownerId, { resource: "settings" });
 }
 
 export function dismissSuggestion(ctx: AppContext, ownerId: string, id: number): void {
-  ctx.db.update(schema.guideSuggestions).set({ status: "dismissed", updatedAt: Date.now() }).where(and(eq(schema.guideSuggestions.id, id), eq(schema.guideSuggestions.ownerId, ownerId))).run();
+  const r = ctx.db.update(schema.guideSuggestions).set({ status: "dismissed", updatedAt: Date.now() }).where(and(eq(schema.guideSuggestions.id, id), eq(schema.guideSuggestions.ownerId, ownerId))).run();
+  if (r.changes === 0) throw new NotFoundError("suggestion");
   emit(ctx, ownerId, { resource: "settings" });
 }
 

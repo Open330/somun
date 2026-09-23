@@ -7,6 +7,7 @@ import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } f
 import { collectAll, collectGithubSource, profileMaterialFor } from "../../app/collect.js";
 import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, listSuggestions } from "../../app/learning.js";
+import { learningStats } from "../../app/learning-stats.js";
 import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
 import { refreshReactions } from "../../app/reactions.js";
@@ -18,7 +19,7 @@ import { connectorsView, githubAppConfig, listInstallationRepos, recordInstallat
 import type { Config } from "../config.js";
 import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
 import { queueStep } from "../../app/pipeline.js";
-import { listPublicationsWithMetrics, performanceSummary, registerPublication, setManualStats } from "../../app/publications.js";
+import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublicationUrl } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
@@ -125,12 +126,15 @@ export function apiRoutes(ctx: AppContext, config: Config) {
   app.get("/suggestions", (c) => c.json(listSuggestions(ctx, c.get("ownerId"))));
   app.post("/suggestions/:id/accept", (c) => { acceptSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/suggestions/:id/dismiss", (c) => { dismissSuggestion(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
+  app.get("/learning/stats", (c) => c.json(learningStats(ctx, c.get("ownerId"))));
   app.get("/publications/summary", (c) => c.json(performanceSummary(ctx, c.get("ownerId"))));
   app.post("/publications/refresh", async (c) => c.json({ refreshed: await refreshReactions(ctx, c.get("ownerId"), true) }));
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
   app.post("/publications", async (c) => c.json({ id: registerPublication(ctx, c.get("ownerId"), await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.string().url() }))) }));
+  app.patch("/publications/:id", async (c) => { updatePublicationUrl(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ url: z.string().url() }))).url); return c.body(null, 204); });
+  app.delete("/publications/:id", (c) => { removePublication(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/publications/:id/stats", async (c) => { setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: z.number().optional(), comments: z.number().optional(), reposts: z.number().optional() }))); return c.body(null, 204); });
 
   // examples

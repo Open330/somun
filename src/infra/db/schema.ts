@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * SQLite 스키마 (Drizzle). JSON 컬럼은 text에 mode "json".
@@ -75,6 +75,10 @@ export const drafts = sqliteTable("drafts", {
   model: text("model").notNull(),
   /** 생성 당시 문체 프리셋. 발행 성과를 문체별로 묶을 때 쓴다. */
   voice: text("voice"),
+  /** 생성 당시 문체 설정(프리셋·지침·예시 사용)의 짧은 해시. 학습 효과를 설정 버전별로 비교할 때 쓴다. */
+  styleKey: text("style_key"),
+  /** 복사할 때 잰 수정량(생성 원문 → 복사본, 0~1). 학습 효과 지표. 복사 전이면 null. */
+  editRatio: real("edit_ratio"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("drafts_candidate").on(t.candidateId), index("drafts_owner_status").on(t.ownerId, t.status)]);
@@ -99,6 +103,8 @@ export const examples = sqliteTable("examples", {
   body: text("body").notNull(),
   source: text("source").notNull(),
   note: text("note"),
+  /** 이 예시를 만든 초안. 복사한 초안 하나당 예시 하나. */
+  draftId: integer("draft_id"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("examples_owner_channel_active").on(t.ownerId, t.channel, t.active)]);
@@ -174,13 +180,15 @@ export const llmJobs = sqliteTable("llm_jobs", {
   claimToken: text("claim_token"),
   executor: text("executor").notNull().default("local"),
   continuation: json<import("../../shared/types.js").GenerationPlan>("continuation"),
+  /** lesson 작업이 규칙을 뽑을 초안. */
+  draftId: integer("draft_id"),
   attempts: integer("attempts").notNull().default(0),
   resultJson: text("result_json"),
   error: text("error"),
   createdAt: integer("created_at").notNull(),
   claimedAt: integer("claimed_at"),
   finishedAt: integer("finished_at"),
-}, (t) => [index("jobs_owner_status").on(t.ownerId, t.status), index("jobs_candidate").on(t.candidateId)]);
+}, (t) => [index("jobs_owner_status").on(t.ownerId, t.status), index("jobs_candidate").on(t.candidateId), index("jobs_executor_status").on(t.executor, t.status, t.id)]);
 
 /** GitHub App 설치. 사용자(ownerId)가 설치한 계정/저장소. */
 export const githubInstallations = sqliteTable("github_installations", {

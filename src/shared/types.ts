@@ -10,7 +10,8 @@ export type Decision = "draft" | "defer" | "ask";
 export type DraftStatus = "proposed" | "edited" | "copied" | "dropped";
 export type FeedbackReason = "wrong_facts" | "voice" | "wrong_channel" | "not_yet" | "not_worth" | "other";
 export type LlmProvider = "gemini" | "anthropic" | "openai" | "local-agent";
-export type JobKind = "digest" | "judge" | "draft";
+/** lesson: 수정·버림에서 문체 규칙 한 줄을 뽑는다. 생성 진행 상태에는 보이지 않는다. */
+export type JobKind = "digest" | "judge" | "draft" | "lesson";
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
@@ -20,6 +21,8 @@ export type Evidence = {
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
+  /** 원자료에서 찾지 못한 수치가 있어 highlights에서 뺀 요약. 판단·초안에 들어가지 않는다. */
+  unverifiedHighlights?: { text: string; numbers: string[] }[];
   /** 이 창에서 넘은 임계. 글감이 아니라 사실로 쓴다. */
   milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
 };
@@ -63,7 +66,8 @@ export type Draft = { id: number; candidateId: number; channel: Channel; lang: s
 export type GuideSuggestion = { id: number; rule: string; category: "voice" | "structure" | "facts" | "format"; count: number; sources: { kind: "edit" | "drop"; draftId: number; at: number }[]; status: "pending" | "accepted" | "dismissed"; createdAt: number; updatedAt: number };
 
 /** 발행 성과 요약. 채널·문체별 평균. */
-export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgLikes?: number }[] };
+/** avgStarDelta: 발행 후 7일 스타 증가 평균. avgExcessStars: 그중 발행 전 추세를 뺀 증가(발행 효과) 평균. */
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
@@ -73,7 +77,11 @@ export type AutoStats = { likes?: number; comments?: number; reposts?: number; v
 export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number }; autoStats?: AutoStats; autoStatsAt?: number };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
-export type PublicationWithMetrics = Publication & { candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string };
+export type PublicationWithMetrics = Publication & {
+  candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string;
+  /** 발행 후 7일 스타 증가, 발행 전 추세로 기대한 증가, 그 차이(발행 효과). 자료가 모자라면 없음. */
+  starDelta7d?: number; expectedStarDelta7d?: number; excessStars7d?: number;
+};
 
 export type Example = { id: number; channel: Channel; lang: string; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
 
@@ -104,4 +112,15 @@ export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" |
 export type ConnectorsView = {
   github: { mode: "app" | "token" | "none"; appConfigured: boolean; appSlug?: string; installUrl?: string; installations: { id: number; account: string; repos: number; watched: number; updatedAt: number }[]; manualTargets: string[]; lastPolledAt?: number; lastError?: string };
   sessions: { lastUploadAt?: number; sessionCount14d: number; sources: string[] };
+};
+
+/** 학습 효과. 복사한 초안 기준: 고치지 않고 쓴 비율과 평균 수정량(0~1). 낮아질수록 초안이 내 문체에 가까워진 것. */
+export type LearningBucket = { copied: number; unchangedRate: number; avgEditRatio: number };
+export type LearningStats = LearningBucket & {
+  byWeek: (LearningBucket & { week: string })[];
+  /** 문체 설정 버전별. 처음 쓰인 순서. 설정을 바꾼 뒤 수정량이 줄었는지 본다. */
+  byStyle: (LearningBucket & { styleKey: string; firstAt: number; current: boolean })[];
+  byChannel: (LearningBucket & { channel: Channel })[];
+  guideLines: number;
+  activeOwnExamples: number;
 };

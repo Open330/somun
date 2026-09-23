@@ -4,7 +4,9 @@
  *   npm run agent-worker -- --cli claude   # 또는 --cli codex, --once, --interval 30
  */
 import { spawn } from "node:child_process";
-import { hostname } from "node:os";
+import { mkdtempSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Job } from "../src/shared/types.js";
 import { call } from "./_client.js";
 
@@ -12,7 +14,8 @@ import { call } from "./_client.js";
 function run(cmd: string, args: string[], input: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== "CLAUDECODE"));
-    const child = spawn(cmd, args, { env, stdio: ["pipe", "pipe", "pipe"] });
+    // 빈 임시 디렉터리에서 실행한다. 원자료(PR 제목·커밋)가 프롬프트에 들어가므로 저장소나 .env 가까이에서 돌리지 않는다.
+    const child = spawn(cmd, args, { env, cwd: workDir, stdio: ["pipe", "pipe", "pipe"] });
     let out = "", err = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
@@ -32,6 +35,7 @@ const cli = arg("--cli", "claude");
 const once = argv.includes("--once");
 const intervalSec = Number(arg("--interval", "30"));
 const runner = `${cli}@${hostname()}`;
+const workDir = mkdtempSync(join(tmpdir(), "somun-agent-"));
 
 function extractJson(text: string): unknown {
   const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -76,8 +80,16 @@ async function tick(): Promise<number> {
   return jobs.length;
 }
 
+// 서버 재시작·네트워크 끊김으로 워커가 죽지 않게 한다. 연속 실패하면 대기 시간을 늘린다(최대 5분).
+let failures = 0;
 for (;;) {
-  const n = await tick();
+  let n = 0;
+  try { n = await tick(); failures = 0; }
+  catch (e) {
+    failures++;
+    console.error(`poll failed (${failures}): ${(e as Error).message}`);
+    if (once) process.exit(1);
+  }
   if (once) break;
-  if (n === 0) await new Promise((r) => setTimeout(r, intervalSec * 1000));
+  if (n === 0) await new Promise((r) => setTimeout(r, Math.min(300, intervalSec * 2 ** Math.min(failures, 4)) * 1000));
 }
