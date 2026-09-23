@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
-import { runLlm, usageProviderOf } from "../infra/llm/providers.js";
-import { UsageReporter } from "../infra/usage.js";
+import { modelFor, runLlm } from "../infra/llm/providers.js";
+import { recordLlmUsage } from "./llm-usage.js";
 import type { RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
@@ -83,11 +83,9 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const startedAt = Date.now();
   // 분석 모델(다이제스트와 같은 등급)로 만든다. local-agent 설정이어도 프로필은 서버 Gemini 키로 만든다: 워커 큐를 타기엔 너무 잦다.
   const cfg = settings.llm.provider === "local-agent" ? { provider: "gemini" as const, model: "gemini-3.5-flash-lite" } : settings.llm;
-  const res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys);
-  ctx.usage.record({
-    userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(startedAt).toISOString(), provider: usageProviderOf(res.provider, cfg.baseUrl), model: res.model,
-    apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: res.latencyMs, status: "success",
-    inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0,
-  });
+  let res;
+  try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys); }
+  catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
+  recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });
   return { profile: normalize(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` };
 }

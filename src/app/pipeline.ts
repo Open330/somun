@@ -12,6 +12,7 @@ import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge } from "./publications.js";
 import { voiceGuideFor } from "../core/voice.js";
+import { splitJudgment } from "../core/judgment.js";
 
 /**
  * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
@@ -43,7 +44,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
-  const angle = judgment?.reasoning.split("각도: ")[1]?.trim();
+  const angle = judgment ? splitJudgment(judgment).angle : undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
@@ -162,8 +163,9 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Excl
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
-    const reasoning = noChanges ? "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요." : r.angle ? `${r.reasoning}\n\n각도: ${r.angle}` : String(r.reasoning ?? "");
-    const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
+    const reasoning = noChanges ? "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요." : String(r.reasoning ?? "");
+    const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
+    const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {

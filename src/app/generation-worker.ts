@@ -1,7 +1,7 @@
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
-import { LlmError, modelFor, runLlm, usageProviderOf } from "../infra/llm/providers.js";
-import { UsageReporter } from "../infra/usage.js";
+import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
+import { recordLlmUsage } from "./llm-usage.js";
 import type { AppContext } from "./context.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
@@ -31,11 +31,10 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     const started = Date.now(), config = getSettings(ctx, ownerId).llm;
     // lesson은 분석 모델(다이제스트와 같은 기본 모델)로 돌린다.
     const modelKind = job.kind === "lesson" ? "digest" : job.kind;
-    const base = { userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(started).toISOString(), provider: usageProviderOf(config.provider, config.baseUrl), model: modelFor(config, modelKind) };
     try {
       const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
-      ctx.usage.record({ ...base, provider: usageProviderOf(res.provider, config.baseUrl), model: res.model, apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: Date.now() - started, status: "success", inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0 });
+      recordLlmUsage(ctx, ownerId, config, started, { res });
     } catch (err) {
       // Upstream error bodies may echo credentials; persist only a bounded diagnostic.
       const error = err instanceof Error && ["TimeoutError", "AbortError"].includes(err.name)
@@ -43,7 +42,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
         : err instanceof LlmError && err.status ? `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`
         : "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.";
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error }, "server");
-      ctx.usage.record({ ...base, latencyMs: Date.now() - started, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 });
+      recordLlmUsage(ctx, ownerId, config, started, { failedModel: modelFor(config, modelKind) });
       ctx.log.warn({ jobId: job.id, error }, "generation failed");
     }
     return true;

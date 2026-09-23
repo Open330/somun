@@ -114,3 +114,10 @@ it("filters unverified highlights before keeping eight, and checks against the t
   expect(ev.highlights).toContain("Cold start went from 800 ms to 200 ms.");
   expect(ev.unverifiedHighlights).toHaveLength(3);
 });
+
+it("stores the judge's angle separately from its reasoning", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Plain verdict.", angle: "The flag nobody asked for" } });
+  expect(ctx.db.select().from(schema.judgments).get()).toMatchObject({ reasoning: "Plain verdict.", angle: "The flag nobody asked for" });
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("The flag nobody asked for");
+});

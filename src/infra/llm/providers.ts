@@ -24,13 +24,9 @@ export type KeyPoolOps = {
   report: (r: { label: string; model: string; ok: boolean; status?: number; body?: string }) => Promise<void>;
 };
 
-export const DEFAULT_MODEL: Record<Exclude<LlmProvider, "local-agent">, string> = {
-  gemini: "gemini-3.5-flash-lite",
-  openai: "gpt-5",
-  anthropic: "claude-opus-5",
-};
-/** 초안은 한 단계 위 모델. 다이제스트·판단은 기본 모델 (판단 편차는 가중치와 임계로 흡수). */
-export const DEFAULT_DRAFT_MODEL: Partial<Record<LlmProvider, string>> = { gemini: "gemini-3.7-flash" };
+export { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "../../core/models.js";
+
+import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "../../core/models.js";
 
 export function modelFor(config: LlmConfig, kind: "digest" | "judge" | "draft"): string {
   if (config.provider === "local-agent") return config.agentCli ?? "claude";

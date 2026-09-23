@@ -56,7 +56,7 @@ export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmCon
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 
-export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop"; overrideReason?: string; createdAt: number };
+export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop"; overrideReason?: string; createdAt: number };
 
 export type LintResult = { rule: string; ok: boolean; detail?: string };
 
