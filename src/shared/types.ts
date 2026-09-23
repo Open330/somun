@@ -19,7 +19,7 @@ export type JobKind = "digest" | "judge" | "draft" | "lesson" | "profile";
 export const SIDE_JOB_KINDS = ["lesson", "profile"] as const;
 export type GenerationKind = Exclude<JobKind, (typeof SIDE_JOB_KINDS)[number]>;
 /** llm_jobs.meta. profile 작업이 만들 저장소와 그때의 README 해시. */
-export type JobMeta = { repo?: string; readmeHash?: string };
+export type JobMeta = { repo?: string; readmeHash?: string; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };

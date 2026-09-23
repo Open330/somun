@@ -231,6 +231,8 @@ export const repoProfiles = sqliteTable("repo_profiles", {
   profile: json<Record<string, unknown>>("profile").notNull(),
   edits: json<Record<string, unknown>>("edits"),
   model: text("model").notNull(),
+  /** 모델이 프로필을 마지막으로 만든 시각. 사용자 수정(edits)은 바꾸지 않는다. 늦게 도착한 옛 작업이 덮지 않게 비교한다. */
+  generatedAt: integer("generated_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [uniqueIndex("repo_profiles_owner_repo").on(t.ownerId, t.repo)]);

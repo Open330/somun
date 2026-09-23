@@ -47,8 +47,8 @@ export function listProfiles(ctx: AppContext, ownerId: string): RepoProfileView[
 function saveProfile(ctx: AppContext, ownerId: string, repo: string, hash: string, profile: RepoProfile, model: string): void {
   const now = Date.now();
   const row = ctx.db.select().from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, repo))).get();
-  if (row) ctx.db.update(schema.repoProfiles).set({ readmeHash: hash, profile: profile as Record<string, unknown>, model, updatedAt: now }).where(eq(schema.repoProfiles.id, row.id)).run();
-  else ctx.db.insert(schema.repoProfiles).values({ ownerId, repo, readmeHash: hash, profile: profile as Record<string, unknown>, edits: null, model, createdAt: now, updatedAt: now }).run();
+  if (row) ctx.db.update(schema.repoProfiles).set({ readmeHash: hash, profile: profile as Record<string, unknown>, model, generatedAt: now, updatedAt: now }).where(eq(schema.repoProfiles.id, row.id)).run();
+  else ctx.db.insert(schema.repoProfiles).values({ ownerId, repo, readmeHash: hash, profile: profile as Record<string, unknown>, edits: null, model, generatedAt: now, createdAt: now, updatedAt: now }).run();
   emit(ctx, ownerId, { resource: "candidates" });
 }
 
@@ -69,19 +69,22 @@ function queueProfile(ctx: AppContext, ownerId: string, material: ProfileMateria
   if (open?.status === "claimed") return "busy";
   if (open) ctx.db.update(schema.llmJobs).set({ status: "failed", error: "새 README로 다시 요청되어 대체되었습니다.", finishedAt: Date.now() }).where(and(eq(schema.llmJobs.id, open.id), eq(schema.llmJobs.status, "pending"))).run();
   const prompt = profilePrompt(material);
-  const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "profile", candidateId: 0, meta: { repo: material.repo, readmeHash: hash }, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: "local", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+  const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "profile", candidateId: 0, meta: { repo: material.repo, readmeHash: hash, queuedAt: Date.now() }, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: "local", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
   emit(ctx, ownerId, { resource: "jobs", id });
   return "queued";
 }
 
 /**
  * 워커가 돌려준 프로필 반영. 작업을 넣을 때의 README 해시로 저장한다(그 뒤 README가 바뀌면 다음 수집이 다시 만든다).
- * 그 사이 더 새 프로필이 저장됐으면(다른 경로로 재생성, 모드 전환) 덮지 않는다. meta가 없으면 false.
+ * 요청한 뒤에 모델이 더 새 프로필을 만들었으면(다른 경로로 재생성, 모드 전환) 덮지 않는다.
+ * 사용자 수정은 기준이 아니다(generatedAt은 모델이 만들 때만 바뀐다). 기준 시각은 처음 요청한 시각이라 다시 시도해도 같다.
+ * meta가 없으면 false.
  */
-export function applyProfile(ctx: AppContext, ownerId: string, meta: JobMeta, result: unknown, model: string, queuedAt: number): boolean {
+export function applyProfile(ctx: AppContext, ownerId: string, meta: JobMeta, result: unknown, model: string, jobCreatedAt: number): boolean {
   if (!meta.repo || !meta.readmeHash) return false;
-  const row = ctx.db.select({ updatedAt: schema.repoProfiles.updatedAt }).from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, meta.repo))).get();
-  if (row && row.updatedAt > queuedAt) return true;
+  const queuedAt = meta.queuedAt ?? jobCreatedAt;
+  const row = ctx.db.select({ generatedAt: schema.repoProfiles.generatedAt }).from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, meta.repo))).get();
+  if (row?.generatedAt && row.generatedAt > queuedAt) return true;
   saveProfile(ctx, ownerId, meta.repo, meta.readmeHash, normalize(result), model);
   return true;
 }
