@@ -1,14 +1,13 @@
 import { EventEmitter } from "node:events";
 import pino from "pino";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
-import { runLlm } from "../infra/llm/providers.js";
 import type { AppContext } from "./context.js";
-import { applyResult, runStep } from "./pipeline.js";
+import { applyResult, buildPrompt, processNewCandidates, queueStep, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
+import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
 
-vi.mock("../infra/llm/providers.js", async (original) => ({ ...await original<typeof import("../infra/llm/providers.js")>(), runLlm: vi.fn() }));
 let ctx: AppContext;
 let id: number;
 beforeEach(() => {
@@ -17,29 +16,34 @@ beforeEach(() => {
 });
 afterEach(() => { ctx.db.$client.close(); vi.resetAllMocks(); });
 
-it.each(["gemini", "local-agent"] as const)("does not spend calls or enqueue %s drafts when digest found no evidence", async (provider) => {
+it.each(["gemini", "local-agent"] as const)("does not enqueue %s drafts when digest found no evidence", (provider) => {
   updateSettings(ctx, "test", { llm: { provider } });
-  const result = await runStep(ctx, "test", "draft", id, "x", "en");
-  expect(result.error).toContain("변경 근거가 없습니다");
-  expect(runLlm).not.toHaveBeenCalled();
-  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(0);
+  expect(() => queueStep(ctx, "test", "draft", id, "x", "en")).toThrow(GenerationConflictError);
   expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
 });
 
-it("still generates and stores a draft when the digest has concrete evidence", async () => {
+it("builds a draft prompt from concrete evidence", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Handles CRLF code frame positions."], highlightsAt: 1 } }).run();
-  vi.mocked(runLlm).mockResolvedValue({ json: { title: "", body: "vite v8.3.0 fixes CRLF code frame positions. https://github.com/vitejs/vite" }, provider: "gemini", model: "test", latencyMs: 1 });
-  const result = await runStep(ctx, "test", "draft", id, "x", "en");
-  expect(result.applied?.draftId).toBeTruthy();
-  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(1);
-  const request = vi.mocked(runLlm).mock.calls[0][1];
+  const request = buildPrompt(ctx, "test", "draft", id, "x", "en");
+  expect(request.user).toContain("Handles CRLF code frame positions.");
   expect(request.user).not.toContain("first person, past tense");
   expect(request.system).toContain("Factual grounding takes priority");
 });
 
+it("keeps digest highlights whose numbers are not in the raw material out of judge and draft", () => {
+  ctx.db.update(schema.candidates).set({ status: "new", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", releaseNotes: "Adds --watch. Cold start is now 120 ms." } }).run();
+  applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "test", result: { highlights: ["Adds a --watch flag.", "Cold start is 3x faster.", "Cold start is 120 ms."], limitations: [] } });
+  const ev = ctx.db.select().from(schema.candidates).get()!.evidence as { highlights: string[]; unverifiedHighlights: { text: string; numbers: string[] }[] };
+  expect(ev.highlights).toEqual(["Adds a --watch flag.", "Cold start is 120 ms."]);
+  expect(ev.unverifiedHighlights).toEqual([{ text: "Cold start is 3x faster.", numbers: ["3x"] }]);
+  const judge = ctx.db.select().from(schema.llmJobs).get()!;
+  expect(judge.kind).toBe("judge");
+  expect(judge.user).not.toContain("3x");
+});
+
 it("does not queue automatic drafts from an empty digest even when the model gives high scores", () => {
   updateSettings(ctx, "test", { llm: { provider: "local-agent" } });
-  const result = applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "test", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "Publish it", suggestedChannels: ["x"] } }, true);
+  const result = applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "test", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "Publish it", suggestedChannels: ["x"] } });
   expect(result.decision).toBe("ask");
   expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
   expect(ctx.db.select().from(schema.judgments).all()[0].reasoning).toContain("변경 근거");
@@ -47,7 +51,7 @@ it("does not queue automatic drafts from an empty digest even when the model giv
 
 it("keeps existing drafts in the review queue after a new judgment", () => {
   ctx.db.update(schema.candidates).set({ status: "drafted" }).run();
-  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "test", result: { scores: {}, reasoning: "Needs evidence" } }, true);
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "test", result: { scores: {}, reasoning: "Needs evidence" } });
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("drafted");
   expect(ctx.db.select().from(schema.judgments).get()?.decision).toBe("ask");
 });
@@ -59,4 +63,35 @@ it.each(["x", "threads", "linkedin", "show_hn", "show_gn", "blog"] as const)("re
   expect(generated.lint.find((r) => r.rule === "no_invented_limit")?.ok).toBe(false);
   const saved = saveDraftEdit(ctx, "test", result.draftId!, { title: generated.title ?? undefined, body: generated.body, markCopied: false });
   expect(saved.lint).toEqual(generated.lint);
+});
+
+describe("hourly sweep", () => {
+  const job = (kind: string, status: string, finishedAt?: number) => ctx.db.insert(schema.llmJobs).values({ ownerId: "test", kind, candidateId: id, system: "s", user: "u", schemaJson: "{}", status, executor: "server", createdAt: 1, finishedAt: finishedAt ?? null }).run();
+  beforeEach(() => {
+    updateSettings(ctx, "test", { watch: { mode: "auto", recentDays: 30 } });
+    ctx.db.update(schema.candidates).set({ status: "new", createdAt: Date.now(), updatedAt: Date.now(), evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite" } }).run();
+  });
+  const queued = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.status === "pending").map((j) => j.kind);
+
+  it("continues with judge instead of digesting again once a digest exists", async () => {
+    ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+    expect(await processNewCandidates(ctx)).toBe(1);
+    expect(queued()).toEqual(["judge"]);
+  });
+
+  it("backs off after a recent failure and stops after repeated failures", async () => {
+    job("digest", "failed", Date.now() - 60_000);
+    expect(await processNewCandidates(ctx)).toBe(0);
+    ctx.db.delete(schema.llmJobs).run();
+    for (let i = 0; i < SWEEP_MAX_FAILURES; i++) job("digest", "failed", Date.now() - SWEEP_BACKOFF_MS - 60_000);
+    expect(await processNewCandidates(ctx)).toBe(0);
+    ctx.db.delete(schema.llmJobs).run();
+    job("digest", "failed", Date.now() - SWEEP_BACKOFF_MS - 60_000);
+    expect(await processNewCandidates(ctx)).toBe(1);
+  });
+
+  it("does not queue twice while a job is in flight", async () => {
+    job("digest", "pending");
+    expect(await processNewCandidates(ctx)).toBe(0);
+  });
 });

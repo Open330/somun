@@ -2,30 +2,38 @@ import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm, usageProviderOf } from "../infra/llm/providers.js";
 import { UsageReporter } from "../infra/usage.js";
-import type { JobKind } from "../shared/types.js";
 import type { AppContext } from "./context.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps } from "./keys.js";
 
-/** One leased job at a time per process. HTTP handlers only enqueue. */
+/** 직전에 처리한 소유자. 다음 차례는 그 뒤 소유자부터라 한 사람의 대기열이 다른 사람을 막지 않는다. */
+const lastServed = new WeakMap<AppContext["db"], string>();
+
+/** One leased job at a time per process, round-robin across owners. HTTP handlers only enqueue. */
 export async function processServerJob(ctx: AppContext, signal?: AbortSignal): Promise<boolean> {
-  const candidates = ctx.db.select({ ownerId: schema.llmJobs.ownerId }).from(schema.llmJobs)
-    .where(and(eq(schema.llmJobs.executor, "server"), inArray(schema.llmJobs.status, ["pending", "claimed"]))).orderBy(asc(schema.llmJobs.id)).all();
-  for (const ownerId of new Set(candidates.map((j) => j.ownerId))) {
+  const owners = ctx.db.selectDistinct({ ownerId: schema.llmJobs.ownerId }).from(schema.llmJobs)
+    .where(and(eq(schema.llmJobs.executor, "server"), inArray(schema.llmJobs.status, ["pending", "claimed"]))).orderBy(asc(schema.llmJobs.ownerId)).all().map((r) => r.ownerId);
+  const last = lastServed.get(ctx.db);
+  const start = last === undefined ? 0 : owners.findIndex((o) => o > last);
+  const rotated = start <= 0 ? owners : [...owners.slice(start), ...owners.slice(0, start)];
+  for (const ownerId of rotated) {
     const job = pendingJobs(ctx, ownerId, "server")[0];
     if (!job) continue;
     const claim = claimJob(ctx, ownerId, job.id, "server", "server");
     if (!claim.claimToken) continue;
+    lastServed.set(ctx.db, ownerId);
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, job.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-    if (!candidate || ["dropped", "published"].includes(candidate.status)) {
+    if (job.kind !== "lesson" && (!candidate || ["dropped", "published"].includes(candidate.status))) {
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error: "글감이 삭제·보관·발행되어 생성을 중단했습니다." }, "server");
       return true;
     }
     const started = Date.now(), config = getSettings(ctx, ownerId).llm;
-    const base = { userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(started).toISOString(), provider: usageProviderOf(config.provider, config.baseUrl), model: modelFor(config, job.kind) };
+    // lesson은 분석 모델(다이제스트와 같은 기본 모델)로 돌린다.
+    const modelKind = job.kind === "lesson" ? "digest" : job.kind;
+    const base = { userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(started).toISOString(), provider: usageProviderOf(config.provider, config.baseUrl), model: modelFor(config, modelKind) };
     try {
-      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind }, job.kind as JobKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
+      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
       ctx.usage.record({ ...base, provider: usageProviderOf(res.provider, config.baseUrl), model: res.model, apiKeyLabel: res.keyLabel === "byok" ? "user" : res.keyLabel, latencyMs: Date.now() - started, status: "success", inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0 });
     } catch (err) {

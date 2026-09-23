@@ -58,6 +58,12 @@ export function markPublished(ctx: AppContext, ownerId: string, candidateId: num
   return ctx.db.update(schema.changeLedger).set({ publishedAt: at, publishedChannel: channel }).where(and(eq(schema.changeLedger.ownerId, ownerId), eq(schema.changeLedger.candidateId, candidateId), ne(schema.changeLedger.firstSeenAt, -1))).run().changes;
 }
 
+/** 발행 기록을 지웠을 때. 그 글감에 남은 발행이 있으면 가장 최근 것으로, 없으면 "발행 안 됨"으로 되돌린다. */
+export function unmarkPublished(ctx: AppContext, ownerId: string, candidateId: number, remaining?: { channel: string; publishedAt: number }): number {
+  return ctx.db.update(schema.changeLedger).set({ publishedAt: remaining?.publishedAt ?? null, publishedChannel: remaining?.channel ?? null })
+    .where(and(eq(schema.changeLedger.ownerId, ownerId), eq(schema.changeLedger.candidateId, candidateId), ne(schema.changeLedger.firstSeenAt, -1))).run().changes;
+}
+
 /** 이 저장소를 마지막으로 다이제스트한 시각. 수집의 커밋 창이 여기서 시작한다. */
 export function lastDigestAt(ctx: AppContext, ownerId: string, repo: string): number | undefined {
   return ctx.db.select({ t: schema.changeLedger.firstSeenAt }).from(schema.changeLedger).where(and(eq(schema.changeLedger.ownerId, ownerId), eq(schema.changeLedger.repo, repo))).orderBy(desc(schema.changeLedger.firstSeenAt)).get()?.t;

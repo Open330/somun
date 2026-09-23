@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { DEFAULT_CHANNEL_LANGS, type Channel } from "../core/channels.js";
 import { DEFAULT_BANNED_PHRASES } from "../core/lint.js";
@@ -14,7 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bannedPhrases: DEFAULT_BANNED_PHRASES,
   llm: { provider: "gemini", model: "gemini-3.5-flash-lite" },
   watch: { mode: "manual", recentDays: 30 },
-  voice: { preset: DEFAULT_VOICE_PRESET, guide: "", useExamples: false },
+  voice: { preset: DEFAULT_VOICE_PRESET, guide: "", useExamples: true },
 };
 
 /** 구 설정(enabledChannels: x_en, x_ko, ...)을 channelLangs로 옮긴다. */
@@ -53,4 +54,9 @@ export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<
     .onConflictDoUpdate({ target: schema.settings.ownerId, set: { data: next as unknown as Record<string, unknown>, updatedAt: Date.now() } }).run();
   emit(ctx, ownerId, { resource: "settings" });
   return getSettingsView(ctx, ownerId);
+}
+
+/** 문체 설정의 짧은 지문. 초안에 남겨 두고 학습 효과를 설정 버전별로 비교한다. */
+export function styleKeyOf(voice: Settings["voice"]): string {
+  return createHash("sha256").update(JSON.stringify([voice.preset, voice.guide.trim(), voice.useExamples])).digest("hex").slice(0, 8);
 }

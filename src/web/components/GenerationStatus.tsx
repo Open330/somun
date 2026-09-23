@@ -4,15 +4,20 @@ import type { JobProgress } from "@shared/types";
 import { post, useResource } from "../lib/api";
 import { CHANNEL_LABEL } from "./ui";
 
-const labels = { digest: "변경 내용 정리", judge: "게시 가치 판단", draft: "초안 작성" };
+const labels: Record<JobProgress["kind"], string> = { digest: "변경 내용 정리", judge: "게시 가치 판단", draft: "초안 작성", lesson: "문체 규칙 찾기" };
 export function GenerationStatus({ candidateId, candidateTitles, onChange }: { candidateId?: number; candidateTitles?: Record<number, string>; onChange: () => void }) {
   const { data, error, reload } = useResource<JobProgress[]>(`/jobs/status${candidateId === undefined ? "" : `?candidateId=${candidateId}`}`, ["jobs"]);
   const [retrying, setRetrying] = useState<number | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const signature = data?.map((job) => `${job.id}:${job.status}`).join(",");
   useEffect(() => { if (signature) onChange(); }, [signature, onChange]);
-  // SSE is the fast path; polling also covers missed events and reconnection gaps.
-  useEffect(() => { const timer = window.setInterval(reload, 5000); return () => window.clearInterval(timer); }, [reload]);
+  const pending = (data ?? []).some((job) => job.status === "pending" || job.status === "claimed");
+  // SSE is the fast path; polling covers missed events, only while work is in flight and the tab is visible.
+  useEffect(() => {
+    if (!pending) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") reload(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [pending, reload]);
   if (error) return <div className="inline-notice is-error" role="alert"><span>생성 상태를 확인하지 못했습니다. 작업은 서버에서 계속될 수 있습니다.</span><button onClick={reload}>상태 다시 확인</button></div>;
   const jobs = (data ?? []).filter((job) => candidateId !== undefined || job.status !== "done");
   if (!jobs.length) return null;

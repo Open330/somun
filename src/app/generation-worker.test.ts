@@ -165,3 +165,25 @@ it("keeps an automatic sweep moving when a changed candidate already has a queue
   expect(await processNewCandidates(ctx, "local")).toBe(1);
   expect(pendingJobs(ctx, "local", "server")).toHaveLength(2);
 });
+
+it("serves owners in turn so one backlog does not starve another", async () => {
+  const job = (ownerId: string, candidateId: number) => ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId, draftId: 1, system: "s", user: ownerId, schemaJson: "{}", status: "pending", executor: "server", createdAt: Date.now() }).run();
+  const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "b", repo: "b/c", title: "B", type: "release", key: "b", evidence: { repo: "b/c", repoUrl: "https://github.com/b/c" }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+  for (let i = 0; i < 3; i++) job("local", cid);
+  job("b", other);
+  vi.mocked(runLlm).mockResolvedValue(output({ rule: "", category: "none" }));
+  for (let i = 0; i < 4; i++) await processServerJob(ctx);
+  const served = vi.mocked(runLlm).mock.calls.map((call) => call[1].user);
+  // b의 작업은 마지막에 들어왔지만 local의 두 번째 작업보다 먼저 처리된다.
+  expect(served.slice(0, 2).sort()).toEqual(["b", "local"]);
+  expect(served).toHaveLength(4);
+});
+
+it("fails a draft request whose digest kept no highlight after the source check, and says why", async () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", releaseNotes: "Fixes CRLF positions." } }).run();
+  const { jobs } = await (await request(`/api/candidates/${cid}/redraft`, params)).json();
+  vi.mocked(runLlm).mockResolvedValue(output({ highlights: ["Parsing is now 3x faster."], limitations: [] }));
+  await processServerJob(ctx);
+  expect(row(jobs[0])).toMatchObject({ status: "failed", error: expect.stringContaining("확인되지 않은 숫자") });
+  expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(1);
+});

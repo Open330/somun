@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { and, asc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { schema } from "../infra/db/index.js";
 import type { Channel, ChangeEvent, Job, JobKind, JobProgress } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getCandidateRow } from "./candidates.js";
 import { applyResult, enqueueJob } from "./pipeline.js";
+import { applyLesson } from "./learning.js";
 
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
@@ -18,6 +19,7 @@ const results = {
   digest: z.object({ highlights: z.array(z.string()), limitations: z.array(z.string()).optional() }),
   judge: z.object({ scores: z.object({ runnable: score, numbers: score, lesson: score, novelty: score, audience: score }), reasoning: z.string(), suggestedChannels: z.array(z.string()).optional(), angle: z.string().optional() }),
   draft: z.object({ title: z.string().optional(), body: z.string().trim().min(1) }),
+  lesson: z.object({ rule: z.string().optional(), category: z.string().optional() }),
 };
 
 function recoverExpired(ctx: AppContext, ownerId: string, now: number) {
@@ -59,7 +61,8 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
     if (!j) throw new NotFoundError("job");
     if (j.executor !== executor || j.claimToken !== input.claimToken || j.status !== "claimed" || j.claimedAt === null || j.claimedAt <= Date.now() - JOB_LEASE_MS) return { applied: false };
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, j.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-    if (!input.error && (!candidate || ["dropped", "published"].includes(candidate.status))) {
+    // lesson은 발행 뒤에도 반영한다(수정 후 복사·발행이 가장 흔한 흐름).
+    if (!input.error && j.kind !== "lesson" && (!candidate || ["dropped", "published"].includes(candidate.status))) {
       ctx.db.update(schema.llmJobs).set({ status: "failed", error: "글감이 삭제·보관·발행되어 생성 결과를 반영하지 않았습니다.", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
       events.push({ ownerId, resource: "jobs", id });
       return { applied: false };
@@ -75,9 +78,14 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
         events.push({ ownerId, resource: "jobs", id });
         return { applied: false };
       }
-      applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as JobKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, true, j.continuation ?? undefined);
-      const empty = j.kind === "digest" && j.continuation && (parsed as { highlights: string[] }).highlights.every((text) => !text.trim());
-      ctx.db.update(schema.llmJobs).set({ status: empty ? "failed" : "done", resultJson: input.resultJson, error: empty ? "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요." : null, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
+      let applied: ReturnType<typeof applyResult> | undefined;
+      if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, parsed as { rule?: string; category?: string }); }
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as Exclude<JobKind, "lesson">, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, model: executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}` }, j.continuation ?? undefined);
+      // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
+      const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
+      const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
+      const error = !empty ? null : raw > 0 ? "요약에 원자료에서 확인되지 않은 숫자만 있어 초안을 쓰지 않았습니다. 글감의 '원자료에서 확인하지 못해 뺀 요약'을 확인해 주세요." : "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.";
+      ctx.db.update(schema.llmJobs).set({ status: empty ? "failed" : "done", resultJson: input.resultJson, error, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
     }
     events.push({ ownerId, resource: "jobs", id });
     return { applied: !input.error && Boolean(input.resultJson) };
@@ -90,7 +98,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
 export function generationStatus(ctx: AppContext, ownerId: string, candidateId?: number): JobProgress[] {
   if (candidateId !== undefined) getCandidateRow(ctx, ownerId, candidateId);
   recoverExpired(ctx, ownerId, Date.now());
-  const rows = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), candidateId === undefined ? undefined : eq(schema.llmJobs.candidateId, candidateId))).orderBy(sql`${schema.llmJobs.id} desc`).limit(200).all();
+  const rows = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), ne(schema.llmJobs.kind, "lesson"), candidateId === undefined ? undefined : eq(schema.llmJobs.candidateId, candidateId))).orderBy(sql`${schema.llmJobs.id} desc`).limit(200).all();
   const seen = new Set<string>();
   return rows.filter((r) => { const key = `${r.candidateId}:${r.kind}:${r.channel}:${r.lang}`; if (seen.has(key)) return false; seen.add(key); return true; }).map((r) => ({ id: r.id, candidateId: r.candidateId, kind: r.kind as JobKind, channel: (r.channel ?? undefined) as Channel | undefined, lang: r.lang ?? undefined, executor: r.executor as "local" | "server", status: r.status as JobProgress["status"], error: r.error ?? undefined, createdAt: r.createdAt, finishedAt: r.finishedAt ?? undefined }));
 }
@@ -104,4 +112,13 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError("보관되거나 발행된 글감은 다시 생성할 수 없습니다.");
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind }, job.continuation ?? undefined);
   }).immediate();
+}
+
+/**
+ * 끝난 작업의 프롬프트·결과 원문을 비운다(행과 상태는 남긴다). 원문이 쌓여 DB와 백업이 커지는 것을 막는다.
+ * 실패한 작업은 "다시 시도"가 같은 프롬프트를 쓰므로 그대로 둔다.
+ */
+export function pruneFinishedJobs(ctx: AppContext, olderThanMs = 14 * 86_400_000): number {
+  return ctx.db.update(schema.llmJobs).set({ system: "", user: "", resultJson: null })
+    .where(and(eq(schema.llmJobs.status, "done"), lt(schema.llmJobs.finishedAt, Date.now() - olderThanMs), ne(schema.llmJobs.user, ""))).run().changes;
 }

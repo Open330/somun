@@ -1,14 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { randomUUID } from "node:crypto";
 import { blindReview, casesSchema, compare, configSchema, execute, hash, reportSchema, summary, summarizeReviews, validatePlan, type Report } from "../src/experiments/drafts.js";
 import { freeGeminiKeys, runLlm } from "../src/infra/llm/providers.js";
+import { openDb, schema } from "../src/infra/db/index.js";
+import { exportHoldout } from "../src/experiments/holdout.js";
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   config: { type: "string" }, out: { type: "string" }, live: { type: "boolean", default: false },
-  "max-calls": { type: "string", default: "0" }, before: { type: "string" }, after: { type: "string" }, run: { type: "string" }, reviews: { type: "string" },
+  "max-calls": { type: "string", default: "0" }, owner: { type: "string" }, max: { type: "string" }, before: { type: "string" }, after: { type: "string" }, run: { type: "string" }, reviews: { type: "string" },
 } });
 const read = (file: string | undefined): unknown => { if (!file) throw new Error("Required file option missing"); return JSON.parse(readFileSync(resolve(file), "utf8")); };
 const command = positionals[0] ?? "run";
@@ -55,4 +57,21 @@ if (command === "compare") {
   }, () => { checkpoint(); console.log(`Completed ${report.results.length}/${count}`); });
   console.log(summary(report));
   if (report.results.some((r) => r.status === "error")) process.exitCode = 1;
-} else throw new Error("Commands: run, compare, review");
+} else if (command === "export-holdout") {
+  // 실제로 복사한 초안으로 보류 평가 세트를 만든다. 개인 원고가 들어가므로 기본 위치는 git에서 제외된 experiments/holdout/.
+  const db = openDb(resolve(process.env.DATA_DIR ?? "./data", "somun.db"));
+  try {
+    const owners = db.selectDistinct({ ownerId: schema.drafts.ownerId }).from(schema.drafts).all().map((r) => r.ownerId);
+    const owner = values.owner ?? (owners.length === 1 ? owners[0] : undefined);
+    if (!owner) throw new Error(`--owner가 필요합니다. 후보: ${owners.join(", ") || "(없음)"}`);
+    const outDir = resolve(values.out ?? `experiments/holdout/${new Date().toISOString().slice(0, 10)}`);
+    // 이전 내보내기를 덮어쓰지 않는다.
+    if (existsSync(outDir)) throw new Error(`이미 있는 경로입니다: ${outDir}. --out으로 새 경로를 지정하세요.`);
+    mkdirSync(outDir, { recursive: true, mode: 0o700 });
+    const { cases, config, skipped } = exportHoldout(db, owner, { max: Number(values.max ?? 30) });
+    writeFileSync(resolve(outDir, "cases.json"), `${JSON.stringify(cases, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(resolve(outDir, "config.json"), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+    console.log(`Exported ${cases.length} cases (${skipped} skipped: no digest) to ${outDir}`);
+    console.log(`Baseline: npm run experiment -- run --config ${resolve(outDir, "config.json")}`);
+  } finally { db.$client.close(); }
+} else throw new Error("Commands: run, compare, review, export-holdout");

@@ -58,6 +58,14 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
   ].filter(Boolean).join("\n");
 }
 
+/**
+ * 사실 대조의 기준. 다이제스트가 본 원자료 + 기본 사실 + 프로필. 다이제스트 요약(highlights)은 넣지 않는다.
+ * 요약이 지어낸 숫자가 "근거 있음"으로 통과하지 않게, 요약과 초안 모두 이것과 맞춰 본다.
+ */
+export function groundingText(c: CandidateLike, profile?: ProfileLike): string {
+  return [factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, profile), rawBlock(c, false)].join("\n\n");
+}
+
 /** 초안이 쓸 수 있는 숫자를 한 줄로 못 박는다. 모델이 placeholder를 남발하지 않게. */
 export function numbersLine(e: EvidenceLike): string {
   const items = [
@@ -135,7 +143,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[] }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -151,7 +159,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in Korean, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", feedbackText].join("\n"),
   };
 }
 
