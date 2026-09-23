@@ -2,7 +2,7 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppConfig } from "../infra/github/app.js";
 import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
-import { emit, GenerationConflictError, type AppContext } from "./context.js";
+import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { listSources, upsertSource } from "./sources.js";
 
 /**
@@ -91,10 +91,10 @@ function installationSource(ctx: AppContext, ownerId: string, installationId: nu
 
 /** 고르기 화면: 설치가 볼 수 있는 저장소 + 지금 지켜보는지. */
 export async function listInstallationRepos(ctx: AppContext, ownerId: string, installationId: number): Promise<InstallationRepo[]> {
+  const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
+  if (!inst) throw new NotFoundError("installation");
   const cfg = githubAppConfig(ctx);
   if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
-  const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
-  if (!inst) throw new Error("이 계정에 기록된 설치가 아닙니다.");
   const watched = new Set(installationSource(ctx, ownerId, installationId)?.targets ?? []);
   const repos = await installationRepos(cfg, installationId);
   return repos.map((r) => ({ ...r, watched: watched.has(r.fullName) })).sort((a, b) => (b.pushedAt ?? 0) - (a.pushedAt ?? 0));
@@ -103,7 +103,7 @@ export async function listInstallationRepos(ctx: AppContext, ownerId: string, in
 /** 지켜볼 저장소를 정한다. 소스의 targets를 통째로 바꾼다. */
 export function setWatchedRepos(ctx: AppContext, ownerId: string, installationId: number, repos: string[]): { sourceId: number; count: number } {
   const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
-  if (!inst) throw new Error("이 계정에 기록된 설치가 아닙니다.");
+  if (!inst) throw new NotFoundError("installation");
   const allowed = new Set(inst.repos);
   const targets = [...new Set(repos.filter((r) => allowed.has(r)))];
   const existing = installationSource(ctx, ownerId, installationId);

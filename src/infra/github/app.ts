@@ -33,7 +33,7 @@ const cache = new Map<number, { token: string; expiresAt: number }>();
 export async function installationToken(cfg: GitHubAppConfig, installationId: number): Promise<string> {
   const hit = cache.get(installationId);
   if (hit && hit.expiresAt - Date.now() > 5 * 60_000) return hit.token;
-  const res = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
+  const res = await fetch(`https://api.github.com/app/installations/${installationId}/access_tokens`, { signal: AbortSignal.timeout(20_000),
     method: "POST",
     headers: { Authorization: `Bearer ${await appJwt(cfg)}`, Accept: "application/vnd.github+json", "User-Agent": "somun" },
   });
@@ -50,13 +50,13 @@ export async function installationInfo(cfg: GitHubAppConfig, installationId: num
   const h = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "somun" };
   const repos: string[] = [];
   for (let page = 1; page <= 10; page++) {
-    const r = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, { headers: h });
+    const r = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, { signal: AbortSignal.timeout(20_000), headers: h });
     if (!r.ok) break;
     const j = (await r.json()) as { repositories: { full_name: string }[] };
     repos.push(...j.repositories.map((x) => x.full_name));
     if (j.repositories.length < 100) break;
   }
-  const meta = await fetch(`https://api.github.com/app/installations/${installationId}`, { headers: { Authorization: `Bearer ${await appJwt(cfg)}`, Accept: "application/vnd.github+json", "User-Agent": "somun" } });
+  const meta = await fetch(`https://api.github.com/app/installations/${installationId}`, { signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${await appJwt(cfg)}`, Accept: "application/vnd.github+json", "User-Agent": "somun" } });
   const m = meta.ok ? ((await meta.json()) as { account: { login: string; type: string } }) : null;
   return { id: installationId, account: m?.account.login ?? repos[0]?.split("/")[0] ?? "", accountType: m?.account.type ?? "", repos };
 }
@@ -69,7 +69,7 @@ export async function installationRepos(cfg: GitHubAppConfig, installationId: nu
   const h = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "somun" };
   const out: InstallationRepoMeta[] = [];
   for (let page = 1; page <= 10; page++) {
-    const r = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, { headers: h });
+    const r = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, { signal: AbortSignal.timeout(20_000), headers: h });
     if (!r.ok) break;
     const j = (await r.json()) as { repositories: { full_name: string; description: string | null; pushed_at: string | null; stargazers_count: number; language: string | null; fork: boolean; archived: boolean; private: boolean }[] };
     for (const x of j.repositories) out.push({ fullName: x.full_name, description: x.description ?? undefined, pushedAt: x.pushed_at ? Date.parse(x.pushed_at) : undefined, stars: x.stargazers_count, language: x.language ?? undefined, fork: x.fork, archived: x.archived, isPrivate: x.private });

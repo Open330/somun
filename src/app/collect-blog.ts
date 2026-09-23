@@ -38,6 +38,8 @@ export function parseFeed(xml: string): FeedItem[] {
   return out;
 }
 
+const MAX_FEED_BYTES = 5_000_000;
+
 export async function collectBlogSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx, { kind: "blog" }).find((s) => s.id === sourceId);
   if (!source) return {};
@@ -46,8 +48,9 @@ export async function collectBlogSource(ctx: AppContext, sourceId: number): Prom
   const summary: Record<string, number> = {};
   try {
     for (const feedUrl of source.targets) {
-      const r = await fetch(feedUrl, { headers: { "User-Agent": "somun/1.0 (+https://somun.jiun.dev)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" } });
-      if (!r.ok) { summary[feedUrl] = -1; ctx.log.warn({ feedUrl, status: r.status }, "feed fetch failed"); continue; }
+      // 타임아웃은 본문 읽기까지 묶는다. 피드가 비정상적으로 크면 읽지 않는다.
+      const r = await fetch(feedUrl, { headers: { "User-Agent": "somun/1.0 (+https://somun.jiun.dev)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(15_000) }).catch((e: Error) => { ctx.log.warn({ feedUrl, err: e.message }, "feed fetch failed"); return null; });
+      if (!r?.ok || Number(r.headers.get("content-length") ?? 0) > MAX_FEED_BYTES) { summary[feedUrl] = -1; if (r) ctx.log.warn({ feedUrl, status: r.status }, "feed fetch failed"); continue; }
       const items = parseFeed(await r.text()).filter((i) => i.publishedAt >= since);
       const host = new URL(feedUrl).host;
       const signals: IncomingSignal[] = items.map((i) => ({ kind: "blog_post", repo: `blog:${host}`, ref: `blog:${i.url}`, title: i.title, payload: { title: i.title, url: i.url, summary: i.summary }, occurredAt: i.publishedAt }));
