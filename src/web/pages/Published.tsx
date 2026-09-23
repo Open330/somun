@@ -27,11 +27,11 @@ export default function Published() {
           <div className="perf">
             <div className="perf-col">
               <div className="tiny muted" style={{ marginBottom: 6 }}>채널별 · 발행 7일 뒤</div>
-              {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{CHANNEL_LABEL[g.key] ?? g.key} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgUniques !== undefined ? ` · 방문 ${g.avgUniques}` : ""}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
+              {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{CHANNEL_LABEL[g.key] ?? g.key} <span className="muted">{g.count}</span></span><span className="mono">{starText(g)}{g.avgUniques !== undefined ? ` · 방문 ${g.avgUniques}` : ""}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
             </div>
             <div className="perf-col">
               <div className="tiny muted" style={{ marginBottom: 6 }}>문체별 · 발행 7일 뒤</div>
-              {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? (g.key === "unknown" ? "문체 미기록" : g.key)} <span className="muted">{g.count}</span></span><span className="mono">{g.avgStarDelta !== undefined ? `스타 ${g.avgStarDelta > 0 ? "+" : ""}${g.avgStarDelta}` : "스타 -"}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
+              {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? (g.key === "unknown" ? "문체 미기록" : g.key)} <span className="muted">{g.count}</span></span><span className="mono">{starText(g)}{g.avgLikes !== undefined ? ` · 반응 ${g.avgLikes}` : ""}</span></div>)}
             </div>
           </div>
         )}
@@ -48,6 +48,7 @@ export default function Published() {
                 <div className="row" style={{ gap: 10 }}>
                   <div className="small muted" style={{ textAlign: "right" }}>
                     <div>스타 {p.baselineStars ?? "?"} → {p.latestStars ?? "?"} {delta !== undefined && <span className={`delta ${delta > 0 ? "up" : ""}`}>{delta > 0 ? `+${delta}` : delta}</span>}</div>
+                    {p.excessStars7d !== undefined && <div className="tiny muted" title="발행 후 7일 증가에서, 발행 전 7일 추세가 이어졌다면 늘었을 만큼을 뺀 값입니다.">추세 대비 {signed(p.excessStars7d)} (7일 {signed(p.starDelta7d ?? 0)}, 기대 {signed(p.expectedStarDelta7d ?? 0)})</div>}
                     {p.series.at(-1)?.uniques !== undefined && <div>방문자 14일 {p.series.at(-1)?.uniques}</div>}
                   </div>
                   <MetricChart series={p.series} publishedAt={p.publishedAt} baseline={p.baselineStars} />
@@ -65,12 +66,21 @@ export default function Published() {
 
 function ManualStats({ id, stats }: { id: number; stats?: { likes?: number; comments?: number; reposts?: number } }) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [v, setV] = useState({ likes: stats?.likes ?? 0, comments: stats?.comments ?? 0, reposts: stats?.reposts ?? 0 });
-  if (!open) return <button className="ghost sm" onClick={() => setOpen(true)}>{stats ? `반응 ${stats.likes ?? 0}·${stats.comments ?? 0}·${stats.reposts ?? 0}` : "반응 입력"}</button>;
+  if (!open) return <button className="ghost sm" onClick={() => { setError(null); setOpen(true); }}>{stats ? `반응 ${stats.likes ?? 0}·${stats.comments ?? 0}·${stats.reposts ?? 0}` : "반응 입력"}</button>;
   return (
     <div className="row small" style={{ gap: 6 }}>
       {(["likes", "comments", "reposts"] as const).map((k) => <input key={k} type="number" value={v[k]} style={{ width: 64 }} title={k} onChange={(ev) => setV({ ...v, [k]: Number(ev.target.value) })} />)}
-      <button className="sm" onClick={async () => { await post(`/publications/${id}/stats`, v); setOpen(false); }}>저장</button>
+      <button className="sm" onClick={async () => { setError(null); try { await post(`/publications/${id}/stats`, v); setOpen(false); } catch (err) { setError((err as Error).message); } }}>저장</button>
+      {error && <span role="alert" className="tiny">저장하지 못했습니다. {error}</span>}
     </div>
   );
+}
+
+const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
+/** 추세를 알면 발행 효과(추세 대비), 모르면 7일 증가만. */
+function starText(g: { avgStarDelta?: number; avgExcessStars?: number }): string {
+  if (g.avgExcessStars !== undefined) return `추세 대비 스타 ${signed(g.avgExcessStars)}`;
+  return g.avgStarDelta !== undefined ? `스타 ${signed(g.avgStarDelta)}` : "스타 -";
 }

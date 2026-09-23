@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import type { CandidateListItem } from "@shared/types";
-import { api, clearStoredToken, useResource } from "./lib/api";
+import { api, clearStoredToken, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
 import { useAuth } from "./lib/auth/context";
 import AuthCallback from "./pages/AuthCallback";
 import Candidate from "./pages/Candidate";
@@ -26,6 +26,15 @@ export default function App() {
     if (auth.enabled) return;
     api("/me").then(() => setTokenState("ok")).catch(() => setTokenState("need"));
   }, [auth.enabled]);
+  // 세션이 끝나면 멈춘 화면 대신 로그인으로 돌아간다.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      if (auth.enabled) void auth.signOut();
+      else { clearStoredToken(); setTokenState((s) => (s === "form" ? s : "need")); }
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [auth]);
   if (!auth.enabled && tokenState === "checking") return null;
   if (!auth.enabled && tokenState === "need") return <Landing onToken={() => setTokenState("form")} />;
   if (!auth.enabled && tokenState === "form") return <TokenLogin onDone={() => setTokenState("ok")} />;
