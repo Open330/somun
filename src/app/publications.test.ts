@@ -18,6 +18,7 @@ afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); fetchMock.mockC
 const ledger = () => ctx.db.select().from(schema.changeLedger).get()!;
 
 it("undoes the ledger's 'already announced' mark when the only publication is removed", () => {
+  ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel: "x", lang: "en", version: 1, body: "b", lint: [], status: "copied", model: "m", createdAt: 1, updatedAt: 1 }).run();
   const id = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/me/status/1" });
   expect(ledger().publishedChannel).toBe("x");
   removePublication(ctx, "me", id);
@@ -38,4 +39,10 @@ it("refetches reactions for the corrected URL even on an old publication", async
   updatePublicationUrl(ctx, "me", id, "https://x.com/me/status/2");
   await vi.waitFor(() => expect(ctx.db.select().from(schema.publications).get()?.autoStats).toMatchObject({ likes: 7 }));
   expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/status/2");
+});
+
+it("returns a candidate without drafts to its judged or new stage when its only publication is removed", () => {
+  const id = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/me/status/1" });
+  removePublication(ctx, "me", id);
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("new");
 });

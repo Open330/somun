@@ -74,9 +74,17 @@ describe("hourly sweep", () => {
   const queued = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.status === "pending").map((j) => j.kind);
 
   it("continues with judge instead of digesting again once a digest exists", async () => {
-    ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+    const at = Date.now();
+    ctx.db.update(schema.candidates).set({ updatedAt: at, evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: at } }).run();
     expect(await processNewCandidates(ctx)).toBe(1);
     expect(queued()).toEqual(["judge"]);
+  });
+
+  it("digests again when new signals were merged after the last digest", async () => {
+    const at = Date.now();
+    ctx.db.update(schema.candidates).set({ updatedAt: at, evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: at - 60_000 } }).run();
+    expect(await processNewCandidates(ctx)).toBe(1);
+    expect(queued()).toEqual(["digest"]);
   });
 
   it("backs off after a recent failure and stops after repeated failures", async () => {
@@ -94,4 +102,15 @@ describe("hourly sweep", () => {
     job("digest", "pending");
     expect(await processNewCandidates(ctx)).toBe(0);
   });
+});
+
+it("filters unverified highlights before keeping eight, and checks against the text the digest actually saw", () => {
+  ctx.db.update(schema.candidates).set({ status: "new", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", releaseNotes: "New notes after a later collect." } }).run();
+  const bad = Array.from({ length: 3 }, (_, i) => `Claim ${i} is 3x faster.`);
+  const good = [..."abcdefg"].map((c) => `Change ${c} without numbers.`);
+  applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "t", promptText: "## Release notes\nCold start went from 800ms to 200ms.", result: { highlights: [...bad, ...good, "Cold start went from 800 ms to 200 ms."], limitations: [] } });
+  const ev = ctx.db.select().from(schema.candidates).get()!.evidence as { highlights: string[]; unverifiedHighlights: unknown[] };
+  expect(ev.highlights).toHaveLength(8);
+  expect(ev.highlights).toContain("Cold start went from 800 ms to 200 ms.");
+  expect(ev.unverifiedHighlights).toHaveLength(3);
 });

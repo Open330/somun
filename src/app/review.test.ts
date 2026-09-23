@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { claimJob, completeJob, generationStatus, pendingJobs } from "./jobs.js";
+import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
 import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
 import { examplesFor } from "./pipeline.js";
@@ -131,4 +131,35 @@ it("accepts a suggestion that repeats an existing guide line even when the guide
   const sid = Number(ctx.db.insert(schema.guideSuggestions).values({ ownerId: OWNER, rule: "rule number 3", normalized: "rule number 3", category: "voice", sources: [], status: "pending", createdAt: now, updatedAt: now }).run().lastInsertRowid);
   acceptSuggestion(ctx, OWNER, sid);
   expect(ctx.db.select().from(schema.guideSuggestions).get()?.status).toBe("accepted");
+});
+
+it("never retires examples the user added by hand", () => {
+  const now = Date.now();
+  ctx.db.insert(schema.examples).values({ ownerId: OWNER, channel: "x", lang: "en", body: "hand written", source: "approved", active: true, createdAt: now - 10_000 }).run();
+  for (let i = 0; i < OWN_EXAMPLE_CAP + 1; i++) { const id = draft(`Post ${i} https://github.com/me/tool`); saveDraftEdit(ctx, OWNER, id, { body: `Post ${i} https://github.com/me/tool`, markCopied: true }); }
+  expect(examples().find((e) => e.body === "hand written")?.active).toBe(true);
+});
+
+it("records whether a lesson came from an edit even if the draft is dropped before it runs, and retries lessons with their draft", () => {
+  updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+  const id = draft("Original https://github.com/me/tool");
+  saveDraftEdit(ctx, OWNER, id, { body: "Edited https://github.com/me/tool", markCopied: false });
+  dropDraft(ctx, OWNER, id, "voice");
+  const [edit, drop] = lessons();
+  expect([edit.lessonKind, drop.lessonKind]).toEqual(["edit", "drop"]);
+  const first = claimJob(ctx, OWNER, edit.id, "t");
+  completeJob(ctx, OWNER, edit.id, { claimToken: first.claimToken!, error: "quota" });
+  ctx.db.update(schema.candidates).set({ status: "published" }).run();
+  const retried = retryGeneration(ctx, OWNER, edit.id);
+  const second = claimJob(ctx, OWNER, retried, "t");
+  completeJob(ctx, OWNER, retried, { claimToken: second.claimToken!, resultJson: JSON.stringify({ rule: "Say it in one line.", category: "length" }) });
+  expect(ctx.db.select().from(schema.guideSuggestions).get()?.sources).toMatchObject([{ kind: "edit", draftId: id }]);
+});
+
+it("fills in the rewrite share for drafts copied before it was stored", () => {
+  const id = draft("a b c d");
+  ctx.db.update(schema.drafts).set({ status: "copied" }).run();
+  expect(learningStats(ctx, OWNER).copied).toBe(1);
+  expect(ctx.db.select().from(schema.drafts).get()?.editRatio).toBe(0);
+  void id;
 });

@@ -27,7 +27,8 @@ const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placehol
 function retireSeeds(ctx: AppContext, ownerId: string, channel: string, lang: string) {
   const active = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt), desc(schema.examples.id)).all();
   const own = active.filter((e) => e.source !== "seed");
-  const retire = [...(own.length >= 5 ? active.filter((e) => e.source === "seed") : []), ...own.slice(OWN_EXAMPLE_CAP)];
+  // 상한은 복사로 생긴 예시에만. 손으로 추가했거나 다시 켠 예시는 사용자가 정한 것이라 끄지 않는다.
+  const retire = [...(own.length >= 5 ? active.filter((e) => e.source === "seed") : []), ...own.filter((e) => e.draftId !== null).slice(OWN_EXAMPLE_CAP)];
   for (const e of retire) ctx.db.update(schema.examples).set({ active: false }).where(eq(schema.examples.id, e.id)).run();
 }
 
@@ -59,8 +60,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const original = input.markCopied ? ctx.db.select({ before: schema.draftEdits.before }).from(schema.draftEdits).where(eq(schema.draftEdits.draftId, id)).orderBy(asc(schema.draftEdits.createdAt), asc(schema.draftEdits.id)).get()?.before ?? d.body : undefined;
   ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint, status, updatedAt: now, ...(original !== undefined ? { editRatio: editRatio(original, input.body) } : {}) }).where(eq(schema.drafts.id, id)).run();
   if (input.markCopied && lint.filter((r) => EXAMPLE_GATE.has(r.rule)).every((r) => r.ok)) {
-    const edited = changed || d.status === "edited" || ctx.db.select({ id: schema.draftEdits.id }).from(schema.draftEdits).where(eq(schema.draftEdits.draftId, id)).get() !== undefined;
-    upsertOwnExample(ctx, ownerId, d, input, edited ? "edited" : "approved", now);
+    upsertOwnExample(ctx, ownerId, d, input, original !== d.body || changed ? "edited" : "approved", now);
     emit(ctx, ownerId, { resource: "examples" });
   }
   emit(ctx, ownerId, { resource: "drafts", id });

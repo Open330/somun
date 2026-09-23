@@ -180,8 +180,9 @@ export const llmJobs = sqliteTable("llm_jobs", {
   claimToken: text("claim_token"),
   executor: text("executor").notNull().default("local"),
   continuation: json<import("../../shared/types.js").GenerationPlan>("continuation"),
-  /** lesson 작업이 규칙을 뽑을 초안. */
+  /** lesson 작업이 규칙을 뽑을 초안과, 수정(edit)에서 왔는지 버림(drop)에서 왔는지. 넣을 때 정한다. */
   draftId: integer("draft_id"),
+  lessonKind: text("lesson_kind"),
   attempts: integer("attempts").notNull().default(0),
   resultJson: text("result_json"),
   error: text("error"),

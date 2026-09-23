@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { publicationEffect } from "../core/metrics.js";
 import { markPublished, unmarkPublished } from "./ledger.js";
 import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
@@ -18,6 +18,7 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
   if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
   markPublished(ctx, ownerId, input.candidateId, input.channel, now);
+  channelResultsCache.get(ctx.db)?.delete(ownerId);
   // 등록 직후 한 번 반응을 받아 둔다 (기준선). 실패해도 등록은 된다.
   void refreshReactions(ctx, ownerId, true).catch(() => undefined);
   emit(ctx, ownerId, { resource: "publications", id });
@@ -33,17 +34,25 @@ export function updatePublicationUrl(ctx: AppContext, ownerId: string, id: numbe
   emit(ctx, ownerId, { resource: "publications", id });
 }
 
-/** 발행 기록 지우기. 그 글감에 남은 발행이 없으면 글감을 "초안 있음"으로 되돌린다. */
+/** 발행 기록 지우기. 삭제·원장 되돌림·글감 상태를 한 트랜잭션으로. 남은 발행이 없으면 글감을 초안·판단 유무에 맞는 단계로 되돌린다. */
 export function removePublication(ctx: AppContext, ownerId: string, id: number): void {
-  const p = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
-  if (!p) throw new NotFoundError("publication");
-  ctx.db.delete(schema.publications).where(eq(schema.publications.id, id)).run();
-  const rest = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId))).orderBy(desc(schema.publications.publishedAt)).get();
-  // 원장의 "이미 알림" 표시도 되돌린다. 그대로 두면 판단이 이 변경들을 발행된 것으로 보고 새로움 점수를 깎는다.
-  unmarkPublished(ctx, ownerId, p.candidateId, rest ? { channel: rest.channel, publishedAt: rest.publishedAt } : undefined);
-  if (!rest) ctx.db.update(schema.candidates).set({ status: "drafted", updatedAt: Date.now() }).where(and(eq(schema.candidates.id, p.candidateId), eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.status, "published"))).run();
+  const candidateId = ctx.db.$client.transaction(() => {
+    const p = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
+    if (!p) throw new NotFoundError("publication");
+    ctx.db.delete(schema.publications).where(eq(schema.publications.id, id)).run();
+    const rest = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId))).orderBy(desc(schema.publications.publishedAt)).get();
+    // 원장의 "이미 알림" 표시도 되돌린다. 그대로 두면 판단이 이 변경들을 발행된 것으로 보고 새로움 점수를 깎는다.
+    unmarkPublished(ctx, ownerId, p.candidateId, rest ? { channel: rest.channel, publishedAt: rest.publishedAt } : undefined);
+    const c = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, p.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
+    if (!rest && c?.status === "published") {
+      const hasDraft = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), ne(schema.drafts.status, "dropped"))).get();
+      ctx.db.update(schema.candidates).set({ status: hasDraft ? "drafted" : c.latestJudgmentId ? "judged" : "new", updatedAt: Date.now() }).where(eq(schema.candidates.id, c.id)).run();
+    }
+    return p.candidateId;
+  }).immediate();
+  channelResultsCache.get(ctx.db)?.delete(ownerId);
   emit(ctx, ownerId, { resource: "publications", id });
-  emit(ctx, ownerId, { resource: "candidates", id: p.candidateId });
+  emit(ctx, ownerId, { resource: "candidates", id: candidateId });
 }
 
 export function setManualStats(ctx: AppContext, ownerId: string, id: number, stats: { likes?: number; comments?: number; reposts?: number }): void {
@@ -111,8 +120,22 @@ export function performanceSummary(ctx: AppContext, ownerId: string): Performanc
   };
 }
 
+/** 채널 성과는 하루 단위로 바뀐다. 판단 프롬프트마다(쓰기 트랜잭션 안) 다시 계산하지 않고 소유자별로 잠시 둔다. */
+const CHANNEL_RESULTS_TTL_MS = 30 * 60_000;
+const channelResultsCache = new WeakMap<AppContext["db"], Map<string, { at: number; lines: string[] }>>();
+
 /** 판단 프롬프트에 넣는 채널별 지난 성과. 발행이 2건 이상인 채널만. 추천 채널을 고를 때 참고한다. */
 export function channelResultsForJudge(ctx: AppContext, ownerId: string): string[] {
+  const cache = channelResultsCache.get(ctx.db) ?? new Map<string, { at: number; lines: string[] }>();
+  channelResultsCache.set(ctx.db, cache);
+  const hit = cache.get(ownerId);
+  if (hit && Date.now() - hit.at < CHANNEL_RESULTS_TTL_MS) return hit.lines;
+  const lines = computeChannelResults(ctx, ownerId);
+  cache.set(ownerId, { at: Date.now(), lines });
+  return lines;
+}
+
+function computeChannelResults(ctx: AppContext, ownerId: string): string[] {
   return performanceSummary(ctx, ownerId).byChannel.filter((g) => g.count >= 2).map((g) => [
     `${g.key}: ${g.count} posts`,
     g.avgExcessStars !== undefined ? `avg ${g.avgExcessStars > 0 ? "+" : ""}${g.avgExcessStars} stars beyond the prior trend in 7 days` : g.avgStarDelta !== undefined ? `avg +${g.avgStarDelta} stars in 7 days (no prior trend)` : "",

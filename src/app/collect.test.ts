@@ -50,3 +50,10 @@ describe("collection guards", () => {
     expect(ctx.db.select().from(schema.sources).get()?.lastError).toContain("rate limit");
   });
 });
+
+it("stops reading a feed body past the byte cap even without Content-Length", async () => {
+  const { readCapped } = await import("./collect-blog.js");
+  const stream = new ReadableStream<Uint8Array>({ pull(c) { c.enqueue(new Uint8Array(1024)); } });
+  expect(await readCapped(new Response(stream), 10_000)).toBeNull();
+  expect(await readCapped(new Response("<rss/>"), 10_000)).toBe("<rss/>");
+});

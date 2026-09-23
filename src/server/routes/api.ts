@@ -4,9 +4,9 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
-import { collectAll, collectGithubSource, profileMaterialFor } from "../../app/collect.js";
+import { collectAll, profileMaterialFor } from "../../app/collect.js";
 import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
-import { acceptSuggestion, dismissSuggestion, listSuggestions } from "../../app/learning.js";
+import { acceptSuggestion, dismissSuggestion, GUIDE_MAX_CHARS, listSuggestions } from "../../app/learning.js";
 import { learningStats } from "../../app/learning-stats.js";
 import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
@@ -63,7 +63,7 @@ export function apiRoutes(ctx: AppContext, config: Config) {
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
       ui: z.object({ onboardingDismissedAt: z.number().optional() }).optional(),
       notify: z.object({ discordWebhookUrl: z.string().url().startsWith("https://discord.com/api/webhooks/").or(z.literal("")).optional(), weekly: z.boolean() }).optional(),
-      voice: z.object({ preset: z.string().max(40), guide: z.string().max(2000), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
+      voice: z.object({ preset: z.string().max(40), guide: z.string().max(GUIDE_MAX_CHARS), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
     }));
     const { keepApiKey, ...patch } = input;
     return c.json(updateSettings(ctx, c.get("ownerId"), patch, keepApiKey ?? true));
@@ -168,7 +168,8 @@ export function apiRoutes(ctx: AppContext, config: Config) {
     const { repos } = await body(c, z.object({ repos: z.array(z.string().min(3)).max(500) }));
     const r = setWatchedRepos(ctx, c.get("ownerId"), id(c.req.param("id")), repos);
     // 고른 즉시 한 번 수집한다. 자동 모드가 아니면 글감은 "새 글감"으로만 쌓인다.
-    if (r.count) void collectGithubSource(ctx, r.sourceId).catch((e: Error) => ctx.log.warn({ err: e.message }, "collect after watch failed"));
+    // 소유자별 수집 잠금을 거친다. 크론·"지금 확인"과 겹쳐도 한 번만 돈다.
+    if (r.count) void collectAll(ctx, c.get("ownerId")).catch((e: Error) => ctx.log.warn({ err: e.message }, "collect after watch failed"));
     return c.json(r);
   });
   app.get("/github/setup", async (c) => {

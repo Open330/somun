@@ -30,7 +30,7 @@ function bucket(ratios: number[]): LearningBucket {
  */
 export function learningStats(ctx: AppContext, ownerId: string, weeks = 12): LearningStats {
   const drafts = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.status, "copied"))).orderBy(asc(schema.drafts.updatedAt)).all();
-  // 수정량은 복사할 때 저장된다. 그 전에 복사된 초안만 여기서 계산한다.
+  // 수정량은 복사할 때 저장된다. 그 전에 복사된 초안만 여기서 계산해 채운다.
   const ids = drafts.filter((d) => d.editRatio === null).map((d) => d.id);
   const firstEdit = new Map<number, string>();
   if (ids.length) {
@@ -38,7 +38,13 @@ export function learningStats(ctx: AppContext, ownerId: string, weeks = 12): Lea
       if (!firstEdit.has(e.draftId)) firstEdit.set(e.draftId, e.before);
     }
   }
-  const rows = drafts.map((d) => ({ at: d.updatedAt, createdAt: d.createdAt, channel: d.channel as Channel, styleKey: d.styleKey ?? "unknown", ratio: d.editRatio ?? editRatio(firstEdit.get(d.id) ?? d.body, d.body) }));
+  // 마이그레이션 전에 복사된 초안은 한 번 계산해 저장한다. 다음 요청부터는 저장된 값만 읽는다.
+  for (const d of drafts) {
+    if (d.editRatio !== null) continue;
+    d.editRatio = editRatio(firstEdit.get(d.id) ?? d.body, d.body);
+    ctx.db.update(schema.drafts).set({ editRatio: d.editRatio }).where(eq(schema.drafts.id, d.id)).run();
+  }
+  const rows = drafts.map((d) => ({ at: d.updatedAt, createdAt: d.createdAt, channel: d.channel as Channel, styleKey: d.styleKey ?? "unknown", ratio: d.editRatio ?? 0 }));
   const group = <K extends string>(key: (r: (typeof rows)[number]) => K) => {
     const m = new Map<K, typeof rows>();
     for (const r of rows) m.set(key(r), [...(m.get(key(r)) ?? []), r]);
