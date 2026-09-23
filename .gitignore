@@ -7,3 +7,5 @@ data
 
 # Raw experiment prompts and outputs stay local unless explicitly selected.
 experiments/runs/
+# Held-out sets exported from real copied drafts contain private writing.
+experiments/holdout/

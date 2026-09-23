@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "소문 — PR for developers who'd rather build than announce.",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"tsx --env-file-if-exists=.env watch src/server/main.ts\" \"vite\"",
     "dev:server": "tsx --env-file-if-exists=.env watch src/server/main.ts",

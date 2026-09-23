@@ -15,5 +15,5 @@ export default defineConfig({
     },
   },
   server: { port: 5180, proxy: { "/api": "http://localhost:8790" } },
-  test: { root: ".", include: ["src/**/*.test.ts"] },
+  test: { root: ".", include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },
 });
