@@ -26,7 +26,7 @@ export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force 
     top || "이번 주는 알릴 게 없습니다. 정상입니다.",
     `<${base}/>`,
   ].join("\n");
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }) });
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(10_000) });
   if (!r.ok) return { ok: false, reason: `Discord ${r.status}` };
   updateSettings(ctx, ownerId, { notify: { ...s.notify!, lastSentAt: Date.now() } });
   return { ok: true, sent: content };

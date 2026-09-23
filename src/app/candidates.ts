@@ -76,7 +76,9 @@ export function refreshEvidence(ctx: AppContext, ownerId: string, repo: string, 
     const keepDigest = cur.limitationsSource === "digest" && !incoming.limitations?.length;
     const limitations = keepDigest ? cur.limitations : incoming.limitations;
     const limitationsSource = keepDigest ? "digest" as const : incoming.limitationsSource ?? "readme" as const;
-    const merged: Evidence = { ...cur, ...incoming, limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
+    // 값이 없는 필드(일시적 조회 실패)는 기존 사실을 지우지 않는다.
+    const defined = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v !== undefined)) as Partial<Evidence>;
+    const merged: Evidence = { ...cur, ...defined, limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
     ctx.db.update(schema.candidates).set({ evidence: merged as Record<string, unknown> }).where(eq(schema.candidates.id, c.id)).run();
     n++;
   }

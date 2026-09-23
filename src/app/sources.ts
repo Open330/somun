@@ -15,6 +15,12 @@ export function listEnabledSources(ctx: AppContext, opts: { ownerId?: string; ki
 }
 
 export function upsertSource(ctx: AppContext, ownerId: string, input: { id?: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean }): Source {
+  // 설치 ID는 이 소유자가 연결한 설치만 가리킬 수 있다. 다른 사람의 설치 토큰으로 읽는 것을 막는다.
+  const inst = input.options?.installationId;
+  if (inst !== undefined) {
+    const owner = ctx.db.select({ ownerId: schema.githubInstallations.ownerId }).from(schema.githubInstallations).where(eq(schema.githubInstallations.installationId, Number(inst))).get()?.ownerId;
+    if (owner !== ownerId) throw new NotFoundError("installation");
+  }
   let id = input.id;
   if (id) {
     const existing = ctx.db.select().from(schema.sources).where(and(eq(schema.sources.id, id), eq(schema.sources.ownerId, ownerId))).get();

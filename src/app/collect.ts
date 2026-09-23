@@ -1,13 +1,13 @@
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
 import { installationToken } from "../infra/github/app.js";
-import { GitHubClient, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
-import { githubAppConfig } from "./connectors.js";
+import { GitHubClient, GitHubRateLimitError, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
+import { githubAppConfig, ownerOfInstallation } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { refreshEvidence } from "./candidates.js";
 import { ensureProfile } from "./profiles.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
-import type { AppContext } from "./context.js";
+import { NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
 import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
@@ -20,7 +20,7 @@ const DAY = 24 * 3600 * 1000;
  * 저장소별로: 릴리스·머지 PR·새 레포·스타/다운로드 임계 신호, 근거 갱신, 지표 스냅샷, 릴리스 후보 병합.
  */
 
-async function expandTargets(gh: GitHubClient, targets: string[]): Promise<GhRepo[]> {
+async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<GhRepo[]> {
   const repos: GhRepo[] = [];
   for (const t of targets) {
     if (t.includes("/")) {
@@ -36,7 +36,7 @@ async function expandTargets(gh: GitHubClient, targets: string[]): Promise<GhRep
     }
   }
   // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
-  return repos.filter((r) => !r.fork && !r.archived && Date.now() - Date.parse(r.pushed_at) < 60 * DAY).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
+  return repos.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
@@ -63,16 +63,29 @@ export function limitationsFrom(readme: string): string[] {
 /** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
 export const PROFILE_BUDGET = 25;
 
+/**
+ * 소유자가 GitHub를 읽을 토큰. 설치 토큰은 그 설치를 연결한 소유자만 쓴다.
+ * 서버 토큰은 허용된 소유자(githubTokenOwners)만 비공개 저장소까지 읽고, 나머지는 공개 저장소만(publicOnly).
+ */
+export async function githubAccess(ctx: AppContext, ownerId: string, installationId?: number): Promise<{ gh: GitHubClient; publicOnly: boolean }> {
+  if (installationId) {
+    if (ownerOfInstallation(ctx, installationId) !== ownerId) throw new Error("이 계정에 연결된 GitHub 설치가 아닙니다.");
+    const cfg = githubAppConfig(ctx);
+    if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+    return { gh: new GitHubClient(await installationToken(cfg, installationId)), publicOnly: false };
+  }
+  if (!ctx.env.githubToken) throw new Error("GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.");
+  const allowed = ctx.env.githubTokenOwners;
+  return { gh: new GitHubClient(ctx.env.githubToken), publicOnly: allowed !== undefined && !allowed.includes(ownerId) };
+}
+
 /** 저장소 하나의 프로필 재료를 GitHub에서 읽는다 (재생성용). */
 export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoName: string) {
   const src = listEnabledSources(ctx, { ownerId, kind: "github" }).find((s) => s.targets.some((t) => t === repoName || t === repoName.split("/")[0]));
-  const instId = src?.options?.installationId ? Number(src.options.installationId) : undefined;
-  const cfg = instId ? githubAppConfig(ctx) : null;
-  const token = instId && cfg ? await installationToken(cfg, instId) : ctx.env.githubToken;
-  if (!token) throw new Error("GitHub 토큰이 없습니다.");
-  const gh = new GitHubClient(token);
-  const [repo, readmeRaw, releases] = await Promise.all([gh.get<GhRepo>(`/repos/${repoName}`), gh.get<{ content: string }>(`/repos/${repoName}/readme`), gh.get<GhRelease[]>(`/repos/${repoName}/releases?per_page=3`)]);
-  if (!repo) throw new Error("저장소를 읽을 수 없습니다.");
+  const { gh, publicOnly } = await githubAccess(ctx, ownerId, src?.options?.installationId ? Number(src.options.installationId) : undefined);
+  const repo = await gh.get<GhRepo>(`/repos/${repoName}`);
+  if (!repo || (publicOnly && repo.private !== false)) throw new NotFoundError("repository");
+  const [readmeRaw, releases] = await Promise.all([gh.get<{ content: string }>(`/repos/${repoName}/readme`), gh.get<GhRelease[]>(`/repos/${repoName}/releases?per_page=3`)]);
   const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
   return { repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
 }
@@ -80,18 +93,14 @@ export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoN
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
   if (!source) return {};
-  // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
-  const instId = source.options?.installationId ? Number(source.options.installationId) : undefined;
-  const cfg = instId ? githubAppConfig(ctx) : null;
-  const token = instId && cfg ? await installationToken(cfg, instId) : ctx.env.githubToken;
-  if (!token) throw new Error("GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.");
-  const gh = new GitHubClient(token);
   const ownerId = source.ownerId;
   const since = Date.now() - 14 * DAY;
   const summary: Record<string, number> = {};
   let profileBudget = PROFILE_BUDGET;
   try {
-    for (const repo of await expandTargets(gh, source.targets)) {
+    // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
+    const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
+    for (const repo of await expandTargets(gh, source.targets, publicOnly)) {
       const name = repo.full_name;
       try {
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
@@ -128,7 +137,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         try {
           const pkg = JSON.parse(Buffer.from(pkgRaw.content, "base64").toString("utf8")) as { name?: string; private?: boolean };
           if (pkg.name && !pkg.private) {
-            const dl = await fetch(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(pkg.name)}`);
+            const dl = await fetch(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(pkg.name)}`, { signal: AbortSignal.timeout(15_000) });
             if (dl.ok) {
               npmPackage = pkg.name;
               npmMonthlyDownloads = ((await dl.json()) as { downloads: number }).downloads;
@@ -169,6 +178,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         summary[name] = r.inserted;
       }
       } catch (e) {
+        // 레이트 리밋이면 멈춘다. 계속 요청하면 남은 저장소도 전부 실패하고 GitHub의 제한만 길어진다.
+        if (e instanceof GitHubRateLimitError) throw e;
         // 저장소 하나의 실패가 조직 전체 수집을 막지 않는다.
         ctx.log.warn({ repo: name, err: (e as Error).message }, "repo collect failed");
         summary[name] = -1;
@@ -183,7 +194,30 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   return summary;
 }
 
-export async function collectAll(ctx: AppContext, ownerId?: string): Promise<Record<number, Record<string, number> | { error: string }>> {
+/** 소유자별 진행 중인 수집. "지금 확인"을 연달아 눌러도, 크론·웹훅과 겹쳐도 소유자마다 한 번만 돈다. */
+const inFlight = new WeakMap<AppContext["db"], Map<string, Promise<CollectResult>>>();
+type CollectResult = Record<number, Record<string, number> | { error: string }>;
+
+/** 소유자를 주면 그 소유자만, 없으면 모든 소유자를 차례로. 어느 쪽이든 같은 소유자별 잠금을 쓴다. */
+export async function collectAll(ctx: AppContext, ownerId?: string): Promise<CollectResult> {
+  if (ownerId !== undefined) return collectOwner(ctx, ownerId);
+  const owners = [...new Set(listEnabledSources(ctx).map((s) => s.ownerId))];
+  const out: CollectResult = {};
+  for (const owner of owners) Object.assign(out, await collectOwner(ctx, owner));
+  return out;
+}
+
+function collectOwner(ctx: AppContext, ownerId: string): Promise<CollectResult> {
+  const running = inFlight.get(ctx.db) ?? new Map<string, Promise<CollectResult>>();
+  inFlight.set(ctx.db, running);
+  const existing = running.get(ownerId);
+  if (existing) return existing;
+  const p = collectAllOnce(ctx, ownerId).finally(() => running.delete(ownerId));
+  running.set(ownerId, p);
+  return p;
+}
+
+async function collectAllOnce(ctx: AppContext, ownerId: string): Promise<CollectResult> {
   const out: Record<number, Record<string, number> | { error: string }> = {};
   for (const s of listEnabledSources(ctx, { ownerId })) {
     if (s.kind !== "github" && s.kind !== "blog") continue;

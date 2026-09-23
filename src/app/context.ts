@@ -8,7 +8,11 @@ import type { UsageReporter } from "../infra/usage.js";
 export type AppContext = {
   db: Db;
   log: Logger;
-  env: { githubToken?: string; geminiKeys?: string; publicUrl?: string };
+  env: {
+    githubToken?: string; geminiKeys?: string; publicUrl?: string;
+    /** 서버 GITHUB_TOKEN으로 비공개 저장소까지 읽을 수 있는 소유자. 비우면 제한 없음(단일 사용자 배포). 목록 밖 소유자는 공개 저장소만 읽는다. */
+    githubTokenOwners?: string[];
+  };
   bus: EventEmitter;
   usage: UsageReporter;
 };
