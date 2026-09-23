@@ -9,6 +9,7 @@ import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
 import { examplesFor } from "./pipeline.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
+import { ensureProfile, getProfile } from "./profiles.js";
 
 let ctx: AppContext;
 let candidateId: number;
@@ -162,4 +163,28 @@ it("fills in the rewrite share for drafts copied before it was stored", () => {
   expect(learningStats(ctx, OWNER).copied).toBe(1);
   expect(ctx.db.select().from(schema.drafts).get()?.editRatio).toBe(0);
   void id;
+});
+
+describe("repository profiles in local-agent mode", () => {
+  const material = { repo: "me/tool", description: "A tool", readme: "# tool\nDoes things.", recentReleaseNotes: [], stars: 1 };
+  it("queues the profile for the local worker instead of calling a server model, once per repository", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    expect(await ensureProfile(ctx, OWNER, material)).toBe("queued");
+    expect(await ensureProfile(ctx, OWNER, material)).toBe("kept");
+    const jobs = ctx.db.select().from(schema.llmJobs).all();
+    expect(jobs).toMatchObject([{ kind: "profile", executor: "local", meta: { repo: "me/tool" } }]);
+    expect(jobs[0].user).toContain("Does things.");
+    expect(generationStatus(ctx, OWNER)).toEqual([]);
+    expect(pendingJobs(ctx, OWNER).map((j) => j.kind)).toEqual(["profile"]);
+  });
+
+  it("saves the worker's profile under the README hash it was built from", async () => {
+    updateSettings(ctx, OWNER, { llm: { provider: "local-agent" } });
+    await ensureProfile(ctx, OWNER, material);
+    const job = ctx.db.select().from(schema.llmJobs).get()!;
+    const { claimToken } = claimJob(ctx, OWNER, job.id, "t");
+    completeJob(ctx, OWNER, job.id, { claimToken: claimToken!, resultJson: JSON.stringify({ what: "A tool that does things", audience: "devs", claims: [], stage: "beta", limitations: [], naming: "tool", avoid: [] }), model: "claude" });
+    expect(getProfile(ctx, OWNER, "me/tool")?.profile).toMatchObject({ what: "A tool that does things", stage: "beta" });
+    expect(await ensureProfile(ctx, OWNER, material)).toBe("kept");
+  });
 });

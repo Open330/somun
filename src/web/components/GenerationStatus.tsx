@@ -4,7 +4,7 @@ import type { JobProgress } from "@shared/types";
 import { post, useResource } from "../lib/api";
 import { CHANNEL_LABEL } from "./ui";
 
-const labels: Record<JobProgress["kind"], string> = { digest: "변경 내용 정리", judge: "게시 가치 판단", draft: "초안 작성", lesson: "문체 규칙 찾기" };
+const labels: Record<JobProgress["kind"], string> = { digest: "변경 내용 정리", judge: "게시 가치 판단", draft: "초안 작성", lesson: "문체 규칙 찾기", profile: "프로젝트 프로필 만들기" };
 export function GenerationStatus({ candidateId, candidateTitles, onChange }: { candidateId?: number; candidateTitles?: Record<number, string>; onChange: () => void }) {
   const { data, error, reload } = useResource<JobProgress[]>(`/jobs/status${candidateId === undefined ? "" : `?candidateId=${candidateId}`}`, ["jobs"]);
   const [retrying, setRetrying] = useState<number | null>(null);

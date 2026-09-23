@@ -117,7 +117,7 @@ Every draft passes a **slop lint** before you see it: banned phrases, emoji bull
 | OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |
 | **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |
 
-The local agent mode queues each judgment and draft as a job. Run the worker where your CLI is logged in:
+The local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a server model. Run the worker where your CLI is logged in:
 
 ```bash
 npm run agent-worker -- --cli claude    # or --cli codex
