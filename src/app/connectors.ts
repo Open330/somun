@@ -4,6 +4,7 @@ import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppCo
 import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { listSources, upsertSource } from "./sources.js";
+import { localeOf, say } from "./i18n.js";
 
 /**
  * 커넥터: GitHub(App 설치 또는 서버 토큰), 세션 업로더. 화면 요약과 GitHub App 설치 기록.
@@ -30,14 +31,14 @@ export function listInstallations(ctx: AppContext, ownerId: string) {
 /** 설치 콜백: 설치 정보를 읽어 기록하고, 설치 저장소를 github 소스로 등록한다. */
 export async function recordInstallation(ctx: AppContext, ownerId: string, installationId: number): Promise<{ account: string; repos: string[] }> {
   const cfg = githubAppConfig(ctx);
-  if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+  if (!cfg) throw new Error(say(localeOf(ctx, ownerId), "GitHub App이 설정되지 않았습니다.", "The GitHub App is not configured."));
   const existingOwner = ownerOfInstallation(ctx, installationId);
-  if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError("이미 다른 계정에 연결된 설치입니다.");
+  if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "이미 다른 계정에 연결된 설치입니다.", "This installation is already linked to another account."));
   const info = await installationInfo(cfg, installationId);
   const now = Date.now();
   const saved = ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: schema.githubInstallations.installationId, set: { account: info.account, accountType: info.accountType, repos: info.repos, updatedAt: now }, setWhere: eq(schema.githubInstallations.ownerId, ownerId) }).run();
-  if (!saved.changes) throw new GenerationConflictError("이미 다른 계정에 연결된 설치입니다.");
+  if (!saved.changes) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "이미 다른 계정에 연결된 설치입니다.", "This installation is already linked to another account."));
   // 설치 저장소 → 소스. 이미 있는 github 소스는 대상만 갱신.
   const existing = listSources(ctx, ownerId).find((s) => s.kind === "github" && s.options?.installationId === String(installationId));
   // 처음 설치면 아무것도 지켜보지 않는다. 무엇을 볼지는 고르기 화면(/github/pick)에서 사용자가 정한다.
@@ -94,7 +95,7 @@ export async function listInstallationRepos(ctx: AppContext, ownerId: string, in
   const inst = listInstallations(ctx, ownerId).find((i) => i.installationId === installationId);
   if (!inst) throw new NotFoundError("installation");
   const cfg = githubAppConfig(ctx);
-  if (!cfg) throw new Error("GitHub App이 설정되지 않았습니다.");
+  if (!cfg) throw new Error(say(localeOf(ctx, ownerId), "GitHub App이 설정되지 않았습니다.", "The GitHub App is not configured."));
   const watched = new Set(installationSource(ctx, ownerId, installationId)?.targets ?? []);
   const repos = await installationRepos(cfg, installationId);
   return repos.map((r) => ({ ...r, watched: watched.has(r.fullName) })).sort((a, b) => (b.pushedAt ?? 0) - (a.pushedAt ?? 0));

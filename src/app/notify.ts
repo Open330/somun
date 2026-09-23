@@ -3,7 +3,7 @@ import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { listSuggestions } from "./learning.js";
-import { localeOf, say } from "./i18n.js";
+import { say } from "./i18n.js";
 
 /**
  * 주간 요약 알림. Discord 웹훅 하나. 수동 모드에서 "들어와야 아는" 문제를 푼다.
@@ -12,7 +12,7 @@ import { localeOf, say } from "./i18n.js";
 export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force = false): Promise<{ ok: boolean; reason?: string; sent?: string }> {
   const s = getSettings(ctx, ownerId);
   const url = s.notify?.discordWebhookUrl;
-  const lc = localeOf(ctx, ownerId);
+  const lc = s.ui?.locale;
   if (!url) return { ok: false, reason: say(lc, "Discord 웹훅 URL이 없습니다.", "No Discord webhook URL is set.") };
   if (!force && !s.notify?.weekly) return { ok: false, reason: say(lc, "주간 알림이 꺼져 있습니다.", "Weekly summaries are turned off.") };
   const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).all();

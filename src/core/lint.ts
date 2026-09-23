@@ -1,4 +1,5 @@
 import { CHANNELS, type Channel } from "./channels.js";
+import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -57,8 +58,8 @@ export function unsupportedNumbers(text: string, source: string): string[] {
   return numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
 }
 
-export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: "ko" | "en" = "ko"): LintResult[] {
-  const say = (ko: string, en: string) => (locale === "en" ? en : ko);
+export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko"): LintResult[] {
+  const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const spec = CHANNELS[channel];
   const text = `${title ?? ""}\n${body}`;
   const lower = text.toLowerCase();

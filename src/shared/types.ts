@@ -10,7 +10,8 @@ export type Decision = "draft" | "defer" | "ask";
 export type DraftStatus = "proposed" | "edited" | "copied" | "dropped";
 export type FeedbackReason = "wrong_facts" | "voice" | "wrong_channel" | "not_yet" | "not_worth" | "other";
 /** 화면 언어. 서버가 만드는 사용자용 문장(오류, 판단 이유, 알림)과 모델에게 시키는 설명 언어도 따른다. */
-export type Locale = "ko" | "en";
+import type { Locale } from "./locale.js";
+export type { Locale };
 export type LlmProvider = "gemini" | "anthropic" | "openai" | "local-agent";
 /**
  * lesson: 수정·버림에서 문체 규칙 한 줄을 뽑는다. profile: 저장소 프로필을 만든다(local-agent 모드).

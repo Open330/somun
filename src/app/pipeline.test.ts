@@ -121,3 +121,10 @@ it("stores the judge's angle separately from its reasoning", () => {
   expect(ctx.db.select().from(schema.judgments).get()).toMatchObject({ reasoning: "Plain verdict.", angle: "The flag nobody asked for" });
   expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("The flag nobody asked for");
 });
+
+it("joins a pending judge instead of failing when only the account language changed", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  const first = queueStep(ctx, "test", "judge", id);
+  updateSettings(ctx, "test", { ui: { locale: "en" } });
+  expect(queueStep(ctx, "test", "judge", id)).toBe(first);
+});

@@ -117,7 +117,10 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
   const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
     .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.lang ?? undefined) === lang && (j.status === "pending" || j.status === "claimed"));
   if (open) {
-    if (open.system !== prompt.system || open.user !== prompt.user || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.", "A job is already running. Wait for it to finish, then request again with different instructions."));
+    // 초안은 프롬프트가 다르면 다른 지침으로 다시 쓰라는 요청이라 충돌이다. 다이제스트·판단은 근거 갱신이나 계정 언어 변경으로도
+    // 프롬프트가 달라지므로, 이미 대기 중인 같은 단계에 합친다(같은 결과를 두 번 만들 이유가 없다).
+    const differs = kind === "draft" && (open.system !== prompt.system || open.user !== prompt.user);
+    if (differs || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.", "A job is already running. Wait for it to finish, then request again with different instructions."));
     return open.id;
   }
   const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
