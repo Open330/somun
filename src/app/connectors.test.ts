@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { authorizedGithubUser, installationInfo } from "../infra/github/app.js";
-import { issueInstallLink, recordInstallation, recordInstaller, saveGithubApp } from "./connectors.js";
+import { issueInstallLink, pruneInstallRecords, recordInstallation, recordInstaller, saveGithubApp, setInstallerWaitForTests } from "./connectors.js";
 import { ForbiddenError, type AppContext } from "./context.js";
 
 vi.mock("../infra/github/app.js", async (original) => ({ ...await original<typeof import("../infra/github/app.js")>(), installationInfo: vi.fn(), authorizedGithubUser: vi.fn() }));
@@ -34,7 +34,7 @@ it("cannot overwrite ownership established while GitHub lookup was in flight", a
 });
 
 describe("first link needs proof that the requester made the installation", () => {
-  const multiUser = () => { ctx.env = { trustedOwners: ["op"] }; };
+  const multiUser = () => { ctx.env = { trustedOwners: ["op"] }; setInstallerWaitForTests(0); };
   const withOAuth = () => { ctx.db.delete(schema.appState).run(); saveGithubApp(ctx, { id: 1, pem: "test", slug: "test", client_id: "Iv1.x", client_secret: "s" }); };
   const stateFor = (owner: string) => new URL(issueInstallLink(ctx, owner)!).searchParams.get("state")!;
   const installs = () => ctx.db.select().from(schema.githubInstallations).all();
@@ -85,5 +85,27 @@ describe("first link needs proof that the requester made the installation", () =
     multiUser();
     await recordInstallation(ctx, "op", 7);
     expect(installs()[0]?.ownerId).toBe("op");
+  });
+
+  it("lets an organization install be retried by reloading when the webhook arrived after the browser", async () => {
+    multiUser(); withOAuth();
+    vi.mocked(installationInfo).mockResolvedValue({ id: 8, account: "acme", accountType: "Organization", repos: ["acme/a"] });
+    vi.mocked(authorizedGithubUser).mockResolvedValue({ id: 5, login: "member" });
+    await expect(recordInstallation(ctx, "someone", 8, { code: "c", state: stateFor("someone") })).rejects.toBeInstanceOf(ForbiddenError);
+    recordInstaller(ctx, 8, { id: 5, login: "member" });
+    // 새로고침: code·state 없이 installation_id만 온다. 30분 안에 확인한 사용자로 다시 판단한다.
+    await recordInstallation(ctx, "someone", 8);
+    expect(installs()[0]?.ownerId).toBe("someone");
+    expect(authorizedGithubUser).toHaveBeenCalledTimes(1);
+    expect(ctx.db.select().from(schema.appState).all().filter((r) => r.key.startsWith("pending_link:") || r.key.startsWith("installer:"))).toHaveLength(0);
+    // 다른 계정은 그 기록을 쓸 수 없다.
+    await expect(recordInstallation(ctx, "other", 9)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("prunes expired states and verification records", () => {
+    withOAuth();
+    stateFor("someone");
+    expect(pruneInstallRecords(ctx, Date.now() + 31 * 60_000)).toBe(1);
+    expect(ctx.db.select().from(schema.appState).all().filter((r) => r.key.startsWith("install_state:"))).toHaveLength(0);
   });
 });
