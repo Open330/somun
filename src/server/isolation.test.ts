@@ -120,6 +120,8 @@ describe("per-account isolation", () => {
     expect((await asBob("POST", "/sources", { kind: "blog", targets: ["http://127.0.0.1:8790/feed"], enabled: true })).status).toBe(400);
     expect((await asBob("PATCH", "/settings", { llm: { provider: "openai", baseUrl: "http://10.0.0.5:11434/v1" } })).status).toBe(400);
     expect(await (await asBob("GET", "/keys")).json()).toEqual([]);
+    // baseUrl은 OpenAI 호환일 때만 쓰이므로, 다른 프로바이더로 바꿀 때 남은 값 때문에 막지 않는다.
+    expect((await asBob("PATCH", "/settings", { llm: { provider: "gemini", baseUrl: "http://10.0.0.5:11434/v1" } })).status).toBe(200);
   });
 
   it("rejects oversized request bodies", async () => {

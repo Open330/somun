@@ -8,9 +8,11 @@ import { resetEvents, subscribeEvents } from "./events";
  * OAuth 모드는 쿠키 대신 Authorization 헤더(메모리의 액세스 토큰)를 쓴다.
  */
 export async function startSession(token: string): Promise<boolean> {
-  const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token.trim() }) });
-  if (res.ok) { forgetLegacyToken(); resetEvents(); }
-  return res.ok;
+  // 예전 버전이 저장한 토큰은 교환에 성공하든 실패하든 지운다(실패하면 다시 로그인하면 된다).
+  forgetLegacyToken();
+  const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token.trim() }) }).catch(() => null);
+  if (res?.ok) resetEvents();
+  return Boolean(res?.ok);
 }
 export async function endSession(): Promise<void> {
   await fetch("/api/session", { method: "DELETE" }).catch(() => undefined);

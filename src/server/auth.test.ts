@@ -59,7 +59,7 @@ describe("browser sessions and SSE tickets", () => {
     expect((await app.request("/api/change", { method: "POST", headers: { Cookie: session, Origin: "https://somun.test", Host: "somun.test" } })).status).toBe(200);
     // 서명이 틀리거나 토큰이 바뀐 서버의 쿠키는 거부된다.
     expect((await app.request("/api/me", { headers: { Cookie: session.replace(/.$/, "x") } })).status).toBe(401);
-    expect(verifySession("rotated-token", session.split("=")[1])).toBeUndefined();
+    expect(verifySession("rotated-token", session.split("=")[1])).toBe(false);
   });
 
   it("lets SSE connect with a single-use ticket instead of a token in the URL", async () => {
@@ -74,6 +74,15 @@ describe("browser sessions and SSE tickets", () => {
     const store = new TicketStore();
     const t = store.issue("op", "token", 0);
     expect(store.consume(t, 61_000)).toBeUndefined();
-    expect(signSession("tok", "op", 0)).not.toBe(signSession("tok", "op", 1000));
+    expect(signSession("tok", 0)).not.toBe(signSession("tok", 1000));
+  });
+
+  it("authenticates a session as the currently configured owner", async () => {
+    const app = build();
+    const session = (await app.request("/api/session", { method: "POST", body: JSON.stringify({ token: "operator-token-123" }) })).headers.get("set-cookie")!.split(";")[0];
+    const moved = new Hono<{ Variables: AuthVars }>();
+    moved.use("/api/*", authMiddleware(loadConfig({ SOMUN_TOKEN: "operator-token-123", SOMUN_TOKEN_OWNER_ID: "new-owner" })));
+    moved.get("/api/me", (c) => c.json({ ownerId: c.get("ownerId") }));
+    expect(await (await moved.request("/api/me", { headers: { Cookie: session } })).json()).toEqual({ ownerId: "new-owner" });
   });
 });

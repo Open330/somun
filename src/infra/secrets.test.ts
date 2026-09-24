@@ -28,5 +28,12 @@ it("fails fast at startup when stored secrets cannot be opened with the configur
   expect(getSettings(ctx(new SecretBox("right-key-123456")), "me").llm.apiKey).toBe("sk-1");
   expect(() => assertSecretsReadable(ctx(new SecretBox("wrong-key-1234567")))).toThrow(/SOMUN_SECRET_KEY/);
   expect(() => assertSecretsReadable(ctx(new SecretBox()))).toThrow(/SOMUN_SECRET_KEY/);
+  // GitHub App 자격 증명만 봉인돼 있어도 시작할 때 잡는다.
+  const { schema } = await import("./db/index.js");
+  db.delete(schema.settings).run();
+  const { saveGithubApp } = await import("../app/connectors.js");
+  saveGithubApp(ctx(new SecretBox("right-key-123456")), { id: 1, pem: "-----BEGIN KEY-----", slug: "app" });
+  expect(() => assertSecretsReadable(ctx(new SecretBox("right-key-123456")))).not.toThrow();
+  expect(() => assertSecretsReadable(ctx(new SecretBox("wrong-key-1234567")))).toThrow(/GitHub App/);
   db.$client.close();
 });
