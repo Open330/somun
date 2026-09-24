@@ -10,6 +10,11 @@ export default function Connectors() {
   const { data: view, error, reload } = useResource<ConnectorsView>("/connectors", ["sources", "candidates"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
   const { data: app } = useResource<{ configured: boolean; installUrl?: string }>("/github/app", []);
+  // 설치는 이 계정이 발급받은 1회용 state를 단 링크로 시작한다. 콜백에서 이 계정의 설치인지 확인하는 데 쓴다.
+  const startInstall = async () => {
+    try { const { url } = await post<{ url: string }>("/github/install-link"); window.location.assign(url); }
+    catch (err) { setNotice({ text: `${t("연결을 변경하지 못했습니다.")} ${(err as Error).message}`, error: true }); }
+  };
   const [targets, setTargets] = useState("");
   const [feed, setFeed] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -29,7 +34,7 @@ export default function Connectors() {
     {notice && <div className={`inline-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}><span>{notice.text}</span>{!notice.error && <Link to="/">{t("글감으로 이동")} →</Link>}</div>}
     <div className="connection-grid">
       <section className="card connection-card"><div className="connection-label"><span className="connection-symbol" aria-hidden>↗</span><span className="badge outline">{t("릴리스 · 커밋 · PR")}</span></div><h2>{t("GitHub 저장소")}</h2><p>{t("프로젝트에서 바뀐 내용을 게시글의 근거로 가져옵니다. 앱 연결 시 읽기 권한만 요청합니다.")}</p>
-        {app?.installUrl && <a className="btn primary" href={app.installUrl}>{view.github.installations.length ? t("다른 저장소 연결") : t("GitHub 연결하기 →")}</a>}
+        {app?.installUrl && <button className="primary" onClick={() => void startInstall()}>{view.github.installations.length ? t("다른 저장소 연결") : t("GitHub 연결하기 →")}</button>}
         {view.github.installations.map((installation) => <div className="installation-summary" key={installation.id}><div><b>{installation.account}</b><span className="small muted"> · {t("{n}개 저장소 선택됨", { n: installation.watched })}</span></div><Link to={`/github/pick?installation_id=${installation.id}`} className="btn sm">{installation.watched ? t("저장소 변경") : t("저장소 선택")}</Link></div>)}
         <details className="manual-connect" open={!app?.configured}><summary>{t("저장소 직접 지정")}</summary><p className="small muted">{tr("공개 저장소는 주소 대신 {repo}를 입력해도 됩니다. 비공개 저장소는 서버에 읽기 권한이 필요합니다.", { repo: <code>{t("소유자/저장소")}</code> })}</p><form onSubmit={(event) => { event.preventDefault(); void run("github", async () => { await post("/sources", { kind: "github", targets: targets.split(",").map((t) => t.trim()).filter(Boolean), enabled: true }); setTargets(""); }, t("저장소를 연결했습니다. 글감 화면에서 첫 변경을 가져와 보세요.")); }}><label className="field"><span>{t("GitHub 소유자 또는 소유자/저장소")}</span><input placeholder={t("예: Open330/somun")} required value={targets} onChange={(event) => setTargets(event.target.value)} /></label><button type="submit" disabled={busy !== null || !targets.trim()}>{busy === "github" ? t("연결 중…") : t("저장소 연결")}</button></form></details>
       </section>

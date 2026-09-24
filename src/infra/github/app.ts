@@ -95,11 +95,10 @@ export function appManifest(baseUrl: string) {
     description: "PR for developers who'd rather build than announce. Reads releases, PRs and commits to draft posts you review.",
     hook_attributes: { url: `${baseUrl}/api/webhooks/github` },
     redirect_url: `${baseUrl}/api/github/app/created`,
-    // 설치 중 사용자 인증: GitHub가 설치 직후 code를 붙여 콜백으로 보낸다. 서버는 그 사용자가 설치에 접근할 수 있는지 확인한 뒤에만 연결한다.
+    // 설치 중 사용자 인증: GitHub가 설치 직후 code를 붙여 콜백으로 보낸다(이 설정에서는 setup_url이 쓰이지 않는다).
+    // 서버는 그 사용자가 설치한 본인인지 확인한 뒤에만 연결한다(app/connectors.ts).
     request_oauth_on_install: true,
     callback_urls: [`${baseUrl}/github/setup`],
-    setup_url: `${baseUrl}/github/setup`,
-    setup_on_update: true,
     public: false,
     default_permissions: { contents: "read", metadata: "read", pull_requests: "read", issues: "read" },
     // installation·installation_repositories 이벤트는 앱에 자동 전달되므로 매니페스트에 적지 않는다.
@@ -108,25 +107,30 @@ export function appManifest(baseUrl: string) {
 }
 
 /**
- * 설치 콜백의 code로 사용자 토큰을 받아, 그 사용자가 이 설치에 접근할 수 있는지 확인한다.
+ * 설치 콜백의 code로 사용자 토큰을 받아 GitHub 사용자(id, login)를 확인한다. 토큰은 확인 뒤 바로 폐기한다.
  * installation_id는 URL로 오므로 그 자체로는 권한의 증거가 아니다(GitHub 문서: setup URL의 installation_id를 믿지 말 것).
+ * "이 사용자가 설치를 볼 수 있다"(/user/installations)는 저장소 하나만 읽어도 참이라 증거가 못 된다. 누가 설치했는지는 호출하는 쪽이 판단한다.
  */
-export async function userCanAccessInstallation(cfg: GitHubAppConfig, code: string, installationId: number): Promise<boolean> {
-  if (!cfg.clientId || !cfg.clientSecret) return false;
+export async function authorizedGithubUser(cfg: GitHubAppConfig, code: string): Promise<{ id: number; login: string } | null> {
+  if (!cfg.clientId || !cfg.clientSecret) return null;
   const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST", signal: AbortSignal.timeout(20_000),
     headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": "somun" },
     body: JSON.stringify({ client_id: cfg.clientId, client_secret: cfg.clientSecret, code }),
   });
   const token = tokenRes.ok ? ((await tokenRes.json()) as { access_token?: string }).access_token : undefined;
-  if (!token) return false;
-  const h = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "somun" };
-  for (let page = 1; page <= 10; page++) {
-    const r = await fetch(`https://api.github.com/user/installations?per_page=100&page=${page}`, { headers: h, signal: AbortSignal.timeout(20_000) });
-    if (!r.ok) return false;
-    const j = (await r.json()) as { installations: { id: number }[] };
-    if (j.installations.some((i) => i.id === installationId)) return true;
-    if (j.installations.length < 100) return false;
+  if (!token) return null;
+  try {
+    const r = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "somun" }, signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) return null;
+    const u = (await r.json()) as { id?: number; login?: string };
+    return u.id && u.login ? { id: u.id, login: u.login } : null;
+  } finally {
+    // 한 번 쓰고 버린다. 8시간짜리 사용자 토큰이 어딘가에 남지 않게.
+    void fetch(`https://api.github.com/applications/${encodeURIComponent(cfg.clientId)}/token`, {
+      method: "DELETE", signal: AbortSignal.timeout(10_000),
+      headers: { Authorization: `Basic ${Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64")}`, Accept: "application/vnd.github+json", "User-Agent": "somun", "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: token }),
+    }).catch(() => undefined);
   }
-  return false;
 }

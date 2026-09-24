@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { collectAll } from "../../app/collect.js";
-import { githubAppConfig, ownerOfInstallation, recordInstallation, removeInstallation } from "../../app/connectors.js";
+import { githubAppConfig, ownerOfInstallation, recordInstallation, recordInstaller, removeInstallation } from "../../app/connectors.js";
 import type { AppContext } from "../../app/context.js";
 import { verifyWebhook } from "../../infra/github/app.js";
 
@@ -16,12 +16,14 @@ export function githubWebhook(ctx: AppContext) {
     const raw = await c.req.text();
     if (!cfg?.webhookSecret || !verifyWebhook(cfg.webhookSecret, raw, c.req.header("x-hub-signature-256"))) return c.json({ error: "bad signature" }, 401);
     const event = c.req.header("x-github-event") ?? "";
-    let p: { action?: string; installation?: { id: number; account?: { login: string } }; repository?: { full_name: string } };
+    let p: { action?: string; installation?: { id: number; account?: { login: string } }; repository?: { full_name: string }; sender?: { id: number; login: string } };
     try { p = JSON.parse(raw); } catch { return c.json({ error: "invalid JSON" }, 400); }
     const instId = p.installation?.id;
     ctx.log.info({ event, action: p.action, installation: instId, repo: p.repository?.full_name }, "github webhook");
     if (!instId) return c.json({ ok: true });
     const ownerId = ownerOfInstallation(ctx, instId);
+    // 아직 연결되지 않은 설치의 설치자를 기억한다. 조직 설치를 연결할 때 "설치한 본인"인지 확인하는 근거다.
+    if (event === "installation" && p.action === "created" && p.sender?.id && !ownerId) recordInstaller(ctx, instId, p.sender);
     if (event === "installation" && p.action === "deleted") { removeInstallation(ctx, instId); return c.json({ ok: true }); }
     if ((event === "installation" || event === "installation_repositories") && ownerId) { await recordInstallation(ctx, ownerId, instId); return c.json({ ok: true }); }
     if (["push", "release", "pull_request", "star", "create"].includes(event) && ownerId) {
