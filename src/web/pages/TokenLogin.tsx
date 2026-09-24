@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Lockup } from "../components/Mark";
 import { t } from "../i18n";
+import { startSession } from "../lib/api";
 
-/** SOMUN_TOKEN 모드 로그인. 토큰은 이 브라우저의 localStorage에만 저장된다. */
+/** SOMUN_TOKEN 모드 로그인. 토큰은 한 번만 보내고, 서버가 준 HttpOnly 세션 쿠키로 인증한다(브라우저 저장소에 토큰을 두지 않는다). */
 export default function TokenLogin({ onDone }: { onDone: () => void }) {
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,9 +15,7 @@ export default function TokenLogin({ onDone }: { onDone: () => void }) {
         className="row"
         onSubmit={async (ev) => {
           ev.preventDefault();
-          const res = await fetch("/api/me", { headers: { Authorization: `Bearer ${token.trim()}` } });
-          if (!res.ok) { setError(t("토큰이 맞지 않습니다.")); return; }
-          try { localStorage.setItem("somun.token", token.trim()); } catch { /* 저장 불가 환경 */ }
+          if (!await startSession(token)) { setError(t("토큰이 맞지 않습니다.")); return; }
           onDone();
         }}
       >

@@ -11,7 +11,8 @@ import { learningStats } from "../../app/learning-stats.js";
 import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
 import { refreshReactions } from "../../app/reactions.js";
-import { NotFoundError, type AppContext } from "../../app/context.js";
+import { isTrusted, NotFoundError, type AppContext } from "../../app/context.js";
+import { assertPublicUrl } from "../../infra/net.js";
 import { retryGeneration, generationStatus, claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
@@ -22,9 +23,10 @@ import { queueStep } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublicationUrl } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
+import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
-import type { AuthVars } from "../auth.js";
+import { TicketStore, type AuthVars } from "../auth.js";
 
 const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
 const lang = z.string().min(2).max(8).regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
@@ -36,7 +38,7 @@ const id = (v: string) => {
 };
 
 /** /api 아래 전부. 얇은 층: 검증 → 유스케이스 → JSON. */
-export function apiRoutes(ctx: AppContext, config: Config) {
+export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore = new TicketStore()) {
   const app = new Hono<{ Variables: AuthVars }>();
   const body = async <T>(c: { req: { json: () => Promise<unknown> } }, schema: z.ZodType<T>): Promise<T> => {
     let input: unknown;
@@ -66,12 +68,18 @@ export function apiRoutes(ctx: AppContext, config: Config) {
       voice: z.object({ preset: z.string().max(40), guide: z.string().max(GUIDE_MAX_CHARS), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
     }));
     const { keepApiKey, ...patch } = input;
+    if (patch.llm) await assertModelEndpoint(ctx, c.get("ownerId"), patch.llm);
     return c.json(updateSettings(ctx, c.get("ownerId"), patch, keepApiKey ?? true));
   });
 
   // sources
   app.get("/sources", (c) => c.json(listSources(ctx, c.get("ownerId"))));
-  app.post("/sources", async (c) => c.json(upsertSource(ctx, c.get("ownerId"), await body(c, z.object({ id: z.number().optional(), kind: z.enum(["github", "npm", "blog", "omp"]), targets: z.array(z.string().min(1)), options: z.record(z.string(), z.string()).optional(), enabled: z.boolean() })))));
+  app.post("/sources", async (c) => {
+    const input = await body(c, z.object({ id: z.number().optional(), kind: z.enum(["github", "npm", "blog", "omp"]), targets: z.array(z.string().min(1)), options: z.record(z.string(), z.string()).optional(), enabled: z.boolean() }));
+    // 피드 주소는 저장할 때도 확인해 바로 알려준다(수집할 때 다시 확인한다).
+    if (input.kind === "blog" && !isTrusted(ctx, c.get("ownerId"))) for (const url of input.targets) await assertPublicUrl(url);
+    return c.json(upsertSource(ctx, c.get("ownerId"), input));
+  });
   app.delete("/sources/:id", (c) => { removeSource(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/collect", async (c) => c.json(await collectAll(ctx, c.get("ownerId"))));
 
@@ -150,7 +158,8 @@ export function apiRoutes(ctx: AppContext, config: Config) {
   app.delete("/examples/:id", (c) => { removeExample(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
 
   // keys · jobs · omp
-  app.get("/keys", (c) => c.json(keyStatus(ctx)));
+  // 서버 키 풀 상태는 운영자만. 다른 계정에는 빈 목록.
+  app.get("/keys", (c) => c.json(isTrusted(ctx, c.get("ownerId")) ? keyStatus(ctx) : []));
   app.post("/jobs/:id/retry", (c) => { const job = retryGeneration(ctx, c.get("ownerId"), id(c.req.param("id"))); c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5"); return c.json({ started: "queued", jobs: [job] }, 202); });
   app.get("/jobs/status", (c) => c.json(generationStatus(ctx, c.get("ownerId"), c.req.query("candidateId") === undefined ? undefined : id(c.req.query("candidateId")!))));
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));
@@ -182,6 +191,8 @@ export function apiRoutes(ctx: AppContext, config: Config) {
     const r = await recordInstallation(ctx, c.get("ownerId"), installationId);
     return c.json({ ok: true, ...r });
   });
+  /** SSE 1회용 티켓. EventSource는 헤더를 못 붙이므로 토큰 대신 이것을 주소에 넣는다. */
+  app.post("/events/ticket", (c) => c.json({ ticket: tickets.issue(c.get("ownerId"), c.get("authMethod")) }));
   // SSE: 내 자원이 바뀌면 알려준다. 화면은 다시 fetch.
   app.get("/events", (c) => {
     const ownerId = c.get("ownerId");

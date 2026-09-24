@@ -30,12 +30,14 @@ async function connect() {
   connecting = true;
   const current = generation;
   try {
+    // EventSource는 헤더를 못 붙인다. 토큰 대신 1회용 티켓을 받아 주소에 넣는다(토큰·JWT가 주소·로그에 남지 않게).
     const manager = getAuthManager();
-    let token: string | null = null;
-    if (manager) token = await manager.fetchApiToken();
-    else { try { token = localStorage.getItem("somun.token"); } catch { /* anonymous mode can work without storage */ } }
+    const token = manager ? await manager.fetchApiToken() : null;
+    const res = await fetch("/api/events/ticket", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new Error(`ticket ${res.status}`);
+    const { ticket } = (await res.json()) as { ticket: string };
     if (current !== generation || !listeners.size) return;
-    const stream = new EventSource(`/api/events${token ? `?token=${encodeURIComponent(token)}` : ""}`, { withCredentials: true });
+    const stream = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`, { withCredentials: true });
     source = stream;
     stream.addEventListener("open", () => { if (source === stream) retryMs = 1000; });
     stream.addEventListener("change", (event) => {
@@ -44,7 +46,7 @@ async function connect() {
       try { change = JSON.parse((event as MessageEvent).data) as ChangeEvent; } catch { return; }
       for (const listener of listeners) listener(change);
     });
-    // EventSource would reuse the expired query token; reconnect with a freshly fetched token.
+    // A ticket is single-use: every reconnect fetches a fresh one.
     stream.addEventListener("error", () => { if (source === stream) reconnect(); });
   } catch {
     if (current === generation) reconnect();
