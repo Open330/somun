@@ -59,7 +59,7 @@ export function githubAppCreated(ctx: AppContext) {
       method: "POST", headers: { Accept: "application/vnd.github+json", "User-Agent": "somun" }, signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) return c.json({ error: "GitHub App conversion failed; restart setup" }, 502);
-    const parsed = z.object({ id: z.number().int().positive(), slug: z.string().min(1), pem: z.string().min(1), webhook_secret: z.string().optional() }).safeParse(await response.json().catch(() => null));
+    const parsed = z.object({ id: z.number().int().positive(), slug: z.string().min(1), pem: z.string().min(1), webhook_secret: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }).safeParse(await response.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid GitHub App response; restart setup" }, 502);
     if (!saveGithubApp(ctx, parsed.data)) return c.json({ error: "GitHub App already configured" }, 409);
     ctx.log.info({ slug: parsed.data.slug, id: parsed.data.id }, "github app created");

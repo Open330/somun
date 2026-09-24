@@ -39,3 +39,6 @@ export class NotFoundError extends Error {
 }
 
 export class GenerationConflictError extends Error {}
+
+/** 인증은 됐지만 이 작업을 할 권한이 없다(403). */
+export class ForbiddenError extends Error {}

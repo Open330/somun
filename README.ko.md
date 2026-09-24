@@ -171,6 +171,7 @@ JWT 모드에서는 여러 사람이 각자 로그인해 쓰고, 소스·글감�
 - **저장값 암호화:** `SOMUN_SECRET_KEY`(16자 이상 임의 문자열, 예: `openssl rand -base64 32`)를 넣으면 저장하는 API 키, 웹훅 URL, GitHub App 개인키를 AES-256-GCM으로 암호화합니다. 평문으로 남은 값은 다음 시작 때 암호화하고, 키가 틀리면 요청마다 실패하는 대신 서버가 시작하지 않습니다.
 - **토큰 노출 방지:** 토큰 모드의 브라우저는 토큰을 한 번 내고 HttpOnly·SameSite=Strict 세션 쿠키로 인증합니다. 실시간 갱신 연결은 1회용 티켓을 써서 토큰이나 JWT가 주소에 남지 않습니다.
 - **사설망 차단:** 운영자가 아닌 계정은 피드나 모델 `baseUrl`을 사설망·링크로컬 주소로 지정할 수 없습니다.
+- **설치 연결 확인:** GitHub App 설치를 처음 연결할 때는 로그인한 GitHub 사용자가 그 설치에 접근할 수 있는지 확인합니다. 앱 설정에서 "Request user authorization (OAuth) during installation"을 켜고, Callback URL을 `<공개 주소>/github/setup`으로 두고, `GITHUB_APP_CLIENT_ID`/`GITHUB_APP_CLIENT_SECRET`을 넣으세요. 내장 매니페스트로 만든 앱은 모두 자동으로 설정됩니다. 이 설정이 없으면 운영자만 설치를 연결할 수 있습니다.
 
 <br />
 

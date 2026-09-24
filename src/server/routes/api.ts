@@ -188,7 +188,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   });
   app.get("/github/setup", async (c) => {
     const installationId = id(c.req.query("installation_id") ?? "");
-    const r = await recordInstallation(ctx, c.get("ownerId"), installationId);
+    const r = await recordInstallation(ctx, c.get("ownerId"), installationId, { code: c.req.query("code") || undefined });
     return c.json({ ok: true, ...r });
   });
   /** SSE 1회용 티켓. EventSource는 헤더를 못 붙이므로 토큰 대신 이것을 주소에 넣는다. */
