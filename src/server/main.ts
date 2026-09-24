@@ -19,7 +19,8 @@ const db = openDb(config.dbFile);
 const usage = new UsageReporter(db, logger, { apiUrl: config.JIUN_API_URL, serviceId: config.JIUN_USAGE_SERVICE_ID, serviceKey: config.JIUN_USAGE_KEY });
 // 여러 사람이 로그인하는 배포(JWT)에서는 서버의 특권 자원(서버 토큰의 비공개 저장소, 사설망 주소, 키 풀 상태)을 운영자에게만 준다.
 const trustedOwners = config.AUTH_JWKS_URL
-  ? [config.SOMUN_ADMIN_OWNER_ID, config.SOMUN_TOKEN || config.anonymous ? config.SOMUN_TOKEN_OWNER_ID || "local" : undefined].filter((x): x is string => Boolean(x))
+  // 익명(인증 없음) 요청의 "local"은 운영자가 아니다. 공유 토큰을 가진 쪽만 운영자로 본다.
+  ? [config.SOMUN_ADMIN_OWNER_ID, config.SOMUN_TOKEN ? config.SOMUN_TOKEN_OWNER_ID || "local" : undefined].filter((x): x is string => Boolean(x))
   : undefined;
 const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, publicUrl: config.SOMUN_PUBLIC_URL, trustedOwners, secrets: new SecretBox(config.SOMUN_SECRET_KEY) }, bus: new EventEmitter(), usage };
 // 글감 단위 변경(신호별 → 저장소 × 10일 창). 한 번만 실제로 일한다.

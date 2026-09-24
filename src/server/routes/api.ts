@@ -16,7 +16,7 @@ import { assertPublicUrl } from "../../infra/net.js";
 import { retryGeneration, generationStatus, claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
-import { connectorsView, githubAppConfig, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
+import { connectorsView, githubAppConfig, issueInstallLink, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import type { Config } from "../config.js";
 import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
 import { queueStep } from "../../app/pipeline.js";
@@ -186,9 +186,14 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     if (r.count) void collectAll(ctx, c.get("ownerId")).catch((e: Error) => ctx.log.warn({ err: e.message }, "collect after watch failed"));
     return c.json(r);
   });
+  /** 설치 링크(1회용 state 포함). 설치는 이 링크로 시작해야 콜백에서 이 계정의 것으로 확인된다. */
+  app.post("/github/install-link", (c) => {
+    const url = issueInstallLink(ctx, c.get("ownerId"));
+    return url ? c.json({ url }) : c.json({ error: "GitHub App is not configured" }, 404);
+  });
   app.get("/github/setup", async (c) => {
     const installationId = id(c.req.query("installation_id") ?? "");
-    const r = await recordInstallation(ctx, c.get("ownerId"), installationId, { code: c.req.query("code") || undefined });
+    const r = await recordInstallation(ctx, c.get("ownerId"), installationId, { code: c.req.query("code") || undefined, state: c.req.query("state") || undefined });
     return c.json({ ok: true, ...r });
   });
   /** SSE 1회용 티켓. EventSource는 헤더를 못 붙이므로 토큰 대신 이것을 주소에 넣는다. */

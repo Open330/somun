@@ -2,11 +2,11 @@ import { EventEmitter } from "node:events";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
-import { installationInfo, userCanAccessInstallation } from "../infra/github/app.js";
-import { recordInstallation, saveGithubApp } from "./connectors.js";
+import { authorizedGithubUser, installationInfo } from "../infra/github/app.js";
+import { issueInstallLink, recordInstallation, recordInstaller, saveGithubApp } from "./connectors.js";
 import { ForbiddenError, type AppContext } from "./context.js";
 
-vi.mock("../infra/github/app.js", async (original) => ({ ...await original<typeof import("../infra/github/app.js")>(), installationInfo: vi.fn(), userCanAccessInstallation: vi.fn() }));
+vi.mock("../infra/github/app.js", async (original) => ({ ...await original<typeof import("../infra/github/app.js")>(), installationInfo: vi.fn(), authorizedGithubUser: vi.fn() }));
 let ctx: AppContext;
 beforeEach(() => {
   vi.stubEnv("GITHUB_APP_ID", ""); vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "");
@@ -33,37 +33,57 @@ it("cannot overwrite ownership established while GitHub lookup was in flight", a
   expect(ctx.db.select().from(schema.sources).all()).toHaveLength(0);
 });
 
-describe("first link needs proof of access to the installation", () => {
+describe("first link needs proof that the requester made the installation", () => {
   const multiUser = () => { ctx.env = { trustedOwners: ["op"] }; };
   const withOAuth = () => { ctx.db.delete(schema.appState).run(); saveGithubApp(ctx, { id: 1, pem: "test", slug: "test", client_id: "Iv1.x", client_secret: "s" }); };
+  const stateFor = (owner: string) => new URL(issueInstallLink(ctx, owner)!).searchParams.get("state")!;
+  const installs = () => ctx.db.select().from(schema.githubInstallations).all();
 
-  it("refuses a bare installation_id from a non-operator account", async () => {
+  it("refuses a bare installation_id, a missing or foreign state, and a missing code", async () => {
     multiUser(); withOAuth();
     await expect(recordInstallation(ctx, "someone", 7)).rejects.toBeInstanceOf(ForbiddenError);
-    expect(ctx.db.select().from(schema.githubInstallations).all()).toHaveLength(0);
+    await expect(recordInstallation(ctx, "someone", 7, { code: "c", state: stateFor("attacker") })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(recordInstallation(ctx, "someone", 7, { state: stateFor("someone") })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(installs()).toHaveLength(0);
     expect(installationInfo).not.toHaveBeenCalled();
+  });
+
+  it("links a personal installation only for the GitHub user who owns it, and each state works once", async () => {
+    multiUser(); withOAuth();
+    vi.mocked(installationInfo).mockResolvedValue({ id: 7, account: "Alice", accountType: "User", repos: ["alice/repo"] });
+    vi.mocked(authorizedGithubUser).mockResolvedValueOnce({ id: 2, login: "mallory" });
+    await expect(recordInstallation(ctx, "someone", 7, { code: "c1", state: stateFor("someone") })).rejects.toBeInstanceOf(ForbiddenError);
+    const state = stateFor("someone");
+    vi.mocked(authorizedGithubUser).mockResolvedValueOnce({ id: 1, login: "alice" });
+    await recordInstallation(ctx, "someone", 7, { code: "c2", state });
+    expect(installs()[0]?.ownerId).toBe("someone");
+    // 이미 이 계정에 연결된 설치의 갱신(webhook)은 확인 없이 된다.
+    await recordInstallation(ctx, "someone", 7);
+    ctx.db.delete(schema.githubInstallations).run();
+    await expect(recordInstallation(ctx, "someone", 7, { code: "c3", state })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("links an organization installation only for the member who installed it (from the webhook)", async () => {
+    multiUser(); withOAuth();
+    vi.mocked(installationInfo).mockResolvedValue({ id: 8, account: "acme", accountType: "Organization", repos: ["acme/a"] });
+    vi.mocked(authorizedGithubUser).mockResolvedValue({ id: 5, login: "member" });
+    await expect(recordInstallation(ctx, "someone", 8, { code: "c", state: stateFor("someone") })).rejects.toBeInstanceOf(ForbiddenError);
+    recordInstaller(ctx, 8, { id: 9, login: "admin" });
+    await expect(recordInstallation(ctx, "someone", 8, { code: "c", state: stateFor("someone") })).rejects.toBeInstanceOf(ForbiddenError);
+    recordInstaller(ctx, 8, { id: 5, login: "member" });
+    await recordInstallation(ctx, "someone", 8, { code: "c", state: stateFor("someone") });
+    expect(installs()[0]?.ownerId).toBe("someone");
   });
 
   it("refuses when the app has no OAuth client configured, even with a code", async () => {
     multiUser();
-    await expect(recordInstallation(ctx, "someone", 7, { code: "c" })).rejects.toBeInstanceOf(ForbiddenError);
+    const state = stateFor("someone");
+    await expect(recordInstallation(ctx, "someone", 7, { code: "c", state })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("links only when the GitHub user behind the code can access the installation", async () => {
-    multiUser(); withOAuth();
-    vi.mocked(userCanAccessInstallation).mockResolvedValueOnce(false);
-    await expect(recordInstallation(ctx, "someone", 7, { code: "c1" })).rejects.toBeInstanceOf(ForbiddenError);
-    vi.mocked(userCanAccessInstallation).mockResolvedValueOnce(true);
-    await recordInstallation(ctx, "someone", 7, { code: "c2" });
-    expect(userCanAccessInstallation).toHaveBeenLastCalledWith(expect.objectContaining({ clientId: "Iv1.x" }), "c2", 7);
-    expect(ctx.db.select().from(schema.githubInstallations).get()?.ownerId).toBe("someone");
-    // 이미 연결된 설치의 갱신은 확인 없이 된다(설정 변경 뒤 콜백, webhook).
-    await recordInstallation(ctx, "someone", 7);
-  });
-
-  it("lets the operator link without a code", async () => {
+  it("lets the operator link without proof", async () => {
     multiUser();
     await recordInstallation(ctx, "op", 7);
-    expect(ctx.db.select().from(schema.githubInstallations).get()?.ownerId).toBe("op");
+    expect(installs()[0]?.ownerId).toBe("op");
   });
 });

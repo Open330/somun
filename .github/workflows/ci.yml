@@ -8,7 +8,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # PR은 새 푸시가 이전 실행을 대신한다. main은 커밋마다 끝까지 검사한다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
