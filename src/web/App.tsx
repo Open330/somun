@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import type { CandidateListItem, SettingsView } from "@shared/types";
-import { api, clearStoredToken, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
+import { api, endSession, legacyToken, startSession, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
 import { useAuth } from "./lib/auth/context";
 import { Skeleton } from "./components/ui";
 import { ChunkBoundary } from "./components/ChunkBoundary";
@@ -34,13 +34,16 @@ export default function App() {
   const [tokenState, setTokenState] = useState<"checking" | "ok" | "need" | "form">("checking");
   useEffect(() => {
     if (auth.enabled) return;
-    api("/me").then(() => setTokenState("ok")).catch(() => setTokenState("need"));
+    // 예전 버전이 localStorage에 둔 토큰이 있으면 세션 쿠키로 바꾼다(한 번).
+    const legacy = legacyToken();
+    (legacy ? startSession(legacy).catch(() => false) : Promise.resolve(false))
+      .then(() => api("/me")).then(() => setTokenState("ok")).catch(() => setTokenState("need"));
   }, [auth.enabled]);
   // 세션이 끝나면 멈춘 화면 대신 로그인으로 돌아간다.
   useEffect(() => {
     const onUnauthorized = () => {
       if (auth.enabled) void auth.signOut();
-      else { clearStoredToken(); setTokenState((s) => (s === "form" ? s : "need")); }
+      else setTokenState((s) => (s === "form" ? s : "need"));
     };
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
@@ -52,7 +55,7 @@ export default function App() {
   if (auth.enabled && !auth.isAuthenticated) {
     return <Routes><Route path="/auth/callback" element={<AuthCallback />} /><Route path="*" element={<Landing />} /></Routes>;
   }
-  return <Shell onSignOut={async () => { if (auth.enabled) await auth.signOut(); else { clearStoredToken(); setTokenState("need"); } }} who={auth.enabled ? auth.user?.displayName ?? auth.user?.username ?? "" : t("토큰 세션")} />;
+  return <Shell onSignOut={async () => { if (auth.enabled) await auth.signOut(); else { await endSession(); setTokenState("need"); } }} who={auth.enabled ? auth.user?.displayName ?? auth.user?.username ?? "" : t("토큰 세션")} />;
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {

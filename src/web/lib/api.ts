@@ -3,18 +3,32 @@ import type { ChangeEvent } from "@shared/types";
 import { getAuthManager } from "./auth/manager";
 import { resetEvents, subscribeEvents } from "./events";
 
-/** fetch 래퍼. 인증 토큰이 있으면 Bearer로. */
-export function storedToken(): string | null {
-  try { return localStorage.getItem("somun.token"); } catch { return null; }
+/**
+ * 토큰 모드: 토큰을 한 번 보내 HttpOnly 세션 쿠키를 받는다. 예전 버전이 localStorage에 둔 토큰은 이때 지운다.
+ * OAuth 모드는 쿠키 대신 Authorization 헤더(메모리의 액세스 토큰)를 쓴다.
+ */
+export async function startSession(token: string): Promise<boolean> {
+  const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token.trim() }) });
+  if (res.ok) { forgetLegacyToken(); resetEvents(); }
+  return res.ok;
 }
-export function clearStoredToken(): void {
-  try { localStorage.removeItem("somun.token"); } catch { /* ignore */ }
+export async function endSession(): Promise<void> {
+  await fetch("/api/session", { method: "DELETE" }).catch(() => undefined);
+  forgetLegacyToken();
   resetEvents();
+}
+const LEGACY_TOKEN = "somun.token";
+/** 예전 버전이 저장한 토큰. 한 번 세션으로 바꾸고 지운다. */
+export function legacyToken(): string | null {
+  try { return localStorage.getItem(LEGACY_TOKEN); } catch { return null; }
+}
+function forgetLegacyToken(): void {
+  try { localStorage.removeItem(LEGACY_TOKEN); } catch { /* ignore */ }
 }
 
 async function authHeader(force = false): Promise<Record<string, string>> {
   const m = getAuthManager();
-  const token = m ? await m.fetchApiToken(force) : storedToken();
+  const token = m ? await m.fetchApiToken(force) : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

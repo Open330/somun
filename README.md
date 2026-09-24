@@ -167,6 +167,8 @@ Auth is one of three modes, checked in order: a shared `SOMUN_TOKEN` bearer (sin
 
 With JWT, several people can sign in; each gets a separate workspace (sources, candidates, drafts, voice, publications). The server `GITHUB_TOKEN` reads private repositories only for `SOMUN_ADMIN_OWNER_ID` and the shared-token owner; everyone else reads public repositories with it, or connects their own GitHub App installation.
 
+Security defaults: set `SOMUN_SECRET_KEY` (any random string of 16+ characters, e.g. `openssl rand -base64 32`) to encrypt stored API keys, webhook URLs, and the GitHub App private key with AES-256-GCM; plaintext values are encrypted on the next start, and a wrong key stops the server at startup instead of failing requests. In token mode the browser exchanges the token once for an HttpOnly, SameSite=Strict session cookie; the live update stream uses single-use tickets, so no token or JWT ever appears in a URL. Accounts other than the operator cannot point feeds or a model `baseUrl` at private or link-local addresses.
+
 <br />
 
 ## Architecture

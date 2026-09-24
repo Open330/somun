@@ -114,4 +114,16 @@ describe("per-account isolation", () => {
     expect(res.status).toBe(404);
     expect(fetchMock.mock.calls.map(([u]) => String(u)).some((u) => u.includes("/readme"))).toBe(false);
   });
+
+  it("keeps server-privileged resources for operators only: private feed and model addresses, key pool status", async () => {
+    expect((await asBob("POST", "/sources", { kind: "blog", targets: ["http://169.254.169.254/latest/meta-data"], enabled: true })).status).toBe(400);
+    expect((await asBob("POST", "/sources", { kind: "blog", targets: ["http://127.0.0.1:8790/feed"], enabled: true })).status).toBe(400);
+    expect((await asBob("PATCH", "/settings", { llm: { provider: "openai", baseUrl: "http://10.0.0.5:11434/v1" } })).status).toBe(400);
+    expect(await (await asBob("GET", "/keys")).json()).toEqual([]);
+  });
+
+  it("rejects oversized request bodies", async () => {
+    const res = await asBob("POST", "/examples/import", { items: [{ channel: "x", lang: "en", body: "x".repeat(3 * 1024 * 1024) }] });
+    expect(res.status).toBe(413);
+  });
 });
