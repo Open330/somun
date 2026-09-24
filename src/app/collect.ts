@@ -9,7 +9,7 @@ import { getSettings } from "./settings.js";
 import { localeOf, say } from "./i18n.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
-import { NotFoundError, type AppContext } from "./context.js";
+import { isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
 import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
@@ -69,7 +69,7 @@ export const PROFILE_BUDGET_LOCAL = 5;
 
 /**
  * 소유자가 GitHub를 읽을 토큰. 설치 토큰은 그 설치를 연결한 소유자만 쓴다.
- * 서버 토큰은 허용된 소유자(githubTokenOwners)만 비공개 저장소까지 읽고, 나머지는 공개 저장소만(publicOnly).
+ * 서버 토큰은 운영자(trustedOwners)만 비공개 저장소까지 읽고, 나머지는 공개 저장소만(publicOnly).
  */
 export async function githubAccess(ctx: AppContext, ownerId: string, installationId?: number): Promise<{ gh: GitHubClient; publicOnly: boolean }> {
   if (installationId) {
@@ -79,8 +79,7 @@ export async function githubAccess(ctx: AppContext, ownerId: string, installatio
     return { gh: new GitHubClient(await installationToken(cfg, installationId)), publicOnly: false };
   }
   if (!ctx.env.githubToken) throw new Error(say(localeOf(ctx, ownerId), "GitHub 토큰이 없습니다. GitHub App을 설치하거나 GITHUB_TOKEN을 설정하세요.", "No GitHub token. Install the GitHub App or set GITHUB_TOKEN."));
-  const allowed = ctx.env.githubTokenOwners;
-  return { gh: new GitHubClient(ctx.env.githubToken), publicOnly: allowed !== undefined && !allowed.includes(ownerId) };
+  return { gh: new GitHubClient(ctx.env.githubToken), publicOnly: !isTrusted(ctx, ownerId) };
 }
 
 /** 저장소 하나의 프로필 재료를 GitHub에서 읽는다 (재생성용). */

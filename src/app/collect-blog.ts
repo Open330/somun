@@ -1,5 +1,6 @@
 import type { Evidence } from "../shared/types.js";
 import type { AppContext } from "./context.js";
+import { fetchForOwner } from "./net-policy.js";
 import { ingestSignals, type IncomingSignal } from "./signals.js";
 import { listEnabledSources, markPolled } from "./sources.js";
 
@@ -65,7 +66,7 @@ export async function collectBlogSource(ctx: AppContext, sourceId: number): Prom
   try {
     for (const feedUrl of source.targets) {
       // 타임아웃은 본문 읽기까지 묶는다. 피드가 비정상적으로 크면 읽지 않는다.
-      const r = await fetch(feedUrl, { headers: { "User-Agent": "somun/1.0 (+https://somun.jiun.dev)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(15_000) }).catch((e: Error) => { ctx.log.warn({ feedUrl, err: e.message }, "feed fetch failed"); return null; });
+      const r = await fetchForOwner(ctx, ownerId, feedUrl, { headers: { "User-Agent": "somun/1.0 (+https://somun.jiun.dev)", Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" }, signal: AbortSignal.timeout(15_000) }).catch((e: Error) => { ctx.log.warn({ feedUrl, err: e.message }, "feed fetch failed"); return null; });
       if (!r?.ok || Number(r.headers.get("content-length") ?? 0) > MAX_FEED_BYTES) { summary[feedUrl] = -1; if (r) ctx.log.warn({ feedUrl, status: r.status }, "feed fetch failed"); continue; }
       const text = await readCapped(r, MAX_FEED_BYTES);
       if (text === null) { summary[feedUrl] = -1; ctx.log.warn({ feedUrl }, "feed too large"); continue; }

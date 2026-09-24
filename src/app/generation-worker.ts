@@ -2,6 +2,7 @@ import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
+import { assertModelEndpoint, needsEndpointCheck } from "./net-policy.js";
 import { localeOf, say } from "./i18n.js";
 import type { AppContext } from "./context.js";
 import { SIDE_JOB_KINDS } from "../shared/types.js";
@@ -36,6 +37,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     // profile 작업은 로컬 워커만 처리하므로(profiles.queueProfile) 여기에는 생성 단계와 lesson만 온다.
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     try {
+      if (needsEndpointCheck(ctx, ownerId, config)) await assertModelEndpoint(ctx, ownerId, config);
       const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
       recordLlmUsage(ctx, ownerId, config, started, { res });

@@ -16,7 +16,8 @@ export function githubWebhook(ctx: AppContext) {
     const raw = await c.req.text();
     if (!cfg?.webhookSecret || !verifyWebhook(cfg.webhookSecret, raw, c.req.header("x-hub-signature-256"))) return c.json({ error: "bad signature" }, 401);
     const event = c.req.header("x-github-event") ?? "";
-    const p = JSON.parse(raw) as { action?: string; installation?: { id: number; account?: { login: string } }; repository?: { full_name: string } };
+    let p: { action?: string; installation?: { id: number; account?: { login: string } }; repository?: { full_name: string } };
+    try { p = JSON.parse(raw); } catch { return c.json({ error: "invalid JSON" }, 400); }
     const instId = p.installation?.id;
     ctx.log.info({ event, action: p.action, installation: instId, repo: p.repository?.full_name }, "github webhook");
     if (!instId) return c.json({ ok: true });
