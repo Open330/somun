@@ -81,7 +81,9 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
     response_format: { type: "json_schema", json_schema: { name: req.schemaName, schema: req.schema } },
     max_tokens: req.maxTokens ?? 4000,
   };
+  // 리다이렉트는 따라가지 않는다(사용자가 준 baseUrl이 사설 주소로 넘기는 것을 막기 위해).
   const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+    redirect: "error",
     method: "POST", signal,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),

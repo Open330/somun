@@ -16,7 +16,7 @@ describe("per-account isolation", () => {
   const ids = { candidate: 0, draft: 0, publication: 0, example: 0, source: 0, suggestion: 0, job: 0, installation: 4242 };
 
   beforeEach(() => {
-    ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "server-pat", githubTokenOwners: ["alice"] }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] };
+    ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "server-pat", trustedOwners: ["alice"] }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] };
     bob = createApp(ctx, loadConfig({ SOMUN_TOKEN: "bob-token", SOMUN_TOKEN_OWNER_ID: "bob" }));
     const now = Date.now();
     const db = ctx.db;

@@ -4,6 +4,7 @@ import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import { modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
+import { assertModelEndpoint, needsEndpointCheck } from "./net-policy.js";
 import type { JobMeta, RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { keyPoolOps } from "./keys.js";
@@ -137,6 +138,7 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const cfg = getSettings(ctx, ownerId).llm;
   const startedAt = Date.now();
   let res;
+  if (needsEndpointCheck(ctx, ownerId, cfg)) await assertModelEndpoint(ctx, ownerId, cfg);
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });

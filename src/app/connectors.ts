@@ -1,5 +1,6 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
+import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
 import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppConfig } from "../infra/github/app.js";
 import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
@@ -15,12 +16,22 @@ export function githubAppConfig(ctx: AppContext): GitHubAppConfig | null {
   if (fromEnv) return fromEnv;
   const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, "github_app")).get();
   if (!row) return null;
-  const j = JSON.parse(row.value) as { id: number; pem: string; slug: string; webhook_secret?: string };
+  const j = JSON.parse((ctx.env.secrets ?? PLAIN_BOX).open(row.value)) as { id: number; pem: string; slug: string; webhook_secret?: string };
   return { appId: String(j.id), privateKeyPem: j.pem, slug: j.slug, webhookSecret: j.webhook_secret };
 }
 
+/** 평문으로 저장된 GitHub App 자격 증명을 봉인한다(키를 새로 설정한 뒤 시작할 때). */
+export function resealGithubApp(ctx: AppContext): boolean {
+  const box = ctx.env.secrets ?? PLAIN_BOX;
+  const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, "github_app")).get();
+  if (!box.enabled || !row || SecretBox.isSealed(row.value)) return false;
+  ctx.db.update(schema.appState).set({ value: box.seal(row.value), updatedAt: Date.now() }).where(eq(schema.appState.key, "github_app")).run();
+  return true;
+}
+
 export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string }): boolean {
-  const value = JSON.stringify(app);
+  // 개인키가 들어 있으므로 봉인해 저장한다(SOMUN_SECRET_KEY가 있을 때).
+  const value = (ctx.env.secrets ?? PLAIN_BOX).seal(JSON.stringify(app));
   return ctx.db.insert(schema.appState).values({ key: "github_app", value, updatedAt: Date.now() }).onConflictDoNothing().run().changes > 0;
 }
 
