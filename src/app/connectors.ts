@@ -1,4 +1,4 @@
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, like, lt, or, sql } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
 import { createHash, randomBytes } from "node:crypto";
@@ -43,6 +43,11 @@ export function listInstallations(ctx: AppContext, ownerId: string) {
 
 /** 설치 콜백: 설치 정보를 읽어 기록하고, 설치 저장소를 github 소스로 등록한다. */
 const INSTALL_STATE_TTL_MS = 30 * 60_000;
+/** 조직 설치에서 webhook(설치자)을 기다리는 시간: 1초씩 최대 10번. 테스트는 줄여 쓴다. */
+export let INSTALLER_WAIT_TRIES = 10;
+const INSTALLER_WAIT_MS = 1000;
+export const setInstallerWaitForTests = (tries: number): void => { INSTALLER_WAIT_TRIES = tries; };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const stateKey = (state: string) => `install_state:${createHash("sha256").update(state).digest("hex")}`;
 
 /**
@@ -52,6 +57,7 @@ const stateKey = (state: string) => `install_state:${createHash("sha256").update
 export function issueInstallLink(ctx: AppContext, ownerId: string): string | undefined {
   const cfg = githubAppConfig(ctx);
   if (!cfg?.slug) return undefined;
+  pruneInstallRecords(ctx);
   const state = randomBytes(24).toString("base64url");
   const now = Date.now();
   ctx.db.insert(schema.appState).values({ key: stateKey(state), value: JSON.stringify({ ownerId, exp: now + INSTALL_STATE_TTL_MS }), updatedAt: now }).run();
@@ -65,6 +71,30 @@ function consumeInstallState(ctx: AppContext, ownerId: string, state: string): b
   if (!row) return false;
   const v = JSON.parse(row.value) as { ownerId: string; exp: number };
   return v.ownerId === ownerId && v.exp >= Date.now();
+}
+
+/**
+ * 확인을 마친 GitHub 사용자를 잠시(30분) 기억한다. 조직 설치에서 webhook(설치자 정보)이 콜백보다 늦게 오면,
+ * state와 code는 이미 한 번 쓰였으므로 새로고침 때 이 기록으로 다시 확인한다.
+ */
+const pendingKey = (installationId: number, ownerId: string) => `pending_link:${installationId}:${createHash("sha256").update(ownerId).digest("hex").slice(0, 32)}`;
+function rememberVerifiedUser(ctx: AppContext, installationId: number, ownerId: string, user: { id: number; login: string }): void {
+  const value = JSON.stringify({ user, exp: Date.now() + INSTALL_STATE_TTL_MS });
+  ctx.db.insert(schema.appState).values({ key: pendingKey(installationId, ownerId), value, updatedAt: Date.now() })
+    .onConflictDoUpdate({ target: schema.appState.key, set: { value, updatedAt: Date.now() } }).run();
+}
+function verifiedUser(ctx: AppContext, installationId: number, ownerId: string): { id: number; login: string } | undefined {
+  const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, pendingKey(installationId, ownerId))).get();
+  if (!row) return undefined;
+  const v = JSON.parse(row.value) as { user: { id: number; login: string }; exp: number };
+  return v.exp >= Date.now() ? v.user : undefined;
+}
+
+/** 만료된 설치 state·확인 기록과, 30일 넘게 연결되지 않은 설치자 기록을 지운다. */
+export function pruneInstallRecords(ctx: AppContext, now = Date.now()): number {
+  const expired = ctx.db.delete(schema.appState).where(and(or(like(schema.appState.key, "install_state:%"), like(schema.appState.key, "pending_link:%")), sql`json_extract(${schema.appState.value}, '$.exp') < ${now}`)).run().changes;
+  const stale = ctx.db.delete(schema.appState).where(and(like(schema.appState.key, "installer:%"), lt(schema.appState.updatedAt, now - 30 * 86_400_000))).run().changes;
+  return expired + stale;
 }
 
 /** webhook installation 이벤트가 알려준 설치자(sender). 조직 설치에서 "설치한 사람"을 확인하는 데 쓴다. */
@@ -93,16 +123,24 @@ export async function recordInstallation(ctx: AppContext, ownerId: string, insta
   const existingOwner = ownerOfInstallation(ctx, installationId);
   if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError(say(lc, "이미 다른 계정에 연결된 설치입니다.", "This installation is already linked to another account."));
   const needsProof = !existingOwner && !isTrusted(ctx, ownerId);
+  let user: { id: number; login: string } | undefined;
   if (needsProof) {
-    if (!proof.state || !consumeInstallState(ctx, ownerId, proof.state)) throw new ForbiddenError(say(lc, "이 계정에서 시작한 설치가 아닙니다. 연결 관리 화면의 버튼으로 다시 설치해 주세요.", "This installation was not started from this account. Install again from the Connections page."));
-    if (!proof.code || !cfg.clientId || !cfg.clientSecret) throw new ForbiddenError(say(lc, "GitHub 설치를 확인할 수 없습니다. 설치 화면에서 GitHub 계정 인증까지 마쳐 주세요(운영자는 앱 설정에서 '설치 중 사용자 인증'을 켜야 합니다).", "Could not verify this GitHub installation. Finish the GitHub account authorization during install (the operator must enable user authorization during installation in the app settings)."));
+    // 새로고침으로 다시 온 경우: 30분 안에 확인을 마친 사용자가 있으면 그것을 쓴다(state·code는 한 번만 쓰인다).
+    user = proof.code || proof.state ? undefined : verifiedUser(ctx, installationId, ownerId);
+    if (!user) {
+      if (!proof.state || !consumeInstallState(ctx, ownerId, proof.state)) throw new ForbiddenError(say(lc, "이 계정에서 시작한 설치가 아닙니다. 연결 관리 화면의 버튼으로 다시 설치해 주세요.", "This installation was not started from this account. Install again from the Connections page."));
+      if (!proof.code || !cfg.clientId || !cfg.clientSecret) throw new ForbiddenError(say(lc, "GitHub 설치를 확인할 수 없습니다. 설치 화면에서 GitHub 계정 인증까지 마쳐 주세요(운영자는 앱 설정에서 '설치 중 사용자 인증'을 켜야 합니다).", "Could not verify this GitHub installation. Finish the GitHub account authorization during install (the operator must enable user authorization during installation in the app settings)."));
+      user = (await authorizedGithubUser(cfg, proof.code)) ?? undefined;
+      if (!user) throw new ForbiddenError(say(lc, "GitHub 계정을 확인하지 못했습니다. 다시 설치해 주세요.", "Could not verify your GitHub account. Please install again."));
+      rememberVerifiedUser(ctx, installationId, ownerId, user);
+    }
   }
-  const user = needsProof ? await authorizedGithubUser(cfg, proof.code!) : undefined;
-  if (needsProof && !user) throw new ForbiddenError(say(lc, "GitHub 계정을 확인하지 못했습니다. 다시 설치해 주세요.", "Could not verify your GitHub account. Please install again."));
   const info = await installationInfo(cfg, installationId);
   if (user) {
     const own = info.accountType === "User" && info.account.toLowerCase() === user.login.toLowerCase();
-    if (!own && installerOf(ctx, installationId)?.id !== user.id) throw new ForbiddenError(say(lc, "이 설치를 한 GitHub 계정만 연결할 수 있습니다. 조직 설치라면 잠시 뒤(GitHub 알림 도착 후) 다시 시도해 주세요.", "Only the GitHub account that made this installation can link it. For an organization installation, try again in a moment (after GitHub's notification arrives)."));
+    // 조직 설치의 설치자는 webhook으로 온다. 브라우저가 먼저 도착하면 잠시 기다린다.
+    if (!own) for (let i = 0; i < INSTALLER_WAIT_TRIES && !installerOf(ctx, installationId); i++) await sleep(INSTALLER_WAIT_MS);
+    if (!own && installerOf(ctx, installationId)?.id !== user.id) throw new ForbiddenError(say(lc, "이 설치를 한 GitHub 계정만 연결할 수 있습니다. 조직 설치라면 잠시 뒤 이 페이지를 새로고침해 주세요(30분 안).", "Only the GitHub account that made this installation can link it. For an organization installation, reload this page in a moment (within 30 minutes)."));
   }
   const now = Date.now();
   const saved = ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
@@ -113,6 +151,8 @@ export async function recordInstallation(ctx: AppContext, ownerId: string, insta
   // 처음 설치면 아무것도 지켜보지 않는다. 무엇을 볼지는 고르기 화면(/github/pick)에서 사용자가 정한다.
   // 이미 소스가 있으면 사용자가 고른 대상을 유지한다.
   upsertSource(ctx, ownerId, { id: existing?.id, kind: "github", targets: existing?.targets ?? [], options: { installationId: String(installationId), account: info.account }, enabled: true });
+  // 연결을 마쳤으니 확인용 기록은 필요 없다.
+  ctx.db.delete(schema.appState).where(or(eq(schema.appState.key, pendingKey(installationId, ownerId)), eq(schema.appState.key, `installer:${installationId}`))).run();
   emit(ctx, ownerId, { resource: "sources" });
   return { account: info.account, repos: info.repos };
 }
