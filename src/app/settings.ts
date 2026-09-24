@@ -66,6 +66,11 @@ function saveSettings(ctx: AppContext, ownerId: string, next: Settings): void {
  * 저장된 비밀값을 모두 열어 본다. 키가 없거나 다르면 여기서 멈춘다(요청마다 500이 나는 대신 시작할 때 알린다).
  */
 export function assertSecretsReadable(ctx: AppContext): void {
+  const app = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, "github_app")).get();
+  if (app) {
+    try { JSON.parse(box(ctx).open(app.value)); }
+    catch (e) { throw new Error(`stored GitHub App credentials cannot be decrypted (${(e as Error).message}). SOMUN_SECRET_KEY must be the key that encrypted them.`); }
+  }
   for (const row of ctx.db.select({ ownerId: schema.settings.ownerId }).from(schema.settings).all()) {
     try { getSettings(ctx, row.ownerId); }
     catch (e) { throw new Error(`stored secrets cannot be decrypted (${(e as Error).message}). SOMUN_SECRET_KEY must be the key that encrypted them.`); }

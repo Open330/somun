@@ -15,10 +15,11 @@ export function createApp(ctx: AppContext, config: Config) {
   const app = new Hono();
   const tickets = new TicketStore();
   app.get("/health", (c) => c.text("ok"));
-  // 요청 본문 상한. 세션 요약 업로드·예시 가져오기도 이 안에 든다.
-  app.use("/api/*", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: "payload too large" }, 413) }));
+  // GitHub webhook은 25MB까지 온다. 서명 검증이 있으므로 상한 앞에 둔다.
   app.post("/api/webhooks/github", githubWebhook(ctx));
   app.get("/api/github/app/created", githubAppCreated(ctx));
+  // 나머지 API의 요청 본문 상한. 세션 요약 업로드·예시 가져오기도 이 안에 든다.
+  app.use("/api/*", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: "payload too large" }, 413) }));
   app.route("/api/session", sessionRoutes(config));
   app.use("/api/*", authMiddleware(config, tickets));
   app.route("/api", apiRoutes(ctx, config, tickets));

@@ -46,17 +46,20 @@ export class TicketStore {
 /** 세션 쿠키 서명 키. SOMUN_TOKEN에서 만든다: 토큰을 바꾸면 기존 세션이 모두 끊긴다. */
 const sessionKey = (token: string) => createHash("sha256").update(`somun-session:${token}`).digest();
 
-export function signSession(token: string, ownerId: string, now = Date.now()): string {
-  const body = `${Buffer.from(ownerId).toString("base64url")}.${Math.floor(now / 1000) + SESSION_TTL_S}`;
-  return `${body}.${createHmac("sha256", sessionKey(token)).update(body).digest("base64url")}`;
+/**
+ * 세션 값: 만료 시각 + 서명. 소유자는 담지 않는다(토큰 모드의 소유자는 설정 SOMUN_TOKEN_OWNER_ID 하나이므로,
+ * 그 값을 바꾸면 기존 세션도 바로 새 소유자로 인증된다). 토큰을 바꾸면 서명 키가 바뀌어 모든 세션이 끊긴다.
+ */
+export function signSession(token: string, now = Date.now()): string {
+  const exp = String(Math.floor(now / 1000) + SESSION_TTL_S);
+  return `${exp}.${createHmac("sha256", sessionKey(token)).update(exp).digest("base64url")}`;
 }
 
-export function verifySession(token: string, value: string, now = Date.now()): string | undefined {
-  const [owner, exp, sig] = value.split(".");
-  if (!owner || !exp || !sig) return undefined;
-  const expected = createHmac("sha256", sessionKey(token)).update(`${owner}.${exp}`).digest("base64url");
-  if (!sameSecret(sig, expected) || Number(exp) * 1000 < now) return undefined;
-  return Buffer.from(owner, "base64url").toString();
+export function verifySession(token: string, value: string, now = Date.now()): boolean {
+  const [exp, sig] = value.split(".");
+  if (!exp || !sig || !/^\d+$/.test(exp)) return false;
+  const expected = createHmac("sha256", sessionKey(token)).update(exp).digest("base64url");
+  return sameSecret(sig, expected) && Number(exp) * 1000 >= now;
 }
 
 /** 쿠키로 인증한 변경 요청은 같은 출처에서 온 것만 받는다(SameSite=Strict에 더한 한 겹). */
@@ -93,8 +96,7 @@ export function authMiddleware(config: Config, tickets?: TicketStore): Middlewar
     }
     const session = config.SOMUN_TOKEN ? getCookie(c, SESSION_COOKIE) : undefined;
     if (session && config.SOMUN_TOKEN) {
-      const owner = verifySession(config.SOMUN_TOKEN, session);
-      if (owner && (["GET", "HEAD"].includes(c.req.method) || sameOrigin(c))) return pass(owner, "token");
+      if (verifySession(config.SOMUN_TOKEN, session) && (["GET", "HEAD"].includes(c.req.method) || sameOrigin(c))) return pass(tokenOwner, "token");
     }
     if (config.anonymous) return pass("local", "anonymous");
     return c.json({ error: "unauthorized" }, 401);
@@ -108,7 +110,7 @@ export function sessionRoutes(config: Config) {
     const { token } = (await c.req.json().catch(() => ({}))) as { token?: unknown };
     if (!config.SOMUN_TOKEN || typeof token !== "string" || !sameSecret(token.trim(), config.SOMUN_TOKEN) || !sameOrigin(c)) return c.json({ error: "unauthorized" }, 401);
     const ownerId = config.SOMUN_TOKEN_OWNER_ID || "local";
-    setCookie(c, SESSION_COOKIE, signSession(config.SOMUN_TOKEN, ownerId), { httpOnly: true, sameSite: "Strict", secure: secureRequest(c, config), path: "/", maxAge: SESSION_TTL_S });
+    setCookie(c, SESSION_COOKIE, signSession(config.SOMUN_TOKEN), { httpOnly: true, sameSite: "Strict", secure: secureRequest(c, config), path: "/", maxAge: SESSION_TTL_S });
     return c.json({ ownerId });
   });
   app.delete("/", (c) => { deleteCookie(c, SESSION_COOKIE, { path: "/" }); return c.body(null, 204); });

@@ -26,6 +26,7 @@ export type KeyPoolOps = {
 
 export { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "../../core/models.js";
 
+import { guardedFetch } from "../net.js";
 import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "../../core/models.js";
 
 export function modelFor(config: LlmConfig, kind: "digest" | "judge" | "draft"): string {
@@ -70,7 +71,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-async function openaiCompatible(baseUrl: string, apiKey: string, model: string, req: LlmRequest, keyLabel?: string, signal?: AbortSignal): Promise<LlmResult> {
+async function openaiCompatible(baseUrl: string, apiKey: string, model: string, req: LlmRequest, keyLabel?: string, signal?: AbortSignal, guard = false): Promise<LlmResult> {
   const t0 = Date.now();
   const body = {
     model,
@@ -81,8 +82,10 @@ async function openaiCompatible(baseUrl: string, apiKey: string, model: string, 
     response_format: { type: "json_schema", json_schema: { name: req.schemaName, schema: req.schema } },
     max_tokens: req.maxTokens ?? 4000,
   };
-  // 리다이렉트는 따라가지 않는다(사용자가 준 baseUrl이 사설 주소로 넘기는 것을 막기 위해).
-  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+  // 사용자가 준 baseUrl(운영자 아닌 계정)은 연결 주소를 확인하고 리다이렉트를 따라가지 않는다(infra/net.ts).
+  const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const doFetch = (guard ? guardedFetch : fetch) as unknown as typeof fetch;
+  const res = await doFetch(url, {
     redirect: "error",
     method: "POST", signal,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -121,7 +124,7 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest, sig
  * 설정에 따라 호출. gemini 서버 키 풀은 429/5xx 때 다음 키로 넘어간다.
  * local-agent는 여기 오면 안 된다 (호출자가 큐로 보낸다).
  */
-export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000)): Promise<LlmResult> {
+export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000), opts: { guardBaseUrl?: boolean } = {}): Promise<LlmResult> {
   signal.throwIfAborted();
   const provider = config.provider;
   if (provider === "local-agent") throw new LlmError("local-agent는 워커가 처리합니다");
@@ -133,7 +136,7 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   }
   if (provider === "openai") {
     if (!config.apiKey) throw new LlmError("OpenAI API 키가 설정에 없습니다 (BYOK)");
-    return await openaiCompatible(config.baseUrl?.trim() || OPENAI_BASE, config.apiKey, model, req, undefined, signal);
+    return await openaiCompatible(config.baseUrl?.trim() || OPENAI_BASE, config.apiKey, model, req, undefined, signal, Boolean(opts.guardBaseUrl && config.baseUrl?.trim()));
   }
   // gemini
   if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok", signal);
@@ -171,7 +174,7 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   // (3.7-flash 무료 한도는 키당 하루 20회 안팎이라 저녁이면 흔히 닿는다.)
   const base = config.model?.trim() || DEFAULT_MODEL.gemini;
   if (lastErr instanceof LlmError && (lastErr.status === 503 || lastErr.status === 429) && model !== base) {
-    return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal);
+    return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal, opts);
   }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
 }

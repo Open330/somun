@@ -2,7 +2,8 @@ import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
-import { assertModelEndpoint, needsEndpointCheck } from "./net-policy.js";
+import { guardsModelEndpoint } from "./net-policy.js";
+import { isBlockedError } from "../infra/net.js";
 import { localeOf, say } from "./i18n.js";
 import type { AppContext } from "./context.js";
 import { SIDE_JOB_KINDS } from "../shared/types.js";
@@ -37,8 +38,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     // profile 작업은 로컬 워커만 처리하므로(profiles.queueProfile) 여기에는 생성 단계와 lesson만 온다.
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     try {
-      if (needsEndpointCheck(ctx, ownerId, config)) await assertModelEndpoint(ctx, ownerId, config);
-      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal);
+      const res = await runLlm(config, { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config) });
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
       recordLlmUsage(ctx, ownerId, config, started, { res });
     } catch (err) {
@@ -46,6 +46,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
       const lc = settings.ui?.locale;
       const error = err instanceof Error && ["TimeoutError", "AbortError"].includes(err.name)
         ? say(lc, "생성 제한 시간을 넘겼거나 서버가 종료되었습니다. 다시 시도해 주세요.", "Generation timed out or the server stopped. Please try again.")
+        : isBlockedError(err) ? say(lc, "모델 주소(baseUrl)가 사설망·예약 주소를 가리켜 요청하지 않았습니다. 설정에서 공인 주소로 바꿔 주세요.", "The model address (baseUrl) points to a private or reserved network, so no request was sent. Use a public address in settings.")
         : err instanceof LlmError && err.status ? say(lc, `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`, `Model request failed (HTTP ${err.status}). Check the model settings and usage limits, then try again.`)
         : say(lc, "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.", "Generation failed. Check the model settings, API key, and response format, then try again.");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error }, "server");
