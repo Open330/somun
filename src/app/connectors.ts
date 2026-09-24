@@ -1,9 +1,9 @@
 import { and, desc, eq, gte } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
-import { appConfigFromEnv, installationInfo, installationRepos, type GitHubAppConfig } from "../infra/github/app.js";
+import { appConfigFromEnv, installationInfo, installationRepos, userCanAccessInstallation, type GitHubAppConfig } from "../infra/github/app.js";
 import type { ConnectorsView, InstallationRepo } from "../shared/types.js";
-import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
+import { emit, ForbiddenError, GenerationConflictError, isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { listSources, upsertSource } from "./sources.js";
 import { localeOf, say } from "./i18n.js";
 
@@ -16,8 +16,8 @@ export function githubAppConfig(ctx: AppContext): GitHubAppConfig | null {
   if (fromEnv) return fromEnv;
   const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, "github_app")).get();
   if (!row) return null;
-  const j = JSON.parse((ctx.env.secrets ?? PLAIN_BOX).open(row.value)) as { id: number; pem: string; slug: string; webhook_secret?: string };
-  return { appId: String(j.id), privateKeyPem: j.pem, slug: j.slug, webhookSecret: j.webhook_secret };
+  const j = JSON.parse((ctx.env.secrets ?? PLAIN_BOX).open(row.value)) as { id: number; pem: string; slug: string; webhook_secret?: string; client_id?: string; client_secret?: string };
+  return { appId: String(j.id), privateKeyPem: j.pem, slug: j.slug, webhookSecret: j.webhook_secret, clientId: j.client_id, clientSecret: j.client_secret };
 }
 
 /** 평문으로 저장된 GitHub App 자격 증명을 봉인한다(키를 새로 설정한 뒤 시작할 때). */
@@ -29,7 +29,7 @@ export function resealGithubApp(ctx: AppContext): boolean {
   return true;
 }
 
-export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string }): boolean {
+export function saveGithubApp(ctx: AppContext, app: { id: number; pem: string; slug: string; webhook_secret?: string; client_id?: string; client_secret?: string }): boolean {
   // 개인키가 들어 있으므로 봉인해 저장한다(SOMUN_SECRET_KEY가 있을 때).
   const value = (ctx.env.secrets ?? PLAIN_BOX).seal(JSON.stringify(app));
   return ctx.db.insert(schema.appState).values({ key: "github_app", value, updatedAt: Date.now() }).onConflictDoNothing().run().changes > 0;
@@ -40,11 +40,21 @@ export function listInstallations(ctx: AppContext, ownerId: string) {
 }
 
 /** 설치 콜백: 설치 정보를 읽어 기록하고, 설치 저장소를 github 소스로 등록한다. */
-export async function recordInstallation(ctx: AppContext, ownerId: string, installationId: number): Promise<{ account: string; repos: string[] }> {
+/**
+ * 설치 기록. 처음 연결할 때는 요청한 사람이 그 설치에 접근할 수 있다는 증거가 필요하다:
+ * 설치 중 사용자 인증(OAuth)의 code로 확인하거나, 운영자(trustedOwners)여야 한다. installation_id만으로는 연결하지 않는다.
+ * 이미 이 계정에 연결된 설치를 갱신하는 것(설정 변경 뒤 콜백, webhook)은 확인 없이 된다.
+ */
+export async function recordInstallation(ctx: AppContext, ownerId: string, installationId: number, proof: { code?: string } = {}): Promise<{ account: string; repos: string[] }> {
   const cfg = githubAppConfig(ctx);
-  if (!cfg) throw new Error(say(localeOf(ctx, ownerId), "GitHub App이 설정되지 않았습니다.", "The GitHub App is not configured."));
+  const lc = localeOf(ctx, ownerId);
+  if (!cfg) throw new Error(say(lc, "GitHub App이 설정되지 않았습니다.", "The GitHub App is not configured."));
   const existingOwner = ownerOfInstallation(ctx, installationId);
-  if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "이미 다른 계정에 연결된 설치입니다.", "This installation is already linked to another account."));
+  if (existingOwner && existingOwner !== ownerId) throw new GenerationConflictError(say(lc, "이미 다른 계정에 연결된 설치입니다.", "This installation is already linked to another account."));
+  if (!existingOwner && !isTrusted(ctx, ownerId)) {
+    if (!proof.code || !cfg.clientId || !cfg.clientSecret) throw new ForbiddenError(say(lc, "GitHub 설치를 확인할 수 없습니다. 설치 화면에서 GitHub 계정 인증까지 마쳐 주세요(운영자는 앱 설정에서 '설치 중 사용자 인증'을 켜야 합니다).", "Could not verify this GitHub installation. Finish the GitHub account authorization during install (the operator must enable user authorization during installation in the app settings)."));
+    if (!await userCanAccessInstallation(cfg, proof.code, installationId)) throw new ForbiddenError(say(lc, "이 GitHub 계정으로 접근할 수 없는 설치입니다.", "This GitHub account cannot access that installation."));
+  }
   const info = await installationInfo(cfg, installationId);
   const now = Date.now();
   const saved = ctx.db.insert(schema.githubInstallations).values({ installationId, ownerId, account: info.account, accountType: info.accountType, repos: info.repos, createdAt: now, updatedAt: now })
