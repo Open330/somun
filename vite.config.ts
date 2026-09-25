@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   root: "src/web",
-  publicDir: false,
+  publicDir: "public",
   build: { outDir: "../../dist/web", emptyOutDir: true },
   resolve: {
     alias: {

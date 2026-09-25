@@ -28,8 +28,8 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
 
       <section className="hero">
         <div className="hero-copy">
-          <h1>{tr("만들기는 매일 하는데,{br}{announce}는 분기에 한 번.", { br: <br />, announce: <em>{t("알리기")}</em> })}</h1>
-          <p className="sub">{t("소문은 저장소와 작업 세션을 지켜보다가 정말 알릴 만한 것이 생겼을 때만 채널별 초안을 건넵니다. 검수하고 복사해서 올리는 건 사용자 몫입니다. 대신 올리지 않고, 없는 숫자를 지어내지 않습니다.")}</p>
+          <h1>{tr("만든 건 많은데,{br}{explain}가 어렵다면.", { br: <br />, explain: <em>{t("설명하기")}</em> })}</h1>
+          <p className="sub">{t("소문은 릴리스·PR·커밋을 읽고, 사용자가 알아듣는 말로 홍보 글 초안을 씁니다. 근거는 실제 작업물에서만 가져오고, 올리는 건 직접 합니다.")}</p>
           <div className="toolbar">
             {auth.enabled ? (
               // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
