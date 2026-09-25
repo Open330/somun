@@ -4,7 +4,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { claimJob, completeJob, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs } from "./jobs.js";
+import { claimJob, completeJob, generationStatus, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs } from "./jobs.js";
 import { updateSettings } from "./settings.js";
 import { enqueueJob } from "./pipeline.js";
 
@@ -23,6 +23,25 @@ describe("local worker job lifecycle", () => {
   const valid = JSON.stringify({ body: "A test draft with 1 limitation: beta. https://github.com/a/x" });
   const row = () => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!;
   const claim = () => claimJob(ctx, "a", jobId, "worker").claimToken!;
+
+  it("stops showing a failure once a newer draft for the same channel and language exists", () => {
+    completeJob(ctx, "a", jobId, { claimToken: claim(), error: "claude exited 1: Not logged in" });
+    expect(generationStatus(ctx, "a", candidateId).map((j) => j.status)).toEqual(["failed"]);
+    vi.advanceTimersByTime(1000);
+    const now = Date.now();
+    // 다른 언어의 초안은 이 실패를 가리지 않는다.
+    ctx.db.insert(schema.drafts).values({ ownerId: "a", candidateId, channel: "x", lang: "ko", version: 1, body: "b", lint: [], status: "proposed", model: "gemini", createdAt: now, updatedAt: now }).run();
+    expect(generationStatus(ctx, "a", candidateId).map((j) => j.status)).toEqual(["failed"]);
+    ctx.db.insert(schema.drafts).values({ ownerId: "a", candidateId, channel: "x", lang: "en", version: 2, body: "b", lint: [], status: "proposed", model: "gemini", createdAt: now, updatedAt: now }).run();
+    expect(generationStatus(ctx, "a", candidateId)).toEqual([]);
+  });
+
+  it("keeps showing a failure when the only draft is older than the failure", () => {
+    const now = Date.now();
+    ctx.db.insert(schema.drafts).values({ ownerId: "a", candidateId, channel: "x", lang: "en", version: 1, body: "b", lint: [], status: "proposed", model: "gemini", createdAt: now - 60_000, updatedAt: now - 60_000 }).run();
+    completeJob(ctx, "a", jobId, { claimToken: claim(), error: "boom" });
+    expect(generationStatus(ctx, "a", candidateId).map((j) => j.status)).toEqual(["failed"]);
+  });
 
   it("allows only one claimant and isolates owners", () => {
     expect(pendingJobs(ctx, "b")).toEqual([]);
