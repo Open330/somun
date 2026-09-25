@@ -12,6 +12,9 @@ const schema = z.object({
   SOMUN_ADMIN_OWNER_ID: z.string().trim().optional(),
   /** 알림 링크에 쓰는 공개 주소. */
   SOMUN_PUBLIC_URL: z.string().url().optional(),
+  /** 검색 콘솔 소유 확인 태그 값(Google Search Console, 네이버 서치어드바이저). 첫 화면 HTML에 공개되는 값이다. */
+  SOMUN_GOOGLE_SITE_VERIFICATION: z.string().trim().optional(),
+  SOMUN_NAVER_SITE_VERIFICATION: z.string().trim().optional(),
   /** DB에 저장하는 비밀값(API 키, 웹훅 URL, GitHub App 개인키) 암호화 키. 없으면 평문으로 저장한다. 한 번 정하면 바꾸지 말 것. */
   SOMUN_SECRET_KEY: z.string().min(16).optional(),
   AUTH_ISSUER: z.string().url().optional(),

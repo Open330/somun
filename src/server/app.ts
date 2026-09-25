@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { ZodError } from "zod";
@@ -10,6 +10,7 @@ import type { Config } from "./config.js";
 import { apiRoutes } from "./routes/api.js";
 import { githubWebhook } from "./routes/webhooks.js";
 import { githubAppCreated } from "./routes/github-app.js";
+import { seoRoutes } from "./seo.js";
 
 export function createApp(ctx: AppContext, config: Config) {
   const app = new Hono();
@@ -35,8 +36,12 @@ export function createApp(ctx: AppContext, config: Config) {
     ctx.log.error({ err: err.message, path: c.req.path }, "unhandled");
     return c.json({ error: "internal server error" }, 500);
   });
-  // 정적 웹 (빌드 결과). SPA 폴백.
+  // 정적 웹 (빌드 결과). 첫 화면과 SPA 폴백은 검색용 머리말을 붙여 내려준다.
+  const page = seoRoutes(app, config);
+  const html = (c: Context) => { const body = page(c.req.path); return body === undefined ? c.notFound() : c.html(body); };
+  app.get("/", html);
+  app.get("/index.html", (c) => c.redirect("/", 301));
   app.use("/*", serveStatic({ root: config.WEB_DIST }));
-  app.get("/*", serveStatic({ root: config.WEB_DIST, path: "index.html" }));
+  app.get("/*", html);
   return app;
 }
