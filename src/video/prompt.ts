@@ -53,6 +53,12 @@ export function directorUser(brief: VideoBrief): string {
     `## Facts (the only facts you may use)`,
     brief.facts,
     brief.script ? `\n## Script (a post the author already reviewed; reuse its wording and order)\n${brief.script}` : "",
+    brief.brand ? `\n## Brand (read from the project's homepage ${brief.brand.source}; use it instead of the neutral palette)\n${[
+      brief.brand.accents.length ? `accent colors: ${brief.brand.accents.join(", ")}` : "",
+      brief.brand.background ? `background: ${brief.brand.background}` : "",
+      brief.brand.ink ? `text: ${brief.brand.ink}` : "",
+      brief.brand.fonts.length ? `fonts (Google Fonts): ${brief.brand.fonts.join(", ")}. Add a fallback that covers the on-screen language.` : "",
+    ].filter(Boolean).join("\n")}` : "",
     ``,
     `## Voice`,
     brief.voice,

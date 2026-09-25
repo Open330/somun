@@ -287,3 +287,16 @@ export const videos = sqliteTable("videos", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("videos_owner_candidate").on(t.ownerId, t.candidateId), uniqueIndex("videos_render").on(t.renderId)]);
+
+/**
+ * 영상 bridge 토큰. 원문은 발급할 때 사용자에게 한 번만 보여 주고 해시만 둔다.
+ * 유효한 토큰의 해시 목록을 영상 서버에 통째로 보내 동기화한다(폐기하면 목록에서 빠진다).
+ */
+export const bridgeTokens = sqliteTable("bridge_tokens", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  label: text("label").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdAt: integer("created_at").notNull(),
+  revokedAt: integer("revoked_at"),
+}, (t) => [index("bridge_tokens_owner").on(t.ownerId)]);

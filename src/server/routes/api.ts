@@ -27,7 +27,8 @@ import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
 import { TicketStore, type AuthVars } from "../auth.js";
-import { listVideos, requestVideo, videoEnabled, videoFile } from "../../app/videos.js";
+import { listVideos, requestVideo, videoFile } from "../../app/videos.js";
+import { issueBridgeToken, listBridgeTokens, revokeBridgeToken, videoConfig } from "../../app/bridges.js";
 import { VIDEO_ASPECTS, VIDEO_DURATIONS } from "../../shared/video.js";
 
 const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
@@ -116,7 +117,10 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   });
 
   // videos: 글감 → 짧은 영상(영상 서버 + 사용자의 Claude Code)
-  app.get("/video", (c) => c.json({ enabled: videoEnabled(ctx) }));
+  app.get("/video", async (c) => c.json(await videoConfig(ctx, c.get("ownerId"))));
+  app.get("/video/bridges", async (c) => c.json(await listBridgeTokens(ctx, c.get("ownerId"))));
+  app.post("/video/bridges", async (c) => c.json(await issueBridgeToken(ctx, c.get("ownerId"), (await body(c, z.object({ label: z.string().max(60) }))).label), 201));
+  app.delete("/video/bridges/:id", async (c) => c.json(await revokeBridgeToken(ctx, c.get("ownerId"), c.req.param("id"))));
   app.get("/candidates/:id/videos", async (c) => c.json(await listVideos(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.post("/candidates/:id/videos", async (c) => {
     const i = await body(c, z.object({ durationSec: z.union([z.literal(VIDEO_DURATIONS[0]), z.literal(VIDEO_DURATIONS[1]), z.literal(VIDEO_DURATIONS[2])]), aspect: z.enum(VIDEO_ASPECTS), draftId: z.number().int().positive().optional() }));

@@ -165,16 +165,23 @@ GitHub App을 웹에서 처음 등록하려면 `SOMUN_ADMIN_OWNER_ID`에 운영�
 
 ```bash
 npx playwright-core install chromium-headless-shell   # 1회. ffmpeg가 PATH에 있어야 함
-cat > .env.video <<EOF
-VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)
-VIDEO_BRIDGE_TOKENS=$(openssl rand -hex 24)
-EOF
-echo "VIDEO_BRIDGE_TOKEN=$(grep ^VIDEO_BRIDGE_TOKENS .env.video | cut -d= -f2)" >> .env.video
-npm run video-server                      # 127.0.0.1:8791
-npm run video-bridge                      # 또는: -- --claude "aas exec <프로필> -- claude"
+echo "VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)" > .env.video
+echo "VIDEO_HOST=0.0.0.0" >> .env.video             # 내부망에서 접속하려면. 기본은 127.0.0.1
+npm run video-server                                  # :8791
 ```
 
-somun에 `SOMUN_VIDEO_URL=http://127.0.0.1:8791`과 `SOMUN_VIDEO_TOKEN`(`VIDEO_SERVICE_TOKEN` 값)을 설정하면 글감 화면에 **짧은 영상** 블록이 나타납니다. 계정이 여럿이면 bridge마다 토큰을 따로 줍니다: `VIDEO_BRIDGE_TOKENS=<ownerId>=<토큰>,...`.
+somun에는 `SOMUN_VIDEO_URL`(somun이 영상 서버에 붙는 주소), `SOMUN_VIDEO_TOKEN`(`VIDEO_SERVICE_TOKEN` 값)을 설정합니다. bridge가 다른 주소로 붙는다면 `SOMUN_VIDEO_PUBLIC_URL`(예: `http://192.168.32.55:8791`)도 설정합니다. 그러면 글감 화면에 **짧은 영상** 블록이 나타납니다.
+
+Claude Code는 사람마다 자기 것을 붙입니다. **설정 › 모델 › 영상 bridge**에서 토큰을 만들면(원문은 한 번만 보이고, somun은 해시만 두고 그 해시를 영상 서버에 등록합니다) 이 저장소에서 실행할 명령이 나옵니다.
+
+```bash
+VIDEO_SERVER_URL=http://192.168.32.55:8791 VIDEO_BRIDGE_TOKEN=smb_… npm run video-bridge
+npm run video-bridge -- --claude "aas exec <프로필> -- claude"   # Claude 계정을 고정할 때
+```
+
+bridge는 자기 소유자의 렌더만 받습니다. 토큰을 폐기하면 영상 서버에서 바로 빠지고, 그때 영상 서버에 닿지 않았으면 5분 안에 빠집니다. 운영자는 `.env.video`의 `VIDEO_BRIDGE_TOKENS=<ownerId>=<토큰>,...`로 고정 토큰을 둘 수도 있습니다.
+
+저장소에 홈페이지가 있으면 somun이 그 페이지의 색과 Google Fonts를 읽어 기획서에 넣습니다(공인 주소만, 수백 KB까지). 모델에게는 `#rrggbb` 값과 글꼴 이름만 전달됩니다.
 
 ## 배포
 

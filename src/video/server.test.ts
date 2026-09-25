@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { VideoBrief } from "../shared/video.js";
 import { parseBridgeTokens, videoServer } from "./server.js";
 import { VideoService, type RendererLike } from "./service.js";
+import { BridgeRegistry, hashBridgeToken } from "./bridges.js";
 
 const SERVICE = "service-token-0123456789";
 const BRIDGE_A = "bridge-a-0123456789abcd";
@@ -18,10 +19,12 @@ const renderer: RendererLike = {
 };
 
 function setup() {
-  const svc = new VideoService(mkdtempSync(join(tmpdir(), "somun-video-srv-")), renderer, { model: "opus", sessionTimeoutSec: 600 });
-  const app = videoServer(svc, { serviceToken: SERVICE, bridgeTokens: parseBridgeTokens(`owner-a=${BRIDGE_A},${BRIDGE_ANY}`) });
+  const dir = mkdtempSync(join(tmpdir(), "somun-video-srv-"));
+  const svc = new VideoService(dir, renderer, { model: "opus", sessionTimeoutSec: 600 });
+  const bridges = new BridgeRegistry(dir, parseBridgeTokens(`owner-a=${BRIDGE_A},${BRIDGE_ANY}`));
+  const app = videoServer(svc, { serviceToken: SERVICE, bridges });
   const as = (token: string) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
-  return { app, as };
+  return { app, as, dir };
 }
 
 const rpc = (method: string, params?: unknown, id: number | null = 1) => JSON.stringify({ jsonrpc: "2.0", ...(id === null ? {} : { id }), method, params });
@@ -79,5 +82,40 @@ describe("video server", () => {
     expect(await part.text()).toBe("234");
     expect((await app.request(`/v1/renders/${created.id}/video`, { headers: { ...as(SERVICE), Range: "bytes=20-" } })).status).toBe(416);
     expect((await app.request(`/v1/renders/${created.id}/video`, { headers: as(BRIDGE_ANY) })).status).toBe(401);
+  });
+
+  it("accepts bridge tokens issued by somun as hashes, scopes them to their owner, and reports when they were last seen", async () => {
+    const { app, as, dir } = setup();
+    const issued = "issued-token-for-owner-c-0123";
+    const put = (tokens: unknown[], auth = SERVICE) => app.request("/v1/bridge-tokens", { method: "PUT", headers: as(auth), body: JSON.stringify({ tokens }) });
+    expect((await put([{ id: "t1", owner: "owner-c", tokenHash: hashBridgeToken(issued) }], BRIDGE_ANY)).status).toBe(401);
+    expect((await put([{ id: "t1", owner: "owner-c", tokenHash: "not-a-hash" }])).status).toBe(400);
+    expect((await put([{ id: "t1", owner: "owner-c", tokenHash: hashBridgeToken(issued) }])).status).toBe(204);
+
+    await app.request("/v1/renders", { method: "POST", headers: as(SERVICE), body: JSON.stringify({ owner: "owner-d", brief }) });
+    expect((await app.request("/v1/sessions/next", { headers: as(issued) })).status).toBe(204);
+    const mine = await (await app.request("/v1/renders", { method: "POST", headers: as(SERVICE), body: JSON.stringify({ owner: "owner-c", brief }) })).json() as { id: string };
+    expect(((await (await app.request("/v1/sessions/next", { headers: as(issued) })).json()) as { renderId: string }).renderId).toBe(mine.id);
+
+    const status = await (await app.request("/v1/bridge-tokens?owner=owner-c", { headers: as(SERVICE) })).json() as { id: string; connected: boolean }[];
+    expect(status.find((s) => s.id === "t1")).toMatchObject({ connected: true });
+    // 재시작해도 등록은 남고, 목록에서 빠진 토큰은 바로 막힌다.
+    expect(new BridgeRegistry(dir, []).authenticate(issued)).toMatchObject({ owner: "owner-c", id: "t1" });
+    await put([]);
+    expect((await app.request("/v1/sessions/next", { headers: as(issued) })).status).toBe(401);
+
+    // 한 건씩 추가·폐기. 폐기되면 기다리던 롱 폴링도 끊긴다.
+    const add = await app.request("/v1/bridge-tokens", { method: "POST", headers: as(SERVICE), body: JSON.stringify({ id: "t2", owner: "owner-c", tokenHash: hashBridgeToken(issued) }) });
+    expect(add.status).toBe(204);
+    const waiting = app.request("/v1/sessions/next?wait=5", { headers: as(issued) });
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await app.request("/v1/bridge-tokens/t2", { method: "DELETE", headers: as(SERVICE) })).status).toBe(204);
+    expect((await waiting).status).toBe(401);
+  });
+
+  it("starts with an empty list when the token file is corrupt", async () => {
+    const { dir } = setup();
+    writeFileSync(join(dir, "bridge-tokens.json"), "{not json");
+    expect(new BridgeRegistry(dir, []).authenticate("anything-at-all-0123")).toBeNull();
   });
 });

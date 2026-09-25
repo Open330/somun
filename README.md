@@ -165,16 +165,23 @@ A candidate can become a 10 to 20 second video (16:9 or 1:1). Three processes sp
 
 ```bash
 npx playwright-core install chromium-headless-shell   # once; ffmpeg must be on PATH
-cat > .env.video <<EOF
-VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)
-VIDEO_BRIDGE_TOKENS=$(openssl rand -hex 24)
-EOF
-echo "VIDEO_BRIDGE_TOKEN=$(grep ^VIDEO_BRIDGE_TOKENS .env.video | cut -d= -f2)" >> .env.video
-npm run video-server                      # :8791 on 127.0.0.1
-npm run video-bridge                      # or: -- --claude "aas exec <profile> -- claude"
+echo "VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)" > .env.video
+echo "VIDEO_HOST=0.0.0.0" >> .env.video             # to reach it from the LAN; default 127.0.0.1
+npm run video-server                                  # :8791
 ```
 
-Then set `SOMUN_VIDEO_URL=http://127.0.0.1:8791` and `SOMUN_VIDEO_TOKEN` (the `VIDEO_SERVICE_TOKEN` value) for somun, and the **Short video** block appears on each candidate. For several accounts, give each bridge its own token: `VIDEO_BRIDGE_TOKENS=<ownerId>=<token>,...`.
+Point somun at it with `SOMUN_VIDEO_URL` (how somun reaches the video server), `SOMUN_VIDEO_TOKEN` (the `VIDEO_SERVICE_TOKEN` value) and, when bridges connect through another address, `SOMUN_VIDEO_PUBLIC_URL` (for example `http://192.168.32.55:8791`). The **Short video** block then appears on each candidate.
+
+Each person connects their own Claude Code: **Settings › Model › Video bridge** issues a token (shown once; somun keeps only its hash and registers the hash with the video server) and shows the command to run in this repository:
+
+```bash
+VIDEO_SERVER_URL=http://192.168.32.55:8791 VIDEO_BRIDGE_TOKEN=smb_… npm run video-bridge
+npm run video-bridge -- --claude "aas exec <profile> -- claude"   # to pin the Claude account
+```
+
+A bridge only receives its owner's renders. Revoking a token removes it from the video server immediately, or within 5 minutes if the server was unreachable. Operators can still set fixed tokens with `VIDEO_BRIDGE_TOKENS=<ownerId>=<token>,...` in `.env.video`.
+
+If the repository has a homepage, somun reads its colors and Google Fonts (public addresses only, a few hundred KB at most) and adds them to the brief. Only `#rrggbb` values and font names reach the model.
 
 ## Deploy
 

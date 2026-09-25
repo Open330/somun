@@ -12,6 +12,7 @@ import { logger } from "../infra/logger.js";
 import { UsageReporter } from "../infra/usage.js";
 import { SecretBox } from "../infra/secrets.js";
 import { VideoClient } from "../infra/video.js";
+import { syncBridgeTokens } from "../app/bridges.js";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 
@@ -23,7 +24,7 @@ const trustedOwners = config.AUTH_JWKS_URL
   // 익명(인증 없음) 요청의 "local"은 운영자가 아니다. 공유 토큰을 가진 쪽만 운영자로 본다.
   ? [config.SOMUN_ADMIN_OWNER_ID, config.SOMUN_TOKEN ? config.SOMUN_TOKEN_OWNER_ID || "local" : undefined].filter((x): x is string => Boolean(x))
   : undefined;
-const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, publicUrl: config.SOMUN_PUBLIC_URL, trustedOwners, secrets: new SecretBox(config.SOMUN_SECRET_KEY), video: config.SOMUN_VIDEO_URL && config.SOMUN_VIDEO_TOKEN ? new VideoClient(config.SOMUN_VIDEO_URL, config.SOMUN_VIDEO_TOKEN) : undefined }, bus: new EventEmitter(), usage };
+const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, publicUrl: config.SOMUN_PUBLIC_URL, trustedOwners, secrets: new SecretBox(config.SOMUN_SECRET_KEY), video: config.SOMUN_VIDEO_URL && config.SOMUN_VIDEO_TOKEN ? new VideoClient(config.SOMUN_VIDEO_URL, config.SOMUN_VIDEO_TOKEN, config.SOMUN_VIDEO_PUBLIC_URL ?? config.SOMUN_VIDEO_URL) : undefined }, bus: new EventEmitter(), usage };
 // 글감 단위 변경(신호별 → 저장소 × 10일 창). 한 번만 실제로 일한다.
 {
   const r = migrateLegacyCandidates(ctx);
@@ -40,6 +41,10 @@ const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOK
 }
 // 못 보낸 사용량은 5분마다 다시 보낸다.
 const usageFlush = setInterval(() => void usage.flush(), 5 * 60_000);
+// bridge 토큰 목록을 영상 서버와 맞춘다. 폐기할 때 영상 서버에 닿지 않았어도 늦어도 5분 안에 막힌다.
+const syncBridges = () => void syncBridgeTokens(ctx).catch((err: Error) => logger.warn({ err: err.message }, "bridge token sync failed"));
+if (ctx.env.video) syncBridges();
+const bridgeSync = ctx.env.video ? setInterval(syncBridges, 5 * 60_000) : undefined;
 ctx.bus.setMaxListeners(100);
 
 const generationWorker = startGenerationWorker(ctx);
@@ -54,6 +59,7 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
     cron.stop();
     clearInterval(usageFlush);
+    clearInterval(bridgeSync);
     void generationWorker.stop().then(() => usage.flush()).finally(() => server.close(() => process.exit(0)));
   });
 }

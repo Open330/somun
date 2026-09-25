@@ -5,6 +5,7 @@ import { schema } from "../infra/db/index.js";
 import type { Draft, Evidence } from "../shared/types.js";
 import { renderUnsettled, type RenderStatus, type RenderView, type VideoAspect, type VideoBrief, type VideoDuration, type VideoItem } from "../shared/video.js";
 import { VideoServerError } from "../infra/video.js";
+import { brandFor } from "./brand.js";
 import { getCandidateRow, toDraft } from "./candidates.js";
 import { GenerationConflictError, NotFoundError, UnavailableError, type AppContext } from "./context.js";
 import { getProfile } from "./profiles.js";
@@ -25,8 +26,6 @@ const CHANNEL_RANK = ["x", "threads", "linkedin", "show_gn", "show_hn", "blog"];
 const SCRIPT_MAX = 3_000, BANNED_MAX = 200, BANNED_LEN = 80;
 /** 요청을 영상 서버에 보내는 중인 계정. 동시에 두 번 눌러 한도를 넘지 않게. */
 const creating = new Set<string>();
-
-export const videoEnabled = (ctx: AppContext) => Boolean(ctx.env.video);
 
 const toItem = (r: typeof schema.videos.$inferSelect): VideoItem => ({
   id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, lang: r.lang, durationSec: r.durationSec, aspect: r.aspect as VideoAspect,
@@ -82,6 +81,7 @@ export async function requestVideo(ctx: AppContext, ownerId: string, candidateId
     const stillOpen = open.filter((r) => OPEN.includes(r.status)).length;
     if (stillOpen >= MAX_OPEN_PER_OWNER) throw new GenerationConflictError(`${stillOpen} videos are already in progress`);
     const { brief, draftId } = buildVideoBrief(ctx, ownerId, candidateId, opts);
+    brief.brand = await brandFor(ctx, (getCandidateRow(ctx, ownerId, candidateId).evidence as Evidence).homepage);
     let render: RenderView;
     try {
       render = await client.create(ownerId, brief);
