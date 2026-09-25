@@ -18,6 +18,8 @@ export const VIRTUAL_CLOCK = String.raw`(() => {
     static now() { return epoch + now; }
   }
   window.Date = VDate;
+  // WebRTC는 요청 가로채기를 거치지 않고 임의 주소로 연결할 수 있다. 영상에는 필요 없으므로 없앤다.
+  for (const k of ["RTCPeerConnection", "webkitRTCPeerConnection", "RTCDataChannel"]) { try { Object.defineProperty(window, k, { value: undefined, configurable: false, writable: false }); } catch (e) { /* 없음 */ } }
   performance.now = () => now;
   window.setTimeout = (fn, ms = 0, ...args) => { const id = seq++; timers.set(id, { at: now + Math.max(0, Number(ms) || 0), fn, args }); return id; };
   window.setInterval = (fn, ms = 0, ...args) => { const every = Math.max(1, Number(ms) || 0); const id = seq++; timers.set(id, { at: now + every, fn, args, every }); return id; };
@@ -31,8 +33,11 @@ export const VIRTUAL_CLOCK = String.raw`(() => {
       if (!born.has(a)) { born.set(a, now); a.pause(); }
     }
   };
+  // 한 번 옮길 때 실행하는 타이머 수의 상한. setTimeout(f, 0)을 스스로 다시 거는 코드가 시계를 멈추지 못하게.
+  const MAX_TIMER_RUNS = 5000;
   window.__seek = (t) => {
-    for (;;) {
+    for (let runs = 0; ; runs++) {
+      if (runs >= MAX_TIMER_RUNS) throw new Error("too many timers fired in one frame (a timer keeps re-arming itself at the same time)");
       let next = null;
       for (const [id, tm] of timers) if (tm.at <= t && (!next || tm.at < next[1].at)) next = [id, tm];
       if (!next) break;

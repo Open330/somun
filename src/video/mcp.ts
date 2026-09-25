@@ -49,6 +49,7 @@ async function callTool(service: VideoService, token: string, name: string, args
 async function handle(service: VideoService, token: string, req: RpcRequest): Promise<RpcResponse | null> {
   const id = req.id ?? null;
   if (req.id === undefined) return null; // 알림
+  if (!service.hasSession(token)) return { jsonrpc: "2.0", id, error: { code: -32001, message: "unknown or finished session" } };
   switch (req.method) {
     case "initialize":
       return { jsonrpc: "2.0", id, result: { protocolVersion: (req.params?.protocolVersion as string) ?? "2025-06-18", capabilities: { tools: { listChanged: false } }, serverInfo: { name: "somun-video", version: "0.1.0" } } };
@@ -63,13 +64,11 @@ async function handle(service: VideoService, token: string, req: RpcRequest): Pr
   }
 }
 
-/** 요청 본문(단건 또는 배치) → 응답. 응답할 것이 없으면(알림만) null. */
-export async function handleMcp(service: VideoService, token: string, body: unknown): Promise<RpcResponse | RpcResponse[] | null> {
+/** 요청 본문 → 응답. 알림이면 null. */
+export async function handleMcp(service: VideoService, token: string, body: unknown): Promise<RpcResponse | null> {
   const bad = (m: string): RpcResponse => ({ jsonrpc: "2.0", id: null, error: { code: -32600, message: m } });
   const one = (x: unknown) => (x && typeof x === "object" && typeof (x as RpcRequest).method === "string" ? handle(service, token, x as RpcRequest) : Promise.resolve(bad("invalid request")));
-  if (Array.isArray(body)) {
-    const out = (await Promise.all(body.map(one))).filter((x): x is RpcResponse => x !== null);
-    return out.length ? out : null;
-  }
+  // 배치는 받지 않는다(MCP 2025-06-18에서 빠졌다). 한 요청에 도구 호출을 여럿 실어 제한을 우회하지 못하게.
+  if (Array.isArray(body)) return bad("batch requests are not supported");
   return one(body);
 }

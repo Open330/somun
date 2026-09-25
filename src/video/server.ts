@@ -31,8 +31,8 @@ const briefSchema = z.object({
   durationSec: z.union(VIDEO_DURATIONS.map((d) => z.literal(d)) as [z.ZodLiteral<10>, z.ZodLiteral<15>, z.ZodLiteral<20>]),
   aspect: z.enum(VIDEO_ASPECTS),
   headline: z.string().max(300),
-  facts: z.string().max(12_000),
-  grounding: z.string().max(60_000),
+  facts: z.string().max(40_000),
+  grounding: z.string().max(400_000),
   script: z.string().max(3_000).optional(),
   voice: z.string().max(4_000),
   bannedPhrases: z.array(z.string().max(80)).max(200),
@@ -55,7 +55,7 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
   // somun → 렌더 요청·조회·영상
   const service_ = new Hono();
   service_.use(async (c, next) => (sameSecret(bearer(c), config.serviceToken) ? next() : c.json({ error: "unauthorized" }, 401)));
-  service_.post("/", bodyLimit({ maxSize: 256_000 }), async (c) => {
+  service_.post("/", bodyLimit({ maxSize: 1_000_000 }), async (c) => {
     const input = z.object({ owner: z.string().min(1).max(300), brief: briefSchema }).parse(await c.req.json());
     return c.json(service.create(input.owner, input.brief), 201);
   });
@@ -72,9 +72,11 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
     const wait = Math.min(LONG_POLL_MAX_SEC, Math.max(0, Number(c.req.query("wait") ?? 0) || 0));
     const until = Date.now() + wait * 1000;
     for (;;) {
+      // 연결이 끊긴 bridge에게 렌더를 넘기지 않는다(넘기면 세션 시간이 다 갈 때까지 멈춰 있다).
+      if (c.req.raw.signal.aborted) return c.body(null, 204);
       const ticket = service.claim(who.owner, bridge);
       if (ticket) return c.json(ticket);
-      if (Date.now() >= until || c.req.raw.signal.aborted) return c.body(null, 204);
+      if (Date.now() >= until) return c.body(null, 204);
       await new Promise((r) => setTimeout(r, 1000));
     }
   });

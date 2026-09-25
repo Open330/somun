@@ -20,12 +20,14 @@ const env = z.object({
   VIDEO_SESSION_TIMEOUT_SEC: z.coerce.number().int().min(60).max(3600).default(900),
   FFMPEG_PATH: z.string().optional(),
   CHROMIUM_PATH: z.string().optional(),
+  /** 모델이 쓴 스크립트를 돌리므로 기본은 켠다. 샌드박스를 쓸 수 없는 컨테이너에서만 false. */
+  CHROMIUM_SANDBOX: z.enum(["true", "false"]).default("true"),
 }).parse(process.env);
 
 const bridgeTokens = parseBridgeTokens(env.VIDEO_BRIDGE_TOKENS);
 if (bridgeTokens.some((b) => b.token.length < 16)) throw new Error("each bridge token must be at least 16 characters");
 
-const renderer = new Renderer({ ffmpegPath: env.FFMPEG_PATH, executablePath: env.CHROMIUM_PATH });
+const renderer = new Renderer({ ffmpegPath: env.FFMPEG_PATH, executablePath: env.CHROMIUM_PATH, sandbox: env.CHROMIUM_SANDBOX === "true" });
 const service = new VideoService(env.VIDEO_DATA_DIR, renderer, { model: env.VIDEO_DIRECTOR_MODEL, sessionTimeoutSec: env.VIDEO_SESSION_TIMEOUT_SEC });
 const app = videoServer(service, { serviceToken: env.VIDEO_SERVICE_TOKEN, bridgeTokens });
 

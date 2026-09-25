@@ -40,6 +40,8 @@ export class VideoError extends Error {
 
 export class VideoService {
   private readonly renders = new Map<string, RenderRecord>();
+  /** 지금 도구 호출(검사·렌더)이 돌고 있는 렌더. 한 세션의 도구 호출은 한 번에 하나만. */
+  private readonly busy = new Set<string>();
   private readonly dir: string;
 
   constructor(dataDir: string, private readonly renderer: RendererLike, private readonly opts: { model: string; sessionTimeoutSec: number; now?: () => number }) {
@@ -55,7 +57,10 @@ export class VideoService {
   }
 
   private now() { return this.opts.now?.() ?? Date.now(); }
+  /** 지워진(계정 삭제) 렌더는 진행 중이던 도구 호출이 끝나도 다시 쓰지 않는다. */
+  private alive(r: RenderRecord) { return this.renders.get(r.id) === r; }
   private save(r: RenderRecord) {
+    if (!this.alive(r)) return;
     r.updatedAt = this.now();
     const file = join(this.dir, `${r.id}.json`);
     writeFileSync(`${file}.tmp`, JSON.stringify(r));
@@ -112,6 +117,18 @@ export class VideoService {
     return { sessionId: next.session.id, renderId: next.id, token, system: directorSystem(), user: directorUser(next.brief), model: this.opts.model, timeoutSec: this.opts.sessionTimeoutSec };
   }
 
+  /** MCP 연결 확인(initialize, tools/list)용. 진행 중인 세션의 토큰인가. */
+  hasSession(token: string): boolean {
+    try { this.bySession(token); return true; } catch { return false; }
+  }
+
+  /** 도구 호출 하나를 이 렌더에 대해 한 번에 하나만 돌린다. */
+  private async exclusiveTool<T>(r: RenderRecord, fn: () => Promise<T>): Promise<T> {
+    if (this.busy.has(r.id)) throw new VideoError("another tool call for this video is still running; wait for it", 409);
+    this.busy.add(r.id);
+    try { return await fn(); } finally { this.busy.delete(r.id); }
+  }
+
   /** 세션 토큰 → 진행 중인 렌더. */
   private bySession(token: string): RenderRecord {
     const h = hash(token);
@@ -126,18 +143,25 @@ export class VideoService {
     const r = this.bySession(token);
     if (Buffer.byteLength(html) > MAX_SCENE_BYTES) throw new VideoError(`scene is larger than ${MAX_SCENE_BYTES} bytes`);
     if (r.scenes.length >= MAX_SCENES) throw new VideoError(`too many checks for one video (${MAX_SCENES}); simplify the scene`, 409);
-    r.phase = "Checking the scene";
-    this.save(r);
-    const ms = r.brief.durationSec * 1000;
-    const ins = await this.renderer.inspect(html, VIDEO_SIZE[r.brief.aspect], ms);
-    const problems = lintScene(ins.samples, ins.errors, r.brief.grounding, r.brief.bannedPhrases);
-    const scene: Scene = { id: `s${r.scenes.length + 1}`, clean: !problems.some(isBlocking) };
-    mkdirSync(join(this.dir, r.id), { recursive: true });
-    writeFileSync(this.sceneFile(r, scene.id), html);
-    r.scenes.push(scene);
-    r.phase = scene.clean ? "Scene passed the check" : "Fixing the scene";
-    this.save(r);
-    return { sceneId: scene.id, clean: scene.clean, problems, visible: ins.samples.map((s) => ({ t: s.t, text: s.text })), thumbnails: ins.thumbnails };
+    return this.exclusiveTool(r, async () => {
+      r.phase = "Checking the scene";
+      this.save(r);
+      const ms = r.brief.durationSec * 1000;
+      const ins = await this.renderer.inspect(html, VIDEO_SIZE[r.brief.aspect], ms).catch((err: Error) => {
+        if (this.alive(r) && r.status === "working") { r.phase = "Fixing the scene"; this.save(r); }
+        throw new VideoError(`the scene could not be checked: ${err.message.slice(0, 400)}`);
+      });
+      const problems = lintScene(ins.samples, ins.errors, r.brief.grounding, r.brief.bannedPhrases);
+      const scene: Scene = { id: `s${r.scenes.length + 1}`, clean: !problems.some(isBlocking) };
+      // 검사하는 동안 세션이 끝났거나 계정이 지워졌으면 아무것도 남기지 않는다.
+      if (!this.alive(r) || r.status !== "working") throw new VideoError(`render is ${this.alive(r) ? r.status : "gone"}`, 409);
+      mkdirSync(join(this.dir, r.id), { recursive: true });
+      writeFileSync(this.sceneFile(r, scene.id), html);
+      r.scenes.push(scene);
+      r.phase = scene.clean ? "Scene passed the check" : "Fixing the scene";
+      this.save(r);
+      return { sceneId: scene.id, clean: scene.clean, problems, visible: ins.samples.map((s) => ({ t: s.t, text: s.text })), thumbnails: ins.thumbnails };
+    });
   }
 
   /** 검사를 통과한 장면만 렌더한다. 통과하지 않은 장면을 모델이 억지로 내보낼 수 없다. */
@@ -146,24 +170,31 @@ export class VideoService {
     const scene = r.scenes.find((s) => s.id === sceneId);
     if (!scene) throw new VideoError(`unknown scene_id ${sceneId}`, 404);
     if (!scene.clean) throw new VideoError(`scene ${sceneId} has blocking problems; fix them and run check_scene again`, 409);
-    r.phase = "Rendering";
-    this.save(r);
-    const out = this.videoFile(r.id);
-    const html = readFileSync(this.sceneFile(r, sceneId), "utf8");
-    try {
-      await this.renderer.render(html, VIDEO_SIZE[r.brief.aspect], r.brief.durationSec * 1000, `${out}.part.mp4`, (f) => { r.phase = `Rendering ${Math.round(f * 100)}%`; });
-      renameSync(`${out}.part.mp4`, out);
-    } catch (err) {
-      rmSync(`${out}.part.mp4`, { force: true });
-      r.phase = "Render failed; fix the scene or try again";
+    return this.exclusiveTool(r, async () => {
+      r.phase = "Rendering";
       this.save(r);
-      throw err;
-    }
-    // 영상은 나왔지만 모델의 메모가 아직이다. bridge가 finish를 부르면 "Done"이 된다.
-    r.status = "done";
-    r.phase = "Rendered";
-    this.save(r);
-    return { seconds: r.brief.durationSec };
+      const out = this.videoFile(r.id);
+      const part = `${out}.part.mp4`;
+      const html = readFileSync(this.sceneFile(r, sceneId), "utf8");
+      try {
+        await this.renderer.render(html, VIDEO_SIZE[r.brief.aspect], r.brief.durationSec * 1000, part, (f) => { r.phase = `Rendering ${Math.round(f * 100)}%`; });
+      } catch (err) {
+        rmSync(part, { force: true });
+        if (this.alive(r) && r.status === "working") { r.phase = "Render failed; fix the scene or try again"; this.save(r); }
+        throw new VideoError(`render failed: ${(err as Error).message.slice(0, 400)}`);
+      }
+      // 렌더하는 동안 세션이 끝났거나(시간 초과, bridge 종료) 계정이 지워졌으면 결과를 버린다.
+      if (!this.alive(r) || r.status !== "working" || !r.session) {
+        rmSync(part, { force: true });
+        throw new VideoError(`render is ${this.alive(r) ? r.status : "gone"}`, 409);
+      }
+      renameSync(part, out);
+      // 영상은 나왔지만 모델의 메모가 아직이다. bridge가 finish를 부르면 "Done"이 된다.
+      r.status = "done";
+      r.phase = "Rendered";
+      this.save(r);
+      return { seconds: r.brief.durationSec };
+    });
   }
 
   /** bridge가 모델 실행을 마쳤다. 렌더 없이 끝났으면 실패로 남긴다. 세션 토큰은 여기서 버린다. */

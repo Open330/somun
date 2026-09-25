@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import pino from "pino";
 import { openDb, schema } from "../infra/db/index.js";
-import type { VideoClient } from "../infra/video.js";
+import { VideoServerError, type VideoClient } from "../infra/video.js";
 import type { Draft } from "../shared/types.js";
 import type { RenderView, VideoBrief } from "../shared/video.js";
 import { deleteAccount } from "./account.js";
@@ -88,6 +88,32 @@ describe("videos", () => {
     await expect(requestVideo(ctx, "a", cid, { durationSec: 10, aspect: "16:9" })).rejects.toThrow(GenerationConflictError);
     video.down = true;
     await expect(requestVideo(ctx, "b", cand("b"), { durationSec: 10, aspect: "16:9" })).rejects.toThrow(UnavailableError);
+  });
+
+  it("fits long scripts and banned phrase lists into the brief limits, and reports a rejected brief as a rejection", async () => {
+    const { ctx, video, cand, draft } = setup();
+    const cid = cand("a");
+    draft("a", cid, { channel: "blog", lang: "ko", status: "copied", title: "t", body: "가".repeat(5000) });
+    ctx.db.insert(schema.settings).values({ ownerId: "a", data: { bannedPhrases: ["ok", "x".repeat(200), ...Array.from({ length: 300 }, (_, i) => `p${i}`)] }, updatedAt: Date.now() }).run();
+    const { brief } = buildVideoBrief(ctx, "a", cid, { durationSec: 15, aspect: "16:9" });
+    expect(brief.script!.length).toBe(3000);
+    expect(brief.bannedPhrases.length).toBe(200);
+    expect(brief.bannedPhrases.every((p) => p.length <= 80)).toBe(true);
+    video.create = async () => { throw new VideoServerError(400, "video server → 400: invalid request"); };
+    const err = await requestVideo(ctx, "a", cid, { durationSec: 15, aspect: "16:9" }).then(() => new Error("resolved"), (e: Error) => e);
+    expect(err).not.toBeInstanceOf(UnavailableError);
+    expect(err.message).toMatch(/rejected/);
+  });
+
+  it("counts only videos that are still open on the video server toward the limit", async () => {
+    const { ctx, video, cand } = setup();
+    const a = cand("a");
+    await requestVideo(ctx, "a", a, { durationSec: 15, aspect: "16:9" });
+    await requestVideo(ctx, "a", a, { durationSec: 15, aspect: "16:9" });
+    // 둘 다 영상 서버에서는 이미 끝났다. 그 글감 화면을 열지 않아도 다음 요청이 막히면 안 된다.
+    video.views.set("r1", { id: "r1", status: "failed", phase: "", error: "x", createdAt: 1, updatedAt: 2 });
+    video.views.set("r2", { id: "r2", status: "done", phase: "Done", createdAt: 1, updatedAt: 2 });
+    await expect(requestVideo(ctx, "a", a, { durationSec: 15, aspect: "16:9" })).resolves.toMatchObject({ status: "queued" });
   });
 
   it("refreshes open videos from the video server and keeps the last state when it is down", async () => {

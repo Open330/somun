@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { VideoBrief } from "../shared/video.js";
+import { renderUnsettled, type VideoBrief } from "../shared/video.js";
 import type { Inspection } from "./renderer.js";
 import { isBlocking, lintScene } from "./scene-lint.js";
 import { VideoService, type RendererLike } from "./service.js";
@@ -25,7 +25,7 @@ function fakeRenderer(): RendererLike & { rendered: string[] } {
   };
 }
 
-const newService = (renderer = fakeRenderer(), now?: () => number) => new VideoService(mkdtempSync(join(tmpdir(), "somun-video-test-")), renderer, { model: "opus", sessionTimeoutSec: 600, now });
+const newService = (renderer: RendererLike = fakeRenderer(), now?: () => number) => new VideoService(mkdtempSync(join(tmpdir(), "somun-video-test-")), renderer, { model: "opus", sessionTimeoutSec: 600, now });
 
 describe("lintScene", () => {
   it("flags numbers outside the grounding, banned phrases, exclamation marks and errors, but only warns on overflow", () => {
@@ -106,6 +106,42 @@ describe("VideoService", () => {
     await svc.renderScene(ticket.token, (await svc.checkScene(ticket.token, `<p data-text="61"></p>`)).sceneId);
     now += 700_000;
     expect(svc.get(r.id)).toMatchObject({ status: "done", phase: "Done" });
+  });
+
+  it("discards a render that finishes after the session ended, instead of leaving it half done", async () => {
+    let release!: () => void;
+    const slow: RendererLike = { ...fakeRenderer(), async render(_h, _s, _m, out) { await new Promise<void>((r) => (release = r)); writeFileSync(out, "mp4"); } };
+    const svc = newService(slow);
+    const r = svc.create("a", brief());
+    const ticket = svc.claim("*", "b")!;
+    const scene = await svc.checkScene(ticket.token, `<p data-text="61"></p>`);
+    const rendering = svc.renderScene(ticket.token, scene.sceneId);
+    await new Promise((res) => setTimeout(res, 0));
+    // 같은 세션의 두 번째 도구 호출은 기다리지 않고 거절한다.
+    await expect(svc.checkScene(ticket.token, `<p data-text="61"></p>`)).rejects.toThrow(/still running/);
+    svc.finish(ticket.token, { error: "claude killed" });
+    release();
+    await expect(rendering).rejects.toThrow(/render is failed/);
+    const view = svc.get(r.id);
+    expect(view).toMatchObject({ status: "failed", error: "claude killed" });
+    expect(renderUnsettled(view)).toBe(false);
+    expect(() => svc.video(r.id)).toThrow(/not found/);
+  });
+
+  it("does not bring a removed render back when an in-flight render finishes", async () => {
+    let release!: () => void;
+    const slow: RendererLike = { ...fakeRenderer(), async render(_h, _s, _m, out) { await new Promise<void>((r) => (release = r)); writeFileSync(out, "mp4"); } };
+    const dir = mkdtempSync(join(tmpdir(), "somun-video-test-"));
+    const svc = new VideoService(dir, slow, { model: "opus", sessionTimeoutSec: 600 });
+    const r = svc.create("a", brief());
+    const ticket = svc.claim("*", "b")!;
+    const rendering = svc.renderScene(ticket.token, (await svc.checkScene(ticket.token, `<p data-text="61"></p>`)).sceneId);
+    await new Promise((res) => setTimeout(res, 0));
+    svc.remove(r.id);
+    release();
+    await expect(rendering).rejects.toThrow(/gone/);
+    expect(existsSync(join(dir, "renders", `${r.id}.json`))).toBe(false);
+    expect(existsSync(join(dir, "renders", `${r.id}.mp4`))).toBe(false);
   });
 
   it("marks sessions that were running during a restart as failed and removes renders", () => {

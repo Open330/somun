@@ -55,8 +55,11 @@ describe("video server", () => {
     const tools = await (await mcp(rpc("tools/list"))).json() as { result: { tools: { name: string }[] } };
     expect(tools.result.tools.map((t) => t.name)).toEqual(["check_scene", "render_video"]);
 
-    const denied = await (await mcp(rpc("tools/call", { name: "check_scene", arguments: { html: "<p>61</p>" } }), "not-a-session")).json() as { result: { isError: boolean } };
-    expect(denied.result.isError).toBe(true);
+    const denied = await (await mcp(rpc("tools/call", { name: "check_scene", arguments: { html: "<p>61</p>" } }), "not-a-session")).json() as { error: { code: number } };
+    expect(denied.error.code).toBe(-32001);
+    expect(((await (await mcp(rpc("tools/list"), "not-a-session")).json()) as { error?: unknown }).error).toBeDefined();
+    // 배치로 도구 호출을 여럿 실을 수 없다.
+    expect(((await (await mcp(JSON.stringify([JSON.parse(rpc("tools/list")), JSON.parse(rpc("ping", undefined, 2))]))).json()) as { error: { message: string } }).error.message).toMatch(/batch/);
     const check = await (await mcp(rpc("tools/call", { name: "check_scene", arguments: { html: "<p>61 releases</p>" } }))).json() as { result: { content: { type: string; text?: string }[] } };
     const summary = JSON.parse(check.result.content[0].text!) as { scene_id: string; renderable: boolean };
     expect(summary.renderable).toBe(true);
