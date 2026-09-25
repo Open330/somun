@@ -153,6 +153,29 @@ To register a GitHub App through the UI, set `SOMUN_ADMIN_OWNER_ID` to the admin
 
 Update and restart local workers together with the server: completion now requires a claim token. Claims expire after 10 minutes; abandoned jobs are reclaimed on the next poll, up to 3 attempts. Invalid results and explicit worker failures are not automatically retried. SQL migrations run on server startup, or manually with `npm run db:migrate`.
 
+### Short videos (experimental, local)
+
+A candidate can become a 10 to 20 second video (16:9 or 1:1). Three processes split the work:
+
+- **somun** builds a brief from the candidate's evidence, the draft you pick, and your voice, and follows the render.
+- **The video server** (`src/video`) queues renders, runs headless Chromium under a virtual clock, encodes with ffmpeg, and exposes two MCP tools: `check_scene` and `render_video`.
+- **The bridge** (`scripts/video-bridge.ts`) runs on your computer. It polls the video server and runs `claude -p` with only those two tools, billed to your Claude Code account. The server never connects to your machine.
+
+`check_scene` lints the text visible on screen like a draft (numbers not in the evidence, banned phrases, exclamation marks, script errors). `render_video` only accepts a scene that passed. Pages may load Google Fonts and nothing else.
+
+```bash
+npx playwright-core install chromium-headless-shell   # once; ffmpeg must be on PATH
+cat > .env.video <<EOF
+VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)
+VIDEO_BRIDGE_TOKENS=$(openssl rand -hex 24)
+EOF
+echo "VIDEO_BRIDGE_TOKEN=$(grep ^VIDEO_BRIDGE_TOKENS .env.video | cut -d= -f2)" >> .env.video
+npm run video-server                      # :8791 on 127.0.0.1
+npm run video-bridge                      # or: -- --claude "aas exec <profile> -- claude"
+```
+
+Then set `SOMUN_VIDEO_URL=http://127.0.0.1:8791` and `SOMUN_VIDEO_TOKEN` (the `VIDEO_SERVICE_TOKEN` value) for somun, and the **Short video** block appears on each candidate. For several accounts, give each bridge its own token: `VIDEO_BRIDGE_TOKENS=<ownerId>=<token>,...`.
+
 ## Deploy
 
 A single container. The API and the built web are served by the same Node process; the database is a file on a volume.

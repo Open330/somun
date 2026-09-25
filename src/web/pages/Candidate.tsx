@@ -9,6 +9,7 @@ import { GenerationStatus } from "../components/GenerationStatus";
 import { post, useResource } from "../lib/api";
 import DraftPanel from "./candidate/DraftPanel";
 import ProfileBlock from "./candidate/ProfileBlock";
+import VideoBlock from "./candidate/VideoBlock";
 import NotFound from "./NotFound";
 import { t } from "../i18n";
 
@@ -138,6 +139,7 @@ export default function Candidate() {
               drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
               busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
           )}
+          <VideoBlock cid={cid} repo={c.repo} drafts={data.drafts} />
         </section>
 
         <aside className="cand-side">

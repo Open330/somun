@@ -153,6 +153,29 @@ GitHub App을 웹에서 처음 등록하려면 `SOMUN_ADMIN_OWNER_ID`에 운영�
 
 로컬 워커는 서버와 같은 버전으로 업데이트한 후 재시작하세요. 완료 요청에 점유 토큰이 필요합니다. 점유는 10분 뒤 만료되며, 중단된 작업은 다음 폴링 때 최대 3회까지 재할당됩니다. 결과 형식 오류나 명시적 워커 실패는 자동 재시도하지 않습니다. 서버 시작 시 SQL 마이그레이션이 적용되며, 수동 적용은 `npm run db:migrate`입니다.
 
+### 짧은 영상 (실험, 로컬)
+
+글감 하나로 10~20초 영상(16:9 또는 1:1)을 만듭니다. 세 프로세스가 일을 나눕니다.
+
+- **somun**: 글감의 근거 사실, 고른 초안, 문체로 기획서를 만들고 렌더 상태를 따라갑니다.
+- **영상 서버**(`src/video`): 렌더 대기열, 가상 시계 아래의 헤드리스 Chromium, ffmpeg 인코딩, MCP 도구 두 개(`check_scene`, `render_video`)를 맡습니다.
+- **bridge**(`scripts/video-bridge.ts`): 사용자의 컴퓨터에서 돕니다. 영상 서버에서 작업을 받아 두 도구만 켠 `claude -p`를 실행하고, 비용은 사용자의 Claude Code 계정에서 나갑니다. 서버는 사용자의 컴퓨터로 연결하지 않습니다.
+
+`check_scene`은 화면에 보이는 글자를 초안처럼 검사합니다(근거에 없는 숫자, 금지 표현, 느낌표, 스크립트 오류). `render_video`는 검사를 통과한 장면만 받습니다. 페이지는 Google Fonts 말고는 아무것도 불러올 수 없습니다.
+
+```bash
+npx playwright-core install chromium-headless-shell   # 1회. ffmpeg가 PATH에 있어야 함
+cat > .env.video <<EOF
+VIDEO_SERVICE_TOKEN=$(openssl rand -hex 24)
+VIDEO_BRIDGE_TOKENS=$(openssl rand -hex 24)
+EOF
+echo "VIDEO_BRIDGE_TOKEN=$(grep ^VIDEO_BRIDGE_TOKENS .env.video | cut -d= -f2)" >> .env.video
+npm run video-server                      # 127.0.0.1:8791
+npm run video-bridge                      # 또는: -- --claude "aas exec <프로필> -- claude"
+```
+
+somun에 `SOMUN_VIDEO_URL=http://127.0.0.1:8791`과 `SOMUN_VIDEO_TOKEN`(`VIDEO_SERVICE_TOKEN` 값)을 설정하면 글감 화면에 **짧은 영상** 블록이 나타납니다. 계정이 여럿이면 bridge마다 토큰을 따로 줍니다: `VIDEO_BRIDGE_TOKENS=<ownerId>=<토큰>,...`.
+
 ## 배포
 
 컨테이너 하나. API와 빌드된 웹을 같은 Node 프로세스가 서빙하고, 데이터베이스는 볼륨의 파일 하나입니다.

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { ZodError } from "zod";
-import { ForbiddenError, GenerationConflictError, NotFoundError, type AppContext } from "../app/context.js";
+import { ForbiddenError, GenerationConflictError, NotFoundError, UnavailableError, type AppContext } from "../app/context.js";
 import { UnsafeUrlError } from "../infra/net.js";
 import { bodyLimit } from "hono/body-limit";
 import { authMiddleware, sessionRoutes, TicketStore } from "./auth.js";
@@ -30,6 +30,7 @@ export function createApp(ctx: AppContext, config: Config) {
     if (err instanceof GenerationConflictError) return c.json({ error: err.message }, 409);
     if (err instanceof NotFoundError) return c.json({ error: err.message }, 404);
     if (err instanceof ForbiddenError) return c.json({ error: err.message }, 403);
+    if (err instanceof UnavailableError) return c.json({ error: err.message }, 503);
     if (err instanceof UnsafeUrlError) return c.json({ error: `unsafe URL: ${err.message}` }, 400);
     ctx.log.error({ err: err.message, path: c.req.path }, "unhandled");
     return c.json({ error: "internal server error" }, 500);

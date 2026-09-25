@@ -27,6 +27,8 @@ import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
 import { TicketStore, type AuthVars } from "../auth.js";
+import { listVideos, requestVideo, videoEnabled, videoFile } from "../../app/videos.js";
+import { VIDEO_ASPECTS, VIDEO_DURATIONS } from "../../shared/video.js";
 
 const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
 const lang = z.string().min(2).max(8).regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
@@ -111,6 +113,21 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       : [queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: unique, instruction } })]).immediate();
     c.header("Location", `/api/jobs/status?candidateId=${cid}`); c.header("Retry-After", "5");
     return c.json({ started: "queued", jobs }, 202);
+  });
+
+  // videos: 글감 → 짧은 영상(영상 서버 + 사용자의 Claude Code)
+  app.get("/video", (c) => c.json({ enabled: videoEnabled(ctx) }));
+  app.get("/candidates/:id/videos", async (c) => c.json(await listVideos(ctx, c.get("ownerId"), id(c.req.param("id")))));
+  app.post("/candidates/:id/videos", async (c) => {
+    const i = await body(c, z.object({ durationSec: z.union([z.literal(VIDEO_DURATIONS[0]), z.literal(VIDEO_DURATIONS[1]), z.literal(VIDEO_DURATIONS[2])]), aspect: z.enum(VIDEO_ASPECTS), draftId: z.number().int().positive().optional() }));
+    return c.json(await requestVideo(ctx, c.get("ownerId"), id(c.req.param("id")), i), 202);
+  });
+  app.get("/videos/:id/file", async (c) => {
+    const res = await videoFile(ctx, c.get("ownerId"), id(c.req.param("id")), c.req.header("range"));
+    const headers = new Headers();
+    for (const h of ["content-type", "content-length", "content-range", "accept-ranges"]) { const v = res.headers.get(h); if (v) headers.set(h, v); }
+    headers.set("cache-control", "private, no-store");
+    return new Response(res.body, { status: res.status, headers });
   });
 
   // drafts

@@ -53,6 +53,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) throw new ApiError((data as { error?: string })?.error ?? `HTTP ${res.status}`, res.status);
   return data as T;
 }
+/** JSON이 아닌 응답(영상 파일)을 인증을 붙여 받는다. <video src>는 헤더를 못 붙이므로 받은 뒤 object URL로 쓴다. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetch(`/api${path}`, { headers: await authHeader(false) });
+  if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+  return res.blob();
+}
 export const post = <T>(path: string, body?: unknown) => api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const del = (path: string) => api<void>(path, { method: "DELETE" });

@@ -20,6 +20,7 @@
     "src/infra",
     "src/core",
     "src/shared",
+    "src/video",
     "scripts",
     "src/experiments"
   ],
