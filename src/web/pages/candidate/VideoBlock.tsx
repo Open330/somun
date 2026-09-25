@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Draft } from "@shared/types";
-import { DEFAULT_VIDEO_DURATION, renderUnsettled, VIDEO_ASPECTS, VIDEO_DURATIONS, type VideoAspect, type VideoItem } from "@shared/video";
+import { Link } from "react-router-dom";
+import { DEFAULT_VIDEO_DURATION, renderUnsettled, VIDEO_ASPECTS, VIDEO_DURATIONS, type VideoAspect, type VideoConfigView, type VideoItem } from "@shared/video";
 import { channelLabel, fmtDate } from "../../components/ui";
 import { apiBlob, post, useResource } from "../../lib/api";
 import { t } from "../../i18n";
@@ -47,7 +48,7 @@ function Player({ video, repo }: { video: VideoItem; repo: string }) {
 }
 
 export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: string; drafts: Draft[] }) {
-  const { data: cfg } = useResource<{ enabled: boolean }>("/video", []);
+  const { data: cfg, reload: reloadCfg } = useResource<VideoConfigView>("/video", []);
   const enabled = Boolean(cfg?.enabled);
   const { data: videos, reload } = useResource<VideoItem[]>(enabled ? `/candidates/${cid}/videos` : null, []);
   const [duration, setDuration] = useState<number>(DEFAULT_VIDEO_DURATION);
@@ -60,9 +61,9 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
   // 진행 중이거나 연출 메모를 기다리는 영상이 있으면 5초마다 상태를 다시 받는다(서버가 영상 서버에 물어 갱신한다).
   useEffect(() => {
     if (!open) return;
-    const timer = setInterval(reload, 5000);
+    const timer = setInterval(() => { reload(); reloadCfg(); }, 5000);
     return () => clearInterval(timer);
-  }, [open, reload]);
+  }, [open, reload, reloadCfg]);
 
   if (!enabled) return null;
   const usable = drafts.filter((d) => d.status !== "dropped").sort((a, b) => b.updatedAt - a.updatedAt);
@@ -92,6 +93,9 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
         </select>
         <button className="primary sm" disabled={busy} onClick={() => void start()}>{busy ? t("요청하는 중…") : t("영상 만들기")}</button>
       </div>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        {cfg?.bridgeConnected ? <><span className="badge ok">{t("bridge 연결됨")}</span> {t("요청하면 내 컴퓨터의 Claude Code가 바로 시작합니다.")}</> : <><span className="badge outline">{t("bridge 없음")}</span> {t("연결된 bridge가 없어 요청은 대기합니다.")} <Link to="/settings?tab=model">{t("설정 › 모델에서 토큰 만들기")}</Link></>}
+      </p>
       {error && <p className="small" style={{ color: "var(--danger)" }}>{error}</p>}
       {videos?.length ? (
         <div className="stack" style={{ marginTop: 12 }}>
@@ -101,7 +105,7 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
                 <span><span className={`badge ${v.status === "done" ? "ok" : v.status === "failed" ? "bad" : ""}`}>{renderUnsettled(v) && <span className="dot" />}{phaseText(v)}</span> <span className="muted">{t("{n}초", { n: v.durationSec })} · {v.aspect} · {v.lang.toUpperCase()}</span></span>
                 <span className="muted">{fmtDate(v.createdAt)}</span>
               </div>
-              {v.status === "queued" && <p className="tiny muted">{t("이 컴퓨터에서 bridge가 켜져 있어야 시작합니다: npm run video-bridge")}</p>}
+              {v.status === "queued" && !cfg?.bridgeConnected && <p className="tiny muted">{t("bridge가 연결되면 시작합니다.")}</p>}
               {v.status === "done" && <Player video={v} repo={repo} />}
               {v.note && <p className="tiny muted" style={{ whiteSpace: "pre-line" }}><b>{t("연출 메모")}</b> {v.note}</p>}
               {v.error && <p className="tiny" style={{ color: "var(--danger)" }}>{v.error}</p>}

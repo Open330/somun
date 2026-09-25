@@ -5,16 +5,17 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { sameSecret } from "../server/auth.js";
 import { VIDEO_ASPECTS, VIDEO_DURATIONS } from "../shared/video.js";
+import type { BridgeRegistry } from "./bridges.js";
 import { handleMcp } from "./mcp.js";
 import { MAX_SCENE_BYTES, VideoError, type VideoService } from "./service.js";
 
 /**
  * 영상 서버 HTTP. 세 종류의 호출자가 각자 다른 토큰을 쓴다.
  *  - somun 서버:  /v1/renders*          서비스 토큰(VIDEO_SERVICE_TOKEN)
- *  - 로컬 bridge: /v1/sessions/next     bridge 토큰(VIDEO_BRIDGE_TOKENS, 소유자별)
+ *  - 로컬 bridge: /v1/sessions/next     bridge 토큰(VIDEO_BRIDGE_TOKENS 또는 somun이 발급해 해시를 등록한 것)
  *  - 연출 모델:   /mcp, 세션 종료        세션 토큰(렌더 하나에만 유효)
  */
-export type VideoServerConfig = { serviceToken: string; bridgeTokens: { owner: string; token: string }[] };
+export type VideoServerConfig = { serviceToken: string; bridges: BridgeRegistry };
 
 /** "token" 또는 "owner=token,owner2=token2". 소유자 없이 쓴 토큰은 모든 렌더를 가져간다(단일 사용자). */
 export function parseBridgeTokens(raw: string): { owner: string; token: string }[] {
@@ -36,6 +37,14 @@ const briefSchema = z.object({
   script: z.string().max(3_000).optional(),
   voice: z.string().max(4_000),
   bannedPhrases: z.array(z.string().max(80)).max(200),
+  // 남의 페이지에서 온 값이라 모양을 좁게 제한한다: 색은 #rrggbb, 글꼴은 영문·숫자·공백.
+  brand: z.object({
+    accents: z.array(z.string().regex(/^#[0-9a-f]{6}$/)).max(3),
+    background: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
+    ink: z.string().regex(/^#[0-9a-f]{6}$/).optional(),
+    fonts: z.array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9 ]{0,39}$/)).max(3),
+    source: z.string().url().max(300),
+  }).optional(),
 });
 
 const bearer = (c: Context) => { const h = c.req.header("authorization") ?? ""; return h.startsWith("Bearer ") ? h.slice(7) : ""; };
@@ -64,9 +73,20 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
   service_.delete("/:id", (c) => { service.remove(c.req.param("id")); return c.body(null, 204); });
   app.route("/v1/renders", service_);
 
+  // somun → 사용자별 bridge 토큰(해시) 등록과 연결 상태
+  const tokens = new Hono();
+  tokens.use(async (c, next) => (sameSecret(bearer(c), config.serviceToken) ? next() : c.json({ error: "unauthorized" }, 401)));
+  tokens.put("/", bodyLimit({ maxSize: 1_000_000 }), async (c) => {
+    const input = z.object({ tokens: z.array(z.object({ id: z.string().min(1).max(64), owner: z.string().min(1).max(300), tokenHash: z.string().regex(/^[a-f0-9]{64}$/) })).max(10_000) }).parse(await c.req.json());
+    config.bridges.replace(input.tokens);
+    return c.body(null, 204);
+  });
+  tokens.get("/", (c) => c.json(config.bridges.status(c.req.query("owner") || undefined)));
+  app.route("/v1/bridge-tokens", tokens);
+
   // bridge → 다음 세션(롱 폴링). 없으면 204.
   app.get("/v1/sessions/next", async (c) => {
-    const who = config.bridgeTokens.find((b) => sameSecret(bearer(c), b.token));
+    const who = config.bridges.authenticate(bearer(c));
     if (!who) return c.json({ error: "unauthorized" }, 401);
     const bridge = (c.req.query("bridge") ?? "bridge").slice(0, 120);
     const wait = Math.min(LONG_POLL_MAX_SEC, Math.max(0, Number(c.req.query("wait") ?? 0) || 0));

@@ -1,4 +1,4 @@
-import type { RenderView, VideoBrief } from "../shared/video.js";
+import type { BridgeStatus, RenderView, VideoBrief } from "../shared/video.js";
 
 /**
  * 영상 서버 클라이언트. 주소는 운영자가 정한 설정값이라(사용자 입력이 아니다) 내부망 주소도 허용한다.
@@ -9,14 +9,15 @@ export class VideoServerError extends Error {
 }
 
 export class VideoClient {
-  constructor(private readonly baseUrl: string, private readonly token: string) {}
+  /** publicUrl: 사용자의 bridge가 접속할 주소(somun이 쓰는 내부 주소와 다를 수 있다). */
+  constructor(private readonly baseUrl: string, private readonly token: string, readonly publicUrl: string = baseUrl) {}
 
   /** 시간 제한은 응답 머리까지만. 본문(영상)은 브라우저로 흘려보내는 동안 끊지 않는다. */
   private async call(path: string, init: RequestInit = {}, timeoutMs = 10_000): Promise<Response> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(new Error(`video server did not answer within ${timeoutMs / 1000}s`)), timeoutMs);
     try {
-      return await fetch(`${this.baseUrl.replace(/\/$/, "")}/v1/renders${path}`, { ...init, signal: ctrl.signal, headers: { Authorization: `Bearer ${this.token}`, ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } });
+      return await fetch(`${this.baseUrl.replace(/\/$/, "")}${path.startsWith("/v1/") ? path : `/v1/renders${path}`}`, { ...init, signal: ctrl.signal, headers: { Authorization: `Bearer ${this.token}`, ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers } });
     } finally {
       clearTimeout(timer);
     }
@@ -43,5 +44,17 @@ export class VideoClient {
   async remove(renderId: string): Promise<void> {
     const res = await this.call(`/${encodeURIComponent(renderId)}`, { method: "DELETE" });
     if (!res.ok && res.status !== 404) throw new Error(`video server → ${res.status}`);
+  }
+
+  /** 유효한 bridge 토큰 해시 전체로 영상 서버의 목록을 바꾼다. */
+  async putBridgeTokens(tokens: { id: string; owner: string; tokenHash: string }[]): Promise<void> {
+    const res = await this.call("/v1/bridge-tokens", { method: "PUT", body: JSON.stringify({ tokens }) });
+    if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);
+  }
+
+  async bridgeStatus(owner: string): Promise<BridgeStatus[]> {
+    const res = await this.call(`/v1/bridge-tokens?owner=${encodeURIComponent(owner)}`, {}, 5_000);
+    if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);
+    return (await res.json()) as BridgeStatus[];
   }
 }

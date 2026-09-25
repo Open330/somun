@@ -2,6 +2,7 @@ import { eq, getTableName } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { removeVideoRenders } from "./videos.js";
+import { syncBridgeTokens } from "./bridges.js";
 
 /**
  * 계정 데이터 내보내기·삭제. 소유자(ownerId) 범위의 모든 표.
@@ -10,7 +11,7 @@ import { removeVideoRenders } from "./videos.js";
 const OWNED = [
   schema.sources, schema.signals, schema.candidates, schema.judgments, schema.drafts, schema.draftEdits, schema.examples,
   schema.publications, schema.metricSnapshots, schema.feedback, schema.settings, schema.llmJobs, schema.githubInstallations,
-  schema.repoProfiles, schema.changeLedger, schema.guideSuggestions, schema.videos,
+  schema.repoProfiles, schema.changeLedger, schema.guideSuggestions, schema.videos, schema.bridgeTokens,
 ] as const;
 
 export function exportAccount(ctx: AppContext, ownerId: string): Record<string, unknown> {
@@ -36,5 +37,6 @@ export function deleteAccount(ctx: AppContext, ownerId: string): Record<string, 
   ctx.log.info({ ownerId, counts }, "account deleted");
   // 영상 파일은 영상 서버에 있다. 행을 지운 뒤 따로 지운다.
   void removeVideoRenders(ctx, renders);
+  if (counts.bridge_tokens) void syncBridgeTokens(ctx).catch((err: Error) => ctx.log.warn({ err: err.message }, "bridge token sync failed"));
   return counts;
 }

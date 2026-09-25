@@ -29,6 +29,8 @@ const schema = z.object({
   /** 영상 서버(src/video). 둘 다 있어야 글감 화면에 "영상 만들기"가 보인다. */
   SOMUN_VIDEO_URL: z.string().url().optional(),
   SOMUN_VIDEO_TOKEN: z.string().min(16).optional(),
+  /** 사용자의 bridge가 접속할 영상 서버 주소. somun이 내부 주소로 붙을 때 따로 정한다. 없으면 SOMUN_VIDEO_URL. */
+  SOMUN_VIDEO_PUBLIC_URL: z.string().url().optional(),
 });
 
 export type Config = z.infer<typeof schema> & { dbFile: string; anonymous: boolean };

@@ -32,6 +32,8 @@ export type VideoBrief = {
   /** 문체 지침(문체 프리셋 + 사용자 지침). */
   voice: string;
   bannedPhrases: string[];
+  /** 저장소 홈페이지에서 읽은 색·글꼴. 색 코드와 글꼴 이름만 담긴다. */
+  brand?: { accents: string[]; background?: string; ink?: string; fonts: string[]; source: string };
 };
 
 export type RenderStatus = "queued" | "working" | "done" | "failed";
@@ -67,3 +69,12 @@ export type VideoItem = {
   createdAt: number;
   updatedAt: number;
 };
+
+/** 영상 서버가 아는 bridge 연결 상태. */
+export type BridgeStatus = { id: string; owner: string; lastSeenAt?: number; connected: boolean };
+
+/** somun 설정 화면의 bridge 토큰 한 줄. */
+export type BridgeTokenView = { id: string; label: string; createdAt: number; lastSeenAt?: number; connected: boolean };
+
+/** GET /api/video: 영상 기능 켜짐, bridge가 접속할 주소, 지금 연결된 bridge가 있는가. */
+export type VideoConfigView = { enabled: boolean; bridgeUrl?: string; bridgeConnected?: boolean };

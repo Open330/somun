@@ -7,6 +7,7 @@ import { channelLabel, CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast,
 import { api, patch, post, useResource } from "../lib/api";
 import { dateLocale, getLocale, t } from "../i18n";
 import { tr } from "../i18n/rich";
+import VideoBridges from "./VideoBridges";
 
 type ModelForm = { provider: "gemini" | "anthropic" | "openai" | "local-agent"; model: string; draftModel: string; apiKey: string; baseUrl: string; agentCli: "claude" | "codex" };
 const modelForm = (settings: SettingsView): ModelForm => ({ provider: settings.llm.provider, model: settings.llm.model ?? "", draftModel: settings.llm.draftModel ?? "", apiKey: "", baseUrl: settings.llm.baseUrl ?? "", agentCli: settings.llm.agentCli ?? "claude" });
@@ -180,6 +181,7 @@ export default function Settings() {
               {settings.llm.apiKeySet && <button className="danger" onClick={async () => { if (await update({ llm: { provider: llm.provider, model: llm.model || undefined, draftModel: llm.draftModel || undefined, agentCli: llm.agentCli }, keepApiKey: false })) { setLlm(null); showToast(t("저장된 키를 삭제했습니다.")); } }}>{t("저장된 키 삭제")}</button>}
             </div>
           </div>
+          <VideoBridges showToast={showToast} />
           {llm.provider === "gemini" && (keyStatus?.length ?? 0) > 0 && (
             <div className="card small">
               <h3>{t("서버 키 풀")}</h3>
