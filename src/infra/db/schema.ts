@@ -266,3 +266,24 @@ export const guideSuggestions = sqliteTable("guide_suggestions", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("guide_sugg_owner_status").on(t.ownerId, t.status)]);
+
+/**
+ * 글감에서 만든 영상. 영상 파일은 영상 서버(src/video)가 갖고, 여기에는 렌더 id와 마지막으로 본 상태를 둔다.
+ * 진행 중인 행은 조회할 때 영상 서버에서 상태를 새로 받는다.
+ */
+export const videos = sqliteTable("videos", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerId: text("owner_id").notNull(),
+  candidateId: integer("candidate_id").notNull(),
+  draftId: integer("draft_id"),
+  renderId: text("render_id").notNull(),
+  lang: text("lang").notNull(),
+  durationSec: integer("duration_sec").notNull(),
+  aspect: text("aspect").notNull(),
+  status: text("status").notNull(),
+  phase: text("phase").notNull().default(""),
+  note: text("note"),
+  error: text("error"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("videos_owner_candidate").on(t.ownerId, t.candidateId), uniqueIndex("videos_render").on(t.renderId)]);

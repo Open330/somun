@@ -25,7 +25,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
       try {
         expect(db.select().from(schema.settings).get()?.ownerId).toBe("owner");
         expect(db.select().from(schema.llmJobs).get()).toMatchObject({ status: "pending", runner: null, claimToken: null, attempts: 0, executor: "local", continuation: null });
-        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 12 });
+        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 13 });
         expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
         expect(db.$client.pragma("foreign_key_check")).toEqual([]);
       } finally { db.$client.close(); }

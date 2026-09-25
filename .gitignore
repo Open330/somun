@@ -3,6 +3,7 @@ dist
 data
 .env
 .env.local
+.env.video
 .DS_Store
 
 # Raw experiment prompts and outputs stay local unless explicitly selected.

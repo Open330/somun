@@ -26,6 +26,9 @@ const schema = z.object({
   JIUN_API_URL: z.string().url().default("https://api.jiun.dev"),
   JIUN_USAGE_SERVICE_ID: z.string().default("somun"),
   JIUN_USAGE_KEY: z.string().optional(),
+  /** 영상 서버(src/video). 둘 다 있어야 글감 화면에 "영상 만들기"가 보인다. */
+  SOMUN_VIDEO_URL: z.string().url().optional(),
+  SOMUN_VIDEO_TOKEN: z.string().min(16).optional(),
 });
 
 export type Config = z.infer<typeof schema> & { dbFile: string; anonymous: boolean };

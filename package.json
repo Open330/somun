@@ -23,6 +23,8 @@
     "seed": "tsx scripts/seed.ts",
     "push": "tsx scripts/push-sessions.ts",
     "agent-worker": "tsx scripts/agent-worker.ts",
+    "video-server": "tsx --env-file-if-exists=.env.video src/video/main.ts",
+    "video-bridge": "tsx --env-file-if-exists=.env.video scripts/video-bridge.ts",
     "usage:outbox": "tsx --env-file-if-exists=.env scripts/usage-outbox.ts",
     "db:backup": "tsx --env-file-if-exists=.env scripts/backup-db.ts",
     "experiment": "tsx --env-file-if-exists=.env scripts/experiments.ts"
@@ -36,6 +38,7 @@
     "hono": "^4.9.0",
     "jose": "^6.1.0",
     "pino": "^9.9.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.0",

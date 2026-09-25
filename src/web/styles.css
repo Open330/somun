@@ -597,3 +597,8 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 .sidebar .who-locale { padding: 4px 10px 8px; }
 .topbar .mobile-locale { display: none; }
 @media (max-width: 860px) { .topbar .mobile-locale { display: inline-flex; } }
+
+/* 짧은 영상 */
+.video-block { margin-top: 16px; }
+.video-item { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.video-frame { width: 100%; max-width: 640px; border-radius: var(--radius-sm); background: var(--surface-2); display: block; }

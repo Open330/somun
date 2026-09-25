@@ -4,6 +4,7 @@ import type { Logger } from "../infra/logger.js";
 import type { ChangeEvent } from "../shared/types.js";
 import type { UsageReporter } from "../infra/usage.js";
 import type { SecretBox } from "../infra/secrets.js";
+import type { VideoClient } from "../infra/video.js";
 
 /** 유스케이스가 받는 실행 문맥. HTTP·크론·스크립트 어디서 부르든 같다. */
 export type AppContext = {
@@ -18,6 +19,8 @@ export type AppContext = {
     trustedOwners?: string[];
     /** DB에 저장하는 비밀값 암호화. 없으면 평문. */
     secrets?: SecretBox;
+    /** 영상 서버. 없으면 영상 기능이 꺼진다. */
+    video?: VideoClient;
   };
   bus: EventEmitter;
   usage: UsageReporter;
@@ -42,3 +45,6 @@ export class GenerationConflictError extends Error {}
 
 /** 인증은 됐지만 이 작업을 할 권한이 없다(403). */
 export class ForbiddenError extends Error {}
+
+/** 바깥 서비스(영상 서버)에 닿지 못했다(503). */
+export class UnavailableError extends Error {}
