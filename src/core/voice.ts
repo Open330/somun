@@ -50,6 +50,17 @@ export const VOICE_PRESETS: VoicePreset[] = [
     },
   },
   {
+    id: "friendly",
+    name: "친근하게",
+    description: "X·Threads에 올리기 좋은 말투. 해요체, 짧은 문장, 겪은 일 하나로 시작.",
+    ko: "친구에게 말하듯 해요체('했어요', '돼요')로 씁니다. 1인칭으로, 직접 겪은 불편 하나로 시작해 그래서 무엇을 만들었고 지금 무엇이 되는지 짧은 문장으로 이어 씁니다. 한 문장에 한 가지만 말합니다. 편한 말투여도 숫자와 사실은 근거 그대로 쓰고, 느낌표·이모지·과장 표현은 쓰지 않습니다. 아직 안 되는 것 하나는 솔직하게 덧붙입니다.",
+    en: "Casual and conversational, like telling a friend. First person, contractions are fine. Open with one small frustration you actually had, then what you made and what it does now, in short sentences. Keep numbers and facts exactly as given. No exclamation marks, no emoji, no hype. Mention one thing that doesn't work yet, plainly.",
+    sample: {
+      ko: "저장소가 많아지니까 어디에 스타가 붙었는지 자꾸 놓치더라고요. 그래서 repopulse를 만들었어요.\n\n0.4.0부터는 조직 저장소도 같이 봐요. 주간 집계를 캐시해 둬서 두 번째 실행부터는 API를 아예 안 불러요.\n\n아직 GitHub만 돼요. GitLab은 다음 차례예요. https://github.com/example/repopulse",
+      en: "I kept losing track of which repos were getting stars, so I made repopulse.\n\n0.4.0 looks at your org repos too. Weekly counts are cached, so the second run doesn't call the API at all.\n\nGitHub only for now. GitLab is next. https://github.com/example/repopulse",
+    },
+  },
+  {
     id: "terse",
     name: "한 줄씩",
     description: "문제 한 줄, 해결 한 줄, 링크. 가장 짧다.",
