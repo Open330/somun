@@ -11,6 +11,11 @@ describe("trackLinks", () => {
       .toBe("https://www.somun.jiun.dev/docs?a=1&utm_source=linkedin&utm_medium=social&utm_campaign=somun");
   });
 
+  it("stops at Korean particles glued to a link", () => {
+    expect(trackLinks("https://somun.jiun.dev/에서 써 보세요", { channel: "x", homepage }))
+      .toBe("https://somun.jiun.dev/?utm_source=x&utm_medium=social&utm_campaign=somun에서 써 보세요");
+  });
+
   it("leaves GitHub, other hosts, and already-tagged links alone", () => {
     const text = "https://github.com/Open330/somun https://example.com https://somun.jiun.dev/?utm_source=mine";
     expect(trackLinks(text, { channel: "x", homepage })).toBe(text);

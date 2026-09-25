@@ -9,7 +9,8 @@ import type { Channel } from "./channels.js";
  */
 export const TRACKED_CHANNELS: readonly Channel[] = ["x", "threads", "linkedin"];
 
-const URL_RE = /https?:\/\/[^\s<>()"'`]+/g;
+// ASCII만 링크로 본다. 한국어 글은 "…/에서"처럼 조사가 링크에 붙어 오는데, 그걸 링크로 읽으면 인코딩돼 문장이 깨진다.
+const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&*+,;=%]+/g;
 /** 문장 끝 구두점은 링크가 아니다. */
 const TRAILING = /[.,;:!?]+$/;
 
