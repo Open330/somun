@@ -146,3 +146,10 @@ it("compares numbers with attached units the same as spaced ones", () => {
   expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150"]);
   expect(unsupportedNumbers("3x faster", "3x faster builds")).toEqual([]);
 });
+
+it("asks LinkedIn posts to come in paragraphs", () => {
+  const wall = lintDraft("linkedin", undefined, "One long block https://somun.jiun.dev");
+  expect(wall.find((r) => r.rule === "paragraphs")?.ok).toBe(false);
+  const split = lintDraft("linkedin", undefined, "Hook.\n\nWhat it is.\n\nHow it works.\n\nhttps://somun.jiun.dev");
+  expect(split.find((r) => r.rule === "paragraphs")?.ok).toBe(true);
+});

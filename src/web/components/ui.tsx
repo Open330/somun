@@ -96,7 +96,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
   if (!lint.length) return <span className="badge outline">{t("문장 점검 전")}</span>;
   const bad = lint.filter((l) => !l.ok);
   if (bad.length === 0) return <span className="badge ok" title={t("길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.")}>{t("형식 점검 통과")}</span>;
-  const label: Record<string, string> = { banned_phrases: t("금지 표현"), no_emoji_bullets: t("이모지 목록"), has_number: t("숫자 없음"), has_limitation: t("한계 없음"), has_number_or_limit: t("숫자·한계 없음"), has_link: t("링크 없음"), no_exclamation: t("감탄부호"), length: t("길이 초과"), title_length: t("제목 길이"), no_vote_request: t("투표 요청"), no_placeholder: t("빈 숫자"), repo_name: t("이름 왜곡"), no_invented_limit: t("한계 확인"), numbers_need_review: t("수치 확인") };
+  const label: Record<string, string> = { banned_phrases: t("금지 표현"), no_emoji_bullets: t("이모지 목록"), has_number: t("숫자 없음"), has_limitation: t("한계 없음"), has_number_or_limit: t("숫자·한계 없음"), has_link: t("링크 없음"), no_exclamation: t("감탄부호"), length: t("길이 초과"), title_length: t("제목 길이"), no_vote_request: t("투표 요청"), no_placeholder: t("빈 숫자"), repo_name: t("이름 왜곡"), no_invented_limit: t("한계 확인"), numbers_need_review: t("수치 확인"), paragraphs: t("문단") };
   return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={lintDetail(l)}>{t(label[l.rule] ?? l.rule)}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
 }
 

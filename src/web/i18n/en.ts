@@ -775,4 +775,5 @@ export const en: Record<string, string> = {
   "점검하지 못했습니다.": "Couldn't run the check.",
   "{url}을 열지 못했습니다.": "Couldn't open {url}.",
   "GitHub 저장소 페이지는 링크 미리보기가 이미 갖춰져 있습니다.": "GitHub repository pages already have link previews.",
+  "문단": "Paragraphs",
 };

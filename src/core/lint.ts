@@ -94,6 +94,12 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "has_link", ok: LINK.test(body) });
   }
 
+  // LinkedIn은 접힘선 위 한 줄 뒤에 3~5문단(채널 규칙). 한 덩어리 글은 모바일에서 읽히지 않는다.
+  if (channel === "linkedin") {
+    const paragraphs = body.split(/\n\s*\n/).filter((p) => p.trim()).length;
+    results.push({ rule: "paragraphs", ok: paragraphs >= 3 && paragraphs <= 7, detail: say(`문단 ${paragraphs}개. 3~5문단으로 나눠 주세요.`, `${paragraphs} paragraph(s). Split into 3-5 paragraphs.`) });
+  }
+
   if (channel === "show_hn" || channel === "x") {
     results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(body) });
   }

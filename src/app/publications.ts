@@ -7,6 +7,12 @@ import type { PerformanceSummary, Channel, PublicationWithMetrics } from "../sha
 import { getCandidateRow, toPublication } from "./candidates.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
 
+/** 이 저장소의 글을 한 번이라도 올렸는가. 없으면 다음 글은 첫 소개다. */
+export function hasPublication(ctx: AppContext, ownerId: string, repo: string): boolean {
+  return Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).get());
+}
+
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
   if (input.draftId !== undefined) {

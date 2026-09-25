@@ -14,6 +14,8 @@ export type EvidenceLike = {
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[];
   milestones?: { metric: string; threshold: number; at: number }[];
+  /** README가 실험·로컬 전용으로 표시한 기능. 지금 쓸 수 있는 것처럼 쓰지 않는다. */
+  experimental?: string[];
 };
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
@@ -54,6 +56,7 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     e.npmPackage ? `npm: ${e.npmPackage}, downloads last month: ${e.npmMonthlyDownloads}` : "",
     e.demoAsset ? `demo asset in README: ${e.demoAsset}` : "demo asset: none found in README",
     e.limitations?.length ? `limitations (from README):\n- ${e.limitations.join("\n- ")}` : profile?.limitations.length ? "" : "limitations: none stated in README",
+    e.experimental?.length ? `not generally available (README marks these experimental or local-only; never present them as something readers can use now):\n- ${e.experimental.join("\n- ")}` : "",
     e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}` : "\n## Digest: (none yet)",
     `\n## Numbers you may use (verbatim, nothing else)\n${numbersLine(e)}`,
   ].filter(Boolean).join("\n");
@@ -117,7 +120,8 @@ Also collect limitations: beta notices, unsupported platforms, "not yet" items, 
 Each highlight is one plain sentence with no adjectives. Never invent numbers. If the raw material contains a number, keep it verbatim. If nothing is worth telling, return an empty list.
 Write highlights in the same language as most of the raw material (English if mixed).
 If a profile is given, it is the baseline: never restate what the project is as a highlight. Only what changed relative to it.
-If an "Already told" list is given, drop any highlight that says the same thing in other words.`,
+If an "Already told" list is given, drop any highlight that says the same thing in other words.
+Drop highlights about features listed under "not generally available": readers cannot use them yet.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
       ctx.alreadyTold?.length ? `\n## Already told (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
@@ -144,7 +148,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -160,9 +164,17 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in ${ctx.locale === "en" ? "English" : "Korean"}, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", feedbackText].join("\n"),
   };
 }
+
+/** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
+const INTRODUCTION_JUDGE = `## First introduction
+Nothing from this repository has been announced yet (no registered posts). Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
+- runnable: can a reader use it today from the homepage or repo?
+- novelty: the project itself is new to readers.
+- audience: who it is for, from the profile.
+The angle should introduce the project: what it is, who it is for, how it works. Recent changes are supporting detail at most.`;
 
 export const DRAFT_SCHEMA = {
   type: "object",
@@ -171,10 +183,12 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
-export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[] };
+export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
-export function draftCoverageGuide(c: CandidateLike, channel: Channel): string {
+export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
+  // 첫 소개는 변경 목록이 아니다. 목록을 요구하면 소개 뒤에 변경이 줄줄이 붙는다(도그푸딩에서 확인).
+  if (introduction) return "## First introduction\nNothing from this repository has been announced before. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows what the project does today.";
   const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
   if (!highlights.length) return "";
   if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
@@ -224,7 +238,7 @@ Hard rules:
       factsBlock(c, opts.profile),
       "",
       exampleText,
-      draftCoverageGuide(c, channel),
+      draftCoverageGuide(c, channel, opts.introduction),
     ].filter((l) => l !== undefined).join("\n"),
   };
 }

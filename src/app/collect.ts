@@ -62,6 +62,13 @@ export function limitationsFrom(readme: string): string[] {
   return notes.slice(0, 5);
 }
 
+/** README가 실험·로컬 전용으로 표시한 절 제목. 운영에서 꺼 둔 기능을 초안이 지금 쓸 수 있는 것처럼 알리지 않게 한다. */
+export function experimentalFrom(readme: string): string[] {
+  // 명시적인 표지만 본다. "Local development", "Preview"(스크린샷) 같은 평범한 절은 실험 기능이 아니다.
+  const MARK = /\b(experimental|alpha|wip|local[- ]only)\b|실험|로컬 전용/i;
+  return [...readme.matchAll(/^#{1,4}\s+(.+?)\s*#*\s*$/gm)].map((m) => m[1].replace(/[`*_]/g, "").trim()).filter((h) => MARK.test(h)).slice(0, 5);
+}
+
 /** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
 export const PROFILE_BUDGET = 25;
 /** local-agent 모드의 상한. 워커가 CLI를 하나씩 돌리므로 작게 둔다. */
@@ -164,7 +171,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, 3000) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
-        npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const,
+        npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
         readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), commitSubjects,
       };
 
