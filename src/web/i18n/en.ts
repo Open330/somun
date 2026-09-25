@@ -677,6 +677,8 @@ export const en: Record<string, string> = {
   "짧게 알리고 독자에게 하나를 묻는다. 피드백을 받는 글에 맞다.": "Announce briefly and ask the reader one thing. Suits posts seeking feedback.",
   "제품 공지": "Product announcement",
   "독자가 얻는 것부터. 이제 되는 것과 아직 안 되는 것을 나란히.": "Start with what the reader gets. What works now and what doesn't yet, side by side.",
+  "친근하게": "Friendly",
+  "X·Threads에 올리기 좋은 말투. 해요체, 짧은 문장, 겪은 일 하나로 시작.": "A tone that fits X and Threads. Casual, short sentences, opens with something you ran into.",
   "한 줄씩": "One line each",
   "문제 한 줄, 해결 한 줄, 링크. 가장 짧다.": "One line for the problem, one for the fix, and a link. The shortest.",
   "이번 주 스타가 붙은 저장소를 터미널에서 보여주는 CLI (가상의 프로젝트)": "A CLI that shows repositories that got stars this week in the terminal (fictional project)",
