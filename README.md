@@ -4,9 +4,9 @@
 
 <img src="docs/brand/lockup.png" alt="somun" width="420" />
 
-**PR for developers who'd rather build than announce.**
+**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**
 
-<sub>*somun* (소문) is Korean for "word of mouth". The tool spreads the word so you don't have to.</sub>
+<sub>*somun* (소문) is Korean for "word of mouth". Try it at <a href="https://somun.jiun.dev">somun.jiun.dev</a>.</sub>
 
 <br />
 
@@ -21,9 +21,9 @@
 
 <br />
 
-You ship every day. Nobody hears about it.
+You built a lot. Explaining it is the hard part.
 
-somun watches your repos, decides when something is actually worth telling, and hands you a draft for each channel — X, Threads, LinkedIn, Show HN, GeekNews — that you review, copy, and post yourself. Every edit you make teaches it your voice. Every post you register gets measured.
+somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Every fact comes from your actual work. You review, copy, and post it yourself. Every edit you make teaches it your voice. Every post you register gets measured.
 
 It never posts for you. It never writes from thin air. It never says "excited to announce".
 
