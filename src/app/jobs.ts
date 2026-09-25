@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { schema } from "../infra/db/index.js";
 import { SIDE_JOB_KINDS, type Channel, type ChangeEvent, type GenerationKind, type Job, type JobKind, type JobProgress } from "../shared/types.js";
@@ -117,7 +117,28 @@ export function generationStatus(ctx: AppContext, ownerId: string, candidateId?:
   recoverExpired(ctx, ownerId, Date.now());
   const rows = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.ownerId, ownerId), ne(schema.llmJobs.kind, "lesson"), candidateId === undefined ? undefined : eq(schema.llmJobs.candidateId, candidateId))).orderBy(sql`${schema.llmJobs.id} desc`).limit(200).all();
   const seen = new Set<string>();
-  return rows.filter((r) => { const key = `${r.candidateId}:${r.kind}:${r.channel}:${r.lang}:${r.meta?.repo ?? ""}`; if (seen.has(key)) return false; seen.add(key); return true; }).map((r) => ({ id: r.id, candidateId: r.candidateId, repo: r.meta?.repo, kind: r.kind as JobKind, channel: (r.channel ?? undefined) as Channel | undefined, lang: r.lang ?? undefined, executor: r.executor as "local" | "server", status: r.status as JobProgress["status"], error: r.error ?? undefined, createdAt: r.createdAt, finishedAt: r.finishedAt ?? undefined }));
+  return rows.filter((r) => { const key = `${r.candidateId}:${r.kind}:${r.channel}:${r.lang}:${r.meta?.repo ?? ""}`; if (seen.has(key)) return false; seen.add(key); return true; })
+    .filter((r) => !(r.status === "failed" && supersededAfterFailure(ctx, r))).map((r) => ({ id: r.id, candidateId: r.candidateId, repo: r.meta?.repo, kind: r.kind as JobKind, channel: (r.channel ?? undefined) as Channel | undefined, lang: r.lang ?? undefined, executor: r.executor as "local" | "server", status: r.status as JobProgress["status"], error: r.error ?? undefined, createdAt: r.createdAt, finishedAt: r.finishedAt ?? undefined }));
+}
+
+/**
+ * 실패 뒤에 같은 결과물이 다른 경로(다른 모델, 서버 생성, 다시 쓰기)로 새로 생겼으면 그 실패는 더 볼 필요가 없다.
+ * 가장 최근 작업만 보여 주므로, 작업 기록을 남기지 않는 경로로 만든 결과가 오래된 실패를 가리지 못하던 문제를 막는다.
+ */
+function supersededAfterFailure(ctx: AppContext, job: typeof schema.llmJobs.$inferSelect): boolean {
+  // 실패가 끝난 뒤에 생긴 것만 친다. 실패한 그 작업이 남긴 흔적(빈 다이제스트의 highlightsAt 등)은 제외.
+  const since = job.finishedAt ?? job.createdAt;
+  if (job.kind === "draft" && job.channel && job.lang) {
+    return Boolean(ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, job.ownerId), eq(schema.drafts.candidateId, job.candidateId), eq(schema.drafts.channel, job.channel), eq(schema.drafts.lang, job.lang), gt(schema.drafts.createdAt, since))).get());
+  }
+  if (job.kind === "judge") {
+    return Boolean(ctx.db.select({ id: schema.judgments.id }).from(schema.judgments).where(and(eq(schema.judgments.candidateId, job.candidateId), gt(schema.judgments.createdAt, since))).get());
+  }
+  if (job.kind === "digest") {
+    const c = ctx.db.select({ evidence: schema.candidates.evidence }).from(schema.candidates).where(eq(schema.candidates.id, job.candidateId)).get();
+    return ((c?.evidence as { highlightsAt?: number } | undefined)?.highlightsAt ?? 0) > since;
+  }
+  return false;
 }
 
 export function retryGeneration(ctx: AppContext, ownerId: string, id: number): number {
