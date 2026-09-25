@@ -17,6 +17,12 @@
 
 **English** · [한국어](README.ko.md)
 
+<br />
+
+<img src="docs/demo.gif" alt="somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews" width="860" />
+
+<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>
+
 </div>
 
 <br />
