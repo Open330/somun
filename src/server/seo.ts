@@ -16,8 +16,8 @@ const attr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").rep
 
 export function seoRoutes(app: Hono, config: Config) {
   const base = config.SOMUN_PUBLIC_URL?.replace(/\/+$/, "");
-  let template: string | undefined;
-  const indexHtml = () => (template ??= readFileSync(join(config.WEB_DIST, "index.html"), "utf8"));
+  // 매번 읽는다. 서버를 띄운 채 웹만 다시 빌드하면(LAN 테스트) 해시가 바뀐 자산을 가리켜야 한다.
+  const indexHtml = (): string | undefined => { try { return readFileSync(join(config.WEB_DIST, "index.html"), "utf8"); } catch { return undefined; } };
 
   app.get("/robots.txt", (c) => c.text(base
     ? `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${base}/sitemap.xml\n`
@@ -30,8 +30,9 @@ export function seoRoutes(app: Hono, config: Config) {
   });
 
   /** SPA의 index.html. 첫 화면에는 정규 주소·공유 이미지·소유 확인 태그를, 나머지에는 noindex를 붙인다. */
-  return (path: string): string => {
+  return (path: string): string | undefined => {
     const html = indexHtml();
+    if (html === undefined) return undefined;
     const home = path === "/";
     const head: string[] = [];
     if (!home) head.push(`<meta name="robots" content="noindex" />`);

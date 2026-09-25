@@ -60,4 +60,13 @@ describe("search and link previews", () => {
     expect(inner).not.toContain("canonical");
     expect(inner).not.toContain("site-verification");
   });
+
+  it("serves a rebuilt index.html without a restart and 404s when the web build is missing", async () => {
+    const app = make();
+    writeFileSync(join(webDir, "index.html"), INDEX.replace("somun", "rebuilt"));
+    expect(await (await app.request("/")).text()).toContain("rebuilt");
+    rmSync(join(webDir, "index.html"));
+    expect((await app.request("/")).status).toBe(404);
+    expect((await app.request("/settings")).status).toBe(404);
+  });
 });

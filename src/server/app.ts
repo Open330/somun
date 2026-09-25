@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { ZodError } from "zod";
@@ -38,9 +38,10 @@ export function createApp(ctx: AppContext, config: Config) {
   });
   // 정적 웹 (빌드 결과). 첫 화면과 SPA 폴백은 검색용 머리말을 붙여 내려준다.
   const page = seoRoutes(app, config);
-  app.get("/", (c) => c.html(page("/")));
+  const html = (c: Context) => { const body = page(c.req.path); return body === undefined ? c.notFound() : c.html(body); };
+  app.get("/", html);
   app.get("/index.html", (c) => c.redirect("/", 301));
   app.use("/*", serveStatic({ root: config.WEB_DIST }));
-  app.get("/*", (c) => c.html(page(c.req.path)));
+  app.get("/*", html);
   return app;
 }
