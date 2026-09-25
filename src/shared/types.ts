@@ -32,6 +32,7 @@ export type Evidence = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
+  /** README가 실험·로컬 전용으로 표시한 기능(절 제목). */ experimental?: string[];
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
   /** 원자료에서 찾지 못한 수치가 있어 highlights에서 뺀 요약. 판단·초안에 들어가지 않는다. */
   unverifiedHighlights?: { text: string; numbers: string[] }[];

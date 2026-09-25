@@ -128,3 +128,9 @@ it("joins a pending judge instead of failing when only the account language chan
   updateSettings(ctx, "test", { ui: { locale: "en" } });
   expect(queueStep(ctx, "test", "judge", id)).toBe(first);
 });
+
+it("drafts a first introduction until something from the repository is published", () => {
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
+  ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "x", url: "https://x.com/a/status/1", publishedAt: 1 }).run();
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+});

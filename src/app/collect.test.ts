@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, limitationsFrom } from "./collect.js";
+import { collectAll, collectGithubSource, experimentalFrom, limitationsFrom } from "./collect.js";
 import type { AppContext } from "./context.js";
 
 describe("limitationsFrom", () => {
@@ -56,4 +56,9 @@ it("stops reading a feed body past the byte cap even without Content-Length", as
   const stream = new ReadableStream<Uint8Array>({ pull(c) { c.enqueue(new Uint8Array(1024)); } });
   expect(await readCapped(new Response(stream), 10_000)).toBeNull();
   expect(await readCapped(new Response("<rss/>"), 10_000)).toBe("<rss/>");
+});
+
+it("finds README sections marked experimental or local-only", () => {
+  const readme = "# somun\n## Run it\n## Local development\n## Preview\n### Short videos (experimental, local)\ntext\n## 짧은 영상 (실험)\n## Deploy\n";
+  expect(experimentalFrom(readme)).toEqual(["Short videos (experimental, local)", "짧은 영상 (실험)"]);
 });

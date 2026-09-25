@@ -10,7 +10,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge } from "./publications.js";
+import { channelResultsForJudge, hasPublication } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -40,8 +40,9 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
+  const introduction = !hasPublication(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const angle = judgment?.angle ?? undefined;
@@ -51,6 +52,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     guide: voiceGuideFor(settings.voice, lang),
     profile,
     disputed,
+    introduction,
     instruction: opts.instruction?.trim() || undefined,
     previous: opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
   });
