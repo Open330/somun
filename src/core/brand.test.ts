@@ -10,7 +10,7 @@ describe("brand extraction", () => {
 
   it("finds accent, background and ink colors and Google Fonts, and nothing else from the page", () => {
     const b = extractBrand(html, [".btn{background:#123f3a;color:#fff} a{color:rgb(124,199,176)}"], "https://somun.example/");
-    expect(b).toEqual({ accents: ["#123f3a", "#7cc7b0"], background: "#f3f4f2", ink: "#131a22", fonts: ["Sora", "Noto Sans KR"], source: "https://somun.example/" });
+    expect(b).toEqual({ accents: ["#123f3a", "#7cc7b0"], background: "#f3f4f2", ink: "#131a22", fonts: ["Sora", "Noto Sans KR"], source: "https://somun.example" });
     expect(JSON.stringify(b)).not.toMatch(/Ignore|10x/);
   });
 
@@ -31,6 +31,19 @@ describe("brand extraction", () => {
 
   it("follows only same-origin stylesheets", () => {
     expect(stylesheetLinks(html, "https://somun.example/docs/")).toEqual(["https://somun.example/assets/app.css"]);
+  });
+
+  it("stays fast on pathological pages", () => {
+    const t0 = performance.now();
+    extractBrand("<style>".repeat(60_000), [], "https://x.example/");
+    extractBrand("<meta " + "name='theme-color' ".repeat(20_000), [], "https://x.example/");
+    extractBrand("<link " + "rel=stylesheet ".repeat(25_000), [], "https://x.example/");
+    extractBrand("style='" .repeat(60_000), [], "https://x.example/");
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+
+  it("keeps only the origin as the source", () => {
+    expect(extractBrand("<style>a{color:#e33}</style>", [], "https://x.example/a#b\n## hi")?.source).toBe("https://x.example");
   });
 
   it("returns nothing for a page without colors or fonts", () => {

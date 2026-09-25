@@ -7,12 +7,14 @@ import type { VideoClient } from "../infra/video.js";
 import type { BridgeStatus } from "../shared/video.js";
 import { deleteAccount } from "./account.js";
 import { GenerationConflictError, NotFoundError, UnavailableError, type AppContext } from "./context.js";
-import { issueBridgeToken, listBridgeTokens, revokeBridgeToken, videoConfig } from "./bridges.js";
+import { issueBridgeToken, listBridgeTokens, revokeBridgeToken, syncBridgeTokens, videoConfig } from "./bridges.js";
 
 function setup() {
   const video = {
     publicUrl: "http://192.168.32.55:8791", pushed: [] as { id: string; owner: string; tokenHash: string }[][], down: false, seen: new Map<string, number>(),
     async putBridgeTokens(tokens: { id: string; owner: string; tokenHash: string }[]) { if (video.down) throw new Error("down"); video.pushed.push(tokens); },
+    async addBridgeToken(t: { id: string; owner: string; tokenHash: string }) { if (video.down) throw new Error("down"); video.pushed.push([...(video.pushed.at(-1) ?? []).filter((x) => x.id !== t.id), t]); },
+    async removeBridgeToken(id: string) { if (video.down) throw new Error("down"); video.pushed.push((video.pushed.at(-1) ?? []).filter((x) => x.id !== id)); },
     async bridgeStatus(owner: string): Promise<BridgeStatus[]> { return (video.pushed.at(-1) ?? []).filter((t) => t.owner === owner).map((t) => ({ id: t.id, owner, lastSeenAt: video.seen.get(t.id), connected: video.seen.has(t.id) })); },
   };
   const ctx: AppContext = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { video: video as unknown as VideoClient }, bus: new EventEmitter(), usage: { record() {} } as unknown as AppContext["usage"] };
@@ -53,6 +55,21 @@ describe("bridge tokens", () => {
     video.down = false;
     for (let i = 0; i < 5; i++) await issueBridgeToken(ctx, "a", `t${i}`);
     await expect(issueBridgeToken(ctx, "a", "t6")).rejects.toThrow(GenerationConflictError);
+  });
+
+  it("keeps the video server's list in the order changes were made", async () => {
+    const { ctx, video } = setup();
+    // 첫 요청이 늦게 끝나도 다음 요청은 그 뒤에 보낸다(먼저 보낸 전체 목록이 폐기를 덮어쓰지 않게).
+    let release!: () => void;
+    const slowPut = video.putBridgeTokens;
+    video.putBridgeTokens = async (tokens) => { await new Promise<void>((r) => (release = r)); await slowPut(tokens); };
+    const a = await issueBridgeToken(ctx, "a", "x");
+    const sync = syncBridgeTokens(ctx);
+    const revoking = revokeBridgeToken(ctx, "a", a.id);
+    await new Promise((r) => setTimeout(r, 0));
+    release();
+    await sync; await revoking;
+    expect(video.pushed.at(-1)).toEqual([]);
   });
 
   it("removes tokens with the account and syncs the video server", async () => {

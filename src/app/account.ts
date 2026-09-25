@@ -2,7 +2,7 @@ import { eq, getTableName } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { removeVideoRenders } from "./videos.js";
-import { syncBridgeTokens } from "./bridges.js";
+import { removeBridgeTokens } from "./bridges.js";
 
 /**
  * 계정 데이터 내보내기·삭제. 소유자(ownerId) 범위의 모든 표.
@@ -28,6 +28,7 @@ export function exportAccount(ctx: AppContext, ownerId: string): Record<string, 
 export function deleteAccount(ctx: AppContext, ownerId: string): Record<string, number> {
   const counts: Record<string, number> = {};
   const renders = ctx.db.select({ renderId: schema.videos.renderId }).from(schema.videos).where(eq(schema.videos.ownerId, ownerId)).all().map((r) => r.renderId);
+  const bridges = ctx.db.select({ id: schema.bridgeTokens.id }).from(schema.bridgeTokens).where(eq(schema.bridgeTokens.ownerId, ownerId)).all().map((r) => r.id);
   ctx.db.transaction((tx) => {
     for (const t of OWNED) {
       const name = getTableName(t);
@@ -37,6 +38,6 @@ export function deleteAccount(ctx: AppContext, ownerId: string): Record<string, 
   ctx.log.info({ ownerId, counts }, "account deleted");
   // 영상 파일은 영상 서버에 있다. 행을 지운 뒤 따로 지운다.
   void removeVideoRenders(ctx, renders);
-  if (counts.bridge_tokens) void syncBridgeTokens(ctx).catch((err: Error) => ctx.log.warn({ err: err.message }, "bridge token sync failed"));
+  if (bridges.length) void removeBridgeTokens(ctx, bridges).catch((err: Error) => ctx.log.warn({ err: err.message }, "bridge token removal failed; the next sync removes them"));
   return counts;
 }

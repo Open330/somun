@@ -52,6 +52,16 @@ export class VideoClient {
     if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);
   }
 
+  async addBridgeToken(token: { id: string; owner: string; tokenHash: string }): Promise<void> {
+    const res = await this.call("/v1/bridge-tokens", { method: "POST", body: JSON.stringify(token) });
+    if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);
+  }
+
+  async removeBridgeToken(id: string): Promise<void> {
+    const res = await this.call(`/v1/bridge-tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);
+  }
+
   async bridgeStatus(owner: string): Promise<BridgeStatus[]> {
     const res = await this.call(`/v1/bridge-tokens?owner=${encodeURIComponent(owner)}`, {}, 5_000);
     if (!res.ok) throw new VideoServerError(res.status, `video server → ${res.status}`);

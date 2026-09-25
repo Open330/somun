@@ -58,6 +58,12 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
   const [error, setError] = useState<string | null>(null);
   const open = videos?.some(renderUnsettled) ?? false;
 
+  // bridge 연결 상태는 진행 중인 영상이 없어도 30초마다 다시 본다.
+  useEffect(() => {
+    const timer = setInterval(reloadCfg, 30_000);
+    return () => clearInterval(timer);
+  }, [reloadCfg]);
+
   // 진행 중이거나 연출 메모를 기다리는 영상이 있으면 5초마다 상태를 다시 받는다(서버가 영상 서버에 물어 갱신한다).
   useEffect(() => {
     if (!open) return;
@@ -94,7 +100,7 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
         <button className="primary sm" disabled={busy} onClick={() => void start()}>{busy ? t("요청하는 중…") : t("영상 만들기")}</button>
       </div>
       <p className="tiny muted" style={{ margin: 0 }}>
-        {cfg?.bridgeConnected ? <><span className="badge ok">{t("bridge 연결됨")}</span> {t("요청하면 내 컴퓨터의 Claude Code가 바로 시작합니다.")}</> : <><span className="badge outline">{t("bridge 없음")}</span> {t("연결된 bridge가 없어 요청은 대기합니다.")} <Link to="/settings?tab=model">{t("설정 › 모델에서 토큰 만들기")}</Link></>}
+        {cfg?.bridgeConnected ? <><span className="badge ok">{t("bridge 연결됨")}</span> {t("요청하면 연결된 bridge의 Claude Code가 바로 시작합니다.")}</> : <><span className="badge outline">{t("bridge 없음")}</span> {t("연결된 bridge가 없어 요청은 대기합니다.")} <Link to="/settings?tab=model">{t("설정 › 모델에서 토큰 만들기")}</Link></>}
       </p>
       {error && <p className="small" style={{ color: "var(--danger)" }}>{error}</p>}
       {videos?.length ? (

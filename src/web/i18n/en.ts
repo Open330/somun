@@ -737,7 +737,7 @@ export const en: Record<string, string> = {
   "이름 (예: 맥북)": "Name (e.g. MacBook)",
   "토큰 만들기": "Create token",
   "bridge 연결됨": "Bridge connected",
-  "요청하면 내 컴퓨터의 Claude Code가 바로 시작합니다.": "Claude Code on your computer starts as soon as you request.",
+  "요청하면 연결된 bridge의 Claude Code가 바로 시작합니다.": "Claude Code on the connected bridge starts as soon as you request.",
   "bridge 없음": "No bridge",
   "연결된 bridge가 없어 요청은 대기합니다.": "No bridge is connected, so requests will wait.",
   "설정 › 모델에서 토큰 만들기": "Create a token in Settings › Model",

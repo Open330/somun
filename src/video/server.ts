@@ -76,8 +76,12 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
   // somun → 사용자별 bridge 토큰(해시) 등록과 연결 상태
   const tokens = new Hono();
   tokens.use(async (c, next) => (sameSecret(bearer(c), config.serviceToken) ? next() : c.json({ error: "unauthorized" }, 401)));
-  tokens.put("/", bodyLimit({ maxSize: 1_000_000 }), async (c) => {
-    const input = z.object({ tokens: z.array(z.object({ id: z.string().min(1).max(64), owner: z.string().min(1).max(300), tokenHash: z.string().regex(/^[a-f0-9]{64}$/) })).max(10_000) }).parse(await c.req.json());
+  const issued = z.object({ id: z.string().min(1).max(64), owner: z.string().min(1).max(300), tokenHash: z.string().regex(/^[a-f0-9]{64}$/) });
+  // 발급·폐기는 한 건씩 반영한다(전체 목록이 커져도 폐기가 막히지 않게). 전체 교체는 주기적 맞추기용.
+  tokens.post("/", async (c) => { config.bridges.add(issued.parse(await c.req.json())); return c.body(null, 204); });
+  tokens.delete("/:id", (c) => { config.bridges.remove(c.req.param("id")); return c.body(null, 204); });
+  tokens.put("/", bodyLimit({ maxSize: 50_000_000 }), async (c) => {
+    const input = z.object({ tokens: z.array(issued).max(200_000) }).parse(await c.req.json());
     config.bridges.replace(input.tokens);
     return c.body(null, 204);
   });
@@ -86,7 +90,8 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
 
   // bridge → 다음 세션(롱 폴링). 없으면 204.
   app.get("/v1/sessions/next", async (c) => {
-    const who = config.bridges.authenticate(bearer(c));
+    const token = bearer(c);
+    const who = config.bridges.authenticate(token);
     if (!who) return c.json({ error: "unauthorized" }, 401);
     const bridge = (c.req.query("bridge") ?? "bridge").slice(0, 120);
     const wait = Math.min(LONG_POLL_MAX_SEC, Math.max(0, Number(c.req.query("wait") ?? 0) || 0));
@@ -94,6 +99,8 @@ export function videoServer(service: VideoService, config: VideoServerConfig) {
     for (;;) {
       // 연결이 끊긴 bridge에게 렌더를 넘기지 않는다(넘기면 세션 시간이 다 갈 때까지 멈춰 있다).
       if (c.req.raw.signal.aborted) return c.body(null, 204);
+      // 기다리는 동안 토큰이 폐기됐으면 더 가져가지 않는다.
+      if (!config.bridges.authenticate(token)) return c.json({ error: "unauthorized" }, 401);
       const ticket = service.claim(who.owner, bridge);
       if (ticket) return c.json(ticket);
       if (Date.now() >= until) return c.body(null, 204);

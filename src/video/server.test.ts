@@ -103,5 +103,19 @@ describe("video server", () => {
     expect(new BridgeRegistry(dir, []).authenticate(issued)).toMatchObject({ owner: "owner-c", id: "t1" });
     await put([]);
     expect((await app.request("/v1/sessions/next", { headers: as(issued) })).status).toBe(401);
+
+    // 한 건씩 추가·폐기. 폐기되면 기다리던 롱 폴링도 끊긴다.
+    const add = await app.request("/v1/bridge-tokens", { method: "POST", headers: as(SERVICE), body: JSON.stringify({ id: "t2", owner: "owner-c", tokenHash: hashBridgeToken(issued) }) });
+    expect(add.status).toBe(204);
+    const waiting = app.request("/v1/sessions/next?wait=5", { headers: as(issued) });
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await app.request("/v1/bridge-tokens/t2", { method: "DELETE", headers: as(SERVICE) })).status).toBe(204);
+    expect((await waiting).status).toBe(401);
+  });
+
+  it("starts with an empty list when the token file is corrupt", async () => {
+    const { dir } = setup();
+    writeFileSync(join(dir, "bridge-tokens.json"), "{not json");
+    expect(new BridgeRegistry(dir, []).authenticate("anything-at-all-0123")).toBeNull();
   });
 });

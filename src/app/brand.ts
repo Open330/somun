@@ -10,7 +10,8 @@ const TTL_MS = 24 * 3600_000, FAIL_TTL_MS = 3600_000, MAX_CACHE = 500;
 const MAX_BYTES = 400_000;
 const cache = new Map<string, { at: number; brand?: Brand }>();
 
-async function text(url: string, accept: string): Promise<string | undefined> {
+/** 본문과, 리다이렉트를 따라간 뒤의 최종 주소. */
+async function fetchText(url: string, accept: string): Promise<{ body: string; url: string } | undefined> {
   const res = await publicFetch(url, { headers: { Accept: accept, "User-Agent": "somun (+https://github.com/Open330/somun)" }, signal: AbortSignal.timeout(6_000) });
   if (!res.ok) { await res.body?.cancel().catch(() => undefined); return undefined; }
   const reader = res.body?.getReader();
@@ -24,24 +25,37 @@ async function text(url: string, accept: string): Promise<string | undefined> {
     if (size > MAX_BYTES) { await reader.cancel().catch(() => undefined); break; }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return { body: Buffer.concat(chunks).toString("utf8"), url: res.url || url };
 }
+
+async function readBrand(ctx: AppContext, homepage: string): Promise<Brand | undefined> {
+  try {
+    const page = await fetchText(homepage, "text/html");
+    if (!page) return undefined;
+    // 스타일시트는 리다이렉트 뒤의 주소(apex → www, http → https)를 기준으로 찾는다.
+    const css = (await Promise.all(stylesheetLinks(page.body, page.url).map((u) => fetchText(u, "text/css").then((r) => r?.body).catch(() => undefined)))).filter((x): x is string => Boolean(x));
+    return extractBrand(page.body, css, page.url);
+  } catch (err) {
+    ctx.log.info({ err: (err as Error).message, homepage }, "brand fetch failed");
+    return undefined;
+  }
+}
+
+/** 같은 홈페이지를 동시에 여러 번 읽지 않는다. */
+const inflight = new Map<string, Promise<Brand | undefined>>();
 
 export async function brandFor(ctx: AppContext, homepage: string | undefined): Promise<Brand | undefined> {
   if (!homepage || homepage.length > 300 || !/^https?:\/\//i.test(homepage)) return undefined;
   const hit = cache.get(homepage);
   if (hit && Date.now() - hit.at < (hit.brand ? TTL_MS : FAIL_TTL_MS)) return hit.brand;
-  let brand: Brand | undefined;
-  try {
-    const html = await text(homepage, "text/html");
-    if (html) {
-      const css = (await Promise.all(stylesheetLinks(html, homepage).map((u) => text(u, "text/css").catch(() => undefined)))).filter((x): x is string => Boolean(x));
-      brand = extractBrand(html, css, homepage);
-    }
-  } catch (err) {
-    ctx.log.info({ err: (err as Error).message, homepage }, "brand fetch failed");
+  let running = inflight.get(homepage);
+  if (!running) {
+    running = readBrand(ctx, homepage).then((brand) => {
+      if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value!);
+      cache.set(homepage, { at: Date.now(), brand });
+      return brand;
+    }).finally(() => inflight.delete(homepage));
+    inflight.set(homepage, running);
   }
-  if (cache.size >= MAX_CACHE) cache.delete(cache.keys().next().value!);
-  cache.set(homepage, { at: Date.now(), brand });
-  return brand;
+  return running;
 }

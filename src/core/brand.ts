@@ -17,6 +17,8 @@ export type Brand = {
 const HEX = /#([0-9a-f]{3}|[0-9a-f]{6})\b/gi;
 const RGB = /rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})(?:[\s,/]+([\d.]+%?))?\s*\)/gi;
 const FONT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ]{0,39}$/;
+/** 정규식에 넣는 HTML 상한. 브랜드 정보는 앞부분(<head>)에 있고, 길수록 느린 입력의 비용만 커진다. */
+const MAX_HTML = 150_000;
 
 function normHex(h: string): string {
   const x = h.replace("#", "").toLowerCase();
@@ -63,7 +65,7 @@ export function googleFonts(html: string): string[] {
 export function stylesheetLinks(html: string, base: string, limit = 3): string[] {
   const origin = new URL(base).origin;
   const out: string[] = [];
-  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+  for (const m of html.slice(0, MAX_HTML).matchAll(/<link\b[^>]{0,1000}>/gi)) {
     const tag = m[0];
     if (!/rel\s*=\s*["']?[^"'>]*stylesheet/i.test(tag)) continue;
     const href = /href\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
@@ -76,11 +78,32 @@ export function stylesheetLinks(html: string, base: string, limit = 3): string[]
   return out.slice(0, limit);
 }
 
-export function extractBrand(html: string, css: string[], source: string): Brand | undefined {
-  const inline = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n");
-  const styleAttrs = [...html.matchAll(/style\s*=\s*["']([^"']*)["']/gi)].map((m) => m[1]).join("\n");
-  const theme = /<meta\b[^>]*name\s*=\s*["']theme-color["'][^>]*content\s*=\s*["'](#(?:[0-9a-f]{3}|[0-9a-f]{6}))["']/i.exec(html)?.[1];
-  const counts = countColors([inline, styleAttrs, ...css].join("\n"));
+/** <style>…</style> 본문. 정규식 대신 indexOf로 한 번만 훑는다(닫히지 않은 태그가 많아도 선형). */
+function styleBlocks(html: string): string {
+  const lower = html.toLowerCase();
+  const out: string[] = [];
+  let at = 0;
+  for (;;) {
+    const open = lower.indexOf("<style", at);
+    if (open < 0) break;
+    const bodyStart = lower.indexOf(">", open);
+    if (bodyStart < 0) break;
+    const close = lower.indexOf("</style", bodyStart);
+    if (close < 0) break;
+    out.push(html.slice(bodyStart + 1, close));
+    at = close + 7;
+  }
+  return out.join("\n");
+}
+
+export function extractBrand(rawHtml: string, css: string[], source: string): Brand | undefined {
+  const html = rawHtml.slice(0, MAX_HTML);
+  const inline = styleBlocks(html);
+  // 반복 구간의 길이를 묶어 둔다: 닫히지 않은 따옴표·태그가 많아도 한 번에 훑는 길이가 제한된다.
+  const styleAttrs = [...html.matchAll(/style\s*=\s*["']([^"'<>]{0,2000})["']/gi)].map((m) => m[1]).join("\n");
+  const theme = [...html.matchAll(/<meta\b[^>]{0,500}>/gi)].map((m) => m[0]).filter((tag) => /name\s*=\s*["']theme-color["']/i.test(tag))
+    .map((tag) => /content\s*=\s*["'](#(?:[0-9a-f]{3}|[0-9a-f]{6}))["']/i.exec(tag)?.[1]).find(Boolean);
+  const counts = countColors([inline, styleAttrs, ...css.map((c) => c.slice(0, MAX_HTML * 2))].join("\n"));
   // theme-color는 사이트가 스스로 밝힌 대표색이라 가산점을 준다.
   if (theme) counts.set(normHex(theme), (counts.get(normHex(theme)) ?? 0) + 5);
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
@@ -90,7 +113,8 @@ export function extractBrand(html: string, css: string[], source: string): Brand
   const background = ranked.find((h) => { const { s, l } = hsl(h); return l >= 0.9 && (s < 0.35 || l >= 0.97); });
   const ink = ranked.find((h) => { const { s, l } = hsl(h); return l <= 0.2 && s < 0.35; });
   // <link>로도, CSS의 @import로도 불러온다.
-  const fonts = googleFonts([html, inline, ...css].join("\n"));
+  const fonts = googleFonts([html, inline, ...css.map((c) => c.slice(0, MAX_HTML))].join("\n"));
   if (!accents.length && !fonts.length) return undefined;
-  return { accents, background, ink, fonts, source };
+  // 출처는 주소의 origin만: 경로·조각에 섞인 글자가 프롬프트에 들어가지 않게.
+  return { accents, background, ink, fonts, source: new URL(source).origin };
 }

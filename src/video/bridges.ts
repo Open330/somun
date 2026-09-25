@@ -24,7 +24,16 @@ export class BridgeRegistry {
   constructor(dataDir: string, private readonly configured: { owner: string; token: string }[], private readonly now: () => number = Date.now) {
     mkdirSync(dataDir, { recursive: true });
     this.file = join(dataDir, "bridge-tokens.json");
-    if (existsSync(this.file)) this.load(JSON.parse(readFileSync(this.file, "utf8")) as IssuedToken[]);
+    if (existsSync(this.file)) {
+      // 망가진 파일로 서버가 뜨지 못하면 안 된다. 빈 목록으로 시작하고 somun의 다음 동기화(5분 안)가 채운다.
+      try { this.load(JSON.parse(readFileSync(this.file, "utf8")) as IssuedToken[]); } catch { this.issued = new Map(); }
+    }
+  }
+
+  private persist() {
+    const tokens = [...this.issued.values()];
+    writeFileSync(`${this.file}.tmp`, JSON.stringify(tokens));
+    renameSync(`${this.file}.tmp`, this.file);
   }
 
   private load(tokens: IssuedToken[]) {
@@ -34,8 +43,20 @@ export class BridgeRegistry {
   /** somun이 가진 유효 토큰 전체로 바꾼다. 폐기된 토큰은 목록에서 빠지면서 바로 막힌다. */
   replace(tokens: IssuedToken[]): void {
     this.load(tokens);
-    writeFileSync(`${this.file}.tmp`, JSON.stringify(tokens));
-    renameSync(`${this.file}.tmp`, this.file);
+    this.persist();
+  }
+
+  /** 발급 하나. 같은 id가 있으면 바꾼다. */
+  add(token: IssuedToken): void {
+    for (const [h, t] of this.issued) if (t.id === token.id) this.issued.delete(h);
+    this.issued.set(token.tokenHash, token);
+    this.persist();
+  }
+
+  /** 폐기 하나. 없어도 성공(이미 빠졌다). */
+  remove(id: string): void {
+    for (const [h, t] of this.issued) if (t.id === id) this.issued.delete(h);
+    this.persist();
   }
 
   authenticate(token: string): BridgeIdentity | null {

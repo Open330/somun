@@ -12,14 +12,14 @@ export default function VideoBridges({ showToast }: { showToast: (m: string) => 
   const { data: cfg } = useResource<VideoConfigView>("/video", []);
   const { data: tokens, reload } = useResource<BridgeTokenView[]>(cfg?.enabled ? "/video/bridges" : null, []);
   const [label, setLabel] = useState("");
-  const [issued, setIssued] = useState<{ token: string; label: string } | null>(null);
+  const [issued, setIssued] = useState<{ id: string; token: string; label: string } | null>(null);
   const [busy, setBusy] = useState(false);
   if (!cfg?.enabled) return null;
 
   const issue = async () => {
     setBusy(true);
     try {
-      const r = await post<{ token: string; label: string }>("/video/bridges", { label: label || "bridge" });
+      const r = await post<{ id: string; token: string; label: string }>("/video/bridges", { label: label || "bridge" });
       setIssued(r); setLabel(""); reload();
     } catch (e) {
       showToast(`${t("토큰을 만들지 못했습니다.")} ${(e as Error).message}`);
@@ -31,6 +31,7 @@ export default function VideoBridges({ showToast }: { showToast: (m: string) => 
     try {
       const r = await api<{ synced: boolean }>(`/video/bridges/${encodeURIComponent(id)}`, { method: "DELETE" });
       showToast(r.synced ? t("토큰을 폐기했습니다.") : t("폐기했습니다. 영상 서버에는 5분 안에 반영됩니다."));
+      if (issued?.id === id) setIssued(null);
       reload();
     } catch (e) {
       showToast((e as Error).message);
