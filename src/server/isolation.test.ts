@@ -46,6 +46,7 @@ describe("per-account isolation", () => {
   it("answers 404 to id-based reads and writes on another account's resources and changes nothing", async () => {
     const attempts: [string, string, unknown?][] = [
       ["GET", `/candidates/${ids.candidate}`],
+      ["GET", `/candidates/${ids.candidate}/launch-check`],
       ["POST", `/candidates/${ids.candidate}/status`, { status: "dropped" }],
       ["POST", `/candidates/${ids.candidate}/override`, { decision: "drop", reason: "other" }],
       ["POST", `/candidates/${ids.candidate}/rejudge`],

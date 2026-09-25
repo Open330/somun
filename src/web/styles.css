@@ -247,6 +247,9 @@ footer.landing-foot { padding-top: 40px; color: var(--muted); font-size: 13px; d
 .facts .badge { font-family: var(--font-mono); font-weight: 400; }
 .hl { margin: 0; padding-left: 18px; }
 .hl li { margin: 4px 0; }
+.launch-check { list-style: none; margin: 8px 0 0; padding: 0; }
+.launch-check li { margin: 6px 0; }
+.launch-check .badge { padding: 0 6px; min-width: 20px; justify-content: center; }
 details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 8px 0; }
 .angle { font-size: 17px; font-weight: 500; line-height: 1.5; margin: 6px 0 10px; }
 .step-post { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; }

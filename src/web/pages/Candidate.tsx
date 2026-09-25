@@ -10,6 +10,7 @@ import { post, useResource } from "../lib/api";
 import DraftPanel from "./candidate/DraftPanel";
 import ProfileBlock from "./candidate/ProfileBlock";
 import VideoBlock from "./candidate/VideoBlock";
+import LaunchCheckBlock from "./candidate/LaunchCheckBlock";
 import NotFound from "./NotFound";
 import { t } from "../i18n";
 
@@ -137,7 +138,7 @@ export default function Candidate() {
           {current && curKey && (
             <DraftPanel key={`${cid}:${curKey}`} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onDirty={setUnsaved} onLang={(l) => switchDraft(() => setLangByCh({ ...langByCh, [current.channel]: l }))} expectedModel={settings?.llm.provider === "gemini" ? (settings.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini) : undefined} draftModelResetAt={keys ? keys.filter((k) => k.label.endsWith(settings?.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini || "") && k.cooldownUntil).map((k) => k.cooldownUntil!).sort()[0] : undefined}
               drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
-              busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
+              busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} homepage={e.homepage} track={settings?.trackLinks !== false} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
           )}
           <VideoBlock cid={cid} repo={c.repo} drafts={data.drafts} />
         </section>
@@ -175,6 +176,8 @@ export default function Candidate() {
             <h2 style={{ marginTop: 14 }}>{t("한계")}</h2>
             {e.limitations?.length ? e.limitations.map((l, i) => <div key={i} className="callout" style={{ marginTop: i ? 6 : 0 }}>{l}</div>) : <div className="callout muted-box">{t("수집한 자료에 명시된 한계가 없습니다. 게시 전에 알려진 제약이 있는지 직접 확인하세요.")}</div>}
           </section>
+
+          <LaunchCheckBlock cid={cid} homepage={e.homepage} />
 
           {j && (
             <section className="side-block">
