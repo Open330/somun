@@ -30,6 +30,7 @@ import { TicketStore, type AuthVars } from "../auth.js";
 import { listVideos, requestVideo, videoFile } from "../../app/videos.js";
 import { issueBridgeToken, listBridgeTokens, revokeBridgeToken, videoConfig } from "../../app/bridges.js";
 import { VIDEO_ASPECTS, VIDEO_DURATIONS } from "../../shared/video.js";
+import { launchCheck } from "../../app/launch-check.js";
 
 const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
 const lang = z.string().min(2).max(8).regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
@@ -69,6 +70,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       ui: z.object({ onboardingDismissedAt: z.number().optional(), locale: z.enum(["ko", "en"]).optional() }).optional(),
       notify: z.object({ discordWebhookUrl: z.string().url().startsWith("https://discord.com/api/webhooks/").or(z.literal("")).optional(), weekly: z.boolean() }).optional(),
       voice: z.object({ preset: z.string().max(40), guide: z.string().max(GUIDE_MAX_CHARS), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
+      trackLinks: z.boolean().optional(),
     }));
     const { keepApiKey, ...patch } = input;
     if (patch.llm) await assertModelEndpoint(ctx, c.get("ownerId"), patch.llm);
@@ -121,6 +123,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/video/bridges", async (c) => c.json(await listBridgeTokens(ctx, c.get("ownerId"))));
   app.post("/video/bridges", async (c) => c.json(await issueBridgeToken(ctx, c.get("ownerId"), (await body(c, z.object({ label: z.string().max(60) }))).label), 201));
   app.delete("/video/bridges/:id", async (c) => c.json(await revokeBridgeToken(ctx, c.get("ownerId"), c.req.param("id"))));
+  app.get("/candidates/:id/launch-check", async (c) => c.json(await launchCheck(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.get("/candidates/:id/videos", async (c) => c.json(await listVideos(ctx, c.get("ownerId"), id(c.req.param("id")))));
   app.post("/candidates/:id/videos", async (c) => {
     const i = await body(c, z.object({ durationSec: z.union([z.literal(VIDEO_DURATIONS[0]), z.literal(VIDEO_DURATIONS[1]), z.literal(VIDEO_DURATIONS[2])]), aspect: z.enum(VIDEO_ASPECTS), draftId: z.number().int().positive().optional() }));

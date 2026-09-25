@@ -118,6 +118,7 @@ export default function Settings() {
         <div className="card stack" style={{ maxWidth: 760 }}>
           <p className="small muted">{t("채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).")}</p>
           {ALL_CHANNELS.map((ch) => <ChannelLangRow key={ch} ch={ch} langs={settings.channelLangs[ch] ?? []} onChange={(l) => setLangs(ch, l)} />)}
+          <label className="row small" style={{ gap: 6, marginTop: 12 }}><input type="checkbox" checked={settings.trackLinks !== false} onChange={(ev) => void update({ trackLinks: ev.target.checked })} /> {t("복사할 때 홈페이지·App Store 링크에 채널 표시(utm, ct) 붙이기. X·Threads·LinkedIn만, Show HN·Show GN은 붙이지 않습니다.")}</label>
         </div>
       )}
 

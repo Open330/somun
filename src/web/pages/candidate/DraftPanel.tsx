@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
 import { CHANNELS, type Channel } from "@core/channels";
+import { trackLinks } from "@core/links";
 import type { Draft } from "@shared/types";
 import { channelLabel, LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
@@ -18,7 +19,7 @@ const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자�
 
 const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="group" aria-label={t("언어")}>{langs.map((l) => <button key={l} aria-pressed={l === lang} className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : <span className="badge outline">{lang.toUpperCase()}</span>;
 
-export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: { id: number; url: string }; busy: boolean; onRedraft: (instruction?: string) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void }) {
+export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty, homepage, track = true }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: { id: number; url: string }; busy: boolean; onRedraft: (instruction?: string) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void; homepage?: string; track?: boolean }) {
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
   const merged = drafts.map((d) => savedDraft?.id === d.id && savedDraft.updatedAt >= d.updatedAt ? savedDraft : d);
   const versions = [...merged].sort((a, b) => b.version - a.version);
@@ -57,6 +58,8 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
   useEffect(() => { if (editing) return; setTitle(latest?.title ?? ""); setBody(latest?.body ?? ""); setEditing(false); setViewId(null); setRewriteOpen(false); setStep(latest?.status === "copied" ? "post" : "draft"); }, [latest?.id, latest?.title, latest?.body, latest?.status, editing]);
 
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
+  // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
+  const outgoing = track ? trackLinks(full, { channel, homepage }) : full;
   const unsupported = (lint?: Draft["lint"]) => lint?.find((item) => item.rule === "numbers_need_review" && !item.ok);
   const save = async (copyAfter: boolean) => {
     if (!latest || action || !body.trim()) return;
@@ -67,7 +70,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
     setAction(copyAfter ? "copy" : "save"); setActionError(null);
     let copied = false;
     try {
-      if (copyAfter) { await navigator.clipboard.writeText(full); copied = true; }
+      if (copyAfter) { await navigator.clipboard.writeText(outgoing); copied = true; }
       const saved = await post<Draft>(`/drafts/${latest.id}/edit`, { title: spec.hasTitle ? title : undefined, body, markCopied: copyAfter });
       if (saved?.id) setSavedDraft(saved);
       setEditing(false); if (copyAfter) setStep("post");
@@ -171,6 +174,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
               <span className="tiny muted"><span className="kbd">c</span> <span className="kbd">e</span> <span className="kbd">r</span></span>
             </div>
           )}
+          {!isOld && outgoing !== full && <div className="tiny muted" style={{ marginTop: 6 }}>{t("복사할 때 링크에 채널 표시(utm_source={channel})를 붙여 어느 글에서 왔는지 셀 수 있게 합니다. 설정 → 채널에서 끌 수 있습니다.", { channel })}</div>}
           {rewriteOpen && !isOld && (
             <div className="rewrite">
               <div className="rewrite-head"><b>{t("다시 쓰기")}</b><span className="tiny muted">{t("사실과 숫자는 그대로. 비우면 같은 문체로 새로 씁니다.")}</span></div>

@@ -90,6 +90,16 @@ describe("draft to publication", () => {
     expect(screen.getByText("Saved words")).toBeTruthy();
     expect(screen.queryByText("Original draft")).toBeNull();
   });
+  it("copies homepage links with the channel tag but keeps the saved draft untouched", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const linked = { ...draft, body: "Try it: https://somun.jiun.dev/" };
+    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [linked], busy: false, onRedraft: async () => true, showToast: vi.fn(), homepage: "https://somun.jiun.dev" })));
+    expect(screen.getByText(/utm_source=x/)).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "초안 복사" })));
+    expect(writeText).toHaveBeenCalledWith("Try it: https://somun.jiun.dev/?utm_source=x&utm_medium=social&utm_campaign=somun");
+    expect(post).toHaveBeenCalledWith("/drafts/1/edit", expect.objectContaining({ body: "Try it: https://somun.jiun.dev/" }));
+  });
   it("does not claim copying succeeded when the clipboard is denied", async () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     render(panel());
