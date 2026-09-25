@@ -91,7 +91,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
         <p className="lede">{t("세 가지 커넥터. 프롬프트 원문은 사용자의 컴퓨터를 떠나지 않습니다.")}</p>
         <div className="three">
           <div className="principle"><h3>GitHub</h3><p>{t("릴리스, 머지된 PR, 마지막 릴리스 이후 커밋, 스타와 다운로드 임계, README의 한계 문구.")}</p></div>
-          <div className="principle"><h3>{t("세션 업로더")}</h3><p>{tr("{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 요약해 요약만 올립니다.", { cmd: <code>somun push</code> })}</p></div>
+          <div className="principle"><h3>{t("세션 업로더")}</h3><p>{tr("{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 요약해 요약만 올립니다.", { cmd: <code>npm run push</code> })}</p></div>
           <div className="principle"><h3>{t("npm · 블로그")}</h3><p>{t("월 다운로드 추이와 발행한 글. 마일스톤을 넘으면 글감 후보가 됩니다.")}</p></div>
         </div>
       </section>
