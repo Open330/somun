@@ -53,8 +53,9 @@ export function relTime(ts: number): string {
 
 /** 후보의 한 가지 상태. 배지 하나로 끝낸다. */
 export type Stage = { key: "review" | "fresh" | "working" | "deferred" | "ask" | "published" | "dropped"; label: string; tone: "ok" | "warn" | "" | "bad"; busy?: boolean };
-export function stageOf(c: Pick<Candidate, "status" | "evidence" | "latestJudgmentId"> & { judgment?: Judgment | null }): Stage {
+export function stageOf(c: Pick<Candidate, "status" | "evidence" | "latestJudgmentId"> & { judgment?: Judgment | null; unpublishedDraftCount?: number }): Stage {
   if (c.status === "dropped") return { key: "dropped", label: t("버림"), tone: "bad" };
+  if (c.unpublishedDraftCount && c.status !== "deferred") return { key: "review", label: t("검수 대기"), tone: "ok" };
   if (c.status === "published") return { key: "published", label: t("발행됨"), tone: "ok" };
   if (c.status === "drafted") return { key: "review", label: t("검수 대기"), tone: "ok" };
   if (c.status === "deferred") return { key: "deferred", label: t("보류"), tone: "warn" };

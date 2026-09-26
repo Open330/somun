@@ -15,7 +15,7 @@ const category = (c: CandidateListItem): Exclude<Filter, "all"> => {
 };
 
 export default function Inbox() {
-  const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts"]);
+  const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState(false);

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
 import { CHANNELS, type Channel } from "@core/channels";
 import { trackLinks } from "@core/links";
-import type { Draft } from "@shared/types";
+import type { Draft, Publication } from "@shared/types";
 import { channelLabel, LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
@@ -15,11 +15,13 @@ import { dateLocale, t } from "../../i18n";
  * 수정 중 이탈은 SPA 이동(useBlocker)과 새로고침·외부 이동(beforeunload)에서 막는다.
  */
 
+type PublicationLink = Pick<Publication, "id" | "url" | "draftId">;
+
 const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자를 앞으로", "한계를 더 구체적으로", "질문으로 끝내기", "덜 격식 있게"];
 
 const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="group" aria-label={t("언어")}>{langs.map((l) => <button key={l} aria-pressed={l === lang} className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : <span className="badge outline">{lang.toUpperCase()}</span>;
 
-export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, published, busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty, homepage, track = true }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; published?: { id: number; url: string }; busy: boolean; onRedraft: (instruction?: string, introduction?: boolean) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void; homepage?: string; track?: boolean }) {
+export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publications = [], busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty, homepage, track = true }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; publications?: PublicationLink[]; busy: boolean; onRedraft: (instruction?: string, introduction?: boolean) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void; homepage?: string; track?: boolean }) {
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
   const merged = drafts.map((d) => savedDraft?.id === d.id && savedDraft.updatedAt >= d.updatedAt ? savedDraft : d);
   const versions = [...merged].sort((a, b) => b.version - a.version);
@@ -35,8 +37,11 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
   const [view, setView] = useState<"preview" | "text">("preview");
   const [step, setStep] = useState<"draft" | "post">("draft");
   const [url, setUrl] = useState("");
-  const [recorded, setRecorded] = useState<{ id: number; url: string } | null>(null);
-  const publication = published ?? recorded;
+  const [recorded, setRecorded] = useState<PublicationLink | null>(null);
+  const [removedIds, setRemovedIds] = useState<number[]>([]);
+  const records = [...(recorded ? [recorded] : []), ...publications].filter((p) => !removedIds.includes(p.id));
+  const publication = latest ? records.find((p) => p.draftId === latest.id) : records[0];
+  const shownPublication = shown ? records.find((p) => p.draftId === shown.id) : undefined;
   const [showDraft, setShowDraft] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
   const [dropReason, setDropReason] = useState<(typeof REASONS)[number][0]>("voice");
@@ -94,7 +99,10 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (publication && !showDraft) return <PublishedCard publication={publication} showToast={showToast} onShowDraft={latest ? () => setShowDraft(true) : undefined} onRemoved={() => setRecorded(null)} />;
+  if (publication && !showDraft) return <>
+    <LangSeg langs={langs} lang={lang} onLang={onLang} />
+    <PublishedCard key={publication.id} publication={publication} showToast={showToast} onShowDraft={latest ? () => setShowDraft(true) : undefined} onRemoved={() => { setRemovedIds((ids) => [...ids, publication.id]); setRecorded(null); }} />
+  </>;
   const introductionButton = <button disabled={busy} title={t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.")} onClick={() => void onRedraft(undefined, true)}>{t("서비스 처음 소개하기")}</button>;
   if (!latest) {
     return (
@@ -118,7 +126,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
         <button onClick={() => blocker.proceed()}>{t("수정 내용 버리고 이동")}</button>
       </div>}
       {actionError && <div className="inline-notice is-error" role="alert">{actionError}</div>}
-      {publication && showDraft && <div className="inline-notice" role="status"><span>{t("이미 게시한 초안입니다.")}</span><button className="ghost sm" onClick={() => setShowDraft(false)}>{t("게시 기록으로")}</button></div>}
+      {shownPublication && showDraft && <div className="inline-notice" role="status"><span>{t("이미 게시한 초안입니다.")}</span><button className="ghost sm" onClick={() => setShowDraft(false)}>{t("게시 기록으로")}</button></div>}
       {latest.lint.some((item) => !item.ok && item.detail) && <details className="raw">
         <summary>{t("초안에서 확인할 부분")}</summary>
         <p className="small muted">{t("저장된 초안의 자동 점검 결과입니다. 수정 후 저장하면 다시 점검합니다. 통과해도 사실 확인은 필요합니다.")}</p>
@@ -214,7 +222,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
           <details className="raw"><summary>{t("게시 전 확인할 점")}</summary><ol>{spec.runbook.map((r, i) => <li key={i}>{t(r)}</li>)}{spec.mediaHint && <li>{t("이미지:")} {t(spec.mediaHint)}</li>}</ol></details>
           <form className="publication-form" onSubmit={async (event) => {
             event.preventDefault(); setAction("publish"); setActionError(null);
-            try { const r = await post<{ id: number }>("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url: url.trim() }); setRecorded({ id: r.id, url: url.trim() }); setShowDraft(false); setUrl(""); showToast(t("발행 기록에 저장했습니다.")); }
+            try { const r = await post<{ id: number }>("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url: url.trim() }); setRecorded({ id: r.id, draftId: latest.id, url: url.trim() }); setShowDraft(false); setUrl(""); showToast(t("발행 기록에 저장했습니다.")); }
             catch (err) { setActionError(`${t("게시 링크를 저장하지 못했습니다.")} ${(err as Error).message}`); }
             finally { setAction(null); }
           }}>

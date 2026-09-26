@@ -149,3 +149,43 @@ it("shows the saved purpose on an introduction draft", () => {
   render(panel([{ ...draft, purpose: "introduction" }]));
   expect(screen.getByText("서비스 소개")).toBeTruthy();
 });
+
+it("keeps language switching available on the published screen", () => {
+  const onLang = vi.fn();
+  render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en", "ko"], onLang, drafts: [draft], publications: [{ id: 7, draftId: draft.id, url: "https://example.test/old" }], busy: false, onRedraft: vi.fn(), showToast: vi.fn() })));
+  expect(screen.getByText("게시 기록을 남겼어요")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "KO" }));
+  expect(onLang).toHaveBeenCalledWith("ko");
+});
+
+it("lets a new version be published while preserving the old version's publication", async () => {
+  const publications = [{ id: 7, draftId: draft.id, url: "https://example.test/old" }];
+  const newer = { ...draft, id: 2, version: 2, body: "New unpublished draft" };
+  const props = { cid: 1, channel: "x" as const, lang: "en", langs: ["en"], onLang: vi.fn(), publications, busy: false, onRedraft: vi.fn(), showToast: vi.fn() };
+  const view = render(wrap(createElement(DraftPanel, { ...props, drafts: [draft] })));
+  expect(screen.getByText("게시 기록을 남겼어요")).toBeTruthy();
+  view.rerender(wrap(createElement(DraftPanel, { ...props, drafts: [draft, newer] })));
+  expect(screen.getByText("New unpublished draft")).toBeTruthy();
+  expect(screen.queryByText("이미 게시한 초안입니다.")).toBeNull();
+  post.mockResolvedValue({ id: 8 });
+  fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/new" } });
+  fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
+  await waitFor(() => expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 2, url: "https://example.test/new" })));
+  expect(screen.getByRole("link", { name: "https://example.test/new" })).toBeTruthy();
+  // A reload with both records must still match the latest draft, regardless of record order.
+  view.rerender(wrap(createElement(DraftPanel, { ...props, drafts: [draft, newer], publications: [...publications, { id: 8, draftId: 2, url: "https://example.test/new" }] })));
+  expect(screen.getByRole("link", { name: "https://example.test/new" })).toBeTruthy();
+});
+
+it("does not apply an unlinked legacy publication to a new draft", () => {
+  render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], publications: [{ id: 7, url: "https://example.test/legacy" }], busy: false, onRedraft: vi.fn(), showToast: vi.fn() })));
+  expect(screen.getByRole("button", { name: "게시 링크 저장" })).toBeTruthy();
+});
+
+it("keeps partially published candidates in the review list", () => {
+  set("/candidates", [{ id: 1, title: "Other channel ready", repo: "a/b", type: "release", status: "published", unpublishedDraftCount: 1, evidence: {}, updatedAt: Date.now(), judgment: null }]);
+  render(wrap(createElement(Inbox)));
+  expect(screen.getByRole("link", { name: "Other channel ready" })).toBeTruthy();
+  expect(screen.getByText("검수 대기")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "초안 검토" })).toBeTruthy();
+});

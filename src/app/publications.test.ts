@@ -84,3 +84,27 @@ it("does not mark introductions as changes when rebuilding an empty ledger", asy
   expect(backfillLedger(ctx)).toBe(1);
   expect(ledger().publishedAt).toBeNull();
 });
+
+it("counts only latest live drafts without an exact publication, across channels and languages", async () => {
+  const { listInbox, getCandidateDetail } = await import("./candidates.js");
+  const count = () => listInbox(ctx, "me").find((c) => c.id === candidateId)!.unpublishedDraftCount;
+  const first = purposeDraft("introduction");
+  registerPublication(ctx, "me", { candidateId, draftId: first, channel: "x", lang: "en", url: "https://example.test/first" });
+  expect(count()).toBe(0);
+  const second = purposeDraft("introduction", 2);
+  expect(count()).toBe(1);
+  const korean = Number(ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel: "x", lang: "ko", version: 1, body: "Korean", lint: [], status: "copied", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+  expect(count()).toBe(2); // Copying is not publishing.
+  const secondPost = registerPublication(ctx, "me", { candidateId, draftId: second, channel: "x", lang: "en", url: "https://example.test/second" });
+  expect(count()).toBe(1);
+  registerPublication(ctx, "me", { candidateId, draftId: korean, channel: "x", lang: "ko", url: "https://example.test/korean" });
+  expect(count()).toBe(0);
+  const dropped = purposeDraft("update", 3);
+  ctx.db.$client.prepare("UPDATE drafts SET status = 'dropped' WHERE id = ?").run(dropped);
+  expect(count()).toBe(0);
+  removePublication(ctx, "me", secondPost);
+  expect(count()).toBe(1);
+  expect(getCandidateDetail(ctx, "me", candidateId).unpublishedDraftCount).toBe(1);
+  expect(listInbox(ctx, "other")).toEqual([]);
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+});

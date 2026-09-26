@@ -57,7 +57,7 @@ export default function Candidate() {
   const { candidate: c, judgments, publications, profile, told, consistency } = data;
   const j = judgments[0];
   const e = c.evidence;
-  const stage = stageOf({ ...c, judgment: j });
+  const stage = stageOf({ ...c, judgment: j, unpublishedDraftCount: data.unpublishedDraftCount });
   const reasoning = j?.reasoning, angle = j?.angle;
   const decision = j?.overriddenDecision ?? j?.decision;
   const curLangs = tab ? langsOf(tab as Channel) : [];
@@ -127,8 +127,8 @@ export default function Candidate() {
           <div className="chtabs" role="group" aria-label={t("초안 채널")}>
             {channels.map((ch) => {
               const ls = langsOf(ch);
-              const live = ls.map((l) => (draftsByTarget.get(targetKey(ch, l)) ?? []).find((d) => d.status !== "dropped")).filter(Boolean) as Draft[];
-              const pub = publications.find((p) => p.channel === ch);
+              const live = ls.map((l) => [...(draftsByTarget.get(targetKey(ch, l)) ?? [])].sort((a, b) => b.version - a.version).find((d) => d.status !== "dropped")).filter(Boolean) as Draft[];
+              const pub = live.length === ls.length && live.every((d) => publications.some((p) => p.draftId === d.id));
               // 기호는 눈으로 훑기용이고, 화면 낭독기에는 같은 뜻을 글로 준다.
               const [st, stText] = pub ? ["✓", t("게시함")] : live.length === ls.length ? (live.every((d) => d.lint.every((l) => l.ok)) ? ["●", t("초안 준비됨")] : ["!", t("확인할 부분 있음")]) : live.length ? [`${live.length}/${ls.length}`, t("언어 {total}개 중 {n}개 초안 있음", { total: ls.length, n: live.length })] : busy === "draft" || stage.busy ? ["…", t("쓰는 중")] : ["", ""];
               return <button key={ch} aria-pressed={tab === ch} className={tab === ch ? "active" : ""} onClick={() => switchDraft(() => setTab(ch))}><ChannelIcon channel={ch} />{channelLabel(ch)}{st && <><span className="st" aria-hidden title={stText}>{st}</span><span className="sr-only">, {stText}</span></>}</button>;
@@ -137,7 +137,7 @@ export default function Candidate() {
           {!channels.length && <div className="state-panel"><h2>{t("게시할 채널을 먼저 골라주세요")}</h2><p>{t("초안을 만들 채널과 언어를 하나 이상 선택하면 시작할 수 있어요.")}</p><Link className="btn primary" to="/settings?tab=channels">{t("채널 선택하기")}</Link></div>}
           {current && curKey && (
             <DraftPanel key={`${cid}:${curKey}`} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onDirty={setUnsaved} onLang={(l) => switchDraft(() => setLangByCh({ ...langByCh, [current.channel]: l }))} expectedModel={settings?.llm.provider === "gemini" ? (settings.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini) : undefined} draftModelResetAt={keys ? keys.filter((k) => k.label.endsWith(settings?.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini || "") && k.cooldownUntil).map((k) => k.cooldownUntil!).sort()[0] : undefined}
-              drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
+              drafts={draftsByTarget.get(curKey) ?? []} publications={publications.filter((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
               busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} homepage={e.homepage} track={settings?.trackLinks !== false} onRedraft={(instruction, introduction) => redraft([current], instruction, `draft:${curKey}`, introduction)} />
           )}
           <VideoBlock cid={cid} repo={c.repo} drafts={data.drafts} />
