@@ -127,6 +127,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       <div className="draft-head">
         <div className="meta">
           <LangSeg langs={langs} lang={lang} onLang={onLang} />
+          {shown?.purpose && <span className="badge outline">{shown.purpose === "introduction" ? t("서비스 소개") : t("변경사항 소개")}</span>}
           <LintBadges lint={latest.lint} />
           {expectedModel && !latest.model.includes(expectedModel) && latest.model.startsWith("gemini/") && (
             <span className="badge warn" title={t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", { model: expectedModel })}>{t("대체 모델")}{draftModelResetAt ? ` · ${t("{time} 이후 다시 쓰기 권장", { time: new Date(draftModelResetAt).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) })}` : ""}</span>

@@ -214,3 +214,63 @@ it("preserves the previous draft when introducing a service again", async () => 
   expect(drafts.find((item) => item.id === first.id)).toEqual(first);
   expect(drafts.map((item) => item.version).sort()).toEqual([1, 2]);
 });
+
+it.each([undefined, 1])("keeps introduction purpose when rewriting without changes (%s)", async (highlightsAt) => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", description: "A parser", highlights: [], highlightsAt } }).run();
+  await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: true });
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).get()?.purpose).toBe("introduction");
+  // A publication elsewhere must not change this draft's purpose.
+  ctx.db.insert(schema.publications).values({ ownerId: "local", candidateId: cid, channel: "linkedin", url: "https://example.test/post", publishedAt: 1 }).run();
+  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, instruction: "Shorter" });
+  expect(response.status).toBe(202);
+  const job = row((await response.json()).jobs[0]);
+  expect(job.kind).toBe("draft");
+  expect(job.meta?.draftPurpose).toBe("introduction");
+  expect(job.user).toContain("## First introduction");
+  expect(job.user).toContain("Previous version");
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all().map((d) => d.purpose)).toEqual(["introduction", "introduction"]);
+});
+
+it("keeps purpose on failure retry and completes a draft after another channel is published", async () => {
+  await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: true });
+  vi.mocked(runLlm).mockRejectedValueOnce(new Error("offline"));
+  await processServerJob(ctx);
+  const failed = ctx.db.select().from(schema.llmJobs).get()!;
+  ctx.db.update(schema.candidates).set({ status: "published" }).run();
+  const retry = await request(`/api/jobs/${failed.id}/retry`);
+  expect(retry.status).toBe(202);
+  const id = (await retry.json()).jobs[0];
+  expect(row(id).meta?.draftPurpose).toBe("introduction");
+  await processServerJob(ctx);
+  expect(row(id).status).toBe("done");
+  expect(ctx.db.select().from(schema.drafts).get()?.purpose).toBe("introduction");
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+});
+
+it.each(["gemini", "local-agent"] as const)("generates another channel of a published candidate with %s", async (provider) => {
+  updateSettings(ctx, "local", { llm: { provider } });
+  ctx.db.update(schema.candidates).set({ status: "published" }).run();
+  const response = await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "linkedin", lang: "ko" }], introduction: true });
+  expect(response.status).toBe(202);
+  const id = (await response.json()).jobs[0];
+  if (provider === "local-agent") {
+    const claim = claimJob(ctx, "local", id, "cli");
+    expect(completeJob(ctx, "local", id, { claimToken: claim.claimToken!, resultJson: JSON.stringify(draft) }).applied).toBe(true);
+  } else await processServerJob(ctx);
+  expect(row(id).status).toBe("done");
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+});
+
+it("allows the requested digest and update draft after publication, without automatic judging", async () => {
+  ctx.db.update(schema.candidates).set({ status: "published", evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", releaseNotes: "Adds watch mode." } }).run();
+  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: false });
+  expect(response.status).toBe(202);
+  vi.mocked(runLlm).mockResolvedValueOnce(output({ highlights: ["Adds watch mode."], limitations: [] }));
+  await processServerJob(ctx);
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).get()?.purpose).toBe("update");
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+  expect(ctx.db.select().from(schema.judgments).all()).toHaveLength(0);
+});

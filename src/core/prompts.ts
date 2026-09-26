@@ -21,7 +21,7 @@ export type EvidenceLike = {
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
 
-export type PromptSpec = { system: string; user: string; schema: Record<string, unknown>; schemaName: string };
+export type PromptSpec = { draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
 export type ProfileLike = { what: string; audience: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
 
@@ -203,6 +203,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     : "";
   return {
     schemaName: "draft",
+    draftPurpose: opts.introduction ? "introduction" : "update",
     schema: DRAFT_SCHEMA,
     system: `You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.
 Hard rules:
