@@ -19,12 +19,27 @@ export function getCandidateRow(ctx: AppContext, ownerId: string, id: number) {
   return row;
 }
 
+/** 채널·언어마다 최신 유효 버전만 검토 대상으로 센다. 연결할 초안 ID가 없는 과거 게시 기록은 새 초안을 덮지 않는다. */
+function unpublishedCount(drafts: { id: number; channel: string; lang: string; version: number; status: string }[], publications: Pick<Publication, "draftId">[]): number {
+  const latest = new Map<string, (typeof drafts)[number]>();
+  for (const draft of drafts) {
+    if (draft.status === "dropped") continue;
+    const key = `${draft.channel}:${draft.lang}`;
+    if (!latest.has(key) || latest.get(key)!.version < draft.version) latest.set(key, draft);
+  }
+  const published = new Set(publications.map((p) => p.draftId));
+  return [...latest.values()].filter((d) => !published.has(d.id)).length;
+}
+
 export function listInbox(ctx: AppContext, ownerId: string): CandidateListItem[] {
   const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).orderBy(desc(schema.candidates.updatedAt)).limit(200).all();
   const jids = rows.map((r) => r.latestJudgmentId).filter((x): x is number => x !== null);
   const js = jids.length ? ctx.db.select().from(schema.judgments).where(inArray(schema.judgments.id, jids)).all() : [];
   const byId = new Map(js.map((j) => [j.id, toJudgment(j)]));
-  return rows.map((r) => ({ ...toCandidate(r), judgment: r.latestJudgmentId ? byId.get(r.latestJudgmentId) ?? null : null }));
+  const ids = rows.map((r) => r.id);
+  const drafts = ids.length ? ctx.db.select({ id: schema.drafts.id, candidateId: schema.drafts.candidateId, channel: schema.drafts.channel, lang: schema.drafts.lang, version: schema.drafts.version, status: schema.drafts.status }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), inArray(schema.drafts.candidateId, ids))).all() : [];
+  const publications = ids.length ? ctx.db.select({ candidateId: schema.publications.candidateId, draftId: schema.publications.draftId }).from(schema.publications).where(and(eq(schema.publications.ownerId, ownerId), inArray(schema.publications.candidateId, ids))).all() : [];
+  return rows.map((r) => ({ ...toCandidate(r), unpublishedDraftCount: unpublishedCount(drafts.filter((d) => d.candidateId === r.id), publications.filter((p) => p.candidateId === r.id).map((p) => ({ draftId: p.draftId ?? undefined }))), judgment: r.latestJudgmentId ? byId.get(r.latestJudgmentId) ?? null : null }));
 }
 
 export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number): CandidateDetail {
@@ -33,7 +48,7 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map(toDraft);
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));
-  return { candidate: toCandidate(c), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
+  return { candidate: toCandidate(c), unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
 }
 
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {

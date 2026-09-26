@@ -90,7 +90,7 @@ export type PerformanceSummary = { byChannel: { key: string; label: string; coun
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
-export type CandidateListItem = Candidate & { judgment: Judgment | null };
+export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; judgment: Judgment | null };
 
 export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
 export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number }; autoStats?: AutoStats; autoStatsAt?: number };
@@ -123,7 +123,7 @@ export type RepoProfile = {
 };
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 
-export type CandidateDetail = { candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[]; consistency: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] };
+export type CandidateDetail = { unpublishedDraftCount?: number; candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[]; consistency: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] };
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
 export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };
