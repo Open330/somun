@@ -187,3 +187,30 @@ it("fails a draft request whose digest kept no highlight after the source check,
   expect(row(jobs[0])).toMatchObject({ status: "failed", error: expect.stringContaining("확인되지 않은 숫자") });
   expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(1);
 });
+
+
+it.each([undefined, 1])("introduces a service without change highlights (digest timestamp %s)", async (highlightsAt) => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", readmeExcerpt: "A parser for source code.", highlights: [], highlightsAt } }).run();
+  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: true });
+  expect(response.status).toBe(202);
+  const jobs = pendingJobs(ctx, "local", "server");
+  expect(jobs).toHaveLength(1);
+  expect(jobs[0].kind).toBe("draft");
+  expect(jobs[0].user).toContain("## First introduction");
+  expect(jobs[0].user).toContain("A parser for source code.");
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(1);
+});
+
+it("preserves the previous draft when introducing a service again", async () => {
+  await request(`/api/candidates/${cid}/redraft`, params);
+  await processServerJob(ctx);
+  const first = ctx.db.select().from(schema.drafts).get()!;
+  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: true });
+  expect(response.status).toBe(202);
+  await processServerJob(ctx);
+  const drafts = ctx.db.select().from(schema.drafts).all();
+  expect(drafts).toHaveLength(2);
+  expect(drafts.find((item) => item.id === first.id)).toEqual(first);
+  expect(drafts.map((item) => item.version).sort()).toEqual([1, 2]);
+});

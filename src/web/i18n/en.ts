@@ -584,6 +584,8 @@ export const en: Record<string, string> = {
   "단축키 c": "Shortcut c",
   "복사 중…": "Copying…",
   "초안 복사": "Copy draft",
+  "서비스 처음 소개하기": "Introduce the service",
+  "변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.": "Write a new draft introducing the service’s purpose and main features.",
   "다시 쓰기": "Rewrite",
   "사실과 숫자는 그대로. 비우면 같은 문체로 새로 씁니다.": "Facts and numbers stay the same. Leave empty to rewrite in the same voice.",
   "바꾸고 싶은 점. 예: 첫 문장을 내가 겪은 문제로 시작": "What to change. E.g. start the first sentence with a problem I ran into",
