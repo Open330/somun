@@ -144,3 +144,8 @@ describe("service introduction", () => {
     expect((screen.getByRole("button", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+it("shows the saved purpose on an introduction draft", () => {
+  render(panel([{ ...draft, purpose: "introduction" }]));
+  expect(screen.getByText("서비스 소개")).toBeTruthy();
+});

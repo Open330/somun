@@ -19,7 +19,7 @@ import { ingestSessions } from "../../app/sessions.js";
 import { connectorsView, githubAppConfig, issueInstallLink, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import type { Config } from "../config.js";
 import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
-import { queueStep } from "../../app/pipeline.js";
+import { queueStep, requestedIntroduction } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublicationUrl } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettingsView, updateSettings } from "../../app/settings.js";
@@ -111,9 +111,13 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     const ownerId = c.get("ownerId"), cid = id(c.req.param("id"));
     const cand = getCandidateDetail(ctx, ownerId, cid).candidate;
     const unique = targets.filter((t, i) => targets.findIndex((o) => o.channel === t.channel && o.lang === t.lang) === i);
-    const jobs = ctx.db.$client.transaction(() => introduction || cand.evidence.highlightsAt
-      ? unique.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction, introduction }))
-      : [queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: unique, instruction } })]).immediate();
+    const jobs = ctx.db.$client.transaction(() => {
+      const direct = unique.filter((t) => cand.evidence.highlightsAt || requestedIntroduction(ctx, ownerId, cid, t.channel, t.lang, introduction));
+      const pending = unique.filter((t) => !direct.includes(t));
+      const jobs = direct.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction, introduction }));
+      if (pending.length) jobs.push(queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: pending, instruction, introduction } }));
+      return jobs;
+    }).immediate();
     c.header("Location", `/api/jobs/status?candidateId=${cid}`); c.header("Retry-After", "5");
     return c.json({ started: "queued", jobs }, 202);
   });

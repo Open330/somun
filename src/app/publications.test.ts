@@ -46,3 +46,41 @@ it("returns a candidate without drafts to its judged or new stage when its only 
   removePublication(ctx, "me", id);
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("new");
 });
+
+function purposeDraft(purpose: "introduction" | "update", version = 1) {
+  return Number(ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel: "x", lang: "en", version, purpose, body: purpose === "introduction" ? "A tool for developers." : "Adds --watch.", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+}
+
+it("does not announce changes when an introduction is posted", () => {
+  registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction"), channel: "x", url: "https://x.com/me/status/1" });
+  expect(ledger().publishedAt).toBeNull();
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+});
+
+it("clears change marks if only an introduction remains after deleting an update", () => {
+  const introduction = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction"), channel: "x", url: "https://x.com/me/status/1" });
+  const update = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update", 2), channel: "linkedin", url: "https://example.test/post" });
+  expect(ledger().publishedChannel).toBe("linkedin");
+  removePublication(ctx, "me", update);
+  expect(ledger().publishedAt).toBeNull();
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+  removePublication(ctx, "me", introduction);
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("drafted");
+});
+
+it("keeps the update's change marks when an introduction is posted and removed", () => {
+  registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update"), channel: "linkedin", url: "https://example.test/post" });
+  const introduction = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction", 2), channel: "x", url: "https://x.com/me/status/1" });
+  expect(ledger().publishedChannel).toBe("linkedin");
+  removePublication(ctx, "me", introduction);
+  expect(ledger().publishedChannel).toBe("linkedin");
+});
+
+it("does not mark introductions as changes when rebuilding an empty ledger", async () => {
+  const { backfillLedger } = await import("./ledger.js");
+  ctx.db.delete(schema.changeLedger).run();
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", highlights: ["Adds --watch."] } }).run();
+  registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction"), channel: "x", url: "https://x.com/me/status/1" });
+  expect(backfillLedger(ctx)).toBe(1);
+  expect(ledger().publishedAt).toBeNull();
+});

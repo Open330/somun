@@ -14,7 +14,7 @@ import { localeOf, say } from "./i18n.js";
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
 export const MAX_JOB_ATTEMPTS = 3;
-const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
+const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ continuation: r.continuation ?? undefined, id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
 
 const score = z.number().int().min(0).max(2);
 const results = {
@@ -67,7 +67,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
     if (j.executor !== executor || j.claimToken !== input.claimToken || j.status !== "claimed" || j.claimedAt === null || j.claimedAt <= Date.now() - JOB_LEASE_MS) return { applied: false };
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, j.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     // lesson은 발행 뒤에도 반영한다(수정 후 복사·발행이 가장 흔한 흐름).
-    if (!input.error && !isSideJob(j.kind) && (!candidate || ["dropped", "published"].includes(candidate.status))) {
+    if (!input.error && !isSideJob(j.kind) && (!candidate || (candidate.status === "dropped" || (candidate.status === "published" && j.kind !== "draft" && !(j.kind === "digest" && j.continuation))))) {
       ctx.db.update(schema.llmJobs).set({ status: "failed", error: say(localeOf(ctx, ownerId), "글감이 삭제·보관·발행되어 생성 결과를 반영하지 않았습니다.", "The result was not applied because the candidate was deleted, archived, or published."), finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
       events.push({ ownerId, resource: "jobs", id });
       return { applied: false };
@@ -92,7 +92,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       }
       if (j.kind === "profile") profileApplied = true;
       else if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, promptText: j.user, model }, j.continuation ?? undefined);
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.meta?.draftPurpose ?? (j.kind === "draft" ? (j.user.includes("\n## First introduction\n") ? "introduction" : "update") : undefined), promptText: j.user, model }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
@@ -157,9 +157,9 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
       return newId;
     }
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
-    if (["dropped", "published"].includes(candidate.status)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
+    if (candidate.status === "dropped" || (candidate.status === "published" && job.kind !== "draft" && !(job.kind === "digest" && job.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
     // 다이제스트·판단은 지금의 근거와 계정 언어로 다시 만든다. 초안은 요청한 지침이 프롬프트에 들어 있으므로 저장된 것을 그대로 쓴다.
-    const prompt = job.kind === "draft" ? { system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
+    const prompt = job.kind === "draft" ? { draftPurpose: job.meta?.draftPurpose ?? (job.user.includes("\n## First introduction\n") ? "introduction" as const : "update" as const), system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();
 }

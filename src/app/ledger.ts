@@ -75,7 +75,8 @@ export function backfillLedger(ctx: AppContext): number {
   if (any) return 0;
   let n = 0;
   const cands = ctx.db.select().from(schema.candidates).all().sort((a, b) => a.createdAt - b.createdAt);
-  const pubs = ctx.db.select().from(schema.publications).all();
+  const introductionIds = new Set(ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.purpose, "introduction")).all().map((d) => d.id));
+  const pubs = ctx.db.select().from(schema.publications).all().filter((p) => !p.draftId || !introductionIds.has(p.draftId));
   for (const c of cands) {
     const ev = c.evidence as { highlights?: string[]; highlightsAt?: number };
     if (!ev.highlights?.length) continue;

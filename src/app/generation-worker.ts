@@ -28,7 +28,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     if (!claim.claimToken) continue;
     lastServed.set(ctx.db, ownerId);
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, job.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-    if (!(SIDE_JOB_KINDS as readonly string[]).includes(job.kind) && (!candidate || ["dropped", "published"].includes(candidate.status))) {
+    if (!(SIDE_JOB_KINDS as readonly string[]).includes(job.kind) && (!candidate || (candidate.status === "dropped" || (candidate.status === "published" && job.kind !== "draft" && !(job.kind === "digest" && job.continuation))))) {
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error: say(localeOf(ctx, ownerId), "글감이 삭제·보관·발행되어 생성을 중단했습니다.", "Generation stopped because the candidate was deleted, archived, or published.") }, "server");
       return true;
     }

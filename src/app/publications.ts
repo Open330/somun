@@ -15,15 +15,17 @@ export function hasPublication(ctx: AppContext, ownerId: string, repo: string): 
 
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
+  let introduction = false;
   if (input.draftId !== undefined) {
-    const d = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(and(eq(schema.drafts.id, input.draftId), eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, input.candidateId))).get();
+    const d = ctx.db.select({ id: schema.drafts.id, purpose: schema.drafts.purpose }).from(schema.drafts).where(and(eq(schema.drafts.id, input.draftId), eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, input.candidateId))).get();
     if (!d) throw new NotFoundError("draft");
+    introduction = d.purpose === "introduction";
   }
   const now = Date.now();
   const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url: input.url, publishedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
   if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
-  markPublished(ctx, ownerId, input.candidateId, input.channel, now);
+  if (!introduction) markPublished(ctx, ownerId, input.candidateId, input.channel, now);
   channelResultsCache.get(ctx.db)?.delete(ownerId);
   // 등록 직후 한 번 반응을 받아 둔다 (기준선). 실패해도 등록은 된다.
   void refreshReactions(ctx, ownerId, true).catch(() => undefined);
@@ -48,7 +50,11 @@ export function removePublication(ctx: AppContext, ownerId: string, id: number):
     ctx.db.delete(schema.publications).where(eq(schema.publications.id, id)).run();
     const rest = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId))).orderBy(desc(schema.publications.publishedAt)).get();
     // 원장의 "이미 알림" 표시도 되돌린다. 그대로 두면 판단이 이 변경들을 발행된 것으로 보고 새로움 점수를 깎는다.
-    unmarkPublished(ctx, ownerId, p.candidateId, rest ? { channel: rest.channel, publishedAt: rest.publishedAt } : undefined);
+    const changePost = ctx.db.select({ channel: schema.publications.channel, publishedAt: schema.publications.publishedAt, purpose: schema.drafts.purpose }).from(schema.publications)
+      .leftJoin(schema.drafts, and(eq(schema.drafts.id, schema.publications.draftId), eq(schema.drafts.ownerId, ownerId)))
+      .where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId)))
+      .orderBy(desc(schema.publications.publishedAt)).all().find((post) => post.purpose !== "introduction");
+    unmarkPublished(ctx, ownerId, p.candidateId, changePost);
     const c = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, p.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     if (!rest && c?.status === "published") {
       const hasDraft = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), ne(schema.drafts.status, "dropped"))).get();
