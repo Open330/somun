@@ -65,10 +65,10 @@ export default function Candidate() {
   const current = tab && curLang ? { channel: tab as Channel, lang: curLang } : null;
   const curKey = current ? targetKey(current.channel, current.lang) : null;
 
-  const redraft = async (ts: { channel: Channel; lang: string }[], instruction?: string, key = "draft") => {
+  const redraft = async (ts: { channel: Channel; lang: string }[], instruction?: string, key = "draft", introduction?: boolean) => {
     setBusy(key); setGenerationNotice(null);
     try {
-      const r = await post<{ started?: string; [key: string]: unknown }>(`/candidates/${cid}/redraft`, { targets: ts, instruction });
+      const r = await post<{ started?: string; [key: string]: unknown }>(`/candidates/${cid}/redraft`, { targets: ts, instruction, introduction });
       const results = Object.values(r).filter((value): value is { error?: string; queued?: boolean } => typeof value === "object" && value !== null);
       const failure = results.find((value) => value.error);
       if (failure) throw new Error(failure.error);
@@ -138,7 +138,7 @@ export default function Candidate() {
           {current && curKey && (
             <DraftPanel key={`${cid}:${curKey}`} cid={cid} channel={current.channel} lang={current.lang} langs={curLangs} onDirty={setUnsaved} onLang={(l) => switchDraft(() => setLangByCh({ ...langByCh, [current.channel]: l }))} expectedModel={settings?.llm.provider === "gemini" ? (settings.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini) : undefined} draftModelResetAt={keys ? keys.filter((k) => k.label.endsWith(settings?.llm.draftModel || DEFAULT_DRAFT_MODEL.gemini || "") && k.cooldownUntil).map((k) => k.cooldownUntil!).sort()[0] : undefined}
               drafts={draftsByTarget.get(curKey) ?? []} published={publications.find((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
-              busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} homepage={e.homepage} track={settings?.trackLinks !== false} onRedraft={(instruction) => redraft([current], instruction, `draft:${curKey}`)} />
+              busy={busy === `draft:${curKey}` || busy === "draft"} showToast={showToast} homepage={e.homepage} track={settings?.trackLinks !== false} onRedraft={(instruction, introduction) => redraft([current], instruction, `draft:${curKey}`, introduction)} />
           )}
           <VideoBlock cid={cid} repo={c.repo} drafts={data.drafts} />
         </section>

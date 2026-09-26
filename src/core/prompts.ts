@@ -2,6 +2,7 @@
  * 다이제스트·판단·초안 프롬프트 (순수). 프로바이더와 워커가 같은 텍스트를 쓴다.
  *
  * 원칙: 원자료(커밋 제목, PR 제목, README, omp 세션)는 다이제스트만 본다.
+ * 첫 소개 초안은 프로필이 없으면 README를 직접 참고한다.
  * 판단과 초안은 다이제스트가 추린 highlights + 기본 사실만 본다. 전체를 넘기지 않는다.
  */
 import { CHANNELS, langInstruction, langName, type Channel } from "./channels.js";
@@ -188,7 +189,7 @@ export type DraftOptions = { guide?: string; instruction?: string; previous?: { 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
   // 첫 소개는 변경 목록이 아니다. 목록을 요구하면 소개 뒤에 변경이 줄줄이 붙는다(도그푸딩에서 확인).
-  if (introduction) return "## First introduction\nNothing from this repository has been announced before. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows what the project does today.";
+  if (introduction) return "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows what the project does today.";
   const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
   if (!highlights.length) return "";
   if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
@@ -209,7 +210,7 @@ Hard rules:
 - Never mention that the code was written with AI or agents unless the tool itself is about agents.
 - Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.
 - Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.
-- Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with what changed.
+- Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with ${opts.introduction ? "what the project is and who it is for" : "what changed"}.
 - A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", or "출시했습니다" without that evidence.
 - Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.
 - When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.
@@ -236,6 +237,7 @@ Hard rules:
       "",
       "## Facts",
       factsBlock(c, opts.profile),
+      opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,
       draftCoverageGuide(c, channel, opts.introduction),

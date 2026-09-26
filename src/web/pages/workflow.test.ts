@@ -129,3 +129,18 @@ it("shows actionable evidence warnings without requiring hover", () => {
   expect(screen.getByText(/제공된 근거에서 찾지 못한 수치: 99%/)).toBeTruthy();
   expect(screen.getByText(/수정 후 저장하면 다시 점검/)).toBeTruthy();
 });
+
+
+describe("service introduction", () => {
+  it.each([true, false])("requests an introduction with an existing draft: %s", async (existing) => {
+    const onRedraft = vi.fn().mockResolvedValue(true);
+    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: existing ? [draft] : [], busy: false, onRedraft, showToast: vi.fn() })));
+    fireEvent.click(screen.getByRole("button", { name: "서비스 처음 소개하기" }));
+    await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, true));
+    if (existing) expect(screen.getByRole("button", { name: "다시 쓰기" })).toBeTruthy();
+  });
+  it("disables introduction while a request is in progress", () => {
+    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], busy: true, onRedraft: vi.fn(), showToast: vi.fn() })));
+    expect((screen.getByRole("button", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

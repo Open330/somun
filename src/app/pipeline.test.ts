@@ -134,3 +134,16 @@ it("drafts a first introduction until something from the repository is published
   ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "x", url: "https://x.com/a/status/1", publishedAt: 1 }).run();
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
 });
+
+
+it("honors an explicit introduction despite publication history and an old change angle", () => {
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Update", angle: "Only discuss the latest patch" } });
+  ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "x", url: "https://x.com/a/status/1", publishedAt: 1 }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Previous update draft" } });
+  const prompt = buildPrompt(ctx, "test", "draft", id, "x", "en", { introduction: true, instruction: "Keep it short" });
+  expect(prompt.user).toContain("## First introduction");
+  expect(prompt.user).toContain("Keep it short");
+  expect(prompt.user).not.toContain("Only discuss the latest patch");
+  expect(prompt.user).not.toContain("Previous update draft");
+  expect(prompt.system).toContain("open with what the project is and who it is for");
+});

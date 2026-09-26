@@ -34,18 +34,18 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
   return ctx.db.select().from(schema.feedback).where(eq(schema.feedback.ownerId, ownerId)).orderBy(desc(schema.feedback.createdAt)).limit(limit).all().map((f) => ({ targetType: f.targetType, reason: f.reason, note: f.note ?? undefined }));
 }
 
-export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string } = {}): PromptSpec {
+export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
   const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
-  const introduction = !hasPublication(ctx, ownerId, row.repo);
+  const introduction = opts.introduction || !hasPublication(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
   if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
-  const angle = judgment?.angle ?? undefined;
+  const angle = opts.introduction ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
@@ -54,7 +54,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     disputed,
     introduction,
     instruction: opts.instruction?.trim() || undefined,
-    previous: opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
+    previous: !opts.introduction && opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
   });
 }
 
@@ -105,12 +105,12 @@ export async function judgeCandidates(ctx: AppContext, ownerId: string, ids: num
   return { started };
 }
 
-export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { instruction?: string; continuation?: GenerationPlan } = {}): number {
+export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string; continuation?: GenerationPlan } = {}): number {
   return ctx.db.$client.transaction(() => {
     const c = getCandidateRow(ctx, ownerId, candidateId);
     if (["dropped", "published"].includes(c.status)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다. 먼저 글감을 복원해 주세요.", "Archived or published candidates cannot be generated again. Restore the candidate first."));
     const evidence = c.evidence as Evidence;
-    if (kind === "draft" && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again."));
+    if (kind === "draft" && !opts.introduction && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again."));
     return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation);
   }).immediate();
 }

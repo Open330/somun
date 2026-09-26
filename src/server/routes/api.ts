@@ -107,12 +107,12 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     return c.json({ started: "queued", jobs: [job] }, 202);
   });
   app.post("/candidates/:id/redraft", async (c) => {
-    const { targets, instruction } = await body(c, z.object({ targets: z.array(z.object({ channel, lang })).min(1).max(30), instruction: z.string().max(600).optional() }));
+    const { targets, instruction, introduction } = await body(c, z.object({ introduction: z.boolean().optional(), targets: z.array(z.object({ channel, lang })).min(1).max(30), instruction: z.string().max(600).optional() }));
     const ownerId = c.get("ownerId"), cid = id(c.req.param("id"));
     const cand = getCandidateDetail(ctx, ownerId, cid).candidate;
     const unique = targets.filter((t, i) => targets.findIndex((o) => o.channel === t.channel && o.lang === t.lang) === i);
-    const jobs = ctx.db.$client.transaction(() => cand.evidence.highlightsAt
-      ? unique.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction }))
+    const jobs = ctx.db.$client.transaction(() => introduction || cand.evidence.highlightsAt
+      ? unique.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction, introduction }))
       : [queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: unique, instruction } })]).immediate();
     c.header("Location", `/api/jobs/status?candidateId=${cid}`); c.header("Retry-After", "5");
     return c.json({ started: "queued", jobs }, 202);
