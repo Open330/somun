@@ -1,0 +1,28 @@
+{
+  "persona": "audit_link",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "게시 직후 링크 수정 결과와 저장 데이터 비교",
+      "status": "pass",
+      "automationMs": 608
+    }
+  ],
+  "findings": [
+    {
+      "kind": "confirmed-stale-publication-link",
+      "observed": "DB에는 corrected-post가 저장되고 상세 재조회가 완료됐지만 게시 완료 카드에는 original-post가 남는다."
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_link-stale-link.png",
+      "overflow": false
+    }
+  ]
+}

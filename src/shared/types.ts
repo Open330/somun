@@ -68,7 +68,7 @@ export type VoiceSettings = { preset: string; guide: string; useExamples: boolea
 /** GitHub App 설치가 볼 수 있는 저장소 하나. 고르기 화면용. */
 export type InstallationRepo = { fullName: string; description?: string; pushedAt?: number; stars: number; language?: string; fork: boolean; archived: boolean; isPrivate: boolean; watched: boolean };
 /** 화면에 주는 설정. 키 원문 대신 설정 여부와 끝자리만. */
-export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmConfig, "apiKey"> & { apiKeySet: boolean; apiKeyHint?: string }; notify?: { weekly: boolean; lastSentAt?: number; discordWebhookSet: boolean } };
+export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmConfig, "apiKey"> & { apiKeySet: boolean; credentialsConfigured?: boolean; apiKeyHint?: string }; notify?: { weekly: boolean; lastSentAt?: number; discordWebhookSet: boolean } };
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 

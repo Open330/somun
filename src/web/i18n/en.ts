@@ -3,6 +3,17 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다. 입력한 내용은 그대로 있습니다.": "This draft was saved elsewhere while you were editing. Your text is still here.",
+  "복사는 완료했지만 저장하지 못했습니다.": "Copied, but not saved.",
+  "내 내용으로 덮어쓰기": "Overwrite with my text",
+  "로그아웃 중…": "Signing out…",
+  "로그아웃하지 못했습니다. 세션이 유지될 수 있습니다. 다시 시도해 주세요.": "Could not sign out. Your session may still be active. Please try again.",
+  "로그아웃 다시 시도": "Retry sign out",
+  "새 버전이 도착했습니다. 수정 내용은 편집을 시작한 v{version}에 저장됩니다.": "A new version has arrived. Your edits will be saved to v{version}, where you started editing.",
+  "모델 설정을 확인할 수 없습니다. 설정을 다시 불러온 뒤 시도해 주세요.": "Model settings could not be checked. Reload settings and try again.",
+  "설정을 불러오지 못했습니다. 기존 초안은 계속 확인할 수 있습니다.": "Settings could not be loaded. You can still review existing drafts.",
+  "설정 다시 불러오기": "Reload settings",
+  "초안을 만들기 전에 모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요.": "Before creating a draft, add an API key or select a local agent in model settings.",
   "저장하지 않은 수정 내용이 있습니다. 언어를 바꾸면 사라집니다. 바꿀까요?": "You have unsaved edits. Changing the language will discard them. Change anyway?",
   "새 초안을 준비했습니다. 내용을 확인해 주세요.": "New draft ready. Please review it.",
   "저장했습니다": "Saved",

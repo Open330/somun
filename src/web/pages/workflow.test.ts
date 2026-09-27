@@ -189,3 +189,99 @@ it("keeps partially published candidates in the review list", () => {
   expect(screen.getByText("검수 대기")).toBeTruthy();
   expect(screen.getByRole("link", { name: "초안 검토" })).toBeTruthy();
 });
+
+describe("inbox model setup preflight", () => {
+  it.each(["missing-key", "settings-error"])("blocks generation and offers the correct recovery for %s", async (condition) => {
+    set("/candidates", [{ id: 1, title: "A change", repo: "a/x", type: "release", status: "new", evidence: {}, updatedAt: Date.now() }]);
+    if (condition === "missing-key") set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, credentialsConfigured: false } });
+    else resources.set("/settings", { error: "offline", reload: vi.fn() });
+    render(wrap(createElement(Inbox)));
+    fireEvent.click(screen.getByRole("button", { name: "초안 준비" }));
+    expect(post).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "모델 설정" }).getAttribute("href")).toBe("/settings?tab=model");
+    expect(screen.queryByRole("link", { name: "연결 확인" })).toBeNull();
+    if (condition === "settings-error") {
+      fireEvent.click(screen.getByRole("button", { name: "설정 다시 불러오기" }));
+      expect(resources.get("/settings")!.reload).toHaveBeenCalledOnce();
+    }
+  });
+});
+
+describe("draft version and publication consistency", () => {
+  it("saves to the version being edited when a generated version arrives", async () => {
+    const view = render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Edit of version one" } });
+    view.rerender(panel([{ ...draft, id: 2, version: 2, body: "New generated version", updatedAt: 2 }, draft]));
+    expect(screen.getByText("새 버전이 도착했습니다. 수정 내용은 편집을 시작한 v1에 저장됩니다.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/drafts/1/edit", expect.objectContaining({ body: "Edit of version one" })));
+    expect(post).not.toHaveBeenCalledWith("/drafts/2/edit", expect.anything());
+  });
+
+  it("moves to a newly generated version after an earlier edit was saved", async () => {
+    post.mockResolvedValue({ ...draft, body: "Saved edit", updatedAt: 2, status: "edited" });
+    const view = render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Saved edit" } });
+    fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "초안 본문" })).toBeNull());
+    view.rerender(panel([{ ...draft, id: 2, version: 2, body: "Rewritten version", updatedAt: 3 }, { ...draft, body: "Saved edit", updatedAt: 2, status: "edited" }]));
+    expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("2");
+    expect(screen.getByText("Rewritten version")).toBeTruthy();
+  });
+
+  it("records the publication against the older version that was edited and copied", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    post.mockImplementation(async (path: string) => path === "/drafts/1/edit" ? { ...draft, body: "Edited v1", updatedAt: 2, status: "copied" } : { id: 9 });
+    const view = render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Edited v1" } });
+    view.rerender(panel([{ ...draft, id: 2, version: 2, body: "New generated version", updatedAt: 3 }, draft]));
+    fireEvent.click(screen.getByRole("button", { name: "저장하고 복사" }));
+    await waitFor(() => expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("1"));
+    fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/v1" } });
+    fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 1, url: "https://example.test/v1" })));
+  });
+
+  it("keeps the edit and asks before overwriting a draft another tab saved first", async () => {
+    post.mockRejectedValueOnce(Object.assign(new Error("conflict"), { status: 409 })).mockResolvedValue({ ...draft, body: "My tab text", updatedAt: 3, status: "edited" });
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "My tab text" } });
+    fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
+    await screen.findByText("편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다. 입력한 내용은 그대로 있습니다.");
+    expect(post).toHaveBeenLastCalledWith("/drafts/1/edit", expect.objectContaining({ body: "My tab text", base: { title: undefined, body: "Original draft" } }));
+    expect((screen.getByRole("textbox", { name: "초안 본문" }) as HTMLTextAreaElement).value).toBe("My tab text");
+    fireEvent.click(screen.getByRole("button", { name: "내 내용으로 덮어쓰기" }));
+    await waitFor(() => expect(post).toHaveBeenLastCalledWith("/drafts/1/edit", expect.objectContaining({ body: "My tab text", base: undefined })));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "초안 본문" })).toBeNull());
+  });
+
+  it("shows a corrected publication URL immediately after recording a publication", async () => {
+    post.mockResolvedValue({ id: 7 });
+    render(panel());
+    fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/original" } });
+    fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
+    await screen.findByRole("heading", { name: "게시 기록을 남겼어요" });
+    fireEvent.click(screen.getByRole("button", { name: "링크 고치기" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "게시글 링크" }), { target: { value: "https://example.test/corrected" } });
+    fireEvent.click(screen.getByRole("button", { name: "링크 저장" }));
+    await screen.findByRole("link", { name: "https://example.test/corrected" });
+    expect(screen.queryByRole("link", { name: "https://example.test/original" })).toBeNull();
+  });
+
+  it("opens the requested published version even when a newer unpublished version exists", async () => {
+    render(wrap(createElement(DraftPanel, {
+      cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(),
+      drafts: [{ ...draft, id: 2, version: 2, body: "New version" }, draft],
+      publications: [{ id: 7, draftId: 1, url: "https://example.test/published" }], initialDraftId: 1,
+      busy: false, onRedraft: async () => true, showToast: vi.fn(),
+    })));
+    expect(screen.getByRole("heading", { name: "게시 기록을 남겼어요" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "초안 다시 보기" }));
+    expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("1");
+    expect(screen.getByText("Original draft")).toBeTruthy();
+  });
+});

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { useResource } from "./api";
+import { endSession, useResource } from "./api";
+import { resetEvents } from "./events";
 
 vi.mock("./events", () => ({ subscribeEvents: () => () => {}, resetEvents: vi.fn() }));
 vi.mock("./auth/manager", () => ({ getAuthManager: () => null }));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); localStorage.clear(); });
 
 it("ignores an older response even if fetch does not honor cancellation", async () => {
   const pending: { resolve: (res: Response) => void; signal: AbortSignal }[] = [];
@@ -33,4 +34,18 @@ it("aborts in-flight requests on unmount and clears data for a null path", async
   await waitFor(() => expect(signals).toHaveLength(2));
   unmount();
   expect(signals[1].aborted).toBe(true);
+});
+
+
+it.each(["network", "http"])("keeps session client state when logout fails: %s", async (failure) => {
+  localStorage.setItem("somun.token", "test-token");
+  const fetchMock = failure === "network" ? vi.fn().mockRejectedValue(new Error("offline")) : vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(endSession()).rejects.toThrow();
+  expect(resetEvents).not.toHaveBeenCalled();
+  expect(localStorage.getItem("somun.token")).toBe("test-token");
+  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  await endSession();
+  expect(resetEvents).toHaveBeenCalledOnce();
+  expect(localStorage.getItem("somun.token")).toBeNull();
 });

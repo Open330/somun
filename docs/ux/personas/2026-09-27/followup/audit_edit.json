@@ -1,0 +1,30 @@
+{
+  "persona": "audit_edit",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "편집 중 새 버전 도착 시 저장 대상 비교",
+      "status": "pass",
+      "automationMs": 564
+    }
+  ],
+  "findings": [
+    {
+      "kind": "confirmed-edit-target-change",
+      "observed": "v1 편집 중 v2 생성 완료 후 저장하면 v1 대신 v2 본문이 수정 내용으로 덮인다.",
+      "firstId": 1,
+      "overwrittenId": 2
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_edit-overwritten-version.png",
+      "overflow": false
+    }
+  ]
+}

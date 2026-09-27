@@ -5,9 +5,10 @@ import { draftLintFacts, lintDraft } from "../core/lint.js";
 import { schema } from "../infra/db/index.js";
 import type { Draft, Evidence, Example, FeedbackReason } from "../shared/types.js";
 import { toDraft } from "./candidates.js";
-import { emit, NotFoundError, type AppContext } from "./context.js";
+import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
+import { say } from "./i18n.js";
 import { disputeCandidateFacts, queueLesson } from "./learning.js";
 
 /** 검수 루프: 복사/수정/버림이 문체 예시와 피드백을 만든다. */
@@ -43,10 +44,12 @@ function upsertOwnExample(ctx: AppContext, ownerId: string, d: { id: number; cha
 /**
  * 초안 저장. 수정이면 diff를 남기고 규칙 뽑기를 큐에 넣는다.
  * 문체 예시는 "복사"한 글만 된다: 쓰지 않은 중간 수정은 예시가 아니다. 금지 표현 등 기본 규칙을 어긴 글도 예시로 쓰지 않는다.
+ * base는 편집을 시작할 때 본 본문이다. 그사이 다른 탭에서 본문이 바뀌었으면 덮어쓰지 않고 충돌로 돌려준다.
  */
-export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean }): Draft {
+export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean; base?: { title?: string; body: string } }): Draft {
   const d = getDraftRow(ctx, ownerId, id);
   const settings = getSettings(ctx, ownerId);
+  if (input.base && (input.base.body !== d.body || (input.base.title ?? "") !== (d.title ?? ""))) throw new GenerationConflictError(say(settings.ui?.locale ?? "ko", "편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다.", "This draft was saved elsewhere while you were editing."));
   const changed = d.body !== input.body || (d.title ?? "") !== (input.title ?? "");
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();

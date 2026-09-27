@@ -1,0 +1,30 @@
+{
+  "persona": "audit_edit",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "편집 중 새 버전 도착 시 저장 대상 비교",
+      "status": "pass",
+      "automationMs": 524
+    }
+  ],
+  "findings": [
+    {
+      "kind": "verified-edit-target",
+      "observed": "v1 편집 중 v2 생성 완료 후 저장해도 수정은 v1에만 반영되고 v2는 보존된다.",
+      "firstId": 1,
+      "preservedId": 2
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_edit-preserved-version.png",
+      "overflow": false
+    }
+  ]
+}
