@@ -32,14 +32,30 @@ function unpublishedCount(drafts: { id: number; channel: string; lang: string; v
 }
 
 export function listInbox(ctx: AppContext, ownerId: string): CandidateListItem[] {
-  const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).orderBy(desc(schema.candidates.updatedAt)).limit(200).all();
-  const jids = rows.map((r) => r.latestJudgmentId).filter((x): x is number => x !== null);
-  const js = jids.length ? ctx.db.select().from(schema.judgments).where(inArray(schema.judgments.id, jids)).all() : [];
+  const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).orderBy(desc(schema.candidates.updatedAt), desc(schema.candidates.id)).all();
+  if (!rows.length) return [];
+  // 소유자별 일괄 조회: 글감 수와 무관하게 쿼리 수를 유지하고 IN 인자 개수 제한도 피한다.
+  const drafts = ctx.db.select({ id: schema.drafts.id, candidateId: schema.drafts.candidateId, channel: schema.drafts.channel, lang: schema.drafts.lang, version: schema.drafts.version, status: schema.drafts.status }).from(schema.drafts).where(eq(schema.drafts.ownerId, ownerId)).all();
+  const publications = ctx.db.select({ candidateId: schema.publications.candidateId, draftId: schema.publications.draftId }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).all();
+  const draftsByCandidate = new Map<number, typeof drafts>();
+  for (const draft of drafts) {
+    const group = draftsByCandidate.get(draft.candidateId) ?? [];
+    group.push(draft); draftsByCandidate.set(draft.candidateId, group);
+  }
+  const publicationsByCandidate = new Map<number, Pick<Publication, "draftId">[]>();
+  for (const publication of publications) {
+    const group = publicationsByCandidate.get(publication.candidateId) ?? [];
+    group.push({ draftId: publication.draftId ?? undefined }); publicationsByCandidate.set(publication.candidateId, group);
+  }
+  let completedCount = 0;
+  const selected = rows.map((r) => ({ ...toCandidate(r), unpublishedDraftCount: unpublishedCount(draftsByCandidate.get(r.id) ?? [], publicationsByCandidate.get(r.id) ?? []) }))
+    .filter((c) => {
+      if (["new", "judged", "drafted"].includes(c.status) || (c.status === "published" && c.unpublishedDraftCount > 0)) return true;
+      return completedCount++ < 200;
+    });
+  const js = ctx.db.select().from(schema.judgments).where(and(eq(schema.judgments.ownerId, ownerId), inArray(schema.judgments.id, ctx.db.select({ id: schema.candidates.latestJudgmentId }).from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId))))).all();
   const byId = new Map(js.map((j) => [j.id, toJudgment(j)]));
-  const ids = rows.map((r) => r.id);
-  const drafts = ids.length ? ctx.db.select({ id: schema.drafts.id, candidateId: schema.drafts.candidateId, channel: schema.drafts.channel, lang: schema.drafts.lang, version: schema.drafts.version, status: schema.drafts.status }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), inArray(schema.drafts.candidateId, ids))).all() : [];
-  const publications = ids.length ? ctx.db.select({ candidateId: schema.publications.candidateId, draftId: schema.publications.draftId }).from(schema.publications).where(and(eq(schema.publications.ownerId, ownerId), inArray(schema.publications.candidateId, ids))).all() : [];
-  return rows.map((r) => ({ ...toCandidate(r), unpublishedDraftCount: unpublishedCount(drafts.filter((d) => d.candidateId === r.id), publications.filter((p) => p.candidateId === r.id).map((p) => ({ draftId: p.draftId ?? undefined }))), judgment: r.latestJudgmentId ? byId.get(r.latestJudgmentId) ?? null : null }));
+  return selected.map((c) => ({ ...c, judgment: c.latestJudgmentId ? byId.get(c.latestJudgmentId) ?? null : null }));
 }
 
 export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number): CandidateDetail {
