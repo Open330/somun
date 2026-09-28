@@ -28,21 +28,31 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       </nav>
 
       <section className="hero">
-        <div className="hero-copy">
-          <h1>{tr("만든 건 많은데,{br}{explain}가 어렵다면.", { br: <br />, explain: <em>{t("설명하기")}</em> })}</h1>
-          <p className="sub">{t("소문은 릴리스·PR·커밋을 읽고, 사용자가 알아듣는 말로 홍보 글 초안을 씁니다. 근거는 실제 작업물에서만 가져오고, 올리는 건 직접 합니다.")}</p>
-          <div className="toolbar">
-            {auth.enabled ? (
-              // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
-              <GithubButton size="lg" onClick={() => auth.signIn("github")} label={t("GitHub로 시작하기")} />
-            ) : (
-              <button className="primary" onClick={onToken}>{t("토큰으로 들어가기")}</button>
-            )}
-            <a className="btn ghost" href="#how">{t("어떻게 생각하는가 ↓")}</a>
+        <div className="hero-head">
+          <div className="hero-copy">
+            <p className="hero-eyebrow"><span aria-hidden /> AN EDITOR FOR WHAT YOU SHIPPED</p>
+            <h1>{tr("만든 건 많은데,{br}{explain} {hard}", { br: <br />, explain: <span className="outline-word">{t("설명하기가")}</span>, hard: <em>{t("어렵다면.")}</em> })}</h1>
+          </div>
+          <div className="hero-aside">
+            <span className="hand-note" aria-hidden>{t("직접 넘겨 보세요")} ↙</span>
+            <p className="sub">{t("소문은 릴리스·PR·커밋을 읽고, 사용자가 알아듣는 말로 홍보 글 초안을 씁니다. 근거는 실제 작업물에서만 가져오고, 올리는 건 직접 합니다.")}</p>
+            <div className="toolbar">
+              {auth.enabled ? (
+                // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
+                <GithubButton size="lg" onClick={() => auth.signIn("github")} label={t("GitHub로 시작하기")} />
+              ) : (
+                <button className="primary" onClick={onToken}>{t("토큰으로 들어가기")}</button>
+              )}
+              <a className="btn ghost" href="#how">{t("어떻게 생각하는가 ↓")}</a>
+            </div>
           </div>
         </div>
         <HeroFilm />
       </section>
+
+      <div className="marquee" aria-hidden>
+        <div className="marquee-track">{[0, 1].map((k) => <span key={k}>OBSERVE <i>↗</i> DISTILL <i>✳</i> JUDGE <i>↗</i> DRAFT <i>✳</i> OBSERVE <i>↗</i> DISTILL <i>✳</i> JUDGE <i>↗</i> DRAFT <i>✳</i> </span>)}</div>
+      </div>
 
       <section className="section" id="how" data-reveal>
         <h2>{t("어떻게 생각하는가")}</h2>

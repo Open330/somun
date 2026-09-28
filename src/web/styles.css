@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Nanum+Pen+Script&display=swap");
 
 /* ── tokens ─────────────────────────────────────────────── */
 :root {
@@ -154,12 +154,24 @@ label.field span { display: block; font-size: 12px; color: var(--muted); margin-
 .step h3 { font-size: 15px; margin: 6px 0 4px; }
 
 /* ── landing ────────────────────────────────────────────── */
-.landing { max-width: 1080px; margin: 0 auto; padding: 24px 24px 80px; }
+.landing { max-width: 1200px; margin: 0 auto; padding: 24px 24px 80px; }
 .landing nav { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 40px; }
-.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 24px 0 56px; }
-.hero h1 { font-size: clamp(34px, 4.6vw, 52px); line-height: 1.12; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.025em; }
+.hero { padding: 28px 0 64px; }
+.hero-head { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 48px; align-items: end; margin-bottom: 44px; }
+.hero-eyebrow { display: flex; align-items: center; gap: 10px; margin: 0 0 22px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .18em; color: var(--accent); }
+.hero-eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.hero h1 { font-size: clamp(40px, 6.2vw, 80px); line-height: 1.08; margin: 0; font-weight: 700; letter-spacing: -0.045em; }
 .hero h1 em { font-style: normal; color: var(--accent); }
-.hero .sub { font-size: 18px; color: var(--ink-2); max-width: 32em; margin-bottom: 26px; }
+/* 윤곽 글자: 쓸 말이 아직 비어 있는 상태. 편집자가 채워 넣는다. */
+.hero h1 .outline-word { color: transparent; -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke; }
+.hero-aside { display: grid; gap: 18px; padding-bottom: 8px; }
+.hand-note { font-family: "Nanum Pen Script", var(--font-body); font-size: 26px; line-height: 1; color: var(--accent); transform: rotate(-4deg); transform-origin: left; width: max-content; }
+.hero .sub { font-size: 16px; color: var(--ink-2); max-width: 30em; margin: 0; }
+.marquee { overflow: hidden; margin: 0 calc(50% - 50vw) 8px; background: var(--accent); color: var(--accent-ink); border-block: 1px solid var(--accent); }
+.marquee-track { display: flex; width: max-content; animation: marquee 38s linear infinite; }
+.marquee-track span { flex: none; padding: 18px 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 3.4vw, 44px); letter-spacing: -.03em; white-space: pre; }
+.marquee-track i { font-style: normal; font-weight: 400; margin: 0 .5em; opacity: .7; }
+@keyframes marquee { to { transform: translateX(-50%); } }
 .section { padding: 40px 0; border-top: 1px solid var(--line); }
 .section h2 { font-size: 24px; text-transform: none; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 8px; font-weight: 600; }
 .section .lede { color: var(--muted); max-width: 40em; margin-bottom: 24px; }
@@ -181,7 +193,9 @@ footer.landing-foot { padding-top: 40px; color: var(--muted); font-size: 13px; d
   .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; }
   .sidebar .spacer, .sidebar .who { display: none; }
   .main { padding: 20px 16px 48px; }
-  .grid2, .hero, .three, .steps { grid-template-columns: 1fr; }
+  .grid2, .hero-head, .three, .steps { grid-template-columns: 1fr; }
+  .hero-head { gap: 26px; margin-bottom: 30px; }
+  .hero h1 .outline-word { -webkit-text-stroke-width: 1.2px; }
   .flow { grid-template-columns: repeat(2, 1fr); }
   .channels { grid-template-columns: 1fr; }
   .cand { grid-template-columns: 1fr; }
@@ -644,3 +658,14 @@ button.chip { min-height: 28px; }
   .pub > button, .pub > span { justify-self: start; }
 }
 .state-panel > h2:first-child { margin-top: 0; }
+
+/* 랜딩 머리: 좁은 폭에서 로고가 세로로 꺾이거나 버튼이 두 줄이 되지 않게 한다. GitHub 링크는 바닥글에도 있다. */
+.lockup .word, .lockup .roman { white-space: nowrap; }
+@media (max-width: 560px) {
+  .landing { padding: 16px 16px 64px; }
+  .landing nav { padding-bottom: 28px; gap: 10px; }
+  .landing nav .lockup .roman { display: none; }
+  .landing nav .toolbar { flex-wrap: nowrap; gap: 6px; }
+  .landing nav .toolbar > a.btn.ghost { display: none; }
+  .hand-note { font-size: 22px; }
+}

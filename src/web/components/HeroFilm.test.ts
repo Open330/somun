@@ -11,7 +11,8 @@ it("plays as a video that can be paused and jumped by chapter", () => {
   fireEvent.click(screen.getByRole("button", { name: "일시정지" }));
   expect(screen.getByRole("button", { name: "재생" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "3장: 판단" }));
-  expect(screen.getByText("다섯 기준으로 점수를 매기고 이유를 남깁니다")).toBeTruthy();
+  expect(screen.getByText("JUDGE.")).toBeTruthy();
+  expect(screen.getAllByText("다섯 기준으로 점수를 매기고 이유를 남깁니다").length).toBeGreaterThan(0);
   expect(screen.getByRole("slider", { name: "재생 위치" }).getAttribute("aria-valuetext")).toBe("0:07 · 판단");
 });
 
