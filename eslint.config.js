@@ -2,7 +2,7 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
-  { ignores: ["dist/**", "node_modules/**", "data/**", ".convex/**", "drizzle/meta/**"] },
+  { ignores: ["dist/**", "node_modules/**", "data/**", ".convex/**", ".claude/**", "drizzle/meta/**"] },
   ...tseslint.configs.recommended,
   {
     files: ["src/web/**/*.{ts,tsx}"],
