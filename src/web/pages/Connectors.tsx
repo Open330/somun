@@ -30,7 +30,7 @@ export default function Connectors() {
   if (!view || !sources) return <Skeleton rows={3} />;
   const linked = sources.filter((s) => ["github", "blog"].includes(s.kind));
   return <>
-    <header className="page-head workspace-head"><div><span className="eyebrow">{t("글감이 시작되는 곳")}</span><h1>{t("연결 관리")}</h1><p className="lede">{t("저장소나 블로그 하나부터 시작하세요. 연결한 소스에서 변경을 모읍니다.")}</p></div>{linked.some((s) => s.enabled && s.targets.length) && <Link className="btn primary" to="/">{t("글감 가져오러 가기 →")}</Link>}</header>
+    <header className="page-head workspace-head"><div><h1>{t("연결 관리")}</h1><p className="lede">{t("저장소나 블로그 하나부터 시작하세요. 연결한 소스에서 변경을 모읍니다.")}</p></div>{linked.some((s) => s.enabled && s.targets.length) && <Link className="btn primary" to="/">{t("글감 가져오러 가기 →")}</Link>}</header>
     {notice && <div className={`inline-notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}><span>{notice.text}</span>{!notice.error && <Link to="/">{t("글감으로 이동")} →</Link>}</div>}
     <div className="connection-grid">
       <section className="card connection-card"><div className="connection-label"><span className="connection-symbol" aria-hidden>↗</span><span className="badge outline">{t("릴리스 · 커밋 · PR")}</span></div><h2>{t("GitHub 저장소")}</h2><p>{t("프로젝트에서 바뀐 내용을 게시글의 근거로 가져옵니다. 앱 연결 시 읽기 권한만 요청합니다.")}</p>

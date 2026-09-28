@@ -7,6 +7,7 @@ import type { Draft, SettingsView } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../app/settings";
 import Inbox from "./Inbox";
 import DraftPanel from "./candidate/DraftPanel";
+import Candidate from "./Candidate";
 
 const { resources, post } = vi.hoisted(() => ({ resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(), post: vi.fn() }));
 vi.mock("../lib/api", () => ({ useResource: (path: string) => resources.get(path) ?? { reload() {} }, post, patch: vi.fn(), del: vi.fn() }));
@@ -135,13 +136,16 @@ describe("service introduction", () => {
   it.each([true, false])("requests an introduction with an existing draft: %s", async (existing) => {
     const onRedraft = vi.fn().mockResolvedValue(true);
     render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: existing ? [draft] : [], busy: false, onRedraft, showToast: vi.fn() })));
-    fireEvent.click(screen.getByRole("button", { name: "서비스 처음 소개하기" }));
+    // 초안이 있으면 드물게 쓰는 동작이라 초안 메뉴에 둔다. 초안이 없으면 바로 보이는 버튼이다.
+    if (existing) fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+    fireEvent.click(screen.getByRole(existing ? "menuitem" : "button", { name: "서비스 처음 소개하기" }));
     await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, true));
     if (existing) expect(screen.getByRole("button", { name: "다시 쓰기" })).toBeTruthy();
   });
   it("disables introduction while a request is in progress", () => {
     render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], busy: true, onRedraft: vi.fn(), showToast: vi.fn() })));
-    expect((screen.getByRole("button", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+    expect((screen.getByRole("menuitem", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -284,4 +288,14 @@ describe("draft version and publication consistency", () => {
     expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("1");
     expect(screen.getByText("Original draft")).toBeTruthy();
   });
+});
+
+it("labels channel tabs with a readable draft status instead of a bare symbol", async () => {
+  set("/settings", { ...DEFAULT_SETTINGS, channelLangs: { x: ["en"], linkedin: ["ko"] } } as SettingsView);
+  set("/keys", []);
+  set("/candidates/1", { candidate: { id: 1, title: "A change", repo: "a/b", type: "release", status: "drafted", evidence: { repo: "a/b", repoUrl: "https://example.test/a/b" }, latestJudgmentId: null, createdAt: 1, updatedAt: 1 }, judgments: [], drafts: [{ ...draft, lint: [{ rule: "no_exclamation", ok: false, detail: "Remove !" }] }, { ...draft, id: 2, channel: "linkedin", lang: "ko", lint: [{ rule: "has_link", ok: true }] }], publications: [], signals: [], told: [], consistency: [] });
+  render(createElement(RouterProvider, { router: createMemoryRouter([{ path: "/c/:id", element: createElement(Candidate) }], { initialEntries: ["/c/1"] }) }));
+  await waitFor(() => expect(screen.getByRole("button", { name: /X, 자동 점검에서 확인할 부분이 있습니다/ })).toBeTruthy());
+  expect(screen.getByRole("button", { name: /LinkedIn, 초안 준비됨/ })).toBeTruthy();
+  expect(screen.getAllByText("확인 필요").length).toBeGreaterThan(0);
 });

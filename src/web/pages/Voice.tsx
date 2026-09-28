@@ -41,9 +41,9 @@ export default function Voice() {
 
   return (
     <>
-      <div className="page-head">
+      <header className="page-head workspace-head">
         <div><h1>{t("문체")}</h1><p className="lede">{t("초안이 어떤 말투로 쓰일지 정합니다. 프리셋 하나를 고르고, 필요하면 내 지침을 덧붙입니다. 예시 문장은 선택입니다.")}</p></div>
-      </div>
+      </header>
 
       {voice && (
         <div className="card stack" style={{ gap: 14, marginBottom: 20 }}>

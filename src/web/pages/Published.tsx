@@ -14,7 +14,7 @@ export default function Published() {
   if (error) return <ErrorState title={t("발행 기록을 불러오지 못했습니다")} message={error} onRetry={reload} />;
   return (
     <>
-      <div className="page-head"><div><h1>{t("발행 기록")}</h1><p className="lede">{t("직접 게시한 글을 모아보고, 게시 후 어떤 변화가 있었는지 확인하세요.")}</p></div>{rows && rows.length > 0 && <div className="toolbar"><button disabled={refreshing} onClick={async () => { setRefreshing(true); setRefreshError(null); try { await post("/publications/refresh"); reload(); } catch (err) { setRefreshError(`${t("반응을 가져오지 못했습니다.")} ${(err as Error).message}`); } finally { setRefreshing(false); } }}>{refreshing ? t("확인 중…") : t("반응 새로 받기")}</button></div>}</div>
+      <header className="page-head workspace-head"><div><h1>{t("발행 기록")}</h1><p className="lede">{t("직접 게시한 글을 모아보고, 게시 후 어떤 변화가 있었는지 확인하세요.")}</p></div>{rows && rows.length > 0 && <div className="toolbar"><button disabled={refreshing} onClick={async () => { setRefreshing(true); setRefreshError(null); try { await post("/publications/refresh"); reload(); } catch (err) { setRefreshError(`${t("반응을 가져오지 못했습니다.")} ${(err as Error).message}`); } finally { setRefreshing(false); } }}>{refreshing ? t("확인 중…") : t("반응 새로 받기")}</button></div>}</header>
       {refreshError && <div className="inline-notice is-error" role="alert">{refreshError}</div>}
       {rows === undefined ? <Skeleton rows={3} /> : rows.length === 0 ? (
         <div className="state-panel">

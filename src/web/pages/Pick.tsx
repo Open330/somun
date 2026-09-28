@@ -57,7 +57,7 @@ export default function Pick() {
 
   return (
     <>
-      <div className="page-head">
+      <header className="page-head workspace-head">
         <div>
           <h1>{t("무엇을 만들어볼까요?")}</h1>
           <p className="lede">{tr("지켜볼 저장소를 고르세요. 고른 것만 읽고, 아래 방식대로 글감을 만듭니다. 나중에 {link}에서 바꿀 수 있습니다.", { link: <a href="/connectors">{t("연결")}</a> })}</p>
@@ -65,7 +65,7 @@ export default function Pick() {
         <div className="toolbar">
           <button className="primary" disabled={busy || sel.size === 0 || !repos} onClick={() => void save()}>{busy ? t("저장 중…") : t("{n}개 지켜보기", { n: sel.size })}</button>
         </div>
-      </div>
+      </header>
 
       {err && <div className="empty">{err}</div>}
       {!repos && !err && <Skeleton rows={6} />}

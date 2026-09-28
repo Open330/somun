@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CHANNELS } from "../../core/channels";
 import { SAMPLE_WORK, VOICE_PRESETS } from "../../core/voice";
 import { en } from "./en";
-import { setLocale, t } from "./index";
+import { loadCatalog, setLocale, t } from "./index";
 
 const files = (dir: string): string[] => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return statSync(p).isDirectory() ? files(p) : /\.tsx?$/.test(f) && !/\.test\./.test(f) && !p.includes("i18n") ? [p] : []; });
 const WEB = files("src/web");
@@ -46,7 +46,8 @@ it("leaves no Korean outside t()/tr() in web code (comments and allowed content 
   expect(leaks).toEqual([]);
 });
 
-it("translates with variables and falls back to Korean for unknown keys", () => {
+it("translates with variables and falls back to Korean for unknown keys", async () => {
+  await loadCatalog("en");
   setLocale("en");
   expect(t("{n}분 전", { n: 5 })).toBe(en["{n}분 전"].replace("{n}", "5"));
   expect(t("사전에 없는 문장")).toBe("사전에 없는 문장");

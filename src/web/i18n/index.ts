@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import type { Locale } from "@shared/locale";
-import { en } from "./en";
 
 /**
  * 화면 언어. 한국어 원문이 키다(gettext 방식): 코드는 t("글감")처럼 원문을 그대로 읽히게 두고,
@@ -25,6 +24,18 @@ function detect(): Locale {
 
 let current: Locale = detect();
 const listeners = new Set<() => void>();
+const notify = () => { for (const l of listeners) l(); };
+
+/**
+ * 영어 사전(수십 KB)은 영어 화면에서만 필요하다. 한국어 사용자는 받지 않고, 영어 사용자는 처음 그리기 전에 한 번 받는다.
+ * 받는 동안 t()는 원문(한국어)을 돌려주므로 화면이 깨지지는 않는다.
+ */
+let catalog: Record<string, string> | null = null;
+let loading: Promise<void> | null = null;
+export function loadCatalog(locale: Locale = current): Promise<void> {
+  if (locale !== "en" || catalog) return Promise.resolve();
+  return (loading ??= import("./en").then((m) => { catalog = m.en; }, (err: unknown) => { loading = null; throw err; }));
+}
 if (typeof document !== "undefined") document.documentElement.lang = current;
 
 export const getLocale = (): Locale => current;
@@ -46,7 +57,9 @@ export function setLocale(next: Locale, { choice = true }: { choice?: boolean } 
   current = next;
   try { localStorage.setItem(KEY, next); } catch { /* 저장소를 못 쓰는 환경 */ }
   if (typeof document !== "undefined") document.documentElement.lang = next;
-  for (const l of listeners) l();
+  // 사전을 아직 안 받았으면 받은 뒤에 다시 그린다(한국어와 영어가 섞인 화면을 잠깐이라도 보이지 않게).
+  if (next === "en" && !catalog) void loadCatalog("en").then(notify, notify);
+  else notify();
 }
 
 export function useLocale(): Locale {
@@ -56,7 +69,7 @@ export function useLocale(): Locale {
 export type Vars = Record<string, string | number | undefined | null>;
 
 export function t(ko: string, vars?: Vars): string {
-  const template = current === "en" ? en[ko] ?? ko : ko;
+  const template = current === "en" ? catalog?.[ko] ?? ko : ko;
   return vars ? template.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] === undefined || vars[k] === null ? m : String(vars[k]))) : template;
 }
 
