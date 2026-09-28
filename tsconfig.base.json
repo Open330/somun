@@ -11,7 +11,6 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "baseUrl": ".",
-    "paths": { "@core/*": ["src/core/*"], "@shared/*": ["src/shared/*"], "@web/*": ["src/web/*"] }
+    "paths": { "@core/*": ["./src/core/*"], "@shared/*": ["./src/shared/*"], "@web/*": ["./src/web/*"] }
   }
 }
