@@ -130,14 +130,14 @@ export default function Candidate() {
       {settings?.llm.credentialsConfigured === false && !generationNotice && <div className="inline-notice" role="status"><span>{t("초안을 만들기 전에 모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요.")}</span><Link to="/settings?tab=model">{t("모델 설정")}</Link></div>}
       {generationNotice && <div className={`inline-notice ${generationNotice.error ? "is-error" : ""}`} role={generationNotice.error ? "alert" : "status"}><span>{generationNotice.text}</span><Link to="/settings?tab=model">{t("모델 설정 확인")}</Link><button className="ghost sm" aria-label={t("안내 닫기")} onClick={() => setGenerationNotice(null)}>×</button></div>}
       <GenerationStatus candidateId={cid} onChange={reload} />
-      <ol className="editor-journey" aria-label={t("게시까지의 과정")}><li><span>1</span> {t("초안 검토·수정")}</li><li><span>2</span> {t("복사해 직접 게시")}</li><li><span>3</span> {t("게시 링크 기록")}</li></ol>
       <div className="cand-layout">
 
 
         <section className="cand-main">
-          <div className="row between" style={{ alignItems: "baseline", marginBottom: 4 }}>
-            <h2 style={{ margin: 0 }}>{t("초안")}</h2>
-            {settings && <Link to="/voice" className="tiny muted">{t("문체:")} {t(voicePreset(settings.voice.preset).name)}{settings.voice.guide ? t(" + 내 지침") : ""} ↗</Link>}
+          <div className="draft-section-head">
+            <h2>{t("초안")}</h2>
+            <ol className="editor-journey" aria-label={t("게시까지의 과정")}><li>{t("초안 검토·수정")}</li><li>{t("복사해 직접 게시")}</li><li>{t("게시 링크 기록")}</li></ol>
+            {settings && <Link to="/voice" className="tiny muted voice-link">{t("문체:")} {t(voicePreset(settings.voice.preset).name)}{settings.voice.guide ? t(" + 내 지침") : ""} ↗</Link>}
           </div>
           {consistency.length > 0 && (
             <div className="callout" style={{ marginBottom: 10 }}>
@@ -149,9 +149,10 @@ export default function Candidate() {
               const ls = langsOf(ch);
               const live = ls.map((l) => [...(draftsByTarget.get(targetKey(ch, l)) ?? [])].sort((a, b) => b.version - a.version).find((d) => d.status !== "dropped")).filter(Boolean) as Draft[];
               const pub = live.length === ls.length && live.every((d) => publications.some((p) => p.draftId === d.id));
-              // 기호는 눈으로 훑기용이고, 화면 낭독기에는 같은 뜻을 글로 준다.
-              const [st, stText] = pub ? ["✓", t("게시함")] : live.length === ls.length ? (live.every((d) => d.lint.every((l) => l.ok)) ? ["●", t("초안 준비됨")] : ["!", t("확인할 부분 있음")]) : live.length ? [`${live.length}/${ls.length}`, t("언어 {total}개 중 {n}개 초안 있음", { total: ls.length, n: live.length })] : busy === "draft" || stage.busy ? ["…", t("쓰는 중")] : ["", ""];
-              return <button key={ch} aria-pressed={tab === ch} className={tab === ch ? "active" : ""} onClick={() => switchDraft(() => setTab(ch))}><ChannelIcon channel={ch} />{channelLabel(ch)}{st && <><span className="st" aria-hidden title={stText}>{st}</span><span className="sr-only">, {stText}</span></>}</button>;
+              // 탭 옆의 짧은 상태 글. 낭독기와 툴팁에는 뜻을 풀어 쓴 문장을 준다.
+              // attn: 모든 언어에 초안이 있지만 자동 점검(lint)에 걸린 항목이 있다.
+              const [tone, short, long] = pub ? ["done", t("게시함"), t("이 채널의 모든 언어를 게시했습니다")] : live.length === ls.length ? (live.every((d) => d.lint.every((l) => l.ok)) ? ["ready", t("준비됨"), t("초안 준비됨")] : ["attn", t("확인 필요"), t("자동 점검에서 확인할 부분이 있습니다")]) : live.length ? ["partial", `${live.length}/${ls.length}`, t("언어 {total}개 중 {n}개 초안 있음", { total: ls.length, n: live.length })] : busy === "draft" || stage.busy ? ["busy", t("쓰는 중"), t("쓰는 중")] : ["", "", ""];
+              return <button key={ch} aria-pressed={tab === ch} className={tab === ch ? "active" : ""} title={long || undefined} onClick={() => switchDraft(() => setTab(ch))}><ChannelIcon channel={ch} />{channelLabel(ch)}{short && <><span className={`st st-${tone}`} aria-hidden>{short}</span><span className="sr-only">, {long}</span></>}</button>;
             })}
           </div>
           {!channels.length && settings && <div className="state-panel"><h2>{t("게시할 채널을 먼저 골라주세요")}</h2><p>{t("초안을 만들 채널과 언어를 하나 이상 선택하면 시작할 수 있어요.")}</p><Link className="btn primary" to="/settings?tab=channels">{t("채널 선택하기")}</Link></div>}

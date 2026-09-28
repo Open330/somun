@@ -64,7 +64,7 @@ export default function Inbox() {
   return (
     <>
       <header className="page-head workspace-head">
-        <div><span className="eyebrow">{t("내 작업 공간")}</span><h1>{t("글감")}</h1><p className="lede">{firstUse ? t("작은 변화도, 전할 이야기가 됩니다.") : counts.review ? t("검토할 초안 {n}개가 준비되어 있어요.", { n: counts.review }) : counts.fresh ? t("새 글감 {n}개 중 알리고 싶은 변화를 골라보세요.", { n: counts.fresh }) : t("모아둔 이야기를 살펴보고 다음 게시글을 준비하세요.")}</p></div>
+        <div><h1>{t("글감")}</h1><p className="lede">{firstUse ? t("작은 변화도, 전할 이야기가 됩니다.") : counts.review ? t("검토할 초안 {n}개가 준비되어 있어요.", { n: counts.review }) : counts.fresh ? t("새 글감 {n}개 중 알리고 싶은 변화를 골라보세요.", { n: counts.fresh }) : t("모아둔 이야기를 살펴보고 다음 게시글을 준비하세요.")}</p></div>
         {!firstUse && <div className="toolbar">{collectable.length > 0 && <button disabled={busy} onClick={() => void collect()}>{busy ? t("변경 가져오는 중…") : t("새 변경 가져오기")}</button>}{firstDraft && <Link className="btn primary" to={`/c/${firstDraft.id}`}>{t("초안 검토하기")} <span aria-hidden>→</span></Link>}</div>}
       </header>
       {message && <div className={`inline-notice ${message.error ? "is-error" : ""}`} role={message.error ? "alert" : "status"}><span>{message.text}</span>{message.error && (message.model ? <><Link to="/settings?tab=model">{t("모델 설정")}</Link>{(settingsError || !settings) && <button onClick={reloadSettings}>{t("설정 다시 불러오기")}</button>}</> : <Link to="/connectors">{t("연결 확인")}</Link>)}<button className="ghost sm" aria-label={t("알림 닫기")} onClick={() => setMessage(null)}>×</button></div>}

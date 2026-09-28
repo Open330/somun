@@ -98,7 +98,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
   const bad = lint.filter((l) => !l.ok);
   if (bad.length === 0) return <span className="badge ok" title={t("길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.")}>{t("형식 점검 통과")}</span>;
   const label: Record<string, string> = { banned_phrases: t("금지 표현"), no_emoji_bullets: t("이모지 목록"), has_number: t("숫자 없음"), has_limitation: t("한계 없음"), has_number_or_limit: t("숫자·한계 없음"), has_link: t("링크 없음"), no_exclamation: t("감탄부호"), length: t("길이 초과"), title_length: t("제목 길이"), no_vote_request: t("투표 요청"), no_placeholder: t("빈 숫자"), repo_name: t("이름 왜곡"), no_invented_limit: t("한계 확인"), numbers_need_review: t("수치 확인"), paragraphs: t("문단") };
-  return <>{bad.map((l) => <span key={l.rule} className="badge bad" title={lintDetail(l)}>{t(label[l.rule] ?? l.rule)}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
+  return <>{bad.map((l) => <span key={l.rule} className={`badge ${l.rule === "length" ? "bad" : "warn"}`} title={lintDetail(l)}>{t(label[l.rule] ?? l.rule)}{l.detail && l.rule === "length" ? ` ${l.detail}` : ""}</span>)}</>;
 }
 
 export function Spark({ values }: { values: number[] }) {
@@ -136,7 +136,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 
 /** 간단한 오버플로 메뉴 (⋯). */
 /** 더 보기 메뉴. 열면 첫 항목에 초점, 위·아래 화살표로 이동, Esc로 닫고 버튼으로 초점을 돌린다. */
-export function Menu({ items }: { items: { label: string; onClick: () => unknown; danger?: boolean }[] }) {
+export function Menu({ items }: { items: { label: string; onClick: () => unknown; danger?: boolean; disabled?: boolean; title?: string }[] }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -144,7 +144,7 @@ export function Menu({ items }: { items: { label: string; onClick: () => unknown
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    list.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    list.current?.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus();
     const close = () => setOpen(false);
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { close(); trigger.current?.focus(); } };
     window.addEventListener("click", close);
@@ -154,7 +154,7 @@ export function Menu({ items }: { items: { label: string; onClick: () => unknown
   const move = (event: ReactKeyboardEvent) => {
     // Tab은 메뉴를 닫고 초점을 원래 흐름으로 보낸다. 화살표·Home·End는 항목 사이를 옮긴다.
     if (event.key === "Tab") { setOpen(false); return; }
-    const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+    const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)") ?? [])];
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     const next = event.key === "ArrowDown" ? (at + 1) % buttons.length : event.key === "ArrowUp" ? (at - 1 + buttons.length) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
     if (next < 0) return;
@@ -165,7 +165,7 @@ export function Menu({ items }: { items: { label: string; onClick: () => unknown
     <span className="menu-wrap" onClick={(e) => e.stopPropagation()}>
       <button ref={trigger} disabled={busy} aria-haspopup="menu" aria-expanded={open} className="ghost sm" aria-label={t("더 보기")} onClick={() => setOpen((o) => !o)}>⋯</button>
       {error && <span className="menu-error" role="alert">{error}</span>}
-      {open && <div className="menu" role="menu" ref={list} onKeyDown={move}>{items.map((it) => <button key={it.label} role="menuitem" className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`${t("작업을 완료하지 못했습니다.")} ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
+      {open && <div className="menu" role="menu" ref={list} onKeyDown={move}>{items.map((it) => <button key={it.label} role="menuitem" disabled={it.disabled} title={it.title} className={`menu-item ${it.danger ? "danger" : ""}`} onClick={async () => { setOpen(false); setError(null); setBusy(true); try { await it.onClick(); } catch (err) { setError(`${t("작업을 완료하지 못했습니다.")} ${(err as Error).message}`); } finally { setBusy(false); } }}>{it.label}</button>)}</div>}
     </span>
   );
 }

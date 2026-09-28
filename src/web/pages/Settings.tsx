@@ -69,7 +69,7 @@ export default function Settings() {
 
   return (
     <>
-      <div className="page-head"><div><h1>{t("설정")}</h1><p className="lede settings-intro">{tr("판단 기준, 채널, 모델. 소스 연결은 {connections}, 문체 예시는 {voice}에 있습니다.", { connections: <a href="/connectors">{t("연결")}</a>, voice: <a href="/voice">{t("문체")}</a> })}</p></div></div>
+      <header className="page-head workspace-head"><div><h1>{t("설정")}</h1><p className="lede settings-intro">{tr("판단 기준, 채널, 모델. 소스 연결은 {connections}, 문체 예시는 {voice}에 있습니다.", { connections: <a href="/connectors">{t("연결")}</a>, voice: <a href="/voice">{t("문체")}</a> })}</p></div></header>
       {error && <ErrorState title={t("최신 설정을 불러오지 못했습니다")} message={error} onRetry={reload} />}
       {saveError && <div className="inline-notice is-error" role="alert">{saveError}</div>}
       <div className="settabs" role="group" aria-label={t("설정 항목")}>
