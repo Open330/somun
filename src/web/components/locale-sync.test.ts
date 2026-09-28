@@ -9,10 +9,20 @@ import { resetLocaleSync, useAccountLocaleSync } from "./LocaleSwitch";
 
 const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
 vi.mock("../lib/api", () => ({ patch }));
-const view = (locale?: "ko" | "en") => ({ ...DEFAULT_SETTINGS, ui: locale ? { locale } : undefined, llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false } }) as SettingsView;
+const view = (locale?: "ko" | "en") =>
+  ({ ...DEFAULT_SETTINGS, ui: locale ? { locale } : undefined, llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false } }) as SettingsView;
 
-beforeEach(() => { patch.mockReset().mockResolvedValue({}); resetLocaleSync(); setLocale("ko", { choice: false }); clearPendingChoice(); setUnsaved(false); });
-afterEach(() => { setLocale("ko", { choice: false }); clearPendingChoice(); });
+beforeEach(() => {
+  patch.mockReset().mockResolvedValue({});
+  resetLocaleSync();
+  setLocale("ko", { choice: false });
+  clearPendingChoice();
+  setUnsaved(false);
+});
+afterEach(() => {
+  setLocale("ko", { choice: false });
+  clearPendingChoice();
+});
 
 it("saves a language the user picked, even if the account still says otherwise", async () => {
   setLocale("en"); // 랜딩이나 상단바에서 고름
@@ -26,7 +36,8 @@ it("keeps the pick pending when saving fails, so the next load retries", async (
   patch.mockRejectedValue(new Error("offline"));
   setLocale("en");
   renderHook(() => useAccountLocaleSync(view("ko")));
-  await Promise.resolve(); await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   expect(getLocale()).toBe("en");
   expect(hasPendingChoice()).toBe(true);
 });

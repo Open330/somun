@@ -15,12 +15,14 @@ function Root() {
 }
 
 // 영어 화면이면 사전을 먼저 받고 그린다. 받지 못해도 한국어 원문으로 그린다.
-void loadCatalog(getLocale()).catch(() => undefined).finally(() => {
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <AuthProvider>
-        <Root />
-      </AuthProvider>
-    </StrictMode>,
-  );
-});
+void loadCatalog(getLocale())
+  .catch(() => undefined)
+  .finally(() => {
+    createRoot(document.getElementById("root")!).render(
+      <StrictMode>
+        <AuthProvider>
+          <Root />
+        </AuthProvider>
+      </StrictMode>,
+    );
+  });

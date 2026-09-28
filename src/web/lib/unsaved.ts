@@ -3,5 +3,7 @@
  * 초안 편집기가 켜고 끈다.
  */
 let dirty = false;
-export const setUnsaved = (value: boolean): void => { dirty = value; };
+export const setUnsaved = (value: boolean): void => {
+  dirty = value;
+};
 export const hasUnsaved = (): boolean => dirty;

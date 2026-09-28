@@ -9,11 +9,24 @@ export function useReveal(root?: React.RefObject<HTMLElement | null>) {
     const scope = root?.current ?? document;
     const els = Array.from(scope.querySelectorAll<HTMLElement>("[data-reveal]"));
     if (els.length === 0) return;
-    if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { for (const el of els) el.classList.add("in"); return; }
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { (e.target as HTMLElement).classList.add("in"); io.unobserve(e.target); }
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
-    for (const el of els) { el.classList.add("pending"); io.observe(el); }
+    if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      for (const el of els) el.classList.add("in");
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries)
+          if (e.isIntersecting) {
+            (e.target as HTMLElement).classList.add("in");
+            io.unobserve(e.target);
+          }
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
+    );
+    for (const el of els) {
+      el.classList.add("pending");
+      io.observe(el);
+    }
     return () => io.disconnect();
   }, [root]);
 }

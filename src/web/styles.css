@@ -676,3 +676,88 @@ button.chip { min-height: 28px; }
   .landing nav .gh-btn { padding: 9px 11px; }
   .landing nav .gh-btn span { display: none; }
 }
+
+/* ── 인라인 스타일에서 옮긴 규칙 ──────────────────────────── */
+/* 간격 유틸리티: .row·.stack·.toolbar의 기본 간격이나 요소의 기본 여백을 바꿀 때. 위의 규칙보다 뒤에 있어야 이긴다. */
+.gap-4 { gap: 4px; }
+.gap-6 { gap: 6px; }
+.gap-8 { gap: 8px; }
+.gap-10 { gap: 10px; }
+.gap-12 { gap: 12px; }
+.gap-14 { gap: 14px; }
+.gap-16 { gap: 16px; }
+.m-0 { margin: 0; }
+.mt-0 { margin-top: 0; }
+.mt-4 { margin-top: 4px; }
+.mt-6 { margin-top: 6px; }
+.mt-8 { margin-top: 8px; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.mb-2 { margin-bottom: 2px; }
+.mb-4 { margin-bottom: 4px; }
+.mb-6 { margin-bottom: 6px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-10 { margin-bottom: 10px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-14 { margin-bottom: 14px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.ml-6 { margin-left: 6px; }
+.min-w-0 { min-width: 0; }
+.row.baseline { align-items: baseline; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.error-text { color: var(--danger); }
+/* 마크·로크업·채널 아이콘 (크기에 따라 달라지는 값만 인라인) */
+.mark { display: block; flex-shrink: 0; }
+.lockup { display: inline-flex; align-items: center; }
+.lockup .word { line-height: 1; }
+.channel-icon { flex: none; }
+.pv-first { font-weight: 500; }
+/* 좁은 입력 칸 */
+.num-input { width: 64px; }
+.weight-input { width: 72px; }
+.lang-code-input { width: 88px; }
+.inline-input { width: 200px; }
+.confirm-input { width: 220px; }
+.banned-input { min-height: 120px; }
+.guide-input { min-height: 90px; }
+.example-input { min-height: 110px; }
+.profile-what-input { min-height: 56px; }
+.profile-claims-input { min-height: 70px; }
+/* 설정 */
+.settings-panel { max-width: 720px; }
+.settings-panel.wide { max-width: 760px; }
+.model-fields > .field { flex: 1; }
+.channel-lang-row { padding: 10px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+.channel-lang-row input[type="checkbox"] { width: auto; }
+.channel-lang-name { min-width: 200px; }
+.channel-lang-hint { max-width: 360px; }
+.channel-lang-options { max-width: 420px; justify-content: flex-end; }
+/* GitHub 연결 */
+.setup-status { margin: 40px; }
+.setup-card { max-width: 640px; }
+.pick-row > .pick-meta { text-align: right; white-space: nowrap; }
+/* 발행 기록 */
+.pub-title { font-weight: 600; color: var(--ink); }
+.pub-stars { text-align: right; }
+/* 글감 상세 */
+.side-block h2.limits-head { margin-top: 14px; }
+.side-block > .callout + .callout { margin-top: 6px; }
+.reasoning { line-height: 1.65; margin: 0; }
+.profile-head h2 { margin: 0; }
+.profile-head h2 .tiny { text-transform: none; letter-spacing: 0; }
+.profile-empty { margin: 8px 0 0; }
+.profile-what { margin: 0; line-height: 1.55; }
+.launch-check-intro { margin: 6px 0; }
+.diff-caption { margin: 8px 0 4px; }
+.draft-title { font-weight: 600; margin-bottom: 8px; }
+.video-frame { aspect-ratio: 16 / 9; }
+.video-frame.square { aspect-ratio: 1 / 1; }
+.video-note { white-space: pre-line; }
+/* 문체 */
+.use-examples-toggle { flex: 1 1 220px; min-width: 0; }
+.suggestions-card { border-color: var(--accent); }
+.sugg-rule { font-weight: 600; }
+.learning-intro { margin: 4px 0 0; }
+.examples-title { margin: 0; text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--ink); }
+.rowi.example-row { grid-template-columns: minmax(0, 1fr) auto; cursor: default; }

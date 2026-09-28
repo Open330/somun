@@ -25,9 +25,20 @@ const Pick = lazy(() => import("./pages/Pick"));
 const SetupGithubApp = lazy(() => import("./pages/SetupGithubApp"));
 
 /** 인증 확인 중. 빈 화면 대신 로고와 상태를 보여준다. */
-const Booting = () => <div className="booting" role="status" aria-live="polite"><Mark size={32} /><span>{t("불러오는 중…")}</span></div>;
+const Booting = () => (
+  <div className="booting" role="status" aria-live="polite">
+    <Mark size={32} />
+    <span>{t("불러오는 중…")}</span>
+  </div>
+);
 
-const NAV = [["/", "글감"], ["/published", "발행 기록"], ["/connectors", "연결 관리"], ["/voice", "문체"], ["/settings", "설정"]] as const;
+const NAV = [
+  ["/", "글감"],
+  ["/published", "발행 기록"],
+  ["/connectors", "연결 관리"],
+  ["/voice", "문체"],
+  ["/settings", "설정"],
+] as const;
 
 export default function App() {
   const auth = useAuth();
@@ -37,7 +48,9 @@ export default function App() {
     // 예전 버전이 localStorage에 둔 토큰이 있으면 세션 쿠키로 바꾼다(한 번).
     const legacy = legacyToken();
     (legacy ? startSession(legacy).catch(() => false) : Promise.resolve(false))
-      .then(() => api("/me")).then(() => setTokenState("ok")).catch(() => setTokenState("need"));
+      .then(() => api("/me"))
+      .then(() => setTokenState("ok"))
+      .catch(() => setTokenState("need"));
   }, [auth.enabled]);
   // 세션이 끝나면 멈춘 화면 대신 로그인으로 돌아간다.
   useEffect(() => {
@@ -53,9 +66,25 @@ export default function App() {
   if (!auth.enabled && tokenState === "form") return <TokenLogin onDone={() => setTokenState("ok")} />;
   if (auth.enabled && auth.isLoading) return <Booting />;
   if (auth.enabled && !auth.isAuthenticated) {
-    return <Routes><Route path="/auth/callback" element={<AuthCallback />} /><Route path="*" element={<Landing />} /></Routes>;
+    return (
+      <Routes>
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="*" element={<Landing />} />
+      </Routes>
+    );
   }
-  return <Shell onSignOut={async () => { if (auth.enabled) await auth.signOut(); else { await endSession(); setTokenState("need"); } }} who={auth.enabled ? auth.user?.displayName ?? auth.user?.username ?? "" : t("토큰 세션")} />;
+  return (
+    <Shell
+      onSignOut={async () => {
+        if (auth.enabled) await auth.signOut();
+        else {
+          await endSession();
+          setTokenState("need");
+        }
+      }}
+      who={auth.enabled ? (auth.user?.displayName ?? auth.user?.username ?? "") : t("토큰 세션")}
+    />
+  );
 }
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
@@ -64,10 +93,15 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   const [signOutError, setSignOutError] = useState(false);
   const signOut = async () => {
     if (signingOut) return;
-    setSigningOut(true); setSignOutError(false);
-    try { await onSignOut(); }
-    catch { setSignOutError(true); }
-    finally { setSigningOut(false); }
+    setSigningOut(true);
+    setSignOutError(false);
+    try {
+      await onSignOut();
+    } catch {
+      setSignOutError(true);
+    } finally {
+      setSigningOut(false);
+    }
   };
   const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
@@ -75,38 +109,84 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
   useAccountLocaleSync(settings);
   const review = (rows ?? []).filter((c) => stageOf(c).key === "review").length;
   const pending = suggestions?.length ?? 0;
-  const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{t(label)}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title={t("지침 제안")}>{pending}</span> : null}</NavLink>);
+  const links = NAV.map(([to, label]) => (
+    <NavLink key={to} to={to} end={to === "/"}>
+      {t(label)}
+      {to === "/" && review ? <span className="count">{review}</span> : null}
+      {to === "/voice" && pending ? (
+        <span className="count" title={t("지침 제안")}>
+          {pending}
+        </span>
+      ) : null}
+    </NavLink>
+  ));
   return (
     <div className="layout">
-      <a className="skip-link" href="#main-content">{t("본문으로 바로 가기")}</a>
+      <a className="skip-link" href="#main-content">
+        {t("본문으로 바로 가기")}
+      </a>
       <aside className="sidebar">
-        <div className="brand"><Lockup size={30} /></div>
-        <span className="nav-caption">{t("워크스페이스")}</span><nav className="nav" aria-label={t("주 메뉴")}>{links}</nav>
-        <div className="spacer" /><div className="sidebar-note"><b>{t("만드는 일에 집중하세요.")}</b><p>{t("알릴 이야기는 여기 모아둘게요.")}</p></div>
-        <div className="who-locale"><LocaleSwitch compact /></div>
-        <div className="who"><span>{who}</span><button className="ghost sm" disabled={signingOut} onClick={() => void signOut()}>{signingOut ? t("로그아웃 중…") : t("나가기")}</button></div>
+        <div className="brand">
+          <Lockup size={30} />
+        </div>
+        <span className="nav-caption">{t("워크스페이스")}</span>
+        <nav className="nav" aria-label={t("주 메뉴")}>
+          {links}
+        </nav>
+        <div className="spacer" />
+        <div className="sidebar-note">
+          <b>{t("만드는 일에 집중하세요.")}</b>
+          <p>{t("알릴 이야기는 여기 모아둘게요.")}</p>
+        </div>
+        <div className="who-locale">
+          <LocaleSwitch compact />
+        </div>
+        <div className="who">
+          <span>{who}</span>
+          <button className="ghost sm" disabled={signingOut} onClick={() => void signOut()}>
+            {signingOut ? t("로그아웃 중…") : t("나가기")}
+          </button>
+        </div>
       </aside>
       <div>
-        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<span className="mobile-locale"><LocaleSwitch compact /></span><button className="ghost sm mobile-signout" disabled={signingOut} onClick={() => void signOut()}>{signingOut ? t("로그아웃 중…") : t("나가기")}</button></div>
+        <div className="topbar">
+          <div className="brand">
+            <Mark size={26} />
+          </div>
+          {links}
+          <span className="mobile-locale">
+            <LocaleSwitch compact />
+          </span>
+          <button className="ghost sm mobile-signout" disabled={signingOut} onClick={() => void signOut()}>
+            {signingOut ? t("로그아웃 중…") : t("나가기")}
+          </button>
+        </div>
         <main className="main" id="main-content" tabIndex={-1}>
-          {signOutError && <div className="inline-notice is-error" role="alert"><span>{t("로그아웃하지 못했습니다. 세션이 유지될 수 있습니다. 다시 시도해 주세요.")}</span><button disabled={signingOut} onClick={() => void signOut()}>{t("로그아웃 다시 시도")}</button></div>}
+          {signOutError && (
+            <div className="inline-notice is-error" role="alert">
+              <span>{t("로그아웃하지 못했습니다. 세션이 유지될 수 있습니다. 다시 시도해 주세요.")}</span>
+              <button disabled={signingOut} onClick={() => void signOut()}>
+                {t("로그아웃 다시 시도")}
+              </button>
+            </div>
+          )}
           <ChunkBoundary resetKey={location.pathname}>
-          <Suspense fallback={<Skeleton rows={4} />}>
-          <Routes>
-            <Route path="/" element={<Inbox />} />
-            <Route path="/c/:id" element={<Candidate />} />
-            <Route path="/published" element={<Published />} />
-            <Route path="/connectors" element={<Connectors />} />
-            <Route path="/voice" element={<Voice />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/welcome" element={<Landing />} />
-            <Route path="/github/setup" element={<GithubSetup />} />
-            <Route path="/github/pick" element={<Pick />} />
-            <Route path="/setup/github-app" element={<SetupGithubApp />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          </Suspense>
+            <Suspense fallback={<Skeleton rows={4} />}>
+              <Routes>
+                <Route path="/" element={<Inbox />} />
+                <Route path="/c/:id" element={<Candidate />} />
+                <Route path="/published" element={<Published />} />
+                <Route path="/connectors" element={<Connectors />} />
+                <Route path="/voice" element={<Voice />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/welcome" element={<Landing />} />
+                <Route path="/github/setup" element={<GithubSetup />} />
+                <Route path="/github/pick" element={<Pick />} />
+                <Route path="/setup/github-app" element={<SetupGithubApp />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </ChunkBoundary>
         </main>
       </div>

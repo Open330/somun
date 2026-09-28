@@ -6,8 +6,10 @@ import { t } from "./index";
  * 문장 전체를 키로 두고 {이름} 자리에 요소를 끼운다: tr("나중에 {link}에서 바꿀 수 있습니다.", { link: <a …/> }).
  */
 export function tr(ko: string, slots: Record<string, ReactNode>): ReactNode {
-  return t(ko).split(/(\{\w+\})/).map((part, i) => {
-    const name = /^\{(\w+)\}$/.exec(part)?.[1];
-    return name && name in slots ? <Fragment key={i}>{slots[name]}</Fragment> : part;
-  });
+  return t(ko)
+    .split(/(\{\w+\})/)
+    .map((part, i) => {
+      const name = /^\{(\w+)\}$/.exec(part)?.[1];
+      return name && name in slots ? <Fragment key={i}>{slots[name]}</Fragment> : part;
+    });
 }

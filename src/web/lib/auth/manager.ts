@@ -61,7 +61,11 @@ export class AuthManager {
   }
 
   async exchangeCode(code: string): Promise<void> {
-    const res = await authFetch("/auth/exchange", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    const res = await authFetch("/auth/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
     if (!res.ok) throw new Error(`code exchange failed (${res.status})`);
     const body = (await res.json()) as { accessToken: string };
     this.accessToken = body.accessToken;
@@ -94,7 +98,14 @@ export class AuthManager {
       if (!id) return;
       this.snapshot = {
         ...this.snapshot,
-        user: { id, username: String(u.username ?? ""), displayName: (u.displayName as string | undefined) ?? (u.name as string | undefined), avatarUrl: (u.avatarUrl as string | undefined) ?? undefined, provider: (u.provider as string | undefined) ?? undefined, email: (u.email as string | undefined) ?? undefined },
+        user: {
+          id,
+          username: String(u.username ?? ""),
+          displayName: (u.displayName as string | undefined) ?? (u.name as string | undefined),
+          avatarUrl: (u.avatarUrl as string | undefined) ?? undefined,
+          provider: (u.provider as string | undefined) ?? undefined,
+          email: (u.email as string | undefined) ?? undefined,
+        },
       };
     } catch {
       /* 표시용 */

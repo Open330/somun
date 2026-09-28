@@ -8,7 +8,15 @@ export function GithubMark({ size = 18 }: { size?: number }) {
   );
 }
 
-export function GithubButton({ onClick, label = t("GitHub로 계속하기"), size = "md" }: { onClick: () => void; label?: string; size?: "md" | "lg" }) {
+export function GithubButton({
+  onClick,
+  label = t("GitHub로 계속하기"),
+  size = "md",
+}: {
+  onClick: () => void;
+  label?: string;
+  size?: "md" | "lg";
+}) {
   return (
     <button type="button" className={`gh-btn ${size}`} onClick={onClick} aria-label={label}>
       <GithubMark size={size === "lg" ? 20 : 18} />
