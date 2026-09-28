@@ -283,7 +283,7 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 @media (max-width: 860px) { .tri-head .tiny { display: none; } .rowi .sc { font-size: 15px; } }
 
 /* 랜딩 실제 화면 */
-.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 20px; }
 .shots figure { margin: 0; }
 .shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); background: var(--surface); }
 .shots figcaption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
@@ -672,4 +672,7 @@ button.chip { min-height: 28px; }
   .landing nav .lockup .roman { display: none; }
   .landing nav .toolbar { flex-wrap: nowrap; gap: 6px; }
   .landing nav .toolbar > a.btn.ghost { display: none; }
+  /* 영어 문구("Sign in with GitHub")는 좁은 폭에서 넘친다. 바로 아래 히어로에 큰 GitHub 버튼이 있으니 머리에는 마크만 둔다. */
+  .landing nav .gh-btn { padding: 9px 11px; }
+  .landing nav .gh-btn span { display: none; }
 }
