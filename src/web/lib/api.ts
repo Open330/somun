@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { ChangeEvent } from "@shared/types";
 import { getAuthManager } from "./auth/manager";
 import { resetEvents, subscribeEvents } from "./events";
@@ -11,13 +11,14 @@ export async function startSession(token: string): Promise<boolean> {
   // 예전 버전이 저장한 토큰은 교환에 성공하든 실패하든 지운다(실패하면 다시 로그인하면 된다).
   forgetLegacyToken();
   const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: token.trim() }) }).catch(() => null);
-  if (res?.ok) resetEvents();
+  if (res?.ok) { clearResourceCache(); resetEvents(); }
   return Boolean(res?.ok);
 }
 export async function endSession(): Promise<void> {
   const res = await fetch("/api/session", { method: "DELETE" });
   if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
   forgetLegacyToken();
+  clearResourceCache();
   resetEvents();
 }
 const LEGACY_TOKEN = "somun.token";
@@ -65,43 +66,84 @@ export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: 
 export const del = (path: string) => api<void>(path, { method: "DELETE" });
 
 export const REFETCH_DEBOUNCE_MS = 150;
+/** 방금 받은 데이터는 다시 붙는 화면이 있어도 새로 요청하지 않는다(사이드바와 본문이 같은 목록을 동시에 여는 경우). */
+const FRESH_MS = 2000;
+
+/**
+ * 경로별 공유 캐시. 같은 경로를 여러 화면이 동시에 열어도 요청은 하나이고,
+ * 화면을 옮겼다 돌아오면 받아 둔 데이터를 먼저 보여 준 뒤 뒤에서 새로 받는다(빈 화면 깜빡임 없음).
+ * 쓰는 화면이 모두 사라지면 진행 중인 요청을 끊는다. 계정이 바뀌면 clearResourceCache로 비운다.
+ */
+type Entry = { data?: unknown; error: string | null; status?: number; fetchedAt: number };
+const entries = new Map<string, Entry>();
+const watchers = new Map<string, Set<() => void>>();
+const inflight = new Map<string, AbortController>();
+const timers = new Map<string, number>();
+const EMPTY: Entry = { error: null, fetchedAt: 0 };
+
+function publish(path: string, next: Entry) {
+  entries.set(path, next);
+  for (const w of watchers.get(path) ?? []) w();
+}
+
+function fetchResource(path: string, force = false) {
+  const running = inflight.get(path);
+  if (running && !force) return;
+  running?.abort();
+  const controller = new AbortController();
+  inflight.set(path, controller);
+  api<unknown>(path, { signal: controller.signal }).then((data) => {
+    if (!controller.signal.aborted) publish(path, { data, error: null, fetchedAt: Date.now() });
+  }).catch((e: Error) => {
+    if (!controller.signal.aborted) publish(path, { ...(entries.get(path) ?? EMPTY), error: e.message, status: e instanceof ApiError ? e.status : undefined, fetchedAt: Date.now() });
+  }).finally(() => { if (inflight.get(path) === controller) inflight.delete(path); });
+}
+
+/** 생성 중에는 이벤트가 몰려 온다. 경로마다 짧게 모아 한 번만 다시 가져온다. */
+function scheduleRefetch(path: string) {
+  window.clearTimeout(timers.get(path));
+  timers.set(path, window.setTimeout(() => { timers.delete(path); if (watchers.get(path)?.size) fetchResource(path, true); }, REFETCH_DEBOUNCE_MS));
+}
+
+function watch(path: string, onChange: () => void): () => void {
+  let set = watchers.get(path);
+  if (!set) watchers.set(path, (set = new Set()));
+  set.add(onChange);
+  return () => {
+    set.delete(onChange);
+    if (set.size) return;
+    watchers.delete(path);
+    inflight.get(path)?.abort();
+    inflight.delete(path);
+    window.clearTimeout(timers.get(path));
+    timers.delete(path);
+  };
+}
+
+/** 로그인·로그아웃 때 부른다. 다른 계정의 데이터가 화면에 남지 않게 한다. */
+export function clearResourceCache(): void {
+  for (const c of inflight.values()) c.abort();
+  inflight.clear();
+  entries.clear();
+}
 
 /**
  * GET + 변경 시 자동 재조회. 서버 상태를 구독하는 유일한 훅.
  * resources: 이 데이터가 의존하는 자원 이름. 그 자원의 change 이벤트가 오면 다시 가져온다.
  */
 export function useResource<T>(path: string | null, resources: ChangeEvent["resource"][]): { data: T | undefined; error: string | null; status?: number; reload: () => void } {
-  const [data, setData] = useState<T | undefined>(undefined);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<number | undefined>(undefined);
   const resKey = resources.join(",");
-  const resRef = useRef(resources);
-  resRef.current = resources;
-  const request = useRef<AbortController | null>(null);
-  const debounce = useRef<number | undefined>(undefined);
-  const load = useCallback(() => {
-    request.current?.abort();
-    if (!path) return;
-    const controller = new AbortController();
-    request.current = controller;
-    api<T>(path, { signal: controller.signal }).then((d) => {
-      if (!controller.signal.aborted) { setData(d); setError(null); setStatus(undefined); }
-    }).catch((e: Error) => {
-      if (!controller.signal.aborted) { setError(e.message); setStatus(e instanceof ApiError ? e.status : undefined); }
-    });
-  }, [path]);
+  const entry = useSyncExternalStore(
+    useCallback((onChange: () => void) => (path ? watch(path, onChange) : () => {}), [path]),
+    () => (path ? entries.get(path) ?? EMPTY : EMPTY),
+  );
   useEffect(() => {
-    setData(undefined);
-    setError(null);
-    setStatus(undefined);
-    load();
-    // 생성 중에는 이벤트가 몰려 온다. 짧게 모아 한 번만 다시 가져온다.
-    const unsubscribe = path ? subscribeEvents((ev) => {
-      if (!resRef.current.includes(ev.resource)) return;
-      window.clearTimeout(debounce.current);
-      debounce.current = window.setTimeout(load, REFETCH_DEBOUNCE_MS);
-    }) : undefined;
-    return () => { request.current?.abort(); window.clearTimeout(debounce.current); unsubscribe?.(); };
-  }, [load, path, resKey]);
-  return { data, error, status, reload: load };
+    if (!path) return;
+    const known = entries.get(path);
+    if (!known || Date.now() - known.fetchedAt > FRESH_MS) fetchResource(path);
+    const wanted = resKey.split(",");
+    return subscribeEvents((ev) => { if (wanted.includes(ev.resource)) scheduleRefetch(path); });
+  }, [path, resKey]);
+  const reload = useCallback(() => { if (path) fetchResource(path, true); }, [path]);
+  return { data: entry.data as T | undefined, error: entry.error, status: entry.status, reload };
 }
