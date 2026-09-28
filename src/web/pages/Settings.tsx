@@ -215,7 +215,7 @@ function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[];
         <div className="row wrap" style={{ gap: 6, maxWidth: 420, justifyContent: "flex-end" }}>
           {common.map((code) => <button key={code} aria-pressed={langs.includes(code)} className={`sm ${langs.includes(code) ? "active" : "ghost"}`} onClick={() => onChange(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code])}>{LANGS[code].nativeName}</button>)}
           {langs.filter((l) => !common.includes(l)).map((code) => <button key={code} className="sm active" onClick={() => onChange(langs.filter((l) => l !== code))}>{code} ×</button>)}
-          <input aria-label={t("{channel} 언어 코드 추가", { channel: channelLabel(ch) })} placeholder={t("코드 추가")} value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
+          <input aria-label={t("{channel} 언어 코드 추가", { channel: channelLabel(ch) })} className="sm" placeholder={t("코드 추가")} value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import shotInbox from "../assets/shots/inbox.jpg";
 import shotCandidate from "../assets/shots/candidate.jpg";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useAuth } from "../lib/auth/context";
 import { useReveal } from "../lib/useReveal";
 import type React from "react";
@@ -9,6 +9,7 @@ import { GithubButton } from "../components/GithubButton";
 import { t } from "../i18n";
 import { tr } from "../i18n/rich";
 import { LocaleSwitch } from "../components/LocaleSwitch";
+import HeroFilm from "../components/HeroFilm";
 
 /** 로그아웃 상태의 첫 화면. 약속 한 문장, 실제 초안 예시, 어떻게 생각하는가, 로그인. */
 export default function Landing({ onToken }: { onToken?: () => void }) {
@@ -27,21 +28,31 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       </nav>
 
       <section className="hero">
-        <div className="hero-copy">
-          <h1>{tr("만든 건 많은데,{br}{explain}가 어렵다면.", { br: <br />, explain: <em>{t("설명하기")}</em> })}</h1>
-          <p className="sub">{t("소문은 릴리스·PR·커밋을 읽고, 사용자가 알아듣는 말로 홍보 글 초안을 씁니다. 근거는 실제 작업물에서만 가져오고, 올리는 건 직접 합니다.")}</p>
-          <div className="toolbar">
-            {auth.enabled ? (
-              // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
-              <GithubButton size="lg" onClick={() => auth.signIn("github")} label={t("GitHub로 시작하기")} />
-            ) : (
-              <button className="primary" onClick={onToken}>{t("토큰으로 들어가기")}</button>
-            )}
-            <a className="btn ghost" href="#how">{t("어떻게 생각하는가 ↓")}</a>
+        <div className="hero-head">
+          <div className="hero-copy">
+            <p className="hero-eyebrow"><span aria-hidden /> AN EDITOR FOR WHAT YOU SHIPPED</p>
+            <h1>{tr("만든 건 많은데,{br}{explain} {hard}", { br: <br />, explain: <span className="outline-word">{t("설명하기가")}</span>, hard: <em>{t("어렵다면.")}</em> })}</h1>
+          </div>
+          <div className="hero-aside">
+            <span className="hand-note" aria-hidden>{t("직접 넘겨 보세요")} ↙</span>
+            <p className="sub">{t("소문은 릴리스·PR·커밋을 읽고, 사용자가 알아듣는 말로 홍보 글 초안을 씁니다. 근거는 실제 작업물에서만 가져오고, 올리는 건 직접 합니다.")}</p>
+            <div className="toolbar">
+              {auth.enabled ? (
+                // 소문은 GitHub 저장소를 읽는 도구라 로그인도 GitHub 하나뿐이다. 다른 제공자로 들어오면 계정이 갈라져 설치 기록이 안 보인다.
+                <GithubButton size="lg" onClick={() => auth.signIn("github")} label={t("GitHub로 시작하기")} />
+              ) : (
+                <button className="primary" onClick={onToken}>{t("토큰으로 들어가기")}</button>
+              )}
+              <a className="btn ghost" href="#how">{t("어떻게 생각하는가 ↓")}</a>
+            </div>
           </div>
         </div>
-        <Demo />
+        <HeroFilm />
       </section>
+
+      <div className="marquee" aria-hidden>
+        <div className="marquee-track">{[0, 1].map((k) => <span key={k}>OBSERVE <i>↗</i> DISTILL <i>✳</i> JUDGE <i>↗</i> DRAFT <i>✳</i> OBSERVE <i>↗</i> DISTILL <i>✳</i> JUDGE <i>↗</i> DRAFT <i>✳</i> </span>)}</div>
+      </div>
 
       <section className="section" id="how" data-reveal>
         <h2>{t("어떻게 생각하는가")}</h2>
@@ -100,36 +111,6 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
         <span className="row" style={{ gap: 8 }}><Mark size={18} /> {t("소문 · Open330 · Apache-2.0")}</span>
         <span><a href="https://github.com/Open330/somun">{t("소스")}</a> · <a href="https://github.com/Open330/somun/blob/main/docs/spec.md">{t("기획")}</a></span>
       </footer>
-    </div>
-  );
-}
-
-/** 히어로의 살아 있는 데모: 같은 글감이 채널·언어마다 어떻게 달라지는지 4초마다 넘긴다. 손대면 멈춘다. 예시 글은 그 채널의 언어 그대로 둔다(화면 언어와 무관). */
-const DEMO = [
-  { tab: "X · EN", chars: "249/280", post: "I ran agents in tmux and lost track of their sessions.\n\nMuxa adds keyboard navigation and natural language automation rules to orchestrate agent sessions.\n\n61 releases, still 0.x: https://github.com/Open330/muxa" },
-  { tab: "X · KO", chars: "138/280", post: "에이전트를 tmux 창마다 띄워 놓고 어느 창이 나를 기다리는지 놓치는 게 지겨웠습니다.\n\nmuxa: 상태를 읽고 가장 오래 기다린 창으로 바로 점프합니다.\n\n릴리스 61회, 아직 0.x: https://github.com/Open330/muxa" },
-  { tab: "Show HN", chars: "제목 62자", post: "Show HN: Muxa – keep track of coding agents running in tmux\n\nAuthor here. I run several agents side by side and kept missing the one waiting on a permission prompt. Muxa reads each pane's state and jumps to the one that has waited longest.\n\nStill 0.x: the API may change before 1.0. No Windows support." },
-  { tab: "LinkedIn · KO", chars: "4문단", post: "에이전트가 멈춘 걸 30분 뒤에 알았습니다.\n\n코딩 에이전트를 tmux 창마다 하나씩 띄워 놓고 일한 지 반년쯤 됐습니다. 문제는 늘 같았습니다.\n\n그래서 muxa를 만들었습니다. 4월에 시작해 릴리스 61회를 냈습니다. 아직 Windows는 없습니다." },
-];
-function Demo() {
-  const [i, setI] = useState(0);
-  const [hold, setHold] = useState(false);
-  useEffect(() => {
-    if (hold || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = setInterval(() => setI((x) => (x + 1) % DEMO.length), 4200);
-    return () => clearInterval(timer);
-  }, [hold]);
-  const d = DEMO[i];
-  return (
-    <div className="demo" aria-label={t("실제 초안 예시")} onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)}>
-      <div className="bar"><b>Open330/muxa v0.8.47</b> {t("· 릴리스 · 판단 6/10 ·")} <span className="badge ok">{t("초안 4")}</span></div>
-      <div className="body">
-        <div className="tabs" style={{ margin: 0 }}>{DEMO.map((x, k) => <button key={x.tab} className={`sm ${k === i ? "active" : ""}`} onClick={() => { setI(k); setHold(true); }}>{x.tab}</button>)}</div>
-        <div className="post" key={i}>{d.post}</div>
-        <div className="facts"><span>stars=28</span><span>commits=707</span><span>releases=61</span><span>limit: API may change before 1.0</span></div>
-        <div className="row between"><span className="badge ok">{t("린트 통과")} · {t(d.chars)}</span><div className="toolbar"><button className="sm">{t("수정")}</button><button className="sm primary">{t("복사")}</button></div></div>
-        {!hold && <div className="demo-progress" key={`p${i}`} aria-hidden />}
-      </div>
     </div>
   );
 }
