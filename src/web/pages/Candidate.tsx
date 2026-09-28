@@ -101,10 +101,10 @@ export default function Candidate() {
   return (
     <>
       <div className="cand-head">
-        <div className="row wrap tiny muted" style={{ marginBottom: 8 }}><Link to="/">{t("글감")}</Link><span>/</span><span>{typeLabel(c.type)}</span><span>·</span><a href={e.repoUrl} target="_blank" rel="noreferrer">{e.repo}</a>{e.version && <span>· {e.version}</span>}</div>
+        <div className="row wrap tiny muted mb-8"><Link to="/">{t("글감")}</Link><span>/</span><span>{typeLabel(c.type)}</span><span>·</span><a href={e.repoUrl} target="_blank" rel="noreferrer">{e.repo}</a>{e.version && <span>· {e.version}</span>}</div>
         <div className="cand-head-row">
-          <div style={{ minWidth: 0 }}>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}><h1 style={{ margin: 0 }}>{c.title}</h1><StageChip stage={stage} /></div>
+          <div className="min-w-0">
+            <div className="row wrap gap-10"><h1 className="m-0">{c.title}</h1><StageChip stage={stage} /></div>
             {angle && <p className="angle">{angle}</p>}
           </div>
           <div className="toolbar">
@@ -140,7 +140,7 @@ export default function Candidate() {
             {settings && <Link to="/voice" className="tiny muted voice-link">{t("문체:")} {t(voicePreset(settings.voice.preset).name)}{settings.voice.guide ? t(" + 내 지침") : ""} ↗</Link>}
           </div>
           {consistency.length > 0 && (
-            <div className="callout" style={{ marginBottom: 10 }}>
+            <div className="callout mb-10">
               <b>{t("언어 간 숫자가 다릅니다.")}</b> {consistency.map((x) => `${channelLabel(x.channel)}: ${x.onlyIn.map((o) => t("{lang}에만 {numbers}", { lang: o.lang.toUpperCase(), numbers: o.numbers.join(", ") })).join(" · ")}`).join(" / ")}. {t("한쪽에만 있는 숫자는 사실 확인 뒤 맞추세요.")}
             </div>
           )}
@@ -168,7 +168,7 @@ export default function Candidate() {
           <details className="context-details"><summary>{t("프로젝트 배경과 문체 참고")}</summary><ProfileBlock repo={c.repo} view={profile} showToast={showToast} /></details>
           <section className="side-block">
             <h2>{t("무엇이 달라졌나")}</h2>
-            {e.highlights?.length ? <ul className="hl check">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted" style={{ margin: 0 }}>{stage.busy ? t("다이제스트를 만드는 중입니다.") : t("초안 만들기를 누르면 이 글감의 변경 내용을 먼저 정리합니다.")}</p>}
+            {e.highlights?.length ? <ul className="hl check">{e.highlights.map((h, i) => <li key={i}>{h}</li>)}</ul> : <p className="small muted m-0">{stage.busy ? t("다이제스트를 만드는 중입니다.") : t("초안 만들기를 누르면 이 글감의 변경 내용을 먼저 정리합니다.")}</p>}
             {e.unverifiedHighlights?.length ? <details className="raw"><summary>{t("원자료에서 확인하지 못해 뺀 요약 {n}개", { n: e.unverifiedHighlights.length })}</summary>
               <p className="tiny muted">{t("요약에 원자료에 없는 수치가 있어 판단과 초안에 넘기지 않았습니다. 맞는 내용이면 원자료(릴리스 노트 등)에 수치를 적은 뒤 다시 분석해 주세요.")}</p>
               <ul className="hl small">{e.unverifiedHighlights.map((h, i) => <li key={i}>{h.text} <span className="badge warn">{h.numbers.join(", ")}</span></li>)}</ul>
@@ -176,7 +176,7 @@ export default function Candidate() {
             {e.ompSummary && <details className="raw"><summary>{t("에이전트 세션 요약")}</summary><pre className="evidence">{e.ompSummary}</pre></details>}
             {told.length > 0 && (
               <details className="raw"><summary>{t("이 저장소에서 이미 다룬 변경 {n}개 · 발행 {published}개", { n: told.length, published: told.filter((x) => x.publishedAt).length })}</summary>
-                <ul className="hl small told">{told.map((x, i) => <li key={i} className={x.publishedAt ? "pub" : ""}>{x.text}{x.publishedAt && <span className="badge ok" style={{ marginLeft: 6 }}>{t("{channel} 발행", { channel: x.publishedChannel ?? "" })}</span>}</li>)}</ul>
+                <ul className="hl small told">{told.map((x, i) => <li key={i} className={x.publishedAt ? "pub" : ""}>{x.text}{x.publishedAt && <span className="badge ok ml-6">{t("{channel} 발행", { channel: x.publishedChannel ?? "" })}</span>}</li>)}</ul>
               </details>
             )}
           </section>
@@ -194,8 +194,8 @@ export default function Candidate() {
               {e.milestones?.length ? <><dt>{t("이번 창 임계")}</dt><dd>{e.milestones.map((m) => `${m.metric === "stars" ? t("스타") : t("다운로드")} ${m.threshold}`).join(" · ")}</dd></> : null}
               <dt>{t("데모")}</dt><dd className={e.demoAsset ? "" : "muted"}>{e.demoAsset ? e.demoAsset.split("/").pop() : t("없음 (올리기 전 GIF나 스크린샷을 준비하세요)")}</dd>
             </dl>
-            <h2 style={{ marginTop: 14 }}>{t("한계")}</h2>
-            {e.limitations?.length ? e.limitations.map((l, i) => <div key={i} className="callout" style={{ marginTop: i ? 6 : 0 }}>{l}</div>) : <div className="callout muted-box">{t("수집한 자료에 명시된 한계가 없습니다. 게시 전에 알려진 제약이 있는지 직접 확인하세요.")}</div>}
+            <h2 className="limits-head">{t("한계")}</h2>
+            {e.limitations?.length ? e.limitations.map((l, i) => <div key={i} className="callout">{l}</div>) : <div className="callout muted-box">{t("수집한 자료에 명시된 한계가 없습니다. 게시 전에 알려진 제약이 있는지 직접 확인하세요.")}</div>}
           </section>
 
           <LaunchCheckBlock cid={cid} homepage={e.homepage} />
@@ -203,7 +203,7 @@ export default function Candidate() {
           {j && (
             <section className="side-block">
               <h2>{t("판단 이유")}</h2>
-              <p className="small" style={{ lineHeight: 1.65, margin: 0 }}>{reasoning}</p>
+              <p className="small reasoning">{reasoning}</p>
               <div className="meta-line"><code>{j.model.split("@")[0].replace("gemini/", "")}</code><span>{fmtDate(j.createdAt)}</span></div>
             </section>
           )}
@@ -217,7 +217,7 @@ export default function Candidate() {
           {publications.length > 0 && (
             <section className="side-block">
               <h2>{t("발행됨")}</h2>
-              <div className="stack small">{publications.map((p) => <div key={p.id} className="row between"><span className="row" style={{ gap: 6 }}><ChannelIcon channel={p.channel} size={14} />{channelLabel(p.channel)}</span><a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 40)}</a><span className="muted">{fmtDate(p.publishedAt)}</span></div>)}</div>
+              <div className="stack small">{publications.map((p) => <div key={p.id} className="row between"><span className="row gap-6"><ChannelIcon channel={p.channel} size={14} />{channelLabel(p.channel)}</span><a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 40)}</a><span className="muted">{fmtDate(p.publishedAt)}</span></div>)}</div>
             </section>
           )}
         </aside>

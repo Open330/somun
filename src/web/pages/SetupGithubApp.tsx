@@ -9,10 +9,10 @@ export default function SetupGithubApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!app) return null;
-  if (app.configured) return <div className="card" style={{ maxWidth: 640 }}><h3>{t("GitHub App 준비됨")}</h3><p className="small muted">slug <code>{app.slug}</code>. {t("사용자는 연결 화면에서 \"GitHub 권한 허용\"으로 설치합니다.")}</p></div>;
+  if (app.configured) return <div className="card setup-card"><h3>{t("GitHub App 준비됨")}</h3><p className="small muted">slug <code>{app.slug}</code>. {t("사용자는 연결 화면에서 \"GitHub 권한 허용\"으로 설치합니다.")}</p></div>;
   if (!app.canConfigure) return <div className="card"><h3>{t("운영자 권한이 필요합니다")}</h3><p>{t("서버 운영자로 지정된 계정으로 로그인해 주세요.")}</p></div>;
   return (
-    <div className="card stack" style={{ maxWidth: 640 }}>
+    <div className="card stack setup-card">
       <h3>{t("이 서버의 GitHub App 만들기")}</h3>
       <p className="small muted">{t("GitHub에서 앱을 만들면 이 서버에 연결됩니다. 조직 소유로 만들려면 조직 이름을 입력하세요.")}</p>
       <form method="post" onSubmit={async (event) => {

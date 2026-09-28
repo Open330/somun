@@ -38,10 +38,10 @@ function Player({ video, repo }: { video: VideoItem; repo: string }) {
     return () => { alive = false; if (made) URL.revokeObjectURL(made); };
   }, [video.id]);
   if (failed) return <p className="small muted">{t("영상 파일을 불러오지 못했습니다.")}</p>;
-  if (!url) return <div className="video-frame" style={{ aspectRatio: video.aspect === "1:1" ? "1 / 1" : "16 / 9" }} />;
+  if (!url) return <div className={video.aspect === "1:1" ? "video-frame square" : "video-frame"} />;
   return (
     <>
-      <video className="video-frame" src={url} controls playsInline style={{ aspectRatio: video.aspect === "1:1" ? "1 / 1" : "16 / 9" }} />
+      <video className={video.aspect === "1:1" ? "video-frame square" : "video-frame"} src={url} controls playsInline />
       <a className="btn sm" href={url} download={`${repo.split("/").pop()}-${video.id}.mp4`}>{t("MP4 내려받기")}</a>
     </>
   );
@@ -89,8 +89,8 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
   return (
     <section className="side-block video-block">
       <h2>{t("짧은 영상")}</h2>
-      <p className="small muted" style={{ marginTop: 0 }}>{t("근거 사실과 고른 초안으로 {n}초 안팎의 영상을 만듭니다. 화면에 나오는 숫자는 초안과 같은 근거로 검사합니다.", { n: duration })}</p>
-      <div className="row wrap" style={{ gap: 8 }}>
+      <p className="small muted mt-0">{t("근거 사실과 고른 초안으로 {n}초 안팎의 영상을 만듭니다. 화면에 나오는 숫자는 초안과 같은 근거로 검사합니다.", { n: duration })}</p>
+      <div className="row wrap gap-8">
         <div className="seg" role="group" aria-label={t("길이")}>{VIDEO_DURATIONS.map((d) => <button key={d} aria-pressed={d === duration} className={d === duration ? "active" : ""} onClick={() => setDuration(d)}>{t("{n}초", { n: d })}</button>)}</div>
         <div className="seg" role="group" aria-label={t("비율")}>{VIDEO_ASPECTS.map((a) => <button key={a} aria-pressed={a === aspect} className={a === aspect ? "active" : ""} onClick={() => setAspect(a)}>{a}</button>)}</div>
         <select value={draftId} onChange={(e) => setDraftId(e.target.value)} aria-label={t("대본으로 쓸 초안")}>
@@ -99,12 +99,12 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
         </select>
         <button className="primary sm" disabled={busy} onClick={() => void start()}>{busy ? t("요청하는 중…") : t("영상 만들기")}</button>
       </div>
-      <p className="tiny muted" style={{ margin: 0 }}>
+      <p className="tiny muted m-0">
         {cfg?.bridgeConnected ? <><span className="badge ok">{t("bridge 연결됨")}</span> {t("요청하면 연결된 bridge의 Claude Code가 바로 시작합니다.")}</> : <><span className="badge outline">{t("bridge 없음")}</span> {t("연결된 bridge가 없어 요청은 대기합니다.")} <Link to="/settings?tab=model">{t("설정 › 모델에서 토큰 만들기")}</Link></>}
       </p>
-      {error && <p className="small" style={{ color: "var(--danger)" }}>{error}</p>}
+      {error && <p className="small error-text">{error}</p>}
       {videos?.length ? (
-        <div className="stack" style={{ marginTop: 12 }}>
+        <div className="stack mt-12">
           {videos.map((v) => (
             <div key={v.id} className="video-item">
               <div className="row between small">
@@ -113,8 +113,8 @@ export default function VideoBlock({ cid, repo, drafts }: { cid: number; repo: s
               </div>
               {v.status === "queued" && !cfg?.bridgeConnected && <p className="tiny muted">{t("bridge가 연결되면 시작합니다.")}</p>}
               {v.status === "done" && <Player video={v} repo={repo} />}
-              {v.note && <p className="tiny muted" style={{ whiteSpace: "pre-line" }}><b>{t("연출 메모")}</b> {v.note}</p>}
-              {v.error && <p className="tiny" style={{ color: "var(--danger)" }}>{v.error}</p>}
+              {v.note && <p className="tiny muted video-note"><b>{t("연출 메모")}</b> {v.note}</p>}
+              {v.error && <p className="tiny error-text">{v.error}</p>}
             </div>
           ))}
         </div>

@@ -98,7 +98,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       </section>
 
       <footer className="landing-foot">
-        <span className="row" style={{ gap: 8 }}><Mark size={18} /> {t("소문 · Open330 · Apache-2.0")}</span>
+        <span className="row gap-8"><Mark size={18} /> {t("소문 · Open330 · Apache-2.0")}</span>
         <span><a href="https://github.com/Open330/somun">{t("소스")}</a> · <a href="https://github.com/Open330/somun/blob/main/docs/spec.md">{t("기획")}</a></span>
       </footer>
     </div>

@@ -7,7 +7,7 @@ export function Mark({ size = 28, ink = "var(--accent)", paper = "var(--surface)
   const left = "474.0,160 610.2,160 241.5,800 105.3,800";
   const right = "322.2,352 458.4,352 717.1,800 580.9,800";
   return (
-    <svg width={size} height={size} viewBox="0 0 1024 1024" role="img" aria-label={title} style={{ display: "block", flexShrink: 0 }}>
+    <svg width={size} height={size} viewBox="0 0 1024 1024" role="img" aria-label={title} className="mark">
       <defs><clipPath id={`somun-box-${size}`}><rect x="420" y="336" width="464" height="464" rx="72" /></clipPath></defs>
       <rect x="420" y="336" width="464" height="464" rx="72" fill={ink} />
       <g fill={ink}><polygon points={left} /><polygon points={right} /></g>
@@ -19,9 +19,9 @@ export function Mark({ size = 28, ink = "var(--accent)", paper = "var(--surface)
 /** 마크 + 소문 + somun. */
 export function Lockup({ size = 28, dim = false }: { size?: number; dim?: boolean }) {
   return (
-    <span className="lockup" style={{ display: "inline-flex", alignItems: "center", gap: Math.round(size * 0.4) }}>
+    <span className="lockup" style={{ gap: Math.round(size * 0.4) }}>
       <Mark size={size} />
-      <span className="word" style={{ fontSize: Math.round(size * 0.8), lineHeight: 1 }}>{t("소문")}</span>
+      <span className="word" style={{ fontSize: Math.round(size * 0.8) }}>{t("소문")}</span>
       {!dim && <span className="roman" style={{ fontSize: Math.max(11, Math.round(size * 0.42)) }}>somun</span>}
     </span>
   );

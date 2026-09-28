@@ -71,23 +71,23 @@ export default function Pick() {
       {!repos && !err && <Skeleton rows={6} />}
       {repos && (
         <>
-          <div className="card" style={{ marginBottom: 14 }}>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="card mb-14">
+            <div className="row wrap gap-10">
               <b className="small">{t("글감 처리")}</b>
-              <label className="row small" style={{ gap: 6 }}><input type="radio" name="mode" checked={auto === false} onChange={() => setAuto(false)} /> {t("모아두고 내가 고른 것만 판단")}</label>
-              <label className="row small" style={{ gap: 6 }}><input type="radio" name="mode" checked={auto === true} onChange={() => setAuto(true)} /> {t("자동: 최근 {n}일 안에 생긴 글감은 바로 판단·초안", { n: settings?.watch.recentDays ?? 30 })}</label>
+              <label className="row small gap-6"><input type="radio" name="mode" checked={auto === false} onChange={() => setAuto(false)} /> {t("모아두고 내가 고른 것만 판단")}</label>
+              <label className="row small gap-6"><input type="radio" name="mode" checked={auto === true} onChange={() => setAuto(true)} /> {t("자동: 최근 {n}일 안에 생긴 글감은 바로 판단·초안", { n: settings?.watch.recentDays ?? 30 })}</label>
             </div>
-            <p className="tiny muted" style={{ marginTop: 6 }}>{t("자동은 모델 호출이 많아집니다. 처음엔 수동으로 두고 어떤 글감이 오는지 본 뒤 켜는 편이 낫습니다.")}</p>
+            <p className="tiny muted mt-6">{t("자동은 모델 호출이 많아집니다. 처음엔 수동으로 두고 어떤 글감이 오는지 본 뒤 켜는 편이 낫습니다.")}</p>
           </div>
 
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-            <input placeholder={t("검색")} value={q} onChange={(ev) => setQ(ev.target.value)} style={{ width: 200 }} />
-            <div className="tabs" style={{ margin: 0 }}>
+          <div className="row wrap gap-8 mb-10">
+            <input placeholder={t("검색")} value={q} onChange={(ev) => setQ(ev.target.value)} className="inline-input" />
+            <div className="tabs m-0">
               {([7, 30, 90, 0] as Recent[]).map((d) => <button key={d} className={`sm ${recent === d ? "active" : ""}`} onClick={() => setRecent(d)}>{d ? t("최근 {n}일 갱신", { n: d }) : t("전체")}</button>)}
             </div>
-            <label className="row small" style={{ gap: 6 }}>{t("스타 ≥")} <input type="number" min={0} value={minStars} onChange={(ev) => setMinStars(Number(ev.target.value) || 0)} style={{ width: 64 }} /></label>
-            <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={hideForks} onChange={(ev) => setHideForks(ev.target.checked)} /> {t("포크 제외")}</label>
-            <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={hideArchived} onChange={(ev) => setHideArchived(ev.target.checked)} /> {t("아카이브 제외")}</label>
+            <label className="row small gap-6">{t("스타 ≥")} <input type="number" min={0} value={minStars} onChange={(ev) => setMinStars(Number(ev.target.value) || 0)} className="num-input" /></label>
+            <label className="row small gap-6"><input type="checkbox" checked={hideForks} onChange={(ev) => setHideForks(ev.target.checked)} /> {t("포크 제외")}</label>
+            <label className="row small gap-6"><input type="checkbox" checked={hideArchived} onChange={(ev) => setHideArchived(ev.target.checked)} /> {t("아카이브 제외")}</label>
             <span className="tiny muted">{t("{shown}/{total}개 표시 · {selected}개 선택", { shown: visible.length, total: repos.length, selected: sel.size })}</span>
             <button className="ghost sm" onClick={() => setSel((s) => { const n = new Set(s); for (const r of visible) { if (allVisible) n.delete(r.fullName); else n.add(r.fullName); } return n; })}>{allVisible ? t("표시된 것 모두 해제") : t("표시된 것 모두 선택")}</button>
           </div>
@@ -97,16 +97,16 @@ export default function Pick() {
             {visible.map((r) => (
               <label key={r.fullName} className="pick-row">
                 <input type="checkbox" checked={sel.has(r.fullName)} onChange={() => toggle(r.fullName)} />
-                <div style={{ minWidth: 0 }}>
-                  <div className="row" style={{ gap: 8, alignItems: "baseline" }}>
-                    <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.fullName}</b>
+                <div className="min-w-0">
+                  <div className="row baseline gap-8">
+                    <b className="ellipsis">{r.fullName}</b>
                     {r.isPrivate && <span className="badge outline">{t("비공개")}</span>}
                     {r.fork && <span className="badge outline">{t("포크")}</span>}
                     {r.archived && <span className="badge outline">{t("아카이브")}</span>}
                   </div>
-                  {r.description && <div className="small muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.description}</div>}
+                  {r.description && <div className="small muted ellipsis">{r.description}</div>}
                 </div>
-                <div className="tiny muted" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                <div className="tiny muted pick-meta">
                   <div>★ {r.stars}{r.language ? ` · ${r.language}` : ""}</div>
                   <div>{r.pushedAt ? t("갱신 {when}", { when: relTime(r.pushedAt) }) : t("갱신 기록 없음")}</div>
                 </div>

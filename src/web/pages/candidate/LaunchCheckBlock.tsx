@@ -35,13 +35,13 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   return (
     <section className="side-block">
       <details className="raw" onToggle={(ev) => { if ((ev.target as HTMLDetailsElement).open && !data && state !== "loading") void load(); }}>
-        <summary>{t("링크 미리보기 점검")}{data?.items.length ? <span className={`badge ${failing ? "warn" : "ok"}`} style={{ marginLeft: 6 }}>{failing ? t("고칠 곳 {n}", { n: failing }) : t("통과")}</span> : null}</summary>
-        <p className="tiny muted" style={{ margin: "6px 0" }}>{t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}</p>
-        {!homepage && <p className="small muted" style={{ margin: 0 }}>{t("저장소에 홈페이지가 없습니다. GitHub 저장소의 Website 칸에 사이트 주소를 넣으면 다음 수집부터 점검합니다.")}</p>}
-        {homepage && state === "loading" && <p className="small muted" style={{ margin: 0 }}>{t("점검하는 중…")}</p>}
-        {homepage && state === "error" && <p className="small muted" style={{ margin: 0 }}>{t("점검하지 못했습니다.")} <button className="ghost sm" onClick={() => void load()}>{t("다시 시도")}</button></p>}
-        {data?.unreachable && <p className="small muted" style={{ margin: 0 }}>{t("{url}을 열지 못했습니다.", { url: data.homepage ?? "" })}</p>}
-        {data && homepage && !data.unreachable && !data.items.length && <p className="small muted" style={{ margin: 0 }}>{t("GitHub 저장소 페이지는 링크 미리보기가 이미 갖춰져 있습니다.")}</p>}
+        <summary>{t("링크 미리보기 점검")}{data?.items.length ? <span className={`badge ml-6 ${failing ? "warn" : "ok"}`}>{failing ? t("고칠 곳 {n}", { n: failing }) : t("통과")}</span> : null}</summary>
+        <p className="tiny muted launch-check-intro">{t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}</p>
+        {!homepage && <p className="small muted m-0">{t("저장소에 홈페이지가 없습니다. GitHub 저장소의 Website 칸에 사이트 주소를 넣으면 다음 수집부터 점검합니다.")}</p>}
+        {homepage && state === "loading" && <p className="small muted m-0">{t("점검하는 중…")}</p>}
+        {homepage && state === "error" && <p className="small muted m-0">{t("점검하지 못했습니다.")} <button className="ghost sm" onClick={() => void load()}>{t("다시 시도")}</button></p>}
+        {data?.unreachable && <p className="small muted m-0">{t("{url}을 열지 못했습니다.", { url: data.homepage ?? "" })}</p>}
+        {data && homepage && !data.unreachable && !data.items.length && <p className="small muted m-0">{t("GitHub 저장소 페이지는 링크 미리보기가 이미 갖춰져 있습니다.")}</p>}
         {data?.items.length ? (
           <ul className="launch-check small">
             {data.items.map((item) => { const [mark, cls] = MARK[item.level]; const h = hint(item); return (

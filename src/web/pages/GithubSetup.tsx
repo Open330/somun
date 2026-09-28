@@ -20,5 +20,5 @@ export default function GithubSetup() {
       .then((r) => { setMsg(t("{account}의 저장소 {n}개에 접근할 수 있습니다. 무엇을 지켜볼지 고르러 갑니다.", { account: r.account, n: r.repos.length })); setTimeout(() => nav(`/github/pick?installation_id=${encodeURIComponent(id)}`, { replace: true }), 700); })
       .catch((e: Error) => setMsg(t("연결 실패: {message}", { message: e.message })));
   }, [nav]);
-  return <div className="empty" style={{ margin: 40 }}>{msg}</div>;
+  return <div className="empty setup-status">{msg}</div>;
 }

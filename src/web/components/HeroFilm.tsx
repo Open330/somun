@@ -166,13 +166,13 @@ export default function HeroFilm() {
         <div className="film-layer" style={{ opacity: layer(T, 0, 4800) }} aria-hidden={step !== 0}>
           <span className="film-label">{steps[0]}</span>
           <div className="film-post film-before">{before.map((p, i) => <span key={i} className={i === 1 && flagged[0] > 0.5 ? "vague" : ""}>{p.shown}</span>)}{T < 1900 && <span className="film-caret" />}</div>
-          <ul className="film-missing">{missing.map((m, i) => <li key={m} style={{ opacity: flagged[i], transform: `translateX(${(1 - flagged[i]) * -6}px)` }}><i aria-hidden>✕</i>{m}</li>)}</ul>
+          <ul className="film-missing">{missing.map((m, i) => <li key={m} style={{ "--p": flagged[i] } as React.CSSProperties}><i aria-hidden>✕</i>{m}</li>)}</ul>
         </div>
 
         <div className="film-layer" style={{ opacity: layer(T, 4800, 8000) }} aria-hidden={step !== 1}>
           <span className="film-label">{steps[1]}</span>
           <ul className="film-evidence">
-            {EVIDENCE.map((e, i) => { const p = seg(T, 5000 + i * 320, 5400 + i * 320); return <li key={e.kind} style={{ opacity: p, transform: `translateY(${(1 - p) * 8}px)` }}><span>{e.kind}</span>{e.title}</li>; })}
+            {EVIDENCE.map((e, i) => { const p = seg(T, 5000 + i * 320, 5400 + i * 320); return <li key={e.kind} style={{ "--p": p } as React.CSSProperties}><span>{e.kind}</span>{e.title}</li>; })}
           </ul>
           <div className="film-facts">{FACTS.map((f, i) => { const p = seg(T, 6200 + i * 220, 6550 + i * 220); return <span key={f} style={{ opacity: p }}>{f}</span>; })}</div>
           <p className="film-aside" style={{ opacity: seg(T, 6900, 7300) }}>{t("잡일 커밋과 리팩터링은 버리고, 바깥 독자가 볼 변화와 숫자만 남겼습니다.")}</p>
@@ -190,7 +190,7 @@ export default function HeroFilm() {
             <span className="film-lint" style={{ opacity: lint }}>{t("린트 통과")}{c.limit ? ` · ${chars(afterText)}/${c.limit}` : ""}</span>
             <span className={`film-copy ${press ? "pressed" : ""}`} style={{ opacity: seg(T, 14000, 14300) }}>{t("복사")}</span>
           </div>
-          <span className="film-toast" style={{ opacity: toast, transform: `translate(-50%, ${(1 - toast) * 8}px)` }}>{t("복사했습니다. 게시는 직접 합니다.")}</span>
+          <span className="film-toast" style={{ "--p": toast } as React.CSSProperties}>{t("복사했습니다. 게시는 직접 합니다.")}</span>
         </div>
       </div>
 
@@ -202,7 +202,7 @@ export default function HeroFilm() {
           {STEPS.map((s, i) => (
             <li key={s.start}>
               <button className={i === step ? "on" : i < step ? "past" : ""} aria-current={i === step ? "step" : undefined} onClick={() => go(s.start)} aria-label={t("{n}단계: {label}", { n: i + 1, label: steps[i] })}>
-                <span className="film-step-bar"><i style={{ transform: `scaleX(${clamp((T - s.start) / (s.end - s.start))})` }} /></span>
+                <span className="film-step-bar"><i style={{ "--p": clamp((T - s.start) / (s.end - s.start)) } as React.CSSProperties} /></span>
                 <span className="film-step-name">{steps[i]}</span>
               </button>
             </li>

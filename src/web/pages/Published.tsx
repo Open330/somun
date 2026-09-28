@@ -27,11 +27,11 @@ export default function Published() {
         {summary && (summary.byChannel.length > 1 || summary.byVoice.length > 1) && (
           <div className="perf">
             <div className="perf-col">
-              <div className="tiny muted" style={{ marginBottom: 6 }}>{t("채널별 · 발행 7일 뒤")}</div>
+              <div className="tiny muted mb-6">{t("채널별 · 발행 7일 뒤")}</div>
               {summary.byChannel.map((g) => <div key={g.key} className="perf-row"><span>{channelLabel(g.key)} <span className="muted">{g.count}</span></span><span className="mono">{starText(g)}{g.avgUniques !== undefined ? ` · ${t("방문 {n}", { n: g.avgUniques })}` : ""}{g.avgLikes !== undefined ? ` · ${t("반응 {n}", { n: g.avgLikes })}` : ""}</span></div>)}
             </div>
             <div className="perf-col">
-              <div className="tiny muted" style={{ marginBottom: 6 }}>{t("문체별 · 발행 7일 뒤")}</div>
+              <div className="tiny muted mb-6">{t("문체별 · 발행 7일 뒤")}</div>
               {summary.byVoice.map((g) => <div key={g.key} className="perf-row"><span>{g.key === "unknown" ? t("문체 미기록") : t(VOICE_PRESETS.find((v) => v.id === g.key)?.name ?? g.key)} <span className="muted">{g.count}</span></span><span className="mono">{starText(g)}{g.avgLikes !== undefined ? ` · ${t("반응 {n}", { n: g.avgLikes })}` : ""}</span></div>)}
             </div>
           </div>
@@ -42,12 +42,12 @@ export default function Published() {
             return (
               <div key={p.id} className="pub">
                 <span className="badge outline">{channelLabel(p.channel)}</span>
-                <div style={{ minWidth: 0 }}>
-                  <Link to={`/c/${p.candidateId}${p.draftId ? `?draft=${p.draftId}` : ""}`} style={{ fontWeight: 600, color: "var(--ink)" }}>{p.candidateTitle}</Link>
+                <div className="min-w-0">
+                  <Link to={`/c/${p.candidateId}${p.draftId ? `?draft=${p.draftId}` : ""}`} className="pub-title">{p.candidateTitle}</Link>
                   <div className="tiny muted">{fmtDate(p.publishedAt)} · <a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 60)}</a></div>
                 </div>
-                <div className="row" style={{ gap: 10 }}>
-                  <div className="small muted" style={{ textAlign: "right" }}>
+                <div className="row gap-10">
+                  <div className="small muted pub-stars">
                     <div>{t("스타")} {p.baselineStars ?? "?"} → {p.latestStars ?? "?"} {delta !== undefined && <span className={`delta ${delta > 0 ? "up" : ""}`}>{delta > 0 ? `+${delta}` : delta}</span>}</div>
                     {p.excessStars7d !== undefined && <div className="tiny muted" title={t("발행 후 7일 증가에서, 발행 전 7일 추세가 이어졌다면 늘었을 만큼을 뺀 값입니다.")}>{t("추세 대비 {excess} (7일 {observed}, 기대 {expected})", { excess: signed(p.excessStars7d), observed: signed(p.starDelta7d ?? 0), expected: signed(p.expectedStarDelta7d ?? 0) })}</div>}
                     {p.series.at(-1)?.uniques !== undefined && <div>{t("방문자 14일 {n}", { n: p.series.at(-1)?.uniques })}</div>}
@@ -71,8 +71,8 @@ function ManualStats({ id, stats }: { id: number; stats?: { likes?: number; comm
   const [v, setV] = useState({ likes: stats?.likes ?? 0, comments: stats?.comments ?? 0, reposts: stats?.reposts ?? 0 });
   if (!open) return <button className="ghost sm" onClick={() => { setError(null); setOpen(true); }}>{stats ? `${t("반응")} ${stats.likes ?? 0}·${stats.comments ?? 0}·${stats.reposts ?? 0}` : t("반응 입력")}</button>;
   return (
-    <div className="row small" style={{ gap: 6 }}>
-      {(["likes", "comments", "reposts"] as const).map((k) => <input key={k} type="number" value={v[k]} style={{ width: 64 }} title={k} onChange={(ev) => setV({ ...v, [k]: Number(ev.target.value) })} />)}
+    <div className="row small gap-6">
+      {(["likes", "comments", "reposts"] as const).map((k) => <input key={k} type="number" value={v[k]} className="num-input" title={k} onChange={(ev) => setV({ ...v, [k]: Number(ev.target.value) })} />)}
       <button className="sm" onClick={async () => { setError(null); try { await post(`/publications/${id}/stats`, v); setOpen(false); } catch (err) { setError((err as Error).message); } }}>{t("저장")}</button>
       {error && <span role="alert" className="tiny">{t("저장하지 못했습니다.")} {error}</span>}
     </div>

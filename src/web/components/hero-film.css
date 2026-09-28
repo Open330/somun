@@ -30,11 +30,11 @@
 .film-after sup { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--accent); margin-right: 3px; vertical-align: 5px; }
 
 .film-missing { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
-.film-missing li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
+.film-missing li { opacity: var(--p); transform: translateX(calc((1 - var(--p)) * -6px)); display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink-2); }
 .film-missing i { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-style: normal; font-size: 10px; color: var(--muted); border: 1px solid var(--line-strong); }
 
 .film-evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.film-evidence li { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 38px; padding: 0 12px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
+.film-evidence li { opacity: var(--p); transform: translateY(calc((1 - var(--p)) * 8px)); display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 38px; padding: 0 12px; border-radius: 8px; background: var(--surface-2); font-size: 13.5px; }
 .film-evidence li span { font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
 .film-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .film-facts span { font-family: var(--font-mono); font-size: 11.5px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2); }
@@ -49,7 +49,7 @@
 .film-lint { font-size: 12px; font-weight: 600; color: var(--ok); background: var(--accent-soft); padding: 4px 10px; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .film-copy { font-size: 12.5px; font-weight: 600; padding: 6px 14px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); transition: transform .12s ease, box-shadow .12s ease; }
 .film-copy.pressed { transform: scale(.94); box-shadow: 0 0 0 4px var(--accent-soft); }
-.film-toast { position: absolute; left: 50%; bottom: 60px; white-space: nowrap; font-size: 12.5px; padding: 7px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); box-shadow: var(--shadow); pointer-events: none; }
+.film-toast { opacity: var(--p); transform: translate(-50%, calc((1 - var(--p)) * 8px)); position: absolute; left: 50%; bottom: 60px; white-space: nowrap; font-size: 12.5px; padding: 7px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); box-shadow: var(--shadow); pointer-events: none; }
 .film-caret { display: inline-block; width: 1.5px; height: 1.05em; margin-left: 1px; vertical-align: -0.15em; background: var(--accent); animation: film-blink 1s steps(1) infinite; }
 @keyframes film-blink { 50% { opacity: 0; } }
 
@@ -65,7 +65,7 @@
 .film-steps button:hover .film-step-name { color: var(--ink); }
 .film-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .film-step-bar { position: relative; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.film-step-bar i { position: absolute; inset: 0; background: var(--accent); transform-origin: left; }
+.film-step-bar i { position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(var(--p)); }
 .film-step-name { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .film-steps button.on .film-step-name { color: var(--accent); font-weight: 600; }
 

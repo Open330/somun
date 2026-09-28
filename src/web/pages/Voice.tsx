@@ -46,11 +46,11 @@ export default function Voice() {
       </header>
 
       {voice && (
-        <div className="card stack" style={{ gap: 14, marginBottom: 20 }}>
+        <div className="card stack gap-14 mb-20">
           <div>
-            <div className="row between" style={{ marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-              <h3 style={{ margin: 0 }}>{t("프리셋")}</h3>
-              <div className="row" style={{ gap: 8 }}><span className="tiny muted">{t("샘플 언어")}</span><div className="lang-seg">{(["ko", "en"] as const).map((l) => <button key={l} className={sampleLang === l ? "on" : ""} onClick={() => setSampleLang(l)}>{l.toUpperCase()}</button>)}</div></div>
+            <div className="row between wrap gap-8 mb-8">
+              <h3 className="m-0">{t("프리셋")}</h3>
+              <div className="row gap-8"><span className="tiny muted">{t("샘플 언어")}</span><div className="lang-seg">{(["ko", "en"] as const).map((l) => <button key={l} className={sampleLang === l ? "on" : ""} onClick={() => setSampleLang(l)}>{l.toUpperCase()}</button>)}</div></div>
             </div>
             <div className="sample-work">
               <b>{t("같은 작업물, 다른 문체")}</b>
@@ -69,11 +69,11 @@ export default function Voice() {
             </div>
           </div>
           <div>
-            <h3 style={{ marginBottom: 4 }}>{t("내 지침")} <span className="tiny muted">{t("선택 · 프리셋보다 우선")}</span></h3>
-            <p className="small muted" style={{ margin: "0 0 8px" }}>{t("글마다 반복해서 고치던 것을 여기 적어 두세요. 예: \"링크는 항상 마지막 줄에\", \"회사 이름은 쓰지 않기\", \"영어 글에서는 I 대신 we\".")}</p>
-            <textarea value={guide ?? voice.guide} onChange={(ev) => setGuide(ev.target.value)} placeholder={t("비워 두면 프리셋 지침만 씁니다.")} style={{ minHeight: 90 }} />
-            <div className="row between wrap" style={{ marginTop: 8, gap: 8 }}>
-              <label className="row small" style={{ gap: 6, flex: "1 1 220px", minWidth: 0 }}><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> {t("내가 복사한 글을 문체 예시로 프롬프트에 붙이기")}</label>
+            <h3 className="mb-4">{t("내 지침")} <span className="tiny muted">{t("선택 · 프리셋보다 우선")}</span></h3>
+            <p className="small muted mb-8">{t("글마다 반복해서 고치던 것을 여기 적어 두세요. 예: \"링크는 항상 마지막 줄에\", \"회사 이름은 쓰지 않기\", \"영어 글에서는 I 대신 we\".")}</p>
+            <textarea value={guide ?? voice.guide} onChange={(ev) => setGuide(ev.target.value)} placeholder={t("비워 두면 프리셋 지침만 씁니다.")} className="guide-input" />
+            <div className="row between wrap gap-8 mt-8">
+              <label className="row small gap-6 use-examples-toggle"><input type="checkbox" checked={voice.useExamples} onChange={(ev) => void saveVoice({ useExamples: ev.target.checked })} /> {t("내가 복사한 글을 문체 예시로 프롬프트에 붙이기")}</label>
               <button className="primary" disabled={guide === null || guide === voice.guide} onClick={async () => { if (await saveVoice({ guide: guide ?? "" })) setGuide(null); }}>{t("지침 저장")}</button>
             </div>
           </div>
@@ -81,15 +81,15 @@ export default function Voice() {
       )}
 
       {suggestions && suggestions.length > 0 && (
-        <div className="card stack" style={{ gap: 10, marginBottom: 20, borderColor: "var(--accent)" }}>
+        <div className="card stack gap-10 mb-20 suggestions-card">
           <div>
-            <h3 style={{ margin: 0 }}>{t("지침 제안")} <span className="tiny muted">{t("수정과 버림에서 배운 것 · 승인하면 내 지침에 붙습니다")}</span></h3>
+            <h3 className="m-0">{t("지침 제안")} <span className="tiny muted">{t("수정과 버림에서 배운 것 · 승인하면 내 지침에 붙습니다")}</span></h3>
           </div>
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="stack gap-6">
             {suggestions.map((g) => (
               <div key={g.id} className="sugg">
-                <div style={{ minWidth: 0 }}>
-                  <div className="small" style={{ fontWeight: 600 }}>{g.rule}</div>
+                <div className="min-w-0">
+                  <div className="small sugg-rule">{g.rule}</div>
                   <div className="tiny muted">{t(CAT_LABEL[g.category] ?? g.category)} · {t("{n}번 관찰 · 마지막 {when}", { n: g.count, when: relTime(g.updatedAt) })}</div>
                 </div>
                 <span className="toolbar">
@@ -104,14 +104,14 @@ export default function Voice() {
 
       <LearningPanel />
 
-      <div className="page-head" style={{ marginTop: 8 }}>
-        <div><h2 style={{ margin: 0, textTransform: "none", letterSpacing: 0, fontSize: 16, color: "var(--ink)" }}>{t("예시 문장")} <span className="tiny muted">{voice?.useExamples ? t("프롬프트에 참고로 들어감") : t("지금은 프롬프트에 들어가지 않음")}</span></h2><p className="lede small">{t("내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현이 있는 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.", { own, seed })}</p></div>
+      <div className="page-head mt-8">
+        <div><h2 className="examples-title">{t("예시 문장")} <span className="tiny muted">{voice?.useExamples ? t("프롬프트에 참고로 들어감") : t("지금은 프롬프트에 들어가지 않음")}</span></h2><p className="lede small">{t("내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현이 있는 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.", { own, seed })}</p></div>
         <div className="toolbar"><button onClick={() => setAdding((a) => !a)}>{adding ? t("닫기") : t("예시 직접 추가")}</button></div>
       </div>
       {adding && (
-        <div className="card stack" style={{ marginBottom: 16 }}>
+        <div className="card stack mb-16">
           <div className="row"><select value={draft.channel} onChange={(ev) => { const c = ev.target.value as Channel; setDraft({ ...draft, channel: c, lang: CHANNELS[c].fixedLang ?? draft.lang }); }}>{ALL_CHANNELS.map((c) => <option key={c} value={c}>{channelLabel(c)}</option>)}</select><select value={draft.lang} disabled={Boolean(CHANNELS[draft.channel].fixedLang)} onChange={(ev) => setDraft({ ...draft, lang: ev.target.value })}>{Object.keys(LANGS).map((l) => <option key={l} value={l}>{langLabel(l)}</option>)}</select>{CHANNELS[draft.channel].hasTitle && <input placeholder={t("제목")} value={draft.title} onChange={(ev) => setDraft({ ...draft, title: ev.target.value })} />}</div>
-          <textarea placeholder={t("내가 실제로 올렸거나 올리고 싶은 문장")} value={draft.body} onChange={(ev) => setDraft({ ...draft, body: ev.target.value })} style={{ minHeight: 110 }} />
+          <textarea placeholder={t("내가 실제로 올렸거나 올리고 싶은 문장")} value={draft.body} onChange={(ev) => setDraft({ ...draft, body: ev.target.value })} className="example-input" />
           <div><button className="primary" disabled={!draft.body.trim()} onClick={async () => { if (await act(() => post("/examples", { channel: draft.channel, lang: draft.lang, title: draft.title || undefined, body: draft.body }), t("추가했습니다"))) { setDraft({ ...draft, body: "", title: "" }); setAdding(false); } }}>{t("추가")}</button></div>
         </div>
       )}
@@ -122,10 +122,10 @@ export default function Voice() {
       {list.length === 0 ? <div className="empty small">{t("이 채널의 예시가 없습니다.")}</div> : (
         <div className="rows">
           {list.map((e) => (
-            <div key={e.id} className="rowi" style={{ gridTemplateColumns: "minmax(0,1fr) auto", cursor: "default" }}>
-              <div style={{ minWidth: 0 }}>
-                <div className="row wrap" style={{ gap: 6, marginBottom: 2 }}><span className="badge outline">{channelLabel(e.channel)} · {e.lang.toUpperCase()}</span><span className={`badge ${e.source === "seed" ? "" : "ok"}`}>{e.source === "seed" ? t("참고") : e.source === "edited" ? t("내가 고침") : t("내가 승인")}</span>{!e.active && <span className="badge bad">{t("비활성")}</span>}<span className="tiny muted">{relTime(e.createdAt)}{e.note ? ` · ${e.note}` : ""}</span></div>
-                <div className={openId === e.id ? "draft-body" : "r"} style={openId === e.id ? { marginTop: 6 } : {}} onClick={() => setOpenId(openId === e.id ? null : e.id)}>{e.title ? `${e.title} — ` : ""}{e.body}</div>
+            <div key={e.id} className="rowi example-row">
+              <div className="min-w-0">
+                <div className="row wrap gap-6 mb-2"><span className="badge outline">{channelLabel(e.channel)} · {e.lang.toUpperCase()}</span><span className={`badge ${e.source === "seed" ? "" : "ok"}`}>{e.source === "seed" ? t("참고") : e.source === "edited" ? t("내가 고침") : t("내가 승인")}</span>{!e.active && <span className="badge bad">{t("비활성")}</span>}<span className="tiny muted">{relTime(e.createdAt)}{e.note ? ` · ${e.note}` : ""}</span></div>
+                <div className={openId === e.id ? "draft-body mt-6" : "r"} onClick={() => setOpenId(openId === e.id ? null : e.id)}>{e.title ? `${e.title} — ` : ""}{e.body}</div>
               </div>
               <div className="toolbar"><button className="ghost sm" onClick={() => void act(() => post(`/examples/${e.id}/active`, { active: !e.active }))}>{e.active ? t("끄기") : t("켜기")}</button><button className="ghost sm danger" onClick={() => void act(() => del(`/examples/${e.id}`))}>{t("삭제")}</button></div>
             </div>
@@ -149,17 +149,17 @@ function LearningPanel() {
   if (!data || data.copied === 0) return null;
   const weeks = data.byWeek.slice(-8);
   return (
-    <div className="card stack" style={{ gap: 10, marginBottom: 20 }}>
+    <div className="card stack gap-10 mb-20">
       <div>
-        <h3 style={{ margin: 0 }}>{t("학습 효과")} <span className="tiny muted">{t("복사한 초안 {n}건 기준", { n: data.copied })}</span></h3>
-        <p className="small muted" style={{ margin: "4px 0 0" }}>{t("초안을 고치지 않고 그대로 쓴 비율과, 고친 경우 원문 대비 바꾼 단어 비율입니다. 지침·예시가 쌓일수록 \"고친 양\"이 줄어야 합니다.")}</p>
+        <h3 className="m-0">{t("학습 효과")} <span className="tiny muted">{t("복사한 초안 {n}건 기준", { n: data.copied })}</span></h3>
+        <p className="small muted learning-intro">{t("초안을 고치지 않고 그대로 쓴 비율과, 고친 경우 원문 대비 바꾼 단어 비율입니다. 지침·예시가 쌓일수록 \"고친 양\"이 줄어야 합니다.")}</p>
       </div>
       <div className="perf-row"><b>{t("전체")}</b><BucketLine b={data} /></div>
-      {weeks.length > 1 && <div className="stack" style={{ gap: 4 }}>
+      {weeks.length > 1 && <div className="stack gap-4">
         <span className="tiny muted">{t("주별")}</span>
         {weeks.map((w) => <div key={w.week} className="perf-row small"><span>{w.week}</span><BucketLine b={w} /></div>)}
       </div>}
-      {data.byStyle.length > 1 && <div className="stack" style={{ gap: 4 }}>
+      {data.byStyle.length > 1 && <div className="stack gap-4">
         <span className="tiny muted">{t("문체 설정 버전별 (처음 쓴 순서)")}</span>
         {data.byStyle.map((g, i) => <div key={g.styleKey} className="perf-row small"><span>{g.styleKey === "unknown" ? t("기록 전") : t("설정 {n}", { n: i + 1 })}{g.current ? ` · ${t("지금")}` : ""} <span className="muted">{t("{when}부터", { when: relTime(g.firstAt) })}</span></span><BucketLine b={g} /></div>)}
       </div>}

@@ -40,13 +40,13 @@ export default function VideoBridges({ showToast }: { showToast: (m: string) => 
   const command = (token: string) => `VIDEO_SERVER_URL=${cfg.bridgeUrl ?? ""} VIDEO_BRIDGE_TOKEN=${token} npm run video-bridge`;
 
   return (
-    <div className="card stack" style={{ gap: 12 }}>
-      <h3 style={{ margin: 0 }}>{t("영상 bridge")}</h3>
-      <p className="small muted" style={{ margin: 0 }}>{t("짧은 영상의 연출은 내 컴퓨터의 Claude Code가 합니다(본인 구독). 토큰을 만들고 somun 저장소에서 아래 명령을 실행하세요. 영상 서버에는 연결하지만 서버가 내 컴퓨터로 들어오지는 않습니다.")}</p>
+    <div className="card stack gap-12">
+      <h3 className="m-0">{t("영상 bridge")}</h3>
+      <p className="small muted m-0">{t("짧은 영상의 연출은 내 컴퓨터의 Claude Code가 합니다(본인 구독). 토큰을 만들고 somun 저장소에서 아래 명령을 실행하세요. 영상 서버에는 연결하지만 서버가 내 컴퓨터로 들어오지는 않습니다.")}</p>
       {issued && (
-        <div className="callout stack" style={{ gap: 6 }}>
+        <div className="callout stack gap-6">
           <b className="small">{t("\"{label}\" 토큰입니다. 이 화면을 벗어나면 다시 볼 수 없습니다.", { label: issued.label })}</b>
-          <pre className="evidence" style={{ margin: 0 }}>{command(issued.token)}</pre>
+          <pre className="evidence m-0">{command(issued.token)}</pre>
           <div className="toolbar">
             <button className="sm" onClick={() => void navigator.clipboard.writeText(command(issued.token)).then(() => showToast(t("복사했습니다")))}>{t("명령 복사")}</button>
             <button className="sm" onClick={() => setIssued(null)}>{t("닫기")}</button>
@@ -62,9 +62,9 @@ export default function VideoBridges({ showToast }: { showToast: (m: string) => 
             </div>
           ))}
         </div>
-      ) : <p className="small muted" style={{ margin: 0 }}>{t("아직 만든 토큰이 없습니다.")}</p>}
-      <div className="row" style={{ gap: 8 }}>
-        <input aria-label={t("토큰 이름")} placeholder={t("이름 (예: 맥북)")} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} style={{ width: 200 }} />
+      ) : <p className="small muted m-0">{t("아직 만든 토큰이 없습니다.")}</p>}
+      <div className="row gap-8">
+        <input aria-label={t("토큰 이름")} placeholder={t("이름 (예: 맥북)")} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} className="inline-input" />
         <button className="primary sm" disabled={busy} onClick={() => void issue()}>{t("토큰 만들기")}</button>
       </div>
     </div>

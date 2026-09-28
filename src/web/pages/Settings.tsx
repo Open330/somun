@@ -79,14 +79,14 @@ export default function Settings() {
       <fieldset className="settings-fields" disabled={saving || accountBusy} aria-busy={saving || accountBusy}>
       {saving && <p role="status" className="small muted">{t("설정을 저장하고 있습니다…")}</p>}
       {tab === "judge" && (
-        <div className="card stack" style={{ gap: 14, maxWidth: 720 }}>
+        <div className="card stack gap-14 settings-panel">
           <div>
             <h3>{t("새 글감 처리")}</h3>
             <p className="small muted">{t("수동은 글감을 모아만 두고 사용자가 고른 것만 판단합니다. 자동은 최근 N일 안에 생긴 글감을 매시간 판단하고 임계를 넘으면 초안까지 씁니다. 자동은 모델 호출이 많습니다.")}</p>
-            <div className="row" style={{ gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-              <label className="row small" style={{ gap: 6 }}><input type="radio" name="watch" checked={settings.watch.mode === "manual"} onChange={() => void update({ watch: { ...settings.watch, mode: "manual" } })} /> {t("수동: 내가 고른 것만")}</label>
-              <label className="row small" style={{ gap: 6 }}><input type="radio" name="watch" checked={settings.watch.mode === "auto"} onChange={() => void update({ watch: { ...settings.watch, mode: "auto" } })} /> {t("자동")}</label>
-              <label className="row small" style={{ gap: 6 }}>{tr("최근 {days}일 안에 생긴 글감만", { days: <input type="number" aria-label={t("일 수")} min={1} max={365} style={{ width: 64 }} value={settings.watch.recentDays} onChange={(ev) => void update({ watch: { ...settings.watch, recentDays: Math.max(1, Math.min(365, Number(ev.target.value) || 30)) } })} /> })}</label>
+            <div className="row wrap gap-14">
+              <label className="row small gap-6"><input type="radio" name="watch" checked={settings.watch.mode === "manual"} onChange={() => void update({ watch: { ...settings.watch, mode: "manual" } })} /> {t("수동: 내가 고른 것만")}</label>
+              <label className="row small gap-6"><input type="radio" name="watch" checked={settings.watch.mode === "auto"} onChange={() => void update({ watch: { ...settings.watch, mode: "auto" } })} /> {t("자동")}</label>
+              <label className="row small gap-6">{tr("최근 {days}일 안에 생긴 글감만", { days: <input type="number" aria-label={t("일 수")} min={1} max={365} className="num-input" value={settings.watch.recentDays} onChange={(ev) => void update({ watch: { ...settings.watch, recentDays: Math.max(1, Math.min(365, Number(ev.target.value) || 30)) } })} /> })}</label>
             </div>
           </div>
           <div>
@@ -101,56 +101,56 @@ export default function Settings() {
             <h3>{t("가중치")}</h3>
             <div className="stack">
               {CRITERIA.map(([k, label, hint]) => (
-                <label key={k} className="row between small"><span><b>{t(label)}</b> <span className="muted">{t(hint)}</span></span><input type="number" step="0.5" min="0" style={{ width: 72 }} value={settings.rubricWeights[k]} onChange={(ev) => void update({ rubricWeights: { ...settings.rubricWeights, [k]: Number(ev.target.value) } })} /></label>
+                <label key={k} className="row between small"><span><b>{t(label)}</b> <span className="muted">{t(hint)}</span></span><input type="number" step="0.5" min="0" className="weight-input" value={settings.rubricWeights[k]} onChange={(ev) => void update({ rubricWeights: { ...settings.rubricWeights, [k]: Number(ev.target.value) } })} /></label>
               ))}
             </div>
           </div>
           <div>
             <h3>{t("금지 표현")}</h3>
             <p className="small muted">{t("초안에 이 표현이 있으면 린트에 걸립니다. 한 줄에 하나.")}</p>
-            <textarea aria-label={t("금지 표현")} value={banned} onChange={(ev) => setBanned(ev.target.value)} style={{ minHeight: 120 }} />
+            <textarea aria-label={t("금지 표현")} value={banned} onChange={(ev) => setBanned(ev.target.value)} className="banned-input" />
           </div>
           <div><button className="primary" onClick={async () => { if (!await update({ draftThreshold: thresholds.draft, deferThreshold: thresholds.defer, bannedPhrases: banned.split("\n").map((s) => s.trim()).filter(Boolean) })) return; setBanned(null); setThresholds(null); showToast(t("저장했습니다")); }}>{t("저장")}</button></div>
         </div>
       )}
 
       {tab === "channels" && (
-        <div className="card stack" style={{ maxWidth: 760 }}>
+        <div className="card stack settings-panel wide">
           <p className="small muted">{t("채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).")}</p>
           {ALL_CHANNELS.map((ch) => <ChannelLangRow key={ch} ch={ch} langs={settings.channelLangs[ch] ?? []} onChange={(l) => setLangs(ch, l)} />)}
-          <label className="row small" style={{ gap: 6, marginTop: 12 }}><input type="checkbox" checked={settings.trackLinks !== false} onChange={(ev) => void update({ trackLinks: ev.target.checked })} /> {t("복사할 때 홈페이지·App Store 링크에 채널 표시(utm, ct) 붙이기. X·Threads·LinkedIn만, Show HN·Show GN은 붙이지 않습니다.")}</label>
+          <label className="row small gap-6 mt-12"><input type="checkbox" checked={settings.trackLinks !== false} onChange={(ev) => void update({ trackLinks: ev.target.checked })} /> {t("복사할 때 홈페이지·App Store 링크에 채널 표시(utm, ct) 붙이기. X·Threads·LinkedIn만, Show HN·Show GN은 붙이지 않습니다.")}</label>
         </div>
       )}
 
       {tab === "notify" && (
-        <div className="card stack" style={{ gap: 12, maxWidth: 720 }}>
+        <div className="card stack gap-12 settings-panel">
           <div>
             <h3>{t("주간 요약")}</h3>
             <p className="small muted">{t("수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 09:00에 검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.")}</p>
             <label className="field"><span>{t("Discord 웹훅 URL")} {settings.notify?.discordWebhookSet && <span className="badge ok">{t("설정됨")}</span>}</span><input type="password" placeholder={settings.notify?.discordWebhookSet ? t("저장된 URL 유지 (바꾸려면 새로 입력)") : "https://discord.com/api/webhooks/…"} value={webhook} onChange={(ev) => setWebhook(ev.target.value)} /></label>
-            <label className="row small" style={{ gap: 6, marginTop: 8 }}><input type="checkbox" checked={settings.notify?.weekly ?? false} onChange={(ev) => void update({ notify: { weekly: ev.target.checked } })} /> {t("월요일 09:00 KST 주간 요약 보내기")}</label>
-            <div className="toolbar" style={{ marginTop: 10 }}>
+            <label className="row small gap-6 mt-8"><input type="checkbox" checked={settings.notify?.weekly ?? false} onChange={(ev) => void update({ notify: { weekly: ev.target.checked } })} /> {t("월요일 09:00 KST 주간 요약 보내기")}</label>
+            <div className="toolbar mt-10">
               <button className="primary" disabled={!webhook.trim()} onClick={async () => { if (!await update({ notify: { weekly: settings.notify?.weekly ?? true, discordWebhookUrl: webhook.trim() } })) return; setWebhook(""); showToast(t("저장했습니다")); }}>{t("웹훅 저장")}</button>
               <button disabled={!settings.notify?.discordWebhookSet} onClick={async () => { try { await post("/notify/test"); showToast(t("보냈습니다. Discord를 확인하세요.")); } catch (e) { showToast(`${t("실패:")} ${(e as Error).message}`); } }}>{t("지금 시험 발송")}</button>
               {settings.notify?.discordWebhookSet && <button className="ghost" onClick={async () => { if (!await update({ notify: { weekly: false, discordWebhookUrl: "" } })) return; showToast(t("웹훅을 지웠습니다")); }}>{t("웹훅 지우기")}</button>}
             </div>
-            {settings.notify?.lastSentAt && <div className="tiny muted" style={{ marginTop: 6 }}>{t("마지막 발송 {when}", { when: new Date(settings.notify.lastSentAt).toLocaleString(dateLocale()) })}</div>}
+            {settings.notify?.lastSentAt && <div className="tiny muted mt-6">{t("마지막 발송 {when}", { when: new Date(settings.notify.lastSentAt).toLocaleString(dateLocale()) })}</div>}
           </div>
         </div>
       )}
 
       {tab === "account" && (
-        <div className="card stack" style={{ gap: 14, maxWidth: 720 }}>
+        <div className="card stack gap-14 settings-panel">
           <div>
             <h3>{t("내 데이터 내보내기")}</h3>
             <p className="small muted">{t("글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.")}</p>
             <button onClick={() => void accountAction(exportJson)}>{t("JSON 내려받기")}</button>
           </div>
           <div>
-            <h3 style={{ color: "var(--danger)" }}>{t("계정 데이터 삭제")}</h3>
+            <h3 className="error-text">{t("계정 데이터 삭제")}</h3>
             <p className="small muted">{t("이 계정의 모든 데이터를 지웁니다. 되돌릴 수 없습니다. GitHub App 설치 자체는 GitHub 설정에서 따로 제거해야 합니다.")}</p>
             <div className="row">
-              <input aria-label={t("계정 데이터 삭제 확인")} placeholder={t("확인하려면 \"{word}\"라고 입력", { word: deleteWord })} value={confirmText} onChange={(ev) => setConfirmText(ev.target.value)} style={{ width: 220 }} />
+              <input aria-label={t("계정 데이터 삭제 확인")} placeholder={t("확인하려면 \"{word}\"라고 입력", { word: deleteWord })} value={confirmText} onChange={(ev) => setConfirmText(ev.target.value)} className="confirm-input" />
               <button className="danger" disabled={confirmText.trim() !== deleteWord} onClick={() => void accountAction(async () => { await post("/account/delete", { confirm: deleteWord }); window.location.assign("/"); })}>{t("모두 삭제")}</button>
             </div>
           </div>
@@ -158,8 +158,8 @@ export default function Settings() {
       )}
 
       {tab === "model" && (
-        <div className="stack" style={{ gap: 16, maxWidth: 760 }}>
-          <div className="card stack" style={{ gap: 12 }}>
+        <div className="stack gap-16 settings-panel wide">
+          <div className="card stack gap-12">
             <p className="small muted">{t("분석(다이제스트·판단)은 가벼운 모델, 초안 생성만 상위 모델을 씁니다. 무료 쿼터가 모델별로 다르기 때문입니다. 기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 \"로컬 에이전트\"를 고르고 내 컴퓨터에서 워커를 실행합니다.")}{settings.llm.apiKeySet && <> {t("현재 저장된 키:")} …{settings.llm.apiKeyHint}</>}</p>
             <div className="tabs">
               {([["gemini", "Gemini"], ["anthropic", "Anthropic"], ["openai", t("OpenAI 호환")], ["local-agent", t("로컬 에이전트")]] as const).map(([k, l]) => <button key={k} className={llm.provider === k ? "active" : ""} onClick={() => setLlm({ ...llm, provider: k })}>{l}</button>)}
@@ -171,10 +171,10 @@ export default function Settings() {
               </>
             ) : (
               <div className="model-fields">
-                <label className="field" style={{ flex: 1 }}><span>{t("분석 모델 (다이제스트·판단)")}</span><input placeholder={DEFAULT_MODEL[llm.provider]} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
-                <label className="field" style={{ flex: 1 }}><span>{t("초안 모델 (글 생성만)")}</span><input placeholder={llm.provider === "gemini" ? DEFAULT_DRAFT_MODEL.gemini : t("위와 같음")} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
-                <label className="field" style={{ flex: 1 }}><span>{t("API 키")} {llm.provider === "gemini" ? t("(비우면 서버 키)") : t("(필수)")}</span><input type="password" placeholder={settings.llm.apiKeySet ? t("저장됨 — 바꾸려면 입력") : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
-                {llm.provider === "openai" && <label className="field" style={{ flex: 1 }}><span>{t("Base URL (선택)")}</span><input placeholder="https://api.openai.com/v1" value={llm.baseUrl} onChange={(ev) => setLlm({ ...llm, baseUrl: ev.target.value })} /></label>}
+                <label className="field"><span>{t("분석 모델 (다이제스트·판단)")}</span><input placeholder={DEFAULT_MODEL[llm.provider]} value={llm.model} onChange={(ev) => setLlm({ ...llm, model: ev.target.value })} /></label>
+                <label className="field"><span>{t("초안 모델 (글 생성만)")}</span><input placeholder={llm.provider === "gemini" ? DEFAULT_DRAFT_MODEL.gemini : t("위와 같음")} value={llm.draftModel} onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })} /></label>
+                <label className="field"><span>{t("API 키")} {llm.provider === "gemini" ? t("(비우면 서버 키)") : t("(필수)")}</span><input type="password" placeholder={settings.llm.apiKeySet ? t("저장됨 — 바꾸려면 입력") : ""} value={llm.apiKey} onChange={(ev) => setLlm({ ...llm, apiKey: ev.target.value })} /></label>
+                {llm.provider === "openai" && <label className="field"><span>{t("Base URL (선택)")}</span><input placeholder="https://api.openai.com/v1" value={llm.baseUrl} onChange={(ev) => setLlm({ ...llm, baseUrl: ev.target.value })} /></label>}
               </div>
             )}
             <div className="toolbar">
@@ -204,18 +204,18 @@ function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[];
   const on = langs.length > 0;
   const common = Object.keys(LANGS);
   return (
-    <div className="row between wrap" style={{ padding: "10px 0", borderTop: "1px solid var(--line)", alignItems: "flex-start" }}>
-      <div style={{ minWidth: 200 }}>
-        <label className="row" style={{ gap: 8 }}><input type="checkbox" style={{ width: "auto" }} checked={on} onChange={() => onChange(on ? [] : spec.defaultLangs)} /><b>{channelLabel(ch)}</b></label>
-        <div className="tiny muted" style={{ maxWidth: 360 }}>{spec.maxChars ? t("{n}자", { n: spec.maxChars }) : t("길이 제한 없음")}{spec.fixedLang ? ` · ${t("{lang} 고정", { lang: langLabel(spec.fixedLang) })}` : ""}</div>
+    <div className="row between wrap channel-lang-row">
+      <div className="channel-lang-name">
+        <label className="row gap-8"><input type="checkbox" checked={on} onChange={() => onChange(on ? [] : spec.defaultLangs)} /><b>{channelLabel(ch)}</b></label>
+        <div className="tiny muted channel-lang-hint">{spec.maxChars ? t("{n}자", { n: spec.maxChars }) : t("길이 제한 없음")}{spec.fixedLang ? ` · ${t("{lang} 고정", { lang: langLabel(spec.fixedLang) })}` : ""}</div>
       </div>
       {spec.fixedLang ? (
         <span className="badge outline">{langLabel(spec.fixedLang)}</span>
       ) : (
-        <div className="row wrap" style={{ gap: 6, maxWidth: 420, justifyContent: "flex-end" }}>
+        <div className="row wrap gap-6 channel-lang-options">
           {common.map((code) => <button key={code} aria-pressed={langs.includes(code)} className={`sm ${langs.includes(code) ? "active" : "ghost"}`} onClick={() => onChange(langs.includes(code) ? langs.filter((l) => l !== code) : [...langs, code])}>{LANGS[code].nativeName}</button>)}
           {langs.filter((l) => !common.includes(l)).map((code) => <button key={code} className="sm active" onClick={() => onChange(langs.filter((l) => l !== code))}>{code} ×</button>)}
-          <input aria-label={t("{channel} 언어 코드 추가", { channel: channelLabel(ch) })} className="sm" placeholder={t("코드 추가")} value={custom} style={{ width: 88 }} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
+          <input aria-label={t("{channel} 언어 코드 추가", { channel: channelLabel(ch) })} className="sm lang-code-input" placeholder={t("코드 추가")} value={custom} onChange={(ev) => setCustom(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Enter" && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(custom.trim())) { onChange([...new Set([...langs, custom.trim()])]); setCustom(""); } }} />
         </div>
       )}
     </div>

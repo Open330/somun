@@ -123,7 +123,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
     return (
       <div className="card draft-empty">
         <LangSeg langs={langs} lang={lang} onLang={onLang} />
-        <p className="muted small" style={{ margin: 0 }}>{t("{target} 초안이 아직 없습니다. 설정된 문체와 이 글감의 사실만으로 씁니다.", { target: targetLabel(channel, lang, Boolean(spec.fixedLang)) })}</p>
+        <p className="muted small m-0">{t("{target} 초안이 아직 없습니다. 설정된 문체와 이 글감의 사실만으로 씁니다.", { target: targetLabel(channel, lang, Boolean(spec.fixedLang)) })}</p>
         <button className="primary" disabled={busy} onClick={() => void onRedraft()}>{busy ? t("쓰는 중…") : t("초안 쓰기")}</button>
         {introductionButton}
       </div>
@@ -153,7 +153,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
             <span className="badge warn" title={t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", { model: expectedModel })}>{t("대체 모델")}{draftModelResetAt ? ` · ${t("{time} 이후 다시 쓰기 권장", { time: new Date(draftModelResetAt).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) })}` : ""}</span>
           )}
         </div>
-        {!editing && <div className="row" style={{ gap: 8 }}>
+        {!editing && <div className="row gap-8">
           <div className="seg" role="group" aria-label={t("보기 방식")}><button aria-pressed={view === "preview"} className={view === "preview" ? "active" : ""} onClick={() => setView("preview")}>{t("미리보기")}</button><button aria-pressed={view === "text"} className={view === "text" ? "active" : ""} onClick={() => setView("text")}>{t("텍스트")}</button></div>
           <Menu items={[
             { label: t("서비스 처음 소개하기"), title: introductionHint, disabled: busy, onClick: () => onRedraft(undefined, true) },
@@ -178,11 +178,11 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       {editing ? (
         <>
           {newest && newest.id !== latest.id && <p role="status" className="inline-notice">{t("새 버전이 도착했습니다. 수정 내용은 편집을 시작한 v{version}에 저장됩니다.", { version: latest.version })}</p>}
-          {spec.hasTitle && <input aria-label={t("초안 제목")} value={title} onChange={(ev) => setTitle(ev.target.value)} style={{ marginBottom: 8 }} placeholder={t("제목")} />}
+          {spec.hasTitle && <input aria-label={t("초안 제목")} value={title} onChange={(ev) => setTitle(ev.target.value)} className="mb-8" placeholder={t("제목")} />}
           <textarea aria-label={t("초안 본문")} value={body} onChange={(ev) => setBody(ev.target.value)} autoFocus />
-          <div className="row between" style={{ marginTop: 6 }}><span className="tiny muted">{t("{n}자", { n: `${[...body].length}${spec.maxChars ? `/${spec.maxChars}` : ""}` })}</span></div>
-          {changed && <><div className="tiny muted" style={{ margin: "8px 0 4px" }}>{t("바뀐 부분. 복사하면 이 글이 내 문체 예시가 되고, 바꾼 이유는 문체 규칙 제안으로 돌아옵니다.")}</div><WordDiff before={latest.body} after={body} /></>}
-          <div className="toolbar" style={{ marginTop: 10 }}>
+          <div className="row between mt-6"><span className="tiny muted">{t("{n}자", { n: `${[...body].length}${spec.maxChars ? `/${spec.maxChars}` : ""}` })}</span></div>
+          {changed && <><div className="tiny muted diff-caption">{t("바뀐 부분. 복사하면 이 글이 내 문체 예시가 되고, 바꾼 이유는 문체 규칙 제안으로 돌아옵니다.")}</div><WordDiff before={latest.body} after={body} /></>}
+          <div className="toolbar mt-10">
             <button className="primary" disabled={action !== null || !body.trim()} onClick={() => void copy()}>{action === "copy" ? t("저장 중…") : t("저장하고 복사")}</button>
             <button disabled={action !== null || !body.trim()} onClick={() => void save(false)}>{action === "save" ? t("저장 중…") : t("변경 저장")}</button>
             <button className="ghost" onClick={() => { setTitle(latest.title ?? ""); setBody(latest.body); setEditing(false); setConflict(null); setActionError(null); }}>{t("취소")}</button>
@@ -190,7 +190,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
         </>
       ) : (
         <>
-          {view === "preview" ? <ChannelPreview channel={channel} title={shown?.title ?? title} body={shown?.body ?? body} author={author} /> : <>{spec.hasTitle && <div style={{ fontWeight: 600, marginBottom: 8 }}>{shown?.title ?? title}</div>}<div className="draft-body">{shown?.body ?? body}</div></>}
+          {view === "preview" ? <ChannelPreview channel={channel} title={shown?.title ?? title} body={shown?.body ?? body} author={author} /> : <>{spec.hasTitle && <div className="draft-title">{shown?.title ?? title}</div>}<div className="draft-body">{shown?.body ?? body}</div></>}
           <div className="draft-meta tiny muted">
             {shown?.purpose && <span>{shown.purpose === "introduction" ? t("서비스 소개") : t("변경사항 소개")}</span>}
             <span className={spec.maxChars && count > spec.maxChars ? "over" : ""}>{t("{n}자", { n: `${count}${spec.maxChars ? ` / ${spec.maxChars}` : ""}` })}</span>
@@ -210,7 +210,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
               <span className="tiny muted"><span className="kbd">c</span> <span className="kbd">e</span> <span className="kbd">r</span></span>
             </div>
           )}
-          {!isOld && outgoing !== full && <div className="tiny muted" style={{ marginTop: 6 }}>{t("복사할 때 링크에 채널 표시(utm_source={channel})를 붙여 어느 글에서 왔는지 셀 수 있게 합니다. 설정 → 채널에서 끌 수 있습니다.", { channel })}</div>}
+          {!isOld && outgoing !== full && <div className="tiny muted mt-6">{t("복사할 때 링크에 채널 표시(utm_source={channel})를 붙여 어느 글에서 왔는지 셀 수 있게 합니다. 설정 → 채널에서 끌 수 있습니다.", { channel })}</div>}
           {rewriteOpen && !isOld && (
             <div className="rewrite">
               <div className="rewrite-head"><b>{t("다시 쓰기")}</b><span className="tiny muted">{t("사실과 숫자는 그대로. 비우면 같은 문체로 새로 씁니다.")}</span></div>
@@ -226,7 +226,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       )}
 
       {dropOpen && (
-        <div className="row wrap" style={{ marginTop: 10 }}>
+        <div className="row wrap mt-10">
           <select value={dropReason} onChange={(ev) => setDropReason(ev.target.value as never)}>{REASONS.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}</select>
           <button className="danger" disabled={action !== null} onClick={async () => {
             setAction("drop"); setActionError(null);
@@ -241,7 +241,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       {!editing && postDraft && !postDone && (
         <div className="step-post">
           <div className="row between"><b>{step === "post" || postDraft.id === copiedId ? t("복사 완료 · 이제 게시해 보세요") : t("게시하고 링크 남기기")}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{t("{channel} 작성 화면 열기", { channel: channelLabel(channel) })} ↗</a>}</div>
-          <p className="small muted" style={{ marginTop: 10 }}>{t("소문이 대신 게시하지는 않습니다. 채널에서 직접 올린 뒤 링크를 등록하면 발행 기록에 남습니다.")}</p>
+          <p className="small muted mt-10">{t("소문이 대신 게시하지는 않습니다. 채널에서 직접 올린 뒤 링크를 등록하면 발행 기록에 남습니다.")}</p>
           <p className="tiny muted">{t("자동 점검은 사실 확인을 대신하지 않습니다. 변경 근거와 대조해 경험·수치·변경 내용을 확인하세요.")}</p>
           <details className="raw"><summary>{t("게시 전 확인할 점")}</summary><ol>{spec.runbook.map((r, i) => <li key={i}>{t(r)}</li>)}{spec.mediaHint && <li>{t("이미지:")} {t(spec.mediaHint)}</li>}</ol></details>
           <form className="publication-form" onSubmit={async (event) => {

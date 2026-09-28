@@ -35,7 +35,7 @@ export function ChannelPreview({ channel, title, body, author }: { channel: Chan
     return (
       <div className="pv pv-li">
         <div className="pv-head"><span className="pv-avatar sq" /><div><b>{author}</b><div className="tiny muted">{t("지금 · 🌐")}</div></div></div>
-        <div className="pv-body"><span style={{ fontWeight: 500 }}>{first}</span>{rest.length ? "\n" + rest.join("\n") : ""}</div>
+        <div className="pv-body"><span className="pv-first">{first}</span>{rest.length ? "\n" + rest.join("\n") : ""}</div>
         <div className="tiny muted">{t("…더 보기 접힘선은 첫 줄 아래에 옵니다")}</div>
       </div>
     );
