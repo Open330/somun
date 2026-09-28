@@ -1,0 +1,52 @@
+{
+  "persona": "jisu",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "390x844",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "390px 모바일에서 수정 시작",
+      "status": "pass",
+      "automationMs": 257
+    },
+    {
+      "label": "저장 실패에도 입력 보존",
+      "status": "pass",
+      "automationMs": 134
+    },
+    {
+      "label": "저장 전 언어 전환 취소 시 입력 보존",
+      "status": "pass",
+      "automationMs": 45
+    },
+    {
+      "label": "오류 해소 후 재저장과 게시 기록",
+      "status": "pass",
+      "automationMs": 272
+    }
+  ],
+  "findings": [],
+  "pageErrors": [],
+  "dialogs": [
+    "저장하지 않은 수정 내용이 있습니다. 내용을 버리고 이동할까요?"
+  ],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "jisu-editing.png",
+      "overflow": false
+    },
+    {
+      "file": "jisu-save-error.png",
+      "overflow": false
+    },
+    {
+      "file": "jisu-published.png",
+      "overflow": false
+    },
+    {
+      "file": "jisu-other-language.png",
+      "overflow": false
+    }
+  ]
+}

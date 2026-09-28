@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
 import { CHANNELS, type Channel } from "@core/channels";
 import { trackLinks } from "@core/links";
@@ -21,23 +21,32 @@ const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자�
 
 const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLang: (l: string) => void }) => langs.length > 1 ? <div className="lang-seg" role="group" aria-label={t("언어")}>{langs.map((l) => <button key={l} aria-pressed={l === lang} className={l === lang ? "on" : ""} onClick={() => onLang(l)}>{l.toUpperCase()}</button>)}</div> : <span className="badge outline">{lang.toUpperCase()}</span>;
 
-export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publications = [], busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty, homepage, track = true }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; publications?: PublicationLink[]; busy: boolean; onRedraft: (instruction?: string, introduction?: boolean) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void; homepage?: string; track?: boolean }) {
+export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, publications = [], busy, onRedraft, showToast, expectedModel, draftModelResetAt, onDirty, homepage, initialDraftId, track = true }: { cid: number; channel: Channel; lang: string; langs: string[]; onLang: (l: string) => void; drafts: Draft[]; publications?: PublicationLink[]; busy: boolean; onRedraft: (instruction?: string, introduction?: boolean) => Promise<boolean>; showToast: (m: string) => void; expectedModel?: string; draftModelResetAt?: number; onDirty?: (dirty: boolean) => void; homepage?: string; initialDraftId?: number; track?: boolean }) {
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
   const merged = drafts.map((d) => savedDraft?.id === d.id && savedDraft.updatedAt >= d.updatedAt ? savedDraft : d);
   const versions = [...merged].sort((a, b) => b.version - a.version);
-  const latest = versions.find((d) => d.status !== "dropped") ?? null;
-  const [viewId, setViewId] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editBase, setEditBase] = useState<Draft | null>(null);
+  const newest = versions.find((d) => d.status !== "dropped") ?? null;
+  const latest = editing && editBase ? editBase : newest;
+  const beginEdit = () => { setEditBase(latest); setEditing(true); };
+  const [viewId, setViewId] = useState<number | null>(initialDraftId ?? null);
+  const firstSync = useRef(true);
+  // 새 버전이 도착한 뒤 이전 판에 저장하면, 저장 직후 한 번만 그 판을 보여준다.
+  const pinAfterSave = useRef<number | null>(null);
+  // 방금 복사한 판. 이전 판이어도 그 판에 게시 링크를 남길 수 있어야 한다.
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
   const spec = CHANNELS[channel];
   const [title, setTitle] = useState(latest?.title ?? "");
   const [body, setBody] = useState(latest?.body ?? "");
-  const [editing, setEditing] = useState(false);
   const [view, setView] = useState<"preview" | "text">("preview");
   const [step, setStep] = useState<"draft" | "post">("draft");
   const [url, setUrl] = useState("");
   const [recorded, setRecorded] = useState<PublicationLink | null>(null);
+  useEffect(() => { if (recorded && publications.some((p) => p.id === recorded.id && p.url === recorded.url)) setRecorded(null); }, [recorded, publications]);
   const [removedIds, setRemovedIds] = useState<number[]>([]);
   const records = [...(recorded ? [recorded] : []), ...publications].filter((p) => !removedIds.includes(p.id));
   const publication = latest ? records.find((p) => p.draftId === latest.id) : records[0];
@@ -49,6 +58,8 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
   const [instruction, setInstruction] = useState("");
   const [action, setAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // 다른 탭이 먼저 저장했을 때 다시 시도할 동작. 입력은 그대로 두고 덮어쓸지 사용자가 고른다.
+  const [conflict, setConflict] = useState<{ copyAfter: boolean } | null>(null);
   const unsaved = editing && (body !== (latest?.body ?? "") || title !== (latest?.title ?? ""));
   const blocker = useBlocker(unsaved);
   useEffect(() => { onDirty?.(unsaved); setUnsaved(unsaved); return () => { onDirty?.(false); setUnsaved(false); }; }, [unsaved, onDirty]);
@@ -60,29 +71,31 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
     return () => window.removeEventListener("beforeunload", beforeLeave);
   }, [unsaved]);
 
-  useEffect(() => { if (editing) return; setTitle(latest?.title ?? ""); setBody(latest?.body ?? ""); setEditing(false); setViewId(null); setRewriteOpen(false); setStep(latest?.status === "copied" ? "post" : "draft"); }, [latest?.id, latest?.title, latest?.body, latest?.status, editing]);
+  useEffect(() => { if (editing) return; setTitle(latest?.title ?? ""); setBody(latest?.body ?? ""); setEditing(false); const pin = pinAfterSave.current; pinAfterSave.current = null; setViewId(firstSync.current ? initialDraftId ?? null : pin); firstSync.current = false; setRewriteOpen(false); setStep(latest?.status === "copied" ? "post" : "draft"); }, [latest?.id, latest?.title, latest?.body, latest?.status, editing, initialDraftId]);
 
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
   // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
   const outgoing = track ? trackLinks(full, { channel, homepage }) : full;
   const unsupported = (lint?: Draft["lint"]) => lint?.find((item) => item.rule === "numbers_need_review" && !item.ok);
-  const save = async (copyAfter: boolean) => {
+  const save = async (copyAfter: boolean, overwrite = false) => {
     if (!latest || action || !body.trim()) return;
     // 원자료에서 찾지 못한 수치가 있으면 복사 전에 한 번 확인한다. 게시하면 되돌리기 어렵다.
     const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
     const check = !bodyChanged ? unsupported(latest.lint) : undefined;
     if (copyAfter && check && !window.confirm(`${lintDetail(check) ?? t("원자료에서 찾지 못한 수치가 있습니다.")}\n\n${t("확인했다면 그대로 복사할까요?")}`)) return;
-    setAction(copyAfter ? "copy" : "save"); setActionError(null);
+    setAction(copyAfter ? "copy" : "save"); setActionError(null); setConflict(null);
     let copied = false;
     try {
       if (copyAfter) { await navigator.clipboard.writeText(outgoing); copied = true; }
-      const saved = await post<Draft>(`/drafts/${latest.id}/edit`, { title: spec.hasTitle ? title : undefined, body, markCopied: copyAfter });
-      if (saved?.id) setSavedDraft(saved);
+      const saved = await post<Draft>(`/drafts/${latest.id}/edit`, { title: spec.hasTitle ? title : undefined, body, markCopied: copyAfter, base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body } });
+      if (saved?.id) { setSavedDraft(saved); if (newest && saved.id !== newest.id) pinAfterSave.current = saved.id; }
+      if (copyAfter) setCopiedId(latest.id);
       setEditing(false); if (copyAfter) setStep("post");
       const after = bodyChanged ? unsupported(saved?.lint) : undefined;
       if (after) setActionError(`${copyAfter ? `${t("복사했습니다.")} ` : ""}${lintDetail(after) ?? t("원자료에서 찾지 못한 수치가 있습니다.")}`);
       showToast(copyAfter ? t("복사했습니다. 채널에 게시한 뒤 아래에 링크를 남겨주세요.") : t("수정한 내용을 저장했습니다."));
     } catch (err) {
+      if ((err as { status?: number }).status === 409) { setConflict({ copyAfter }); setActionError(`${copied ? `${t("복사는 완료했지만 저장하지 못했습니다.")} ` : ""}${t("편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다. 입력한 내용은 그대로 있습니다.")}`); return; }
       setActionError(copied ? t("복사는 완료했지만 저장하지 못했습니다. 내용을 유지한 채 다시 저장해 주세요.") : copyAfter ? t("복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하거나 수정 화면에서 직접 복사해 주세요.") : `${t("저장하지 못했습니다.")} ${(err as Error).message}`);
     } finally { setAction(null); }
   };
@@ -92,16 +105,17 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       if (editing || action || !latest || (ev.target as HTMLElement)?.closest("input, textarea, select, button, a, [contenteditable=true]") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
       if (viewId !== null && viewId !== latest.id) return;
       if (ev.key === "c") void copy();
-      if (ev.key === "e") setEditing(true);
+      if (ev.key === "e") beginEdit();
       if (ev.key === "r") setRewriteOpen(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (publication && !showDraft) return <>
+  const displayedPublication = viewId !== null ? shownPublication : publication;
+  if (displayedPublication && !showDraft && !editing) return <>
     <LangSeg langs={langs} lang={lang} onLang={onLang} />
-    <PublishedCard key={publication.id} publication={publication} showToast={showToast} onShowDraft={latest ? () => setShowDraft(true) : undefined} onRemoved={() => { setRemovedIds((ids) => [...ids, publication.id]); setRecorded(null); }} />
+    <PublishedCard key={displayedPublication.id} publication={displayedPublication} onUpdated={(url) => setRecorded({ ...displayedPublication, url })} showToast={showToast} onShowDraft={shown ? () => setShowDraft(true) : undefined} onRemoved={() => { setRemovedIds((ids) => [...ids, displayedPublication.id]); setRecorded(null); }} />
   </>;
   const introductionButton = <button disabled={busy} title={t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.")} onClick={() => void onRedraft(undefined, true)}>{t("서비스 처음 소개하기")}</button>;
   if (!latest) {
@@ -116,6 +130,8 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
+  const postDraft = isOld ? (shown.id === copiedId ? shown : null) : latest;
+  const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
   const count = [...body].length;
 
   return (
@@ -125,7 +141,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
         <button onClick={() => blocker.reset()}>{t("계속 수정")}</button>
         <button onClick={() => blocker.proceed()}>{t("수정 내용 버리고 이동")}</button>
       </div>}
-      {actionError && <div className="inline-notice is-error" role="alert">{actionError}</div>}
+      {actionError && <div className="inline-notice is-error" role="alert"><span>{actionError}</span>{conflict && <button className="sm" disabled={action !== null} onClick={() => void save(conflict.copyAfter, true)}>{t("내 내용으로 덮어쓰기")}</button>}</div>}
       {shownPublication && showDraft && <div className="inline-notice" role="status"><span>{t("이미 게시한 초안입니다.")}</span><button className="ghost sm" onClick={() => setShowDraft(false)}>{t("게시 기록으로")}</button></div>}
       {latest.lint.some((item) => !item.ok && item.detail) && <details className="raw">
         <summary>{t("초안에서 확인할 부분")}</summary>
@@ -142,7 +158,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
           )}
           <span className={`badge ${spec.maxChars && count > spec.maxChars ? "bad" : "outline"}`}>{t("{n}자", { n: `${count}${spec.maxChars ? ` / ${spec.maxChars}` : ""}` })}</span>
           {versions.length > 1 ? (
-            <select className="ver" value={shown?.id ?? latest.id} onChange={(ev) => setViewId(Number(ev.target.value))} title={t("버전")}>
+            <select className="ver" disabled={editing} value={shown?.id ?? latest.id} onChange={(ev) => setViewId(Number(ev.target.value))} title={t("버전")}>
               {versions.map((d) => <option key={d.id} value={d.id}>v{d.version}{d.status === "dropped" ? t(" (버림)") : d.id === latest.id ? t(" (현재)") : ""} · {d.model.split("@")[0].replace("gemini/", "")}</option>)}
             </select>
           ) : <span className="tiny muted">v{latest.version} · {latest.model.split("@")[0].replace("gemini/", "")}</span>}
@@ -156,12 +172,13 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
       {isOld && shown && (
         <div className="old-ver small">
           <span>{t("v{version} 이전 판을 보고 있습니다.", { version: shown.version })}</span>
-          <span className="toolbar"><button className="sm" onClick={() => { setTitle(shown.title ?? ""); setBody(shown.body); setViewId(null); setEditing(true); }}>{t("이 판으로 수정 시작")}</button><button className="ghost sm" onClick={() => setViewId(null)}>{t("현재 판으로")}</button></span>
+          <span className="toolbar"><button className="sm" onClick={() => { setTitle(shown.title ?? ""); setBody(shown.body); setViewId(null); beginEdit(); }}>{t("이 판으로 수정 시작")}</button><button className="ghost sm" onClick={() => setViewId(null)}>{t("현재 판으로")}</button></span>
         </div>
       )}
 
       {editing ? (
         <>
+          {newest && newest.id !== latest.id && <p role="status" className="inline-notice">{t("새 버전이 도착했습니다. 수정 내용은 편집을 시작한 v{version}에 저장됩니다.", { version: latest.version })}</p>}
           {spec.hasTitle && <input aria-label={t("초안 제목")} value={title} onChange={(ev) => setTitle(ev.target.value)} style={{ marginBottom: 8 }} placeholder={t("제목")} />}
           <textarea aria-label={t("초안 본문")} value={body} onChange={(ev) => setBody(ev.target.value)} autoFocus />
           <div className="row between" style={{ marginTop: 6 }}><span className="tiny muted">{t("{n}자", { n: `${[...body].length}${spec.maxChars ? `/${spec.maxChars}` : ""}` })}</span></div>
@@ -169,7 +186,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
           <div className="toolbar" style={{ marginTop: 10 }}>
             <button className="primary" disabled={action !== null || !body.trim()} onClick={() => void copy()}>{action === "copy" ? t("저장 중…") : t("저장하고 복사")}</button>
             <button disabled={action !== null || !body.trim()} onClick={() => void save(false)}>{action === "save" ? t("저장 중…") : t("변경 저장")}</button>
-            <button className="ghost" onClick={() => { setTitle(latest.title ?? ""); setBody(latest.body); setEditing(false); }}>{t("취소")}</button>
+            <button className="ghost" onClick={() => { setTitle(latest.title ?? ""); setBody(latest.body); setEditing(false); setConflict(null); setActionError(null); }}>{t("취소")}</button>
           </div>
         </>
       ) : (
@@ -179,7 +196,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
             <div className="draft-actions">
               <div className="toolbar">
                 <button className="primary" title={t("단축키 c")} disabled={action !== null} onClick={() => void copy()}>{action === "copy" ? t("복사 중…") : t("초안 복사")}</button>
-                <button title="e" onClick={() => setEditing(true)}>{t("수정")}</button>
+                <button title="e" onClick={beginEdit}>{t("수정")}</button>
                 <button className={rewriteOpen ? "active" : ""} title="r" disabled={busy} onClick={() => setRewriteOpen((o) => !o)}>{busy ? t("쓰는 중…") : t("다시 쓰기")}</button>
                 {introductionButton}
               </div>
@@ -214,15 +231,15 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
         </div>
       )}
 
-      {!editing && !isOld && !publication && (
+      {!editing && postDraft && !postDone && (
         <div className="step-post">
           <p className="tiny muted">{t("자동 점검은 사실 확인을 대신하지 않습니다. 변경 근거와 대조해 경험·수치·변경 내용을 확인하세요.")}</p>
-          <div className="row between"><b>{step === "post" ? t("복사 완료 · 이제 게시해 보세요") : t("게시하고 링크 남기기")}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{t("{channel} 작성 화면 열기", { channel: channelLabel(channel) })} ↗</a>}</div>
+          <div className="row between"><b>{step === "post" || postDraft.id === copiedId ? t("복사 완료 · 이제 게시해 보세요") : t("게시하고 링크 남기기")}</b>{spec.composeUrl && <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">{t("{channel} 작성 화면 열기", { channel: channelLabel(channel) })} ↗</a>}</div>
           <p className="small muted" style={{ marginTop: 10 }}>{t("소문이 대신 게시하지는 않습니다. 채널에서 직접 올린 뒤 링크를 등록하면 발행 기록에 남습니다.")}</p>
           <details className="raw"><summary>{t("게시 전 확인할 점")}</summary><ol>{spec.runbook.map((r, i) => <li key={i}>{t(r)}</li>)}{spec.mediaHint && <li>{t("이미지:")} {t(spec.mediaHint)}</li>}</ol></details>
           <form className="publication-form" onSubmit={async (event) => {
             event.preventDefault(); setAction("publish"); setActionError(null);
-            try { const r = await post<{ id: number }>("/publications", { candidateId: cid, draftId: latest.id, channel, lang, url: url.trim() }); setRecorded({ id: r.id, draftId: latest.id, url: url.trim() }); setShowDraft(false); setUrl(""); showToast(t("발행 기록에 저장했습니다.")); }
+            try { const r = await post<{ id: number }>("/publications", { candidateId: cid, draftId: postDraft.id, channel, lang, url: url.trim() }); setRecorded({ id: r.id, draftId: postDraft.id, url: url.trim() }); setShowDraft(false); setUrl(""); showToast(t("발행 기록에 저장했습니다.")); }
             catch (err) { setActionError(`${t("게시 링크를 저장하지 못했습니다.")} ${(err as Error).message}`); }
             finally { setAction(null); }
           }}>
@@ -236,7 +253,7 @@ export default function DraftPanel({ cid, channel, lang, langs, onLang, drafts, 
 }
 
 /** 게시 기록. 잘못 적은 링크는 고치거나 지울 수 있다. */
-function PublishedCard({ publication, showToast, onShowDraft, onRemoved }: { publication: { id: number; url: string }; showToast: (m: string) => void; onShowDraft?: () => void; onRemoved: () => void }) {
+function PublishedCard({ publication, showToast, onShowDraft, onRemoved, onUpdated }: { publication: { id: number; url: string }; showToast: (m: string) => void; onShowDraft?: () => void; onRemoved: () => void; onUpdated: (url: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState(publication.url);
   const [busy, setBusy] = useState(false);
@@ -248,7 +265,7 @@ function PublishedCard({ publication, showToast, onShowDraft, onRemoved }: { pub
   return <div className="card">
     <h2 className="completed-title">{t("게시 기록을 남겼어요")}</h2>
     {error && <div className="inline-notice is-error" role="alert">{t("저장하지 못했습니다.")} {error}</div>}
-    {editing ? <form className="publication-form" onSubmit={async (ev) => { ev.preventDefault(); if (await run(() => patch(`/publications/${publication.id}`, { url: url.trim() }), t("링크를 고쳤습니다."))) setEditing(false); }}>
+    {editing ? <form className="publication-form" onSubmit={async (ev) => { ev.preventDefault(); if (await run(() => patch(`/publications/${publication.id}`, { url: url.trim() }), t("링크를 고쳤습니다."))) { onUpdated(url.trim()); setEditing(false); } }}>
       <label className="field"><span>{t("게시글 링크")}</span><input type="url" required value={url} onChange={(ev) => setUrl(ev.target.value)} /></label>
       <div className="toolbar"><button className="primary" type="submit" disabled={busy || !/^https?:\/\//.test(url.trim())}>{busy ? t("저장 중…") : t("링크 저장")}</button><button type="button" className="ghost" onClick={() => { setUrl(publication.url); setEditing(false); }}>{t("취소")}</button></div>
     </form> : <p className="small"><span className="badge ok">{t("올림")}</span> <a href={publication.url} target="_blank" rel="noreferrer">{publication.url}</a></p>}

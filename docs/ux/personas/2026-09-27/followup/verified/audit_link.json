@@ -1,0 +1,28 @@
+{
+  "persona": "audit_link",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "게시 직후 링크 수정 결과와 저장 데이터 비교",
+      "status": "pass",
+      "automationMs": 557
+    }
+  ],
+  "findings": [
+    {
+      "kind": "verified-publication-link",
+      "observed": "DB와 게시 완료 카드 모두 corrected-post로 갱신된다."
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_link-corrected-link.png",
+      "overflow": false
+    }
+  ]
+}

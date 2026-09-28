@@ -1,0 +1,61 @@
+{
+  "persona": "minseo",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "빈 계정에서 첫 소스 연결 발견",
+      "status": "pass",
+      "automationMs": 277
+    },
+    {
+      "label": "블로그 연결과 실제 RSS 수집",
+      "status": "pass",
+      "automationMs": 306
+    },
+    {
+      "label": "기본 모델 자격 증명 누락을 오류로 확인",
+      "status": "pass",
+      "automationMs": 292
+    },
+    {
+      "label": "모델 설정에서 로컬 워커로 전환",
+      "status": "pass",
+      "automationMs": 446
+    },
+    {
+      "label": "소개글 수정과 복사",
+      "status": "pass",
+      "automationMs": 124
+    },
+    {
+      "label": "게시 링크 기록과 새로고침 유지",
+      "status": "pass",
+      "automationMs": 200
+    }
+  ],
+  "findings": [
+    {
+      "kind": "setup-friction",
+      "observed": "첫 초안 요청 전에는 모델 준비 여부를 확인하지 않고, 요청 후 실패/모델 설정 경로로 복구한다."
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "minseo-first-candidate.png",
+      "overflow": false
+    },
+    {
+      "file": "minseo-model-failure.png",
+      "overflow": false
+    },
+    {
+      "file": "minseo-published.png",
+      "overflow": false
+    }
+  ]
+}

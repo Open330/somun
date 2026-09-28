@@ -4,7 +4,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { claimJob, completeJob, generationStatus, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs } from "./jobs.js";
+import { claimJob, completeJob, generationStatus, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration } from "./jobs.js";
 import { updateSettings } from "./settings.js";
 import { enqueueJob } from "./pipeline.js";
 
@@ -107,5 +107,27 @@ describe("local worker job lifecycle", () => {
     const next = pendingJobs(ctx, "a");
     expect(next).toHaveLength(1);
     expect(next[0].kind).toBe("judge");
+  });
+});
+
+
+describe("side job retry after changing model provider", () => {
+  it.each([
+    ["lesson", "local", "gemini", "server"],
+    ["lesson", "server", "local-agent", "local"],
+    ["profile", "local", "gemini", "server"],
+    ["profile", "server", "local-agent", "local"],
+  ] as const)("retries %s from %s with current %s executor %s", (kind, oldExecutor, provider, expected) => {
+    const ctx: AppContext = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: {} as AppContext["usage"] };
+    try {
+      const meta = kind === "profile" ? { repo: "a/x" } : { draftId: 42 };
+      const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId: "a", kind, candidateId: 0, executor: oldExecutor, system: "original system", user: "original input", schemaJson: "{}", meta, status: "failed", attempts: 3, error: "offline", createdAt: 1 }).run().lastInsertRowid);
+      updateSettings(ctx, "a", { llm: { provider } });
+      const retriedId = retryGeneration(ctx, "a", id);
+      const retried = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retriedId)).get()!;
+      expect(retried).toMatchObject({ executor: expected, status: "pending", attempts: 0, system: "original system", user: "original input", meta });
+      expect(retriedId).not.toBe(id);
+      expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!.status).toBe("failed");
+    } finally { ctx.db.$client.close(); }
   });
 });

@@ -15,7 +15,8 @@ export async function startSession(token: string): Promise<boolean> {
   return Boolean(res?.ok);
 }
 export async function endSession(): Promise<void> {
-  await fetch("/api/session", { method: "DELETE" }).catch(() => undefined);
+  const res = await fetch("/api/session", { method: "DELETE" });
+  if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
   forgetLegacyToken();
   resetEvents();
 }

@@ -1,0 +1,28 @@
+{
+  "persona": "audit_published",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "발행 기록에서 해당 게시 초안으로 돌아가기",
+      "status": "pass",
+      "automationMs": 423
+    }
+  ],
+  "findings": [
+    {
+      "kind": "verified-publication-navigation",
+      "observed": "영어 발행 기록에서 해당 영어 초안의 게시 기록이 열린다."
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_published-correct-target.png",
+      "overflow": false
+    }
+  ]
+}

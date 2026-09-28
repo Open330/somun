@@ -17,9 +17,9 @@ const category = (c: CandidateListItem): Exclude<Filter, "all"> => {
 export default function Inbox() {
   const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
-  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: settings, error: settingsError, reload: reloadSettings } = useResource<SettingsView>("/settings", ["settings"]);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [message, setMessage] = useState<{ text: string; error?: boolean; model?: boolean } | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [requested, setRequested] = useState<number[]>([]);
@@ -46,6 +46,8 @@ export default function Inbox() {
     finally { setBusy(false); }
   }
   async function judge(id: number) {
+    if (settingsError || !settings) { setMessage({ text: t("모델 설정을 확인할 수 없습니다. 설정을 다시 불러온 뒤 시도해 주세요."), error: true, model: true }); return; }
+    if (settings.llm.credentialsConfigured === false) { setMessage({ text: t("초안을 만들기 전에 모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요."), error: true, model: true }); return; }
     setRequested((ids) => [...ids, id]); setMessage(null);
     try {
       await post("/candidates/judge", { ids: [id] });
@@ -65,7 +67,7 @@ export default function Inbox() {
         <div><span className="eyebrow">{t("내 작업 공간")}</span><h1>{t("글감")}</h1><p className="lede">{firstUse ? t("작은 변화도, 전할 이야기가 됩니다.") : counts.review ? t("검토할 초안 {n}개가 준비되어 있어요.", { n: counts.review }) : counts.fresh ? t("새 글감 {n}개 중 알리고 싶은 변화를 골라보세요.", { n: counts.fresh }) : t("모아둔 이야기를 살펴보고 다음 게시글을 준비하세요.")}</p></div>
         {!firstUse && <div className="toolbar">{collectable.length > 0 && <button disabled={busy} onClick={() => void collect()}>{busy ? t("변경 가져오는 중…") : t("새 변경 가져오기")}</button>}{firstDraft && <Link className="btn primary" to={`/c/${firstDraft.id}`}>{t("초안 검토하기")} <span aria-hidden>→</span></Link>}</div>}
       </header>
-      {message && <div className={`inline-notice ${message.error ? "is-error" : ""}`} role={message.error ? "alert" : "status"}><span>{message.text}</span>{message.error && <Link to="/connectors">{t("연결 확인")}</Link>}<button className="ghost sm" aria-label={t("알림 닫기")} onClick={() => setMessage(null)}>×</button></div>}
+      {message && <div className={`inline-notice ${message.error ? "is-error" : ""}`} role={message.error ? "alert" : "status"}><span>{message.text}</span>{message.error && (message.model ? <><Link to="/settings?tab=model">{t("모델 설정")}</Link>{(settingsError || !settings) && <button onClick={reloadSettings}>{t("설정 다시 불러오기")}</button>}</> : <Link to="/connectors">{t("연결 확인")}</Link>)}<button className="ghost sm" aria-label={t("알림 닫기")} onClick={() => setMessage(null)}>×</button></div>}
       <GenerationStatus candidateTitles={Object.fromEntries(rows.map((row) => [row.id, row.title]))} onChange={reload} />
       {firstUse ? <>
         <Onboarding rows={rows} sources={sources} />

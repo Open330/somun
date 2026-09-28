@@ -43,7 +43,7 @@ export default function Published() {
               <div key={p.id} className="pub">
                 <span className="badge outline">{channelLabel(p.channel)}</span>
                 <div style={{ minWidth: 0 }}>
-                  <Link to={`/c/${p.candidateId}`} style={{ fontWeight: 600, color: "var(--ink)" }}>{p.candidateTitle}</Link>
+                  <Link to={`/c/${p.candidateId}${p.draftId ? `?draft=${p.draftId}` : ""}`} style={{ fontWeight: 600, color: "var(--ink)" }}>{p.candidateTitle}</Link>
                   <div className="tiny muted">{fmtDate(p.publishedAt)} · <a href={p.url} target="_blank" rel="noreferrer">{p.url.replace(/^https?:\/\//, "").slice(0, 60)}</a></div>
                 </div>
                 <div className="row" style={{ gap: 10 }}>

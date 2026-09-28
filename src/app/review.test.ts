@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
-import type { AppContext } from "./context.js";
+import { GenerationConflictError, type AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
 import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
@@ -103,6 +103,16 @@ describe("lessons run on the same executor as generation", () => {
     const sid = Number(ctx.db.insert(schema.guideSuggestions).values({ ownerId: OWNER, rule: "one more", normalized: "one more", category: "voice", sources: [], status: "pending", createdAt: now, updatedAt: now }).run().lastInsertRowid);
     expect(() => acceptSuggestion(ctx, OWNER, sid)).toThrow(/정리한 뒤/);
   });
+});
+
+it("refuses to overwrite a draft that another tab saved after this edit began", () => {
+  const id = draft("Original text");
+  saveDraftEdit(ctx, OWNER, id, { body: "Tab A text", markCopied: false, base: { body: "Original text" } });
+  expect(() => saveDraftEdit(ctx, OWNER, id, { body: "Tab B text", markCopied: true, base: { body: "Original text" } })).toThrow(GenerationConflictError);
+  const row = ctx.db.select().from(schema.drafts).all()[0];
+  expect(row).toMatchObject({ body: "Tab A text", status: "edited" });
+  expect(examples()).toHaveLength(0);
+  expect(saveDraftEdit(ctx, OWNER, id, { body: "Tab B text", markCopied: false }).body).toBe("Tab B text");
 });
 
 it("measures copied drafts: unchanged rate and how much was rewritten", () => {

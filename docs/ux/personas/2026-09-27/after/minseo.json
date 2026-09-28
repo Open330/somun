@@ -1,0 +1,56 @@
+{
+  "persona": "minseo",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "빈 계정에서 첫 소스 연결 발견",
+      "status": "pass",
+      "automationMs": 303
+    },
+    {
+      "label": "블로그 연결과 실제 RSS 수집",
+      "status": "pass",
+      "automationMs": 353
+    },
+    {
+      "label": "생성 전에 모델 설정 안내와 불필요한 작업 방지",
+      "status": "pass",
+      "automationMs": 97
+    },
+    {
+      "label": "모델 설정에서 로컬 워커로 전환",
+      "status": "pass",
+      "automationMs": 657
+    },
+    {
+      "label": "소개글 수정과 복사",
+      "status": "pass",
+      "automationMs": 142
+    },
+    {
+      "label": "게시 링크 기록과 새로고침 유지",
+      "status": "pass",
+      "automationMs": 231
+    }
+  ],
+  "findings": [],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "minseo-first-candidate.png",
+      "overflow": false
+    },
+    {
+      "file": "minseo-model-setup.png",
+      "overflow": false
+    },
+    {
+      "file": "minseo-published.png",
+      "overflow": false
+    }
+  ]
+}

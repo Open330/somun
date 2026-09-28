@@ -1,0 +1,28 @@
+{
+  "persona": "audit_published",
+  "commit": "0e80132da047e0e1ec630f985e9749c136e6e5d7",
+  "viewport": "1440x1000",
+  "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+  "steps": [
+    {
+      "label": "발행 기록에서 해당 게시 초안으로 돌아가기",
+      "status": "pass",
+      "automationMs": 366
+    }
+  ],
+  "findings": [
+    {
+      "kind": "publication-navigation",
+      "observed": "영어 발행 기록의 제목을 눌렀지만 미게시 한국어 초안이 열린다. 기록에 해당하는 채널·언어·버전이 링크에 전달되지 않는다."
+    }
+  ],
+  "pageErrors": [],
+  "dialogs": [],
+  "requests": [],
+  "screenshots": [
+    {
+      "file": "audit_published-wrong-target.png",
+      "overflow": false
+    }
+  ]
+}

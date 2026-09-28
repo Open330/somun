@@ -3,7 +3,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import type { CandidateListItem, SettingsView } from "@shared/types";
 import { api, endSession, legacyToken, startSession, UNAUTHORIZED_EVENT, useResource } from "./lib/api";
 import { useAuth } from "./lib/auth/context";
-import { Skeleton } from "./components/ui";
+import { Skeleton, stageOf } from "./components/ui";
 import { ChunkBoundary } from "./components/ChunkBoundary";
 import { LocaleSwitch, useAccountLocaleSync } from "./components/LocaleSwitch";
 import AuthCallback from "./pages/AuthCallback";
@@ -60,11 +60,20 @@ export default function App() {
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
   const location = useLocation();
-  const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates"]);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState(false);
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true); setSignOutError(false);
+    try { await onSignOut(); }
+    catch { setSignOutError(true); }
+    finally { setSigningOut(false); }
+  };
+  const { data: rows } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: suggestions } = useResource<{ id: number }[]>("/suggestions", ["settings"]);
   const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   useAccountLocaleSync(settings);
-  const review = (rows ?? []).filter((c) => c.status === "drafted").length;
+  const review = (rows ?? []).filter((c) => stageOf(c).key === "review").length;
   const pending = suggestions?.length ?? 0;
   const links = NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === "/"}>{t(label)}{to === "/" && review ? <span className="count">{review}</span> : null}{to === "/voice" && pending ? <span className="count" title={t("지침 제안")}>{pending}</span> : null}</NavLink>);
   return (
@@ -75,11 +84,12 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
         <span className="nav-caption">{t("워크스페이스")}</span><nav className="nav" aria-label={t("주 메뉴")}>{links}</nav>
         <div className="spacer" /><div className="sidebar-note"><b>{t("만드는 일에 집중하세요.")}</b><p>{t("알릴 이야기는 여기 모아둘게요.")}</p></div>
         <div className="who-locale"><LocaleSwitch compact /></div>
-        <div className="who"><span>{who}</span><button className="ghost sm" onClick={() => void onSignOut()}>{t("나가기")}</button></div>
+        <div className="who"><span>{who}</span><button className="ghost sm" disabled={signingOut} onClick={() => void signOut()}>{signingOut ? t("로그아웃 중…") : t("나가기")}</button></div>
       </aside>
       <div>
-        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<span className="mobile-locale"><LocaleSwitch compact /></span><button className="ghost sm mobile-signout" onClick={() => void onSignOut()}>{t("나가기")}</button></div>
+        <div className="topbar"><div className="brand"><Mark size={26} /></div>{links}<span className="mobile-locale"><LocaleSwitch compact /></span><button className="ghost sm mobile-signout" disabled={signingOut} onClick={() => void signOut()}>{signingOut ? t("로그아웃 중…") : t("나가기")}</button></div>
         <main className="main" id="main-content" tabIndex={-1}>
+          {signOutError && <div className="inline-notice is-error" role="alert"><span>{t("로그아웃하지 못했습니다. 세션이 유지될 수 있습니다. 다시 시도해 주세요.")}</span><button disabled={signingOut} onClick={() => void signOut()}>{t("로그아웃 다시 시도")}</button></div>}
           <ChunkBoundary resetKey={location.pathname}>
           <Suspense fallback={<Skeleton rows={4} />}>
           <Routes>
