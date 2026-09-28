@@ -5,28 +5,57 @@ import { clearResourceCache, endSession, REFETCH_DEBOUNCE_MS, useResource } from
 import { resetEvents } from "./events";
 
 const { listeners } = vi.hoisted(() => ({ listeners: new Set<(ev: { resource: string }) => void>() }));
-vi.mock("./events", () => ({ subscribeEvents: (l: (ev: { resource: string }) => void) => { listeners.add(l); return () => listeners.delete(l); }, resetEvents: vi.fn() }));
+vi.mock("./events", () => ({
+  subscribeEvents: (l: (ev: { resource: string }) => void) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  },
+  resetEvents: vi.fn(),
+}));
 vi.mock("./auth/manager", () => ({ getAuthManager: () => null }));
-afterEach(() => { cleanup(); clearResourceCache(); listeners.clear(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); localStorage.clear(); });
+afterEach(() => {
+  cleanup();
+  clearResourceCache();
+  listeners.clear();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 it("ignores an older response even if fetch does not honor cancellation", async () => {
   const pending: { resolve: (res: Response) => void; signal: AbortSignal }[] = [];
-  vi.stubGlobal("fetch", vi.fn((_url, init) => new Promise<Response>((resolve) => pending.push({ resolve, signal: init.signal }))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url, init) => new Promise<Response>((resolve) => pending.push({ resolve, signal: init.signal }))),
+  );
   const { result, rerender } = renderHook(({ path }) => useResource<{ id: number }>(path, []), { initialProps: { path: "/old" } });
   await waitFor(() => expect(pending).toHaveLength(1));
   rerender({ path: "/new" });
   await waitFor(() => expect(pending).toHaveLength(2));
   expect(pending[0].signal.aborted).toBe(true);
-  await act(async () => { pending[1].resolve(new Response('{"id":2}')); });
+  await act(async () => {
+    pending[1].resolve(new Response('{"id":2}'));
+  });
   await waitFor(() => expect(result.current.data).toEqual({ id: 2 }));
-  await act(async () => { pending[0].resolve(new Response('{"id":1}')); });
+  await act(async () => {
+    pending[0].resolve(new Response('{"id":1}'));
+  });
   expect(result.current.data).toEqual({ id: 2 });
 });
 
 it("aborts in-flight requests on unmount and clears data for a null path", async () => {
   const signals: AbortSignal[] = [];
-  vi.stubGlobal("fetch", vi.fn((url: string, init) => { signals.push(init.signal); return url.endsWith("/done") ? Promise.resolve(new Response('{"id":1}')) : new Promise<Response>(() => {}); }));
-  const { result, rerender, unmount } = renderHook(({ path }: { path: string | null }) => useResource(path, []), { initialProps: { path: "/done" as string | null } });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init) => {
+      signals.push(init.signal);
+      return url.endsWith("/done") ? Promise.resolve(new Response('{"id":1}')) : new Promise<Response>(() => {});
+    }),
+  );
+  const { result, rerender, unmount } = renderHook(({ path }: { path: string | null }) => useResource(path, []), {
+    initialProps: { path: "/done" as string | null },
+  });
   await waitFor(() => expect(result.current.data).toEqual({ id: 1 }));
   rerender({ path: "/one" });
   await waitFor(() => expect(signals).toHaveLength(2));
@@ -39,10 +68,12 @@ it("aborts in-flight requests on unmount and clears data for a null path", async
   expect(signals[2].aborted).toBe(true);
 });
 
-
 it.each(["network", "http"])("keeps session client state when logout fails: %s", async (failure) => {
   localStorage.setItem("somun.token", "test-token");
-  const fetchMock = failure === "network" ? vi.fn().mockRejectedValue(new Error("offline")) : vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
+  const fetchMock =
+    failure === "network"
+      ? vi.fn().mockRejectedValue(new Error("offline"))
+      : vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
   vi.stubGlobal("fetch", fetchMock);
   await expect(endSession()).rejects.toThrow();
   expect(resetEvents).not.toHaveBeenCalled();
@@ -85,16 +116,26 @@ describe("shared resource cache", () => {
     renderHook(() => useResource("/candidates", ["candidates", "drafts"]));
     renderHook(() => useResource("/candidates", ["candidates"]));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    act(() => { for (const l of [...listeners]) { l({ resource: "drafts" }); l({ resource: "candidates" }); } });
+    act(() => {
+      for (const l of [...listeners]) {
+        l({ resource: "drafts" });
+        l({ resource: "candidates" });
+      }
+    });
     await new Promise((r) => setTimeout(r, REFETCH_DEBOUNCE_MS + 50));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    act(() => { for (const l of [...listeners]) l({ resource: "sources" }); });
+    act(() => {
+      for (const l of [...listeners]) l({ resource: "sources" });
+    });
     await new Promise((r) => setTimeout(r, REFETCH_DEBOUNCE_MS + 50));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("forgets cached data when the session ends", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) => url.endsWith("/session") ? Promise.resolve(new Response(null, { status: 204 })) : json({ owner: "a" })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => (url.endsWith("/session") ? Promise.resolve(new Response(null, { status: 204 })) : json({ owner: "a" }))),
+    );
     const first = renderHook(() => useResource<{ owner: string }>("/me", []));
     await waitFor(() => expect(first.result.current.data).toEqual({ owner: "a" }));
     first.unmount();

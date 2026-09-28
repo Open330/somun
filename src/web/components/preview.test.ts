@@ -2,7 +2,14 @@ import { expect, it } from "vitest";
 import { diffParts } from "./preview";
 
 it("diffs word by word and keeps whitespace", () => {
-  expect(diffParts("a b c", "a x c")).toEqual([{ t: "eq", s: "a" }, { t: "eq", s: " " }, { t: "del", s: "b" }, { t: "ins", s: "x" }, { t: "eq", s: " " }, { t: "eq", s: "c" }]);
+  expect(diffParts("a b c", "a x c")).toEqual([
+    { t: "eq", s: "a" },
+    { t: "eq", s: " " },
+    { t: "del", s: "b" },
+    { t: "ins", s: "x" },
+    { t: "eq", s: " " },
+    { t: "eq", s: "c" },
+  ]);
 });
 
 it("falls back to line diff for long texts so typing stays responsive", () => {

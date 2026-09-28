@@ -26,7 +26,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const m = getAuthManager();
   const snap = useAuthSnapshot();
   // 계정이 바뀌면 이벤트 연결과 받아 둔 데이터를 모두 새로 시작한다.
-  useEffect(() => { clearResourceCache(); resetEvents(); }, [snap.status, snap.user?.id]);
+  useEffect(() => {
+    clearResourceCache();
+    resetEvents();
+  }, [snap.status, snap.user?.id]);
   useEffect(() => {
     void m?.restore();
   }, [m]);

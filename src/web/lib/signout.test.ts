@@ -7,14 +7,20 @@ import App from "../App";
 
 const { endSession, auth } = vi.hoisted(() => ({ endSession: vi.fn(), auth: { enabled: false } }));
 vi.mock("./api", () => ({
-  api: vi.fn().mockResolvedValue({}), endSession,
-  legacyToken: () => null, startSession: vi.fn(), UNAUTHORIZED_EVENT: "test-unauthorized",
+  api: vi.fn().mockResolvedValue({}),
+  endSession,
+  legacyToken: () => null,
+  startSession: vi.fn(),
+  UNAUTHORIZED_EVENT: "test-unauthorized",
   useResource: () => ({ data: undefined }),
 }));
 vi.mock("./auth/context", () => ({ useAuth: () => auth }));
 vi.mock("../pages/Inbox", () => ({ default: () => createElement("p", null, "Signed-in workspace") }));
 vi.mock("../pages/Landing", () => ({ default: () => createElement("p", null, "Signed-out landing") }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 it("keeps the workspace after failed logout and allows a successful retry", async () => {
   endSession.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
@@ -31,7 +37,12 @@ it("keeps the workspace after failed logout and allows a successful retry", asyn
 
 it("disables desktop and mobile logout controls while the request is pending", async () => {
   let finish!: () => void;
-  endSession.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+  endSession.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
   render(createElement(MemoryRouter, null, createElement(App)));
   await screen.findByText("Signed-in workspace");
   fireEvent.click(screen.getAllByRole("button", { name: "나가기" })[0]);

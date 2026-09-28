@@ -21,7 +21,10 @@ function stop() {
 function reconnect() {
   stop();
   if (!listeners.size) return;
-  retry = setTimeout(() => { retry = undefined; void connect(); }, retryMs);
+  retry = setTimeout(() => {
+    retry = undefined;
+    void connect();
+  }, retryMs);
   retryMs = Math.min(retryMs * 2, 30_000);
 }
 
@@ -39,15 +42,23 @@ async function connect() {
     if (current !== generation || !listeners.size) return;
     const stream = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`, { withCredentials: true });
     source = stream;
-    stream.addEventListener("open", () => { if (source === stream) retryMs = 1000; });
+    stream.addEventListener("open", () => {
+      if (source === stream) retryMs = 1000;
+    });
     stream.addEventListener("change", (event) => {
       if (source !== stream) return;
       let change: ChangeEvent;
-      try { change = JSON.parse((event as MessageEvent).data) as ChangeEvent; } catch { return; }
+      try {
+        change = JSON.parse((event as MessageEvent).data) as ChangeEvent;
+      } catch {
+        return;
+      }
       for (const listener of listeners) listener(change);
     });
     // A ticket is single-use: every reconnect fetches a fresh one.
-    stream.addEventListener("error", () => { if (source === stream) reconnect(); });
+    stream.addEventListener("error", () => {
+      if (source === stream) reconnect();
+    });
   } catch {
     if (current === generation) reconnect();
   } finally {
@@ -66,6 +77,9 @@ export function subscribeEvents(listener: Listener): () => void {
   if (!retry) void connect();
   return () => {
     listeners.delete(listener);
-    if (!listeners.size) { stop(); retryMs = 1000; }
+    if (!listeners.size) {
+      stop();
+      retryMs = 1000;
+    }
   };
 }

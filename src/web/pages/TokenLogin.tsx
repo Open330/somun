@@ -9,18 +9,25 @@ export default function TokenLogin({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="main">
-      <div className="mb-12"><Lockup size={36} /></div>
+      <div className="mb-12">
+        <Lockup size={36} />
+      </div>
       <p className="muted">{t("소문낼 줄 모르는 개발자를 위한 PR 도우미. 접근 토큰을 넣으면 시작합니다.")}</p>
       <form
         className="row"
         onSubmit={async (ev) => {
           ev.preventDefault();
-          if (!await startSession(token)) { setError(t("토큰이 맞지 않습니다.")); return; }
+          if (!(await startSession(token))) {
+            setError(t("토큰이 맞지 않습니다."));
+            return;
+          }
           onDone();
         }}
       >
         <input type="password" placeholder="SOMUN_TOKEN" value={token} onChange={(ev) => setToken(ev.target.value)} autoFocus />
-        <button className="primary" disabled={!token.trim()}>{t("들어가기")}</button>
+        <button className="primary" disabled={!token.trim()}>
+          {t("들어가기")}
+        </button>
       </form>
       {error && <p className="small error-text">{error}</p>}
     </div>

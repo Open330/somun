@@ -8,7 +8,10 @@ import type { Locale } from "@shared/locale";
  * 변수는 {이름}으로 끼운다: t("내 예시 {n}개", { n: 3 }).
  */
 export type { Locale };
-export const LOCALES: { id: Locale; label: string }[] = [{ id: "ko", label: "한국어" }, { id: "en", label: "English" }];
+export const LOCALES: { id: Locale; label: string }[] = [
+  { id: "ko", label: "한국어" },
+  { id: "en", label: "English" },
+];
 const KEY = "somun.locale";
 /** 사용자가 직접 고른 언어가 아직 계정에 저장되지 않았다는 표시. 저장될 때까지 계정 값보다 우선한다. */
 const PENDING = "somun.locale.pending";
@@ -17,14 +20,18 @@ function detect(): Locale {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === "ko" || saved === "en") return saved;
-  } catch { /* 저장소를 못 쓰는 환경 */ }
+  } catch {
+    /* 저장소를 못 쓰는 환경 */
+  }
   const langs = typeof navigator === "undefined" ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];
   return langs.some((l) => l?.toLowerCase().startsWith("ko")) ? "ko" : "en";
 }
 
 let current: Locale = detect();
 const listeners = new Set<() => void>();
-const notify = () => { for (const l of listeners) l(); };
+const notify = () => {
+  for (const l of listeners) l();
+};
 
 /**
  * 영어 사전(수십 KB)은 영어 화면에서만 필요하다. 한국어 사용자는 받지 않고, 영어 사용자는 처음 그리기 전에 한 번 받는다.
@@ -34,17 +41,33 @@ let catalog: Record<string, string> | null = null;
 let loading: Promise<void> | null = null;
 export function loadCatalog(locale: Locale = current): Promise<void> {
   if (locale !== "en" || catalog) return Promise.resolve();
-  return (loading ??= import("./en").then((m) => { catalog = m.en; }, (err: unknown) => { loading = null; throw err; }));
+  return (loading ??= import("./en").then(
+    (m) => {
+      catalog = m.en;
+    },
+    (err: unknown) => {
+      loading = null;
+      throw err;
+    },
+  ));
 }
 if (typeof document !== "undefined") document.documentElement.lang = current;
 
 export const getLocale = (): Locale => current;
 
 export function hasPendingChoice(): boolean {
-  try { return localStorage.getItem(PENDING) === "1"; } catch { return false; }
+  try {
+    return localStorage.getItem(PENDING) === "1";
+  } catch {
+    return false;
+  }
 }
 export function clearPendingChoice(): void {
-  try { localStorage.removeItem(PENDING); } catch { /* 저장소를 못 쓰는 환경 */ }
+  try {
+    localStorage.removeItem(PENDING);
+  } catch {
+    /* 저장소를 못 쓰는 환경 */
+  }
 }
 
 /**
@@ -52,10 +75,20 @@ export function clearPendingChoice(): void {
  * choice: 사용자가 직접 고른 것(기본). 계정에서 받아 맞추는 것이면 false.
  */
 export function setLocale(next: Locale, { choice = true }: { choice?: boolean } = {}): void {
-  if (choice) { try { localStorage.setItem(PENDING, "1"); } catch { /* 저장소를 못 쓰는 환경 */ } }
+  if (choice) {
+    try {
+      localStorage.setItem(PENDING, "1");
+    } catch {
+      /* 저장소를 못 쓰는 환경 */
+    }
+  }
   if (next === current) return;
   current = next;
-  try { localStorage.setItem(KEY, next); } catch { /* 저장소를 못 쓰는 환경 */ }
+  try {
+    localStorage.setItem(KEY, next);
+  } catch {
+    /* 저장소를 못 쓰는 환경 */
+  }
   if (typeof document !== "undefined") document.documentElement.lang = next;
   // 사전을 아직 안 받았으면 받은 뒤에 다시 그린다(한국어와 영어가 섞인 화면을 잠깐이라도 보이지 않게).
   if (next === "en" && !catalog) void loadCatalog("en").then(notify, notify);
@@ -63,14 +96,23 @@ export function setLocale(next: Locale, { choice = true }: { choice?: boolean } 
 }
 
 export function useLocale(): Locale {
-  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, getLocale, getLocale);
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    getLocale,
+    getLocale,
+  );
 }
 
 export type Vars = Record<string, string | number | undefined | null>;
 
 export function t(ko: string, vars?: Vars): string {
-  const template = current === "en" ? catalog?.[ko] ?? ko : ko;
-  return vars ? template.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] === undefined || vars[k] === null ? m : String(vars[k]))) : template;
+  const template = current === "en" ? (catalog?.[ko] ?? ko) : ko;
+  return vars
+    ? template.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] === undefined || vars[k] === null ? m : String(vars[k])))
+    : template;
 }
 
 /** 날짜·시간 표기의 언어 태그. */

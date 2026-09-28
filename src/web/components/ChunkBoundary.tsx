@@ -7,10 +7,25 @@ import { t } from "../i18n";
  */
 export class ChunkBoundary extends Component<{ children: ReactNode; resetKey?: string }, { failed: boolean }> {
   state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  componentDidUpdate(prev: { resetKey?: string }) { if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false }); }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidUpdate(prev: { resetKey?: string }) {
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false });
+  }
   render() {
     if (!this.state.failed) return this.props.children;
-    return <div className="state-panel error-state" role="alert"><span className="state-symbol" aria-hidden>!</span><h2>{t("화면을 불러오지 못했습니다")}</h2><p>{t("새 버전이 배포되었거나 연결이 끊겼을 수 있습니다. 새로고침하면 최신 화면을 받습니다.")}</p><button className="primary" onClick={() => window.location.reload()}>{t("새로고침")}</button></div>;
+    return (
+      <div className="state-panel error-state" role="alert">
+        <span className="state-symbol" aria-hidden>
+          !
+        </span>
+        <h2>{t("화면을 불러오지 못했습니다")}</h2>
+        <p>{t("새 버전이 배포되었거나 연결이 끊겼을 수 있습니다. 새로고침하면 최신 화면을 받습니다.")}</p>
+        <button className="primary" onClick={() => window.location.reload()}>
+          {t("새로고침")}
+        </button>
+      </div>
+    );
   }
 }

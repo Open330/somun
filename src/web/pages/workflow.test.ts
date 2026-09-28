@@ -9,16 +9,31 @@ import Inbox from "./Inbox";
 import DraftPanel from "./candidate/DraftPanel";
 import Candidate from "./Candidate";
 
-const { resources, post } = vi.hoisted(() => ({ resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(), post: vi.fn() }));
-vi.mock("../lib/api", () => ({ useResource: (path: string) => resources.get(path) ?? { reload() {} }, post, patch: vi.fn(), del: vi.fn() }));
+const { resources, post } = vi.hoisted(() => ({
+  resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(),
+  post: vi.fn(),
+}));
+vi.mock("../lib/api", () => ({
+  useResource: (path: string) => resources.get(path) ?? { reload() {} },
+  post,
+  patch: vi.fn(),
+  del: vi.fn(),
+}));
 vi.mock("../lib/auth/context", () => ({ useAuth: () => ({ user: null }) }));
 const set = (path: string, data: unknown) => resources.set(path, { data, reload: vi.fn() });
-const wrap = (component: ReturnType<typeof createElement>) => createElement(RouterProvider, { router: createMemoryRouter([{ path: "*", element: component }]) });
+const wrap = (component: ReturnType<typeof createElement>) =>
+  createElement(RouterProvider, { router: createMemoryRouter([{ path: "*", element: component }]) });
 beforeEach(() => {
-  resources.clear(); post.mockReset().mockResolvedValue({});
-  set("/candidates", []); set("/sources", []); set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false } } as SettingsView);
+  resources.clear();
+  post.mockReset().mockResolvedValue({});
+  set("/candidates", []);
+  set("/sources", []);
+  set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false } } as SettingsView);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("first useful outcome", () => {
   it("offers a concrete first step instead of empty draft sections", () => {
@@ -44,7 +59,19 @@ describe("first useful outcome", () => {
     expect(screen.getByRole("alert")).toBeTruthy();
   });
   it("puts low-evidence candidates under attention, not processing", () => {
-    set("/candidates", [{ id: 1, title: "A change", repo: "a/x", type: "release", status: "judged", latestJudgmentId: 1, evidence: { highlightsAt: 1 }, updatedAt: Date.now(), judgment: { total: 2, decision: "ask", reasoning: "More evidence needed" } }]);
+    set("/candidates", [
+      {
+        id: 1,
+        title: "A change",
+        repo: "a/x",
+        type: "release",
+        status: "judged",
+        latestJudgmentId: 1,
+        evidence: { highlightsAt: 1 },
+        updatedAt: Date.now(),
+        judgment: { total: 2, decision: "ask", reasoning: "More evidence needed" },
+      },
+    ]);
     render(wrap(createElement(Inbox)));
     expect(screen.getByText("추가 근거 필요")).toBeTruthy();
     expect(screen.queryByText("초안 작성 중")).toBeNull();
@@ -55,14 +82,41 @@ describe("first useful outcome", () => {
   });
 });
 
-const draft: Draft = { id: 1, candidateId: 1, channel: "x", lang: "en", version: 1, body: "Original draft", status: "proposed", lint: [], model: "test", createdAt: 1, updatedAt: 1 };
-const panel = (drafts = [draft]) => wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts, busy: false, onRedraft: async () => true, showToast: vi.fn() }));
+const draft: Draft = {
+  id: 1,
+  candidateId: 1,
+  channel: "x",
+  lang: "en",
+  version: 1,
+  body: "Original draft",
+  status: "proposed",
+  lint: [],
+  model: "test",
+  createdAt: 1,
+  updatedAt: 1,
+};
+const panel = (drafts = [draft]) =>
+  wrap(
+    createElement(DraftPanel, {
+      cid: 1,
+      channel: "x",
+      lang: "en",
+      langs: ["en"],
+      onLang: vi.fn(),
+      drafts,
+      busy: false,
+      onRedraft: async () => true,
+      showToast: vi.fn(),
+    }),
+  );
 describe("draft to publication", () => {
   it("lets users register an already-published post without copying first", async () => {
     render(panel());
     fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/post" } });
     fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ url: "https://example.test/post", draftId: 1 })));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ url: "https://example.test/post", draftId: 1 })),
+    );
     expect(screen.getByRole("heading", { name: "게시 기록을 남겼어요" })).toBeTruthy();
   });
   it("keeps local edits when server data refreshes", () => {
@@ -95,14 +149,32 @@ describe("draft to publication", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const linked = { ...draft, body: "Try it: https://somun.jiun.dev/" };
-    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [linked], busy: false, onRedraft: async () => true, showToast: vi.fn(), homepage: "https://somun.jiun.dev" })));
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "x",
+          lang: "en",
+          langs: ["en"],
+          onLang: vi.fn(),
+          drafts: [linked],
+          busy: false,
+          onRedraft: async () => true,
+          showToast: vi.fn(),
+          homepage: "https://somun.jiun.dev",
+        }),
+      ),
+    );
     expect(screen.getByText(/utm_source=x/)).toBeTruthy();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "초안 복사" })));
     expect(writeText).toHaveBeenCalledWith("Try it: https://somun.jiun.dev/?utm_source=x&utm_medium=social&utm_campaign=somun");
     expect(post).toHaveBeenCalledWith("/drafts/1/edit", expect.objectContaining({ body: "Try it: https://somun.jiun.dev/" }));
   });
   it("does not claim copying succeeded when the clipboard is denied", async () => {
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
     render(panel());
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "초안 복사" })));
     expect(screen.getByRole("alert").textContent).toContain("복사하지 못했습니다");
@@ -111,31 +183,74 @@ describe("draft to publication", () => {
 });
 
 it("blocks browser back navigation until unsaved edits are explicitly discarded", async () => {
-  const router = createMemoryRouter([{ path: "/before", element: createElement("p", null, "Previous page") }, { path: "/edit", element: createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], busy: false, onRedraft: async () => true, showToast: vi.fn() }) }], { initialEntries: ["/before", "/edit"], initialIndex: 1 });
+  const router = createMemoryRouter(
+    [
+      { path: "/before", element: createElement("p", null, "Previous page") },
+      {
+        path: "/edit",
+        element: createElement(DraftPanel, {
+          cid: 1,
+          channel: "x",
+          lang: "en",
+          langs: ["en"],
+          onLang: vi.fn(),
+          drafts: [draft],
+          busy: false,
+          onRedraft: async () => true,
+          showToast: vi.fn(),
+        }),
+      },
+    ],
+    { initialEntries: ["/before", "/edit"], initialIndex: 1 },
+  );
   render(createElement(RouterProvider, { router }));
   fireEvent.click(screen.getByRole("button", { name: "수정" }));
   fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Keep this edit" } });
-  await act(async () => { await router.navigate(-1); });
+  await act(async () => {
+    await router.navigate(-1);
+  });
   fireEvent.click(screen.getByRole("button", { name: "계속 수정" }));
   expect((screen.getByRole("textbox", { name: "초안 본문" }) as HTMLTextAreaElement).value).toBe("Keep this edit");
   expect(router.state.location.pathname).toBe("/edit");
-  await act(async () => { await router.navigate(-1); });
+  await act(async () => {
+    await router.navigate(-1);
+  });
   fireEvent.click(screen.getByRole("button", { name: "수정 내용 버리고 이동" }));
   await waitFor(() => expect(screen.getByText("Previous page")).toBeTruthy());
 });
 
 it("shows actionable evidence warnings without requiring hover", () => {
-  render(panel([{ ...draft, lint: [{ rule: "numbers_need_review", ok: false, detail: "제공된 근거에서 찾지 못한 수치: 99%. 원문과 단위를 확인해 주세요." }] }]));
+  render(
+    panel([
+      {
+        ...draft,
+        lint: [{ rule: "numbers_need_review", ok: false, detail: "제공된 근거에서 찾지 못한 수치: 99%. 원문과 단위를 확인해 주세요." }],
+      },
+    ]),
+  );
   fireEvent.click(screen.getByText("초안에서 확인할 부분"));
   expect(screen.getByText(/제공된 근거에서 찾지 못한 수치: 99%/)).toBeTruthy();
   expect(screen.getByText(/수정 후 저장하면 다시 점검/)).toBeTruthy();
 });
 
-
 describe("service introduction", () => {
   it.each([true, false])("requests an introduction with an existing draft: %s", async (existing) => {
     const onRedraft = vi.fn().mockResolvedValue(true);
-    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: existing ? [draft] : [], busy: false, onRedraft, showToast: vi.fn() })));
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "x",
+          lang: "en",
+          langs: ["en"],
+          onLang: vi.fn(),
+          drafts: existing ? [draft] : [],
+          busy: false,
+          onRedraft,
+          showToast: vi.fn(),
+        }),
+      ),
+    );
     // 초안이 있으면 드물게 쓰는 동작이라 초안 메뉴에 둔다. 초안이 없으면 바로 보이는 버튼이다.
     if (existing) fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
     fireEvent.click(screen.getByRole(existing ? "menuitem" : "button", { name: "서비스 처음 소개하기" }));
@@ -143,7 +258,21 @@ describe("service introduction", () => {
     if (existing) expect(screen.getByRole("button", { name: "다시 쓰기" })).toBeTruthy();
   });
   it("disables introduction while a request is in progress", () => {
-    render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], busy: true, onRedraft: vi.fn(), showToast: vi.fn() })));
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "x",
+          lang: "en",
+          langs: ["en"],
+          onLang: vi.fn(),
+          drafts: [draft],
+          busy: true,
+          onRedraft: vi.fn(),
+          showToast: vi.fn(),
+        }),
+      ),
+    );
     fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
     expect((screen.getByRole("menuitem", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -156,7 +285,22 @@ it("shows the saved purpose on an introduction draft", () => {
 
 it("keeps language switching available on the published screen", () => {
   const onLang = vi.fn();
-  render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en", "ko"], onLang, drafts: [draft], publications: [{ id: 7, draftId: draft.id, url: "https://example.test/old" }], busy: false, onRedraft: vi.fn(), showToast: vi.fn() })));
+  render(
+    wrap(
+      createElement(DraftPanel, {
+        cid: 1,
+        channel: "x",
+        lang: "en",
+        langs: ["en", "ko"],
+        onLang,
+        drafts: [draft],
+        publications: [{ id: 7, draftId: draft.id, url: "https://example.test/old" }],
+        busy: false,
+        onRedraft: vi.fn(),
+        showToast: vi.fn(),
+      }),
+    ),
+  );
   expect(screen.getByText("게시 기록을 남겼어요")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "KO" }));
   expect(onLang).toHaveBeenCalledWith("ko");
@@ -165,7 +309,17 @@ it("keeps language switching available on the published screen", () => {
 it("lets a new version be published while preserving the old version's publication", async () => {
   const publications = [{ id: 7, draftId: draft.id, url: "https://example.test/old" }];
   const newer = { ...draft, id: 2, version: 2, body: "New unpublished draft" };
-  const props = { cid: 1, channel: "x" as const, lang: "en", langs: ["en"], onLang: vi.fn(), publications, busy: false, onRedraft: vi.fn(), showToast: vi.fn() };
+  const props = {
+    cid: 1,
+    channel: "x" as const,
+    lang: "en",
+    langs: ["en"],
+    onLang: vi.fn(),
+    publications,
+    busy: false,
+    onRedraft: vi.fn(),
+    showToast: vi.fn(),
+  };
   const view = render(wrap(createElement(DraftPanel, { ...props, drafts: [draft] })));
   expect(screen.getByText("게시 기록을 남겼어요")).toBeTruthy();
   view.rerender(wrap(createElement(DraftPanel, { ...props, drafts: [draft, newer] })));
@@ -174,20 +328,57 @@ it("lets a new version be published while preserving the old version's publicati
   post.mockResolvedValue({ id: 8 });
   fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/new" } });
   fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
-  await waitFor(() => expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 2, url: "https://example.test/new" })));
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 2, url: "https://example.test/new" })),
+  );
   expect(screen.getByRole("link", { name: "https://example.test/new" })).toBeTruthy();
   // A reload with both records must still match the latest draft, regardless of record order.
-  view.rerender(wrap(createElement(DraftPanel, { ...props, drafts: [draft, newer], publications: [...publications, { id: 8, draftId: 2, url: "https://example.test/new" }] })));
+  view.rerender(
+    wrap(
+      createElement(DraftPanel, {
+        ...props,
+        drafts: [draft, newer],
+        publications: [...publications, { id: 8, draftId: 2, url: "https://example.test/new" }],
+      }),
+    ),
+  );
   expect(screen.getByRole("link", { name: "https://example.test/new" })).toBeTruthy();
 });
 
 it("does not apply an unlinked legacy publication to a new draft", () => {
-  render(wrap(createElement(DraftPanel, { cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(), drafts: [draft], publications: [{ id: 7, url: "https://example.test/legacy" }], busy: false, onRedraft: vi.fn(), showToast: vi.fn() })));
+  render(
+    wrap(
+      createElement(DraftPanel, {
+        cid: 1,
+        channel: "x",
+        lang: "en",
+        langs: ["en"],
+        onLang: vi.fn(),
+        drafts: [draft],
+        publications: [{ id: 7, url: "https://example.test/legacy" }],
+        busy: false,
+        onRedraft: vi.fn(),
+        showToast: vi.fn(),
+      }),
+    ),
+  );
   expect(screen.getByRole("button", { name: "게시 링크 저장" })).toBeTruthy();
 });
 
 it("keeps partially published candidates in the review list", () => {
-  set("/candidates", [{ id: 1, title: "Other channel ready", repo: "a/b", type: "release", status: "published", unpublishedDraftCount: 1, evidence: {}, updatedAt: Date.now(), judgment: null }]);
+  set("/candidates", [
+    {
+      id: 1,
+      title: "Other channel ready",
+      repo: "a/b",
+      type: "release",
+      status: "published",
+      unpublishedDraftCount: 1,
+      evidence: {},
+      updatedAt: Date.now(),
+      judgment: null,
+    },
+  ]);
   render(wrap(createElement(Inbox)));
   expect(screen.getByRole("link", { name: "Other channel ready" })).toBeTruthy();
   expect(screen.getByText("검수 대기")).toBeTruthy();
@@ -197,7 +388,8 @@ it("keeps partially published candidates in the review list", () => {
 describe("inbox model setup preflight", () => {
   it.each(["missing-key", "settings-error"])("blocks generation and offers the correct recovery for %s", async (condition) => {
     set("/candidates", [{ id: 1, title: "A change", repo: "a/x", type: "release", status: "new", evidence: {}, updatedAt: Date.now() }]);
-    if (condition === "missing-key") set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, credentialsConfigured: false } });
+    if (condition === "missing-key")
+      set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, credentialsConfigured: false } });
     else resources.set("/settings", { error: "offline", reload: vi.fn() });
     render(wrap(createElement(Inbox)));
     fireEvent.click(screen.getByRole("button", { name: "초안 준비" }));
@@ -230,14 +422,21 @@ describe("draft version and publication consistency", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Saved edit" } });
     fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
     await waitFor(() => expect(screen.queryByRole("textbox", { name: "초안 본문" })).toBeNull());
-    view.rerender(panel([{ ...draft, id: 2, version: 2, body: "Rewritten version", updatedAt: 3 }, { ...draft, body: "Saved edit", updatedAt: 2, status: "edited" }]));
+    view.rerender(
+      panel([
+        { ...draft, id: 2, version: 2, body: "Rewritten version", updatedAt: 3 },
+        { ...draft, body: "Saved edit", updatedAt: 2, status: "edited" },
+      ]),
+    );
     expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("2");
     expect(screen.getByText("Rewritten version")).toBeTruthy();
   });
 
   it("records the publication against the older version that was edited and copied", async () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
-    post.mockImplementation(async (path: string) => path === "/drafts/1/edit" ? { ...draft, body: "Edited v1", updatedAt: 2, status: "copied" } : { id: 9 });
+    post.mockImplementation(async (path: string) =>
+      path === "/drafts/1/edit" ? { ...draft, body: "Edited v1", updatedAt: 2, status: "copied" } : { id: 9 },
+    );
     const view = render(panel());
     fireEvent.click(screen.getByRole("button", { name: "수정" }));
     fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Edited v1" } });
@@ -246,20 +445,29 @@ describe("draft version and publication consistency", () => {
     await waitFor(() => expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("1"));
     fireEvent.change(screen.getByRole("textbox", { name: /게시글 링크/ }), { target: { value: "https://example.test/v1" } });
     fireEvent.click(screen.getByRole("button", { name: "게시 링크 저장" }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 1, url: "https://example.test/v1" })));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith("/publications", expect.objectContaining({ draftId: 1, url: "https://example.test/v1" })),
+    );
   });
 
   it("keeps the edit and asks before overwriting a draft another tab saved first", async () => {
-    post.mockRejectedValueOnce(Object.assign(new Error("conflict"), { status: 409 })).mockResolvedValue({ ...draft, body: "My tab text", updatedAt: 3, status: "edited" });
+    post
+      .mockRejectedValueOnce(Object.assign(new Error("conflict"), { status: 409 }))
+      .mockResolvedValue({ ...draft, body: "My tab text", updatedAt: 3, status: "edited" });
     render(panel());
     fireEvent.click(screen.getByRole("button", { name: "수정" }));
     fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "My tab text" } });
     fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
     await screen.findByText("편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다. 입력한 내용은 그대로 있습니다.");
-    expect(post).toHaveBeenLastCalledWith("/drafts/1/edit", expect.objectContaining({ body: "My tab text", base: { title: undefined, body: "Original draft" } }));
+    expect(post).toHaveBeenLastCalledWith(
+      "/drafts/1/edit",
+      expect.objectContaining({ body: "My tab text", base: { title: undefined, body: "Original draft" } }),
+    );
     expect((screen.getByRole("textbox", { name: "초안 본문" }) as HTMLTextAreaElement).value).toBe("My tab text");
     fireEvent.click(screen.getByRole("button", { name: "내 내용으로 덮어쓰기" }));
-    await waitFor(() => expect(post).toHaveBeenLastCalledWith("/drafts/1/edit", expect.objectContaining({ body: "My tab text", base: undefined })));
+    await waitFor(() =>
+      expect(post).toHaveBeenLastCalledWith("/drafts/1/edit", expect.objectContaining({ body: "My tab text", base: undefined })),
+    );
     await waitFor(() => expect(screen.queryByRole("textbox", { name: "초안 본문" })).toBeNull());
   });
 
@@ -277,12 +485,23 @@ describe("draft version and publication consistency", () => {
   });
 
   it("opens the requested published version even when a newer unpublished version exists", async () => {
-    render(wrap(createElement(DraftPanel, {
-      cid: 1, channel: "x", lang: "en", langs: ["en"], onLang: vi.fn(),
-      drafts: [{ ...draft, id: 2, version: 2, body: "New version" }, draft],
-      publications: [{ id: 7, draftId: 1, url: "https://example.test/published" }], initialDraftId: 1,
-      busy: false, onRedraft: async () => true, showToast: vi.fn(),
-    })));
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "x",
+          lang: "en",
+          langs: ["en"],
+          onLang: vi.fn(),
+          drafts: [{ ...draft, id: 2, version: 2, body: "New version" }, draft],
+          publications: [{ id: 7, draftId: 1, url: "https://example.test/published" }],
+          initialDraftId: 1,
+          busy: false,
+          onRedraft: async () => true,
+          showToast: vi.fn(),
+        }),
+      ),
+    );
     expect(screen.getByRole("heading", { name: "게시 기록을 남겼어요" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "초안 다시 보기" }));
     expect((screen.getByTitle("버전") as HTMLSelectElement).value).toBe("1");
@@ -293,8 +512,33 @@ describe("draft version and publication consistency", () => {
 it("labels channel tabs with a readable draft status instead of a bare symbol", async () => {
   set("/settings", { ...DEFAULT_SETTINGS, channelLangs: { x: ["en"], linkedin: ["ko"] } } as SettingsView);
   set("/keys", []);
-  set("/candidates/1", { candidate: { id: 1, title: "A change", repo: "a/b", type: "release", status: "drafted", evidence: { repo: "a/b", repoUrl: "https://example.test/a/b" }, latestJudgmentId: null, createdAt: 1, updatedAt: 1 }, judgments: [], drafts: [{ ...draft, lint: [{ rule: "no_exclamation", ok: false, detail: "Remove !" }] }, { ...draft, id: 2, channel: "linkedin", lang: "ko", lint: [{ rule: "has_link", ok: true }] }], publications: [], signals: [], told: [], consistency: [] });
-  render(createElement(RouterProvider, { router: createMemoryRouter([{ path: "/c/:id", element: createElement(Candidate) }], { initialEntries: ["/c/1"] }) }));
+  set("/candidates/1", {
+    candidate: {
+      id: 1,
+      title: "A change",
+      repo: "a/b",
+      type: "release",
+      status: "drafted",
+      evidence: { repo: "a/b", repoUrl: "https://example.test/a/b" },
+      latestJudgmentId: null,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    judgments: [],
+    drafts: [
+      { ...draft, lint: [{ rule: "no_exclamation", ok: false, detail: "Remove !" }] },
+      { ...draft, id: 2, channel: "linkedin", lang: "ko", lint: [{ rule: "has_link", ok: true }] },
+    ],
+    publications: [],
+    signals: [],
+    told: [],
+    consistency: [],
+  });
+  render(
+    createElement(RouterProvider, {
+      router: createMemoryRouter([{ path: "/c/:id", element: createElement(Candidate) }], { initialEntries: ["/c/1"] }),
+    }),
+  );
   await waitFor(() => expect(screen.getByRole("button", { name: /X, 자동 점검에서 확인할 부분이 있습니다/ })).toBeTruthy());
   expect(screen.getByRole("button", { name: /LinkedIn, 초안 준비됨/ })).toBeTruthy();
   expect(screen.getAllByText("확인 필요").length).toBeGreaterThan(0);
