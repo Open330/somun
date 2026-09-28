@@ -3,6 +3,21 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "관찰": "Observe",
+  "릴리스·PR·커밋을 읽습니다": "Reads releases, PRs, and commits",
+  "추리기": "Distill",
+  "잡일은 버리고 바깥 독자가 볼 변화와 숫자만 남깁니다": "Drops chores and keeps only changes and numbers outsiders care about",
+  "다섯 기준으로 점수를 매기고 이유를 남깁니다": "Scores five criteria and writes down why",
+  "채널 형식에 맞춰 쓰고, 올리는 건 직접 합니다": "Writes for each channel's format; you do the posting",
+  "릴리스 61회라는 숫자가 있고, 바로 설치해 볼 수 있습니다. 청중은 아직 좁습니다.": "There is a real number (61 releases) and it can be installed right away. The audience is still narrow.",
+  "영상": "video",
+  "소문이 일하는 방식, 17초": "How somun works, 17 seconds",
+  "초안 쓸 만함 · 4점 이상": "Worth a draft · 4 or more",
+  "복사했습니다. 게시는 직접 합니다.": "Copied. You post it yourself.",
+  "일시정지": "Pause",
+  "재생": "Play",
+  "재생 위치": "Playback position",
+  "{n}장: {label}": "Chapter {n}: {label}",
   "편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다. 입력한 내용은 그대로 있습니다.": "This draft was saved elsewhere while you were editing. Your text is still here.",
   "복사는 완료했지만 저장하지 못했습니다.": "Copied, but not saved.",
   "내 내용으로 덮어쓰기": "Overwrite with my text",
