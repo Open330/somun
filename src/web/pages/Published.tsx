@@ -18,8 +18,8 @@ export default function Published() {
       {refreshError && <div className="inline-notice is-error" role="alert">{refreshError}</div>}
       {rows === undefined ? <Skeleton rows={3} /> : rows.length === 0 ? (
         <div className="state-panel">
-          <p style={{ marginBottom: 12 }}>{t("아직 발행한 글이 없습니다.")}</p>
-          <p className="small muted" style={{ marginBottom: 14 }}>{t("초안을 검토해 원하는 채널에 올리고, 초안 화면에 게시 링크를 남겨주세요. 여기에 발행 기록과 지표가 쌓입니다.")}</p>
+          <h2>{t("아직 발행한 글이 없습니다.")}</h2>
+          <p>{t("초안을 검토해 원하는 채널에 올리고, 초안 화면에 게시 링크를 남겨주세요. 여기에 발행 기록과 지표가 쌓입니다.")}</p>
           <Link to="/" className="btn primary">{t("글감에서 초안 고르기")}</Link>
         </div>
       ) : (

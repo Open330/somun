@@ -13,6 +13,7 @@
   --accent: #123f3a;
   --accent-ink: #f3f4f2;
   --accent-soft: #e3ece9;
+  --accent-strong: #0b2d29;
   --score: #b86e00;
   --score-soft: #fbefdc;
   --danger: #b02e2e;
@@ -30,7 +31,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ground: #0e1216; --surface: #151b21; --surface-2: #1c242c; --ink: #e8ecef; --ink-2: #c3cbd3; --muted: #8a96a1;
-    --line: #253039; --line-strong: #34414c; --accent: #7cc7b0; --accent-ink: #0e1216; --accent-soft: #16302b;
+    --line: #253039; --line-strong: #34414c; --accent: #7cc7b0; --accent-ink: #0e1216; --accent-soft: #16302b; --accent-strong: #9ad6c3;
     --score: #e5a33c; --score-soft: #33280f; --danger: #ef6b6b; --danger-soft: #3a1c1c; --ok: #7cc7b0; --warn: #e5a33c;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
@@ -38,7 +39,7 @@
 }
 :root[data-theme="dark"] {
   --ground: #0e1216; --surface: #151b21; --surface-2: #1c242c; --ink: #e8ecef; --ink-2: #c3cbd3; --muted: #8a96a1;
-  --line: #253039; --line-strong: #34414c; --accent: #7cc7b0; --accent-ink: #0e1216; --accent-soft: #16302b;
+  --line: #253039; --line-strong: #34414c; --accent: #7cc7b0; --accent-ink: #0e1216; --accent-soft: #16302b; --accent-strong: #9ad6c3;
   --score: #e5a33c; --score-soft: #33280f; --danger: #ef6b6b; --danger-soft: #3a1c1c; --ok: #7cc7b0; --warn: #e5a33c;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -65,7 +66,7 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12.5px; }
 button, .btn { white-space: nowrap; font: inherit; font-weight: 500; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); padding: 7px 13px; line-height: 1.3; display: inline-flex; align-items: center; gap: 6px; transition: background 0.12s, border-color 0.12s; }
 button:hover, .btn:hover { background: var(--surface-2); text-decoration: none; }
 button.primary, .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
-button.primary:hover, .btn.primary:hover { filter: brightness(1.05); }
+button.primary:hover, .btn.primary:hover { background: var(--accent-strong); }
 button.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 button.ghost:hover { background: var(--surface-2); }
 button.danger { color: var(--danger); }
@@ -159,12 +160,6 @@ label.field span { display: block; font-size: 12px; color: var(--muted); margin-
 .hero h1 { font-size: clamp(34px, 4.6vw, 52px); line-height: 1.12; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.025em; }
 .hero h1 em { font-style: normal; color: var(--accent); }
 .hero .sub { font-size: 18px; color: var(--ink-2); max-width: 32em; margin-bottom: 26px; }
-.demo { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
-.demo .bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.demo .bar b { color: var(--ink); font-weight: 600; }
-.demo .body { padding: 16px; display: grid; gap: 12px; }
-.demo .post { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; font-size: 14px; white-space: pre-wrap; line-height: 1.55; }
-.demo .facts { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
 .section { padding: 40px 0; border-top: 1px solid var(--line); }
 .section h2 { font-size: 24px; text-transform: none; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 8px; font-weight: 600; }
 .section .lede { color: var(--muted); max-width: 40em; margin-bottom: 24px; }
@@ -304,7 +299,6 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 .hero-copy > * { animation: rise .6s cubic-bezier(.2,.7,.2,1) both; }
 .hero-copy > :nth-child(2) { animation-delay: .08s; }
 .hero-copy > :nth-child(3) { animation-delay: .16s; }
-.hero .demo { animation: rise .7s cubic-bezier(.2,.7,.2,1) .18s both; }
 [data-reveal].pending { opacity: 0; transform: translateY(16px); }
 [data-reveal].in { opacity: 1; transform: none; transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
 .flow .st { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; position: relative; }
@@ -314,9 +308,6 @@ details.raw summary { cursor: pointer; color: var(--muted); font-size: 13px; mar
 .principle, .shots img { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
 .principle:hover { transform: translateY(-2px); border-color: var(--accent); }
 .shots img:hover { transform: translateY(-3px); }
-.demo .post { animation: fadein .45s ease both; }
-.demo .body { position: relative; }
-.demo-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform-origin: left; animation: bar 4.2s linear both; opacity: .7; }
 .main > * { animation: fadein .25s ease both; }
 .btn, button { transition: background .15s ease, border-color .15s ease, transform .1s ease, box-shadow .15s ease; }
 button.primary:active, .btn.primary:active { transform: translateY(1px); }
@@ -428,7 +419,7 @@ button.active { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 640px) { .perf { grid-template-columns: 1fr; } }
 
 /* Product workspace: clear next action, readable content, complete states. */
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.sr-only { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 100; padding: 12px; background: var(--surface); }
 .skip-link:focus { top: 12px; }
 .layout { grid-template-columns: 220px minmax(0, 1fr); }
@@ -523,8 +514,12 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
   .story-actions .toolbar { margin-left: auto; }
   .story-score { display: none; }
   .inline-notice { align-items: flex-start; flex-wrap: wrap; }
-  .topbar a { font-size: 12px; padding: 8px; }
+  .topbar a { font-size: 12px; padding: 8px 7px; }
   .topbar .brand { display: none; }
+  /* 좁은 폭에서는 메뉴를 한 줄로 두고 가로로 밀어 본다. 두 줄로 접히면 모든 화면 머리가 두꺼워진다. */
+  .topbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .topbar::-webkit-scrollbar { display: none; }
+  .topbar .mobile-signout { flex: none; position: sticky; right: -12px; margin-right: -12px; padding: 0 12px; border-radius: 0; background: var(--surface); box-shadow: -1px 0 0 var(--line); }
 }
 .connection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 .connection-card { padding: 26px; }
@@ -605,3 +600,47 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 .video-block { margin-top: 16px; }
 .video-item { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
 .video-frame { width: 100%; max-width: 640px; border-radius: var(--radius-sm); background: var(--surface-2); display: block; }
+
+/* ── polish: 컨트롤 높이·상태·밀도 정리 ────────────────────── */
+/* 입력과 버튼 높이를 36px 한 줄로 맞춘다(작은 것은 32px). */
+input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])), select { min-height: 36px; padding: 6px 11px; line-height: 1.4; }
+input.sm { min-height: 32px; padding: 4px 9px; font-size: 13px; }
+.locale-switch select { min-height: 32px; padding: 4px 8px; }
+.draft-toolbar select.ver { min-height: 28px; padding: 3px 8px; }
+.publication-form button { min-height: 36px; }
+/* 비활성 버튼은 hover에도 변하지 않는다. */
+button:disabled:hover { background: var(--surface); }
+button.primary:disabled:hover { background: var(--accent); }
+button.ghost:disabled:hover, .filter-strip button:disabled:hover { background: transparent; }
+button:not(:disabled):not(.primary):active { background: var(--line); }
+/* 세그먼트 컨트롤: 칩 높이에 맞추고, 선택은 소나무색으로. */
+.seg button { min-height: 30px; }
+.seg button.active { background: var(--accent-soft); color: var(--accent); }
+.lang-seg button { min-height: 26px; padding: 2px 10px; }
+.lang-seg button.on { background: var(--accent); color: var(--accent-ink); }
+.lang-seg button:not(.on):hover { background: var(--surface-2); color: var(--ink); }
+button.chip { min-height: 28px; }
+/* 모바일 상단 메뉴의 숫자 배지 */
+.topbar a .count { margin-left: 5px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.topbar a.active .count { color: var(--accent); }
+/* 글감 상세 곁 패널: 상자 안 상자 대신 구분선으로 나눈다. */
+.cand-side { gap: 0; padding: 6px 18px; }
+.cand-side > .context-details { padding: 12px 0; }
+.cand-side > .context-details[open] > summary { margin-bottom: 12px; }
+.cand-side > .side-block { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 16px 0; }
+.cand-side > .side-block:last-child { padding-bottom: 12px; }
+/* 문체 프리셋: 긴 URL이 카드 밖으로 밀리지 않게, 선택 버튼에도 포커스 링. */
+.preset { grid-template-columns: minmax(0, 1fr); }
+.preset-sample, .preset .sample { overflow-wrap: anywhere; }
+.preset > button.ghost { justify-self: start; }
+.preset-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+/* 발행 기록 행: 채널 배지가 칸 너비로 늘어나지 않게, 긴 링크는 줄바꿈. */
+.pub > .badge { justify-self: start; }
+.pub > div { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .pub { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .pub > .row { flex-wrap: wrap; }
+  .pub > .row > .small { text-align: left !important; }
+  .pub > button, .pub > span { justify-self: start; }
+}
+.state-panel > h2:first-child { margin-top: 0; }
