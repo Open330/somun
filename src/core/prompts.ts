@@ -189,7 +189,7 @@ export type DraftOptions = { guide?: string; instruction?: string; previous?: { 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
   // 첫 소개는 변경 목록이 아니다. 목록을 요구하면 소개 뒤에 변경이 줄줄이 붙는다(도그푸딩에서 확인).
-  if (introduction) return "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows a capability a user can see today. Never mention implementation details (databases, process model, background jobs, timeouts, refactors, dependency or build changes).";
+  if (introduction) return "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows a capability a user can see today. Never mention implementation details (databases, process model, background jobs, timeouts, refactors, dependency or build changes). If Facts has a homepage, link to the homepage rather than the repository. If the channel rules name a 'what changed' section (무엇이 달라졌나 / 변경 내용), use it to say what the project is and does (for example 무엇인가), not to list changes.";
   const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
   if (!highlights.length) return "";
   if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
@@ -210,7 +210,7 @@ Hard rules:
 - Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.
 - Never mention that the code was written with AI or agents unless the tool itself is about agents.
 - Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.
-- Refer to the project only by the exact name in Facts (the repo name after the slash, or the full owner/name). Never shorten, respell or invent owners or names.
+- Refer to the project by "how to name it" from the profile when Facts has one; otherwise by the repo name after the slash. Use the full owner/name only inside links. Never shorten, respell or invent owners or names.
 - Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with ${opts.introduction ? "what the project is and who it is for" : "what changed"}.
 - A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", or "출시했습니다" without that evidence.
 - Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.

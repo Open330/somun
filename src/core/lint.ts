@@ -36,7 +36,7 @@ const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /!/;
 
-export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[] };
+export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string };
 
 /** 한글로 음역한 제품·채널·도구 이름. 이름은 원래 철자로 쓴다(채널 규칙, KO_FLUENCY_RULES). 조사가 붙어도 잡고, 더 긴 낱말(엑스포)은 건너뛴다. */
 const TRANSLITERATED: [RegExp, string][] = ([
@@ -44,12 +44,19 @@ const TRANSLITERATED: [RegExp, string][] = ([
   ["깃 ?허브", "GitHub"], ["제미나이", "Gemini"], ["에이피아이", "API"], ["씨엘아이", "CLI"], ["엔피엠", "npm"], ["알에스에스", "RSS"],
   ["클로드 ?코드", "Claude Code"], ["코덱스", "Codex"], ["타입스크립트", "TypeScript"],
 ] as const).map(([ko, en]) => [new RegExp(`(?<![가-힣])${ko}(?=(?:에서|으로|에게|까지|처럼|보다|[와과는은이가를을에의도로만])?(?![가-힣]))`, "g"), en]);
-/** Show GN 본문에 있어야 할 절. 한계는 근거에 한계가 있을 때만 요구한다(없으면 지어내지 않는다). */
-const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^\s*(무엇|what)/im], ["왜", /^\s*(왜|why)/im], ["다른 점", /^\s*(다른 점|차이|how it differs)/im], ["피드백", /^\s*(피드백|feedback)/im]];
+/**
+ * Show GN 본문에 있어야 할 절(채널 규칙). 무엇을 했는지는 항상, 한계는 근거에 한계가 있을 때만 요구한다.
+ * 왜·다른 점·기술 결정은 근거가 있을 때만 쓰는 절이라 요구하지 않는다(요구하면 지어내게 된다). 댓글 요청은 규칙이 금한다.
+ */
+const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^\s*(무엇|변경 내용|what)/im]];
 
-/** 생성과 사용자 수정에 같은 근거를 적용한다. 숫자는 요약이 아니라 원자료와 맞춰 본다. */
-export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike): LintFacts {
-  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [] };
+/**
+ * 생성과 사용자 수정에 같은 근거를 적용한다. 숫자는 요약이 아니라 원자료와 맞춰 본다.
+ * 첫 소개 글은 홈페이지가 있으면 홈페이지로 보낸다(처음 보는 사람에게 저장소보다 서비스가 먼저다).
+ */
+export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, purpose?: "introduction" | "update" | null): LintFacts {
+  const preferLink = purpose === "introduction" ? candidate.evidence.homepage : undefined;
+  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink };
 }
 
 /**
@@ -111,6 +118,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   if (channel === "x" || channel === "linkedin") {
     results.push({ rule: "has_link", ok: LINK.test(body) });
+  }
+  if (facts.preferLink && channel !== "blog") {
+    const link = facts.preferLink.replace(/\/+$/, "");
+    results.push({ rule: "preferred_link", ok: text.includes(link), detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // LinkedIn은 접힘선 위 한 줄 뒤에 3~5문단(채널 규칙). 한 덩어리 글은 모바일에서 읽히지 않는다.
