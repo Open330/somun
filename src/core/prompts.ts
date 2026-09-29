@@ -23,7 +23,7 @@ export type CandidateLike = { title: string; type: string; evidence: EvidenceLik
 
 export type PromptSpec = { draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
-export type ProfileLike = { what: string; audience: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
+export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
 
 /** 프로필 블록. 정체성은 여기서만 말하고, 변경은 다이제스트가 말한다. */
 export function profileBlock(p: ProfileLike): string {
@@ -31,6 +31,7 @@ export function profileBlock(p: ProfileLike): string {
     "## What this project is (profile, the baseline; do not re-announce any of this as a change)",
     `what: ${p.what}`,
     `for whom: ${p.audience}`,
+    p.why ? `why it exists (the author's own words; the only allowed motivation): ${p.why}` : "",
     p.claims.length ? `core claims:\n- ${p.claims.join("\n- ")}` : "",
     `stage: ${p.stage}`,
     p.limitations.length ? `known limitations:\n- ${p.limitations.join("\n- ")}` : "",
@@ -249,13 +250,13 @@ Hard rules:
 export const PROFILE_SCHEMA = {
   type: "object",
   properties: {
-    what: { type: "string" }, audience: { type: "string" },
+    what: { type: "string" }, audience: { type: "string" }, why: { type: "string" },
     claims: { type: "array", items: { type: "string" } },
     stage: { type: "string", enum: ["experiment", "beta", "stable", "archived", "unknown"] },
     limitations: { type: "array", items: { type: "string" } },
     naming: { type: "string" }, avoid: { type: "array", items: { type: "string" } },
   },
-  required: ["what", "audience", "claims", "stage", "limitations", "naming", "avoid"],
+  required: ["what", "audience", "why", "claims", "stage", "limitations", "naming", "avoid"],
   additionalProperties: false,
 };
 
@@ -269,6 +270,7 @@ export function profilePrompt(m: ProfileMaterial): PromptSpec {
     system: `You write a short, factual profile of a software project from its README and metadata. The profile is a baseline that other steps compare changes against, so describe what the project IS, not what recently changed.
 - what: one sentence, plain, no adjectives. Name the category (CLI, library, web app, dataset, config repo, coursework, ...).
 - audience: who would use it, in one sentence. If it is a personal/config/coursework repo, say so plainly.
+- why: why the author made it, only if the README states the motivation in the author's words. Empty if the README does not say why.
 - claims: up to 4 concrete things it does or promises for its users, taken from the README. Prefer what a user sees or gets over how it is built; leave out implementation details (databases, process model, frameworks) unless the project is itself about them. No marketing words.
 - stage: experiment | beta | stable | archived | unknown, from version numbers, badges, "beta"/"WIP" notes, release count.
 - limitations: things the README admits do not work or are not supported. Empty if none.

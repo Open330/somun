@@ -195,3 +195,11 @@ it("asks introductions to link the homepage when the project has one", () => {
   expect(rule("somun drafts posts. https://somun.jiun.dev")?.ok).toBe(true);
   expect(rule("somun drafts posts. https://github.com/Open330/somun", draftLintFacts(candidate, undefined, "update"))).toBeUndefined();
 });
+
+it("asks for a Show GN why section only when the profile states why the project exists", () => {
+  const body = "somun은 초안을 씁니다.\n\n무엇인가\n- 릴리스·PR·커밋을 읽어 채널마다 초안을 씁니다.";
+  const sections = (facts: Parameters<typeof lintDraft>[4]) => lintDraft("show_gn", "Show GN: somun", body, [], facts).find((r) => r.rule === "sections");
+  expect(sections({ limitations: [] })?.ok).toBe(true);
+  expect(sections({ limitations: [], why: "만든 건 많은데, 설명하기가 어렵습니다." })).toMatchObject({ ok: false, detail: expect.stringContaining("왜") });
+  expect(lintDraft("show_gn", "Show GN: somun", `${body}\n\n왜 만들었나\n- 만든 건 많은데 설명하기가 어려웠습니다.`, [], { limitations: [], why: "x" }).find((r) => r.rule === "sections")?.ok).toBe(true);
+});

@@ -13,16 +13,18 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
   const p = view?.profile;
   const [what, setWhat] = useState(p?.what ?? "");
   const [audience, setAudience] = useState(p?.audience ?? "");
+  const [why, setWhy] = useState(p?.why ?? "");
   const [claims, setClaims] = useState((p?.claims ?? []).join("\n"));
   const [avoid, setAvoid] = useState((p?.avoid ?? []).join(", "));
   const [limitations, setLimitations] = useState((p?.limitations ?? []).join("\n"));
   useEffect(() => {
     setWhat(p?.what ?? "");
     setAudience(p?.audience ?? "");
+    setWhy(p?.why ?? "");
     setClaims((p?.claims ?? []).join("\n"));
     setAvoid((p?.avoid ?? []).join(", "));
     setLimitations((p?.limitations ?? []).join("\n"));
-  }, [p?.what, p?.audience, p?.claims, p?.avoid, p?.limitations]);
+  }, [p?.what, p?.audience, p?.why, p?.claims, p?.avoid, p?.limitations]);
   const regen = async () => {
     setBusy(true);
     try {
@@ -70,6 +72,11 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
         <div className="stack gap-6 mt-8">
           <p className="small profile-what">{p!.what || <span className="muted">{t("설명 없음")}</span>}</p>
           <div className="tiny muted">{p!.audience}</div>
+          {p!.why && (
+            <div className="tiny muted">
+              {t("왜 만들었나:")} {p!.why}
+            </div>
+          )}
           <div className="row wrap gap-6">
             <span className="badge outline">{t(STAGE_LABEL[p!.stage] ?? p!.stage)}</span>
             {p!.naming && <span className="badge outline">{p!.naming}</span>}
@@ -109,6 +116,15 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
             <input value={audience} onChange={(ev) => setAudience(ev.target.value)} />
           </label>
           <label className="field">
+            <span>{t("왜 만들었나")}</span>
+            <textarea
+              value={why}
+              onChange={(ev) => setWhy(ev.target.value)}
+              className="profile-claims-input"
+              placeholder={t("직접 겪은 이유를 한두 문장으로. 비워 두면 초안은 동기를 쓰지 않습니다.")}
+            />
+          </label>
+          <label className="field">
             <span>{t("핵심 주장 (한 줄에 하나)")}</span>
             <textarea value={claims} onChange={(ev) => setClaims(ev.target.value)} className="profile-claims-input" />
           </label>
@@ -135,6 +151,7 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
                   await patch(`/profiles/${repo}`, {
                     what,
                     audience,
+                    why,
                     claims: claims
                       .split("\n")
                       .map((x) => x.trim())

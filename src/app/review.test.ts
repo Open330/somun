@@ -279,3 +279,11 @@ it("keeps every profile edit up to the limits the API accepts", () => {
   expect(view.profile.limitations).toEqual(limitations);
   expect(view.profile.avoid).toEqual(avoid);
 });
+
+it("keeps the author's stated motivation and hands it to drafts only when there is one", async () => {
+  const { profileBlock } = await import("../core/prompts.js");
+  const view = editProfile(ctx, OWNER, "me/tool", { why: "I kept missing which agent was waiting for me." });
+  expect(view.profile.why).toBe("I kept missing which agent was waiting for me.");
+  expect(profileBlock(view.profile)).toContain("why it exists (the author's own words; the only allowed motivation): I kept missing");
+  expect(profileBlock({ ...view.profile, why: "" })).not.toContain("why it exists");
+});
