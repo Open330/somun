@@ -15,12 +15,14 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
   const [audience, setAudience] = useState(p?.audience ?? "");
   const [claims, setClaims] = useState((p?.claims ?? []).join("\n"));
   const [avoid, setAvoid] = useState((p?.avoid ?? []).join(", "));
+  const [limitations, setLimitations] = useState((p?.limitations ?? []).join("\n"));
   useEffect(() => {
     setWhat(p?.what ?? "");
     setAudience(p?.audience ?? "");
     setClaims((p?.claims ?? []).join("\n"));
     setAvoid((p?.avoid ?? []).join(", "));
-  }, [p?.what, p?.audience, p?.claims, p?.avoid]);
+    setLimitations((p?.limitations ?? []).join("\n"));
+  }, [p?.what, p?.audience, p?.claims, p?.avoid, p?.limitations]);
   const regen = async () => {
     setBusy(true);
     try {
@@ -80,6 +82,11 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
               ))}
             </ul>
           )}
+          {p!.limitations.length > 0 && (
+            <div className="tiny muted">
+              {t("한계:")} {p!.limitations.join(" · ")}
+            </div>
+          )}
           {p!.avoid.length > 0 && (
             <div className="tiny muted">
               {t("쓰지 않음:")} {p!.avoid.join(", ")}
@@ -106,6 +113,15 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
             <textarea value={claims} onChange={(ev) => setClaims(ev.target.value)} className="profile-claims-input" />
           </label>
           <label className="field">
+            <span>{t("한계 (한 줄에 하나)")}</span>
+            <textarea
+              value={limitations}
+              onChange={(ev) => setLimitations(ev.target.value)}
+              className="profile-claims-input"
+              placeholder={t("지원하지 않는 것, 아직 되지 않는 것. 초안은 여기 있는 한계만 씁니다.")}
+            />
+          </label>
+          <label className="field">
             <span>{t("글에 쓰지 않을 말 (쉼표로)")}</span>
             <input value={avoid} onChange={(ev) => setAvoid(ev.target.value)} placeholder={t("회사명, 내부 호스트명…")} />
           </label>
@@ -123,13 +139,17 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
                       .split("\n")
                       .map((x) => x.trim())
                       .filter(Boolean),
+                    limitations: limitations
+                      .split("\n")
+                      .map((x) => x.trim())
+                      .filter(Boolean),
                     avoid: avoid
                       .split(",")
                       .map((x) => x.trim())
                       .filter(Boolean),
                   });
                   setEditing(false);
-                  showToast(t("프로필을 저장했습니다. 다음 다이제스트부터 반영됩니다."));
+                  showToast(t("프로필을 저장했습니다. 다음에 쓰는 초안부터 반영됩니다."));
                 } catch (err) {
                   showToast(`${t("저장하지 못했습니다.")} ${(err as Error).message}`);
                 } finally {

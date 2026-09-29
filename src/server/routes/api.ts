@@ -5,7 +5,7 @@ import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { collectAll, profileMaterialFor } from "../../app/collect.js";
-import { editProfile, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
+import { editProfile, EDIT_LIMITS, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, GUIDE_MAX_CHARS, listSuggestions } from "../../app/learning.js";
 import { learningStats } from "../../app/learning-stats.js";
 import { sendWeeklySummary } from "../../app/notify.js";
@@ -148,7 +148,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // repo profiles (정체성 기준선)
   app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));
   app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
-  app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(6).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(8).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(12).optional() })))));
+  app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(EDIT_LIMITS.claims).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(EDIT_LIMITS.limitations).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(EDIT_LIMITS.avoid).optional() })))));
   app.post("/profiles/:owner/:name/regenerate", async (c) => {
     const repo = `${c.req.param("owner")}/${c.req.param("name")}`;
     const r = await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo));

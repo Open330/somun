@@ -56,8 +56,11 @@ export type Report = z.infer<typeof reportSchema>;
 export type Result = Report["results"][number];
 export type Generate = (variant: Variant, prompt: PromptSpec) => Promise<LlmResult>;
 
+/** 채널 형식(절 구성, 끝맺는 질문)은 실험에서 사람이 평가한다. 고정 루브릭에 넣으면 과거 보고서와 비교할 수 없게 된다. */
+const HUMAN_JUDGED_RULES = new Set(["sections", "open_question"]);
+
 export function evaluate(test: ExperimentCase, draft: z.infer<typeof draftSchema>): LintResult[] {
-  const checks = lintDraft(test.channel, draft.title, draft.body, undefined, draftLintFacts(test.candidate as CandidateLike));
+  const checks = lintDraft(test.channel, draft.title, draft.body, undefined, draftLintFacts(test.candidate as CandidateLike)).filter((c) => !HUMAN_JUDGED_RULES.has(c.rule));
   const text = `${draft.title}\n${draft.body}`.toLowerCase();
   for (const phrase of test.required) checks.push({ rule: `required:${phrase}`, ok: text.includes(phrase.toLowerCase()), detail: `필수 사실: ${phrase}` });
   for (const group of test.requiredAny ?? []) checks.push({ rule: `required_any:${group.id}`, ok: group.phrases.some((phrase) => text.includes(phrase.toLowerCase())), detail: `필수 개념: ${group.phrases.join(" / ")}` });

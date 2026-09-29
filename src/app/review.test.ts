@@ -269,3 +269,13 @@ describe("account language", () => {
     expect(getSettingsView(ctx, OWNER).ui).toEqual({ onboardingDismissedAt: 123, locale: "en" });
   });
 });
+
+it("keeps every profile edit up to the limits the API accepts", () => {
+  const claims = ["a", "b", "c", "d", "e", "f"].map((x) => `claim ${x}`);
+  const limitations = Array.from({ length: 8 }, (_, i) => `limit ${i}`);
+  const avoid = Array.from({ length: 12 }, (_, i) => `word ${i}`);
+  const view = editProfile(ctx, OWNER, "me/tool", { claims, limitations, avoid });
+  expect(view.profile.claims).toEqual(claims);
+  expect(view.profile.limitations).toEqual(limitations);
+  expect(view.profile.avoid).toEqual(avoid);
+});

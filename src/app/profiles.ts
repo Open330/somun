@@ -22,17 +22,22 @@ export function readmeHash(readme: string, description?: string): string {
   return createHash("sha1").update(readme).update("\n").update(description ?? "").digest("hex").slice(0, 16);
 }
 
-function normalize(raw: unknown): RepoProfile {
+/** 모델이 만든 프로필은 짧게 둔다(기준선이 길면 초안이 목록이 된다). */
+const GENERATED_LIMITS = { claims: 4, limitations: 5, avoid: 8 };
+/** 사용자가 고친 값은 API가 받는 만큼 그대로 둔다. 조용히 잘리면 넣은 줄이 사라진다. */
+export const EDIT_LIMITS = { claims: 6, limitations: 8, avoid: 12 };
+
+function normalize(raw: unknown, limits = GENERATED_LIMITS): RepoProfile {
   const r = (raw ?? {}) as Partial<RepoProfile>;
   const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim()).slice(0, n) : []);
   const stage = ["experiment", "beta", "stable", "archived", "unknown"].includes(String(r.stage)) ? (r.stage as RepoProfile["stage"]) : "unknown";
-  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), claims: strs(r.claims, 4), stage, limitations: strs(r.limitations, 5), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, 8) };
+  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid) };
 }
 
 function merged(row: typeof schema.repoProfiles.$inferSelect): RepoProfileView {
   const base = normalize(row.profile);
   const edits = (row.edits ?? {}) as Partial<RepoProfile>;
-  const profile = { ...base, ...normalize({ ...base, ...edits }) };
+  const profile = { ...base, ...normalize({ ...base, ...edits }, EDIT_LIMITS) };
   return { repo: row.repo, profile, editedFields: Object.keys(edits) as (keyof RepoProfile)[], model: row.model, updatedAt: row.updatedAt };
 }
 
