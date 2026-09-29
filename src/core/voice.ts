@@ -103,7 +103,7 @@ export const KO_FLUENCY_RULES = `Korean fluency rules (violations make the text 
 - Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.
 - Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.
 - One register throughout. Never mix 합니다체 and 한다체 in one post.
-- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings).
+- Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings). Never transliterate names into Hangul: X, Threads, LinkedIn, Show HN, GeekNews, GitHub, Gemini, Claude Code, Codex, API, CLI, npm, RSS, TypeScript (never 엑스, 링크드인, 쇼 에이치엔, 긱뉴스, 깃허브, 제미나이, 에이피아이, 씨엘아이, 엔피엠).
 - Translate ordinary technical prose into established Korean: code frame → 코드 프레임, line endings → 줄바꿈, path segments → 경로 구성 요소, dependencies → 의존성, proxy context matchers → 프록시 컨텍스트 매처. Preserve identifiers such as CRLF and node_modules.
 - For an ambiguous operation, preserve the exact source verb instead of guessing its meaning. For example, keep the word settling unchanged unless Facts explains the underlying operation. Do not turn a Promise/dependency operation into a financial metaphor.
 - Before returning, replace unnecessary English phrases with these Korean terms and confirm that each changed component and operation retains its original meaning.`;

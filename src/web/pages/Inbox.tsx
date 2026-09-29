@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { CandidateListItem, SettingsView, Source } from "@shared/types";
+import type { CandidateListItem, JobProgress, SettingsView, Source } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
 import { post, useResource } from "../lib/api";
 import { GenerationStatus } from "../components/GenerationStatus";
@@ -16,8 +16,10 @@ const FILTERS: [Filter, string][] = [
   ["deferred", "보류"],
   ["archived", "보관"],
 ];
-const category = (c: CandidateListItem): Exclude<Filter, "all"> => {
+/** 판단이 아직 진행 중인 글감은 확인할 것이 아니라 기다릴 것이다. 작업이 끝났는데 결과가 없을 때만 "확인 필요"로 보낸다. */
+const category = (c: CandidateListItem, running: Set<number>): Exclude<Filter, "all"> => {
   const key = stageOf(c).key;
+  if (key === "working" && running.has(c.id)) return "fresh";
   return key === "published" || key === "dropped" ? "archived" : key === "working" || key === "ask" ? "attention" : key;
 };
 
@@ -25,6 +27,11 @@ export default function Inbox() {
   const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
   const { data: settings, error: settingsError, reload: reloadSettings } = useResource<SettingsView>("/settings", ["settings"]);
+  const { data: jobs } = useResource<JobProgress[]>("/jobs/status", ["jobs"]);
+  const running = useMemo(
+    () => new Set((jobs ?? []).filter((j) => j.status === "pending" || j.status === "claimed").map((j) => j.candidateId)),
+    [jobs],
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean; model?: boolean } | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -35,22 +42,22 @@ export default function Inbox() {
   const counts = useMemo(() => {
     const result = { all: 0, review: 0, fresh: 0, attention: 0, deferred: 0, archived: 0 };
     for (const c of rows ?? []) {
-      const key = category(c);
+      const key = category(c, running);
       result[key]++;
       if (key !== "archived") result.all++;
     }
     return result;
-  }, [rows]);
+  }, [rows, running]);
   const visible = useMemo(
     () =>
       (rows ?? [])
         .filter(
           (c) =>
-            (filter === "all" ? category(c) !== "archived" : category(c) === filter) &&
+            (filter === "all" ? category(c, running) !== "archived" : category(c, running) === filter) &&
             `${c.title} ${c.repo}`.toLowerCase().includes(query.trim().toLowerCase()),
         )
         .sort((a, b) => b.updatedAt - a.updatedAt),
-    [rows, filter, query],
+    [rows, filter, query, running],
   );
 
   async function collect() {
@@ -117,7 +124,7 @@ export default function Inbox() {
       />
     );
   if (!rows || !sources) return <Skeleton rows={4} />;
-  const firstDraft = rows.find((c) => category(c) === "review");
+  const firstDraft = rows.find((c) => category(c, running) === "review");
   const firstUse = rows.length === 0;
   return (
     <>
@@ -231,7 +238,7 @@ export default function Inbox() {
               ? FILTERS.filter(([key]) => !["all", "archived"].includes(key))
               : FILTERS.filter(([key]) => key === filter)
             ).map(([key, label]) => {
-              const items = visible.filter((c) => category(c) === key);
+              const items = visible.filter((c) => category(c, running) === key);
               if (!items.length) return null;
               return (
                 <Section key={key} title={t(label)} count={items.length}>
@@ -262,13 +269,13 @@ export default function Inbox() {
                             </span>
                           )}
                           <div className="toolbar">
-                            {category(c) === "fresh" && (
+                            {stageOf(c).key === "fresh" && (
                               <button className="sm" disabled={requested.includes(c.id)} onClick={() => void judge(c.id)}>
                                 {requested.includes(c.id) ? t("요청 중…") : t("초안 준비")}
                               </button>
                             )}
                             <Link className="btn sm" to={`/c/${c.id}`}>
-                              {category(c) === "review" ? t("초안 검토") : t("자세히 보기")}
+                              {category(c, running) === "review" ? t("초안 검토") : t("자세히 보기")}
                               <span aria-hidden> →</span>
                             </Link>
                           </div>

@@ -3,6 +3,7 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "한계:": "Limitations:",
   판단: "Judgment",
   "만든 건 많은데,{br}{explain}가 어렵다면.": "Built a lot, but{br}hard to {explain}?",
   "직접 쓰면 '버그 수정과 개선'으로 끝나는 글을, 소문은 겪은 문제와 실제 숫자로 시작하는 초안으로 바꿉니다. 근거는 릴리스·PR·커밋에서만 가져오고, 올리는 건 직접 합니다.":
@@ -54,7 +55,10 @@ export const en: Record<string, string> = {
   "저장된 키를 삭제했습니다.": "Saved key deleted.",
   "버렸습니다. 사유가 다음 초안에 반영됩니다.": "Dropped. The reason will shape the next draft.",
   "발행 기록에 저장했습니다.": "Saved to Published.",
-  "프로필을 저장했습니다. 다음 다이제스트부터 반영됩니다.": "Profile saved. It applies from the next digest.",
+  "프로필을 저장했습니다. 다음에 쓰는 초안부터 반영됩니다.": "Profile saved. It applies to the next drafts you write.",
+  "한계 (한 줄에 하나)": "Limitations (one per line)",
+  "지원하지 않는 것, 아직 되지 않는 것. 초안은 여기 있는 한계만 씁니다.":
+    "What is not supported or does not work yet. Drafts only mention limitations listed here.",
   "화면 언어": "Language",
   "불러오는 중…": "Loading…",
   "토큰 세션": "Token session",

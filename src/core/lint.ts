@@ -36,11 +36,20 @@ const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /!/;
 
-export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string };
+export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[] };
+
+/** 한글로 음역한 제품·채널·도구 이름. 이름은 원래 철자로 쓴다(채널 규칙, KO_FLUENCY_RULES). 조사가 붙어도 잡고, 더 긴 낱말(엑스포)은 건너뛴다. */
+const TRANSLITERATED: [RegExp, string][] = ([
+  ["엑스", "X"], ["링크드인", "LinkedIn"], ["쇼 ?(?:에이치엔|에이치 엔|핸|에이낸)", "Show HN"], ["쇼 ?지엔", "Show GN"], ["긱 ?뉴스", "GeekNews"],
+  ["깃 ?허브", "GitHub"], ["제미나이", "Gemini"], ["에이피아이", "API"], ["씨엘아이", "CLI"], ["엔피엠", "npm"], ["알에스에스", "RSS"],
+  ["클로드 ?코드", "Claude Code"], ["코덱스", "Codex"], ["타입스크립트", "TypeScript"],
+] as const).map(([ko, en]) => [new RegExp(`(?<![가-힣])${ko}(?=(?:에서|으로|에게|까지|처럼|보다|[와과는은이가를을에의도로만])?(?![가-힣]))`, "g"), en]);
+/** Show GN 본문에 있어야 할 절. 한계는 근거에 한계가 있을 때만 요구한다(없으면 지어내지 않는다). */
+const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^\s*(무엇|what)/im], ["왜", /^\s*(왜|why)/im], ["다른 점", /^\s*(다른 점|차이|how it differs)/im], ["피드백", /^\s*(피드백|feedback)/im]];
 
 /** 생성과 사용자 수정에 같은 근거를 적용한다. 숫자는 요약이 아니라 원자료와 맞춰 본다. */
 export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike): LintFacts {
-  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile) };
+  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [] };
 }
 
 /**
@@ -69,6 +78,16 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   results.push({ rule: "banned_phrases", ok: hits.length === 0, detail: hits.length ? hits.join(", ") : undefined });
 
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
+
+  // 프로필의 "글에 쓰지 않을 말". 프롬프트에만 두면 약한 모델이 그대로 쓴다.
+  if (facts.avoid?.length) {
+    const used = facts.avoid.filter((w) => w.trim() && lower.includes(w.trim().toLowerCase()));
+    results.push({ rule: "avoid_terms", ok: used.length === 0, detail: used.length ? say(`프로필에서 쓰지 않기로 한 말: ${used.join(", ")}`, `Words the profile says to avoid: ${used.join(", ")}`) : undefined });
+  }
+  if (/[가-힣]/.test(body)) {
+    const found = TRANSLITERATED.flatMap(([re, en]) => [...text.matchAll(re)].map((m) => `${m[0]} → ${en}`));
+    results.push({ rule: "no_transliterated_names", ok: found.length === 0, detail: found.length ? say(`이름은 원래 철자로 씁니다: ${[...new Set(found)].join(", ")}`, `Keep names in their original spelling: ${[...new Set(found)].join(", ")}`) : undefined });
+  }
 
   if (facts.sourceText !== undefined) {
     const missing = unsupportedNumbers(text, facts.sourceText);
@@ -102,6 +121,16 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   if (channel === "show_hn" || channel === "x") {
     results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(body) });
+  }
+
+  // 채널 규칙의 필수 구성. Show GN은 절, Show HN 작성자 댓글은 열린 질문으로 끝난다.
+  if (channel === "show_gn") {
+    const need = [...SHOW_GN_SECTIONS, ...(facts.limitations?.length ? [["한계", /^\s*(한계|limitations?)/im] as [string, RegExp]] : [])];
+    const missing = need.filter(([, re]) => !re.test(body)).map(([name]) => name);
+    results.push({ rule: "sections", ok: missing.length === 0, detail: missing.length ? say(`빠진 절: ${missing.join(", ")}`, `Missing sections: ${missing.join(", ")}`) : undefined });
+  }
+  if (channel === "show_hn") {
+    results.push({ rule: "open_question", ok: /\?/.test(body), detail: say("작성자 댓글을 열린 질문 하나로 끝내 주세요.", "End the author comment with one open question.") });
   }
 
   if (spec.maxChars !== null) {

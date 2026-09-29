@@ -189,7 +189,7 @@ export type DraftOptions = { guide?: string; instruction?: string; previous?: { 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
   // 첫 소개는 변경 목록이 아니다. 목록을 요구하면 소개 뒤에 변경이 줄줄이 붙는다(도그푸딩에서 확인).
-  if (introduction) return "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows what the project does today.";
+  if (introduction) return "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows a capability a user can see today. Never mention implementation details (databases, process model, background jobs, timeouts, refactors, dependency or build changes).";
   const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
   if (!highlights.length) return "";
   if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
@@ -269,7 +269,7 @@ export function profilePrompt(m: ProfileMaterial): PromptSpec {
     system: `You write a short, factual profile of a software project from its README and metadata. The profile is a baseline that other steps compare changes against, so describe what the project IS, not what recently changed.
 - what: one sentence, plain, no adjectives. Name the category (CLI, library, web app, dataset, config repo, coursework, ...).
 - audience: who would use it, in one sentence. If it is a personal/config/coursework repo, say so plainly.
-- claims: up to 4 concrete things it does or promises, taken from the README. No marketing words.
+- claims: up to 4 concrete things it does or promises for its users, taken from the README. Prefer what a user sees or gets over how it is built; leave out implementation details (databases, process model, frameworks) unless the project is itself about them. No marketing words.
 - stage: experiment | beta | stable | archived | unknown, from version numbers, badges, "beta"/"WIP" notes, release count.
 - limitations: things the README admits do not work or are not supported. Empty if none.
 - naming: the exact name to use in prose (e.g. "muxa", not "Muxa CLI tool") and its owner/name form.

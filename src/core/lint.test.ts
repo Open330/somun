@@ -153,3 +153,35 @@ it("asks LinkedIn posts to come in paragraphs", () => {
   const split = lintDraft("linkedin", undefined, "Hook.\n\nWhat it is.\n\nHow it works.\n\nhttps://somun.jiun.dev");
   expect(split.find((r) => r.rule === "paragraphs")?.ok).toBe(true);
 });
+
+describe("dogfooding guardrails", () => {
+  const rule = (r: ReturnType<typeof lintDraft>, name: string) => r.find((x) => x.rule === name);
+
+  it("flags words the profile says to avoid", () => {
+    const r = lintDraft("x", undefined, "somun is marketing automation for developers. https://somun.jiun.dev", [], { avoid: ["Marketing automation", "SQLite"] });
+    expect(rule(r, "avoid_terms")).toMatchObject({ ok: false, detail: expect.stringContaining("Marketing automation") });
+    expect(rule(lintDraft("x", undefined, "somun drafts posts. https://somun.jiun.dev", [], { avoid: ["SQLite"] }), "avoid_terms")?.ok).toBe(true);
+  });
+
+  it("flags product and channel names transliterated into Hangul, with particles, but not longer words", () => {
+    const body = "엑스와 스레드, 링크드인, 쇼 핸과 긱뉴스 같은 채널에 씁니다. 제미나이 에이피아이 키가 필요합니다. 깃허브에서 읽습니다.";
+    const r = rule(lintDraft("linkedin", undefined, body), "no_transliterated_names");
+    expect(r?.ok).toBe(false);
+    for (const name of ["X", "LinkedIn", "Show HN", "GeekNews", "Gemini", "API", "GitHub"]) expect(r?.detail).toContain(`→ ${name}`);
+    expect(rule(lintDraft("linkedin", undefined, "엑스포에 다녀왔습니다. X와 LinkedIn, GitHub에 씁니다."), "no_transliterated_names")?.ok).toBe(true);
+    expect(rule(lintDraft("x", undefined, "English only post https://a.b"), "no_transliterated_names")).toBeUndefined();
+  });
+
+  it("requires the Show GN sections, and limitations only when the evidence has some", () => {
+    const flat = "somun을 소개합니다. 릴리스와 커밋을 읽어 초안을 씁니다.";
+    expect(rule(lintDraft("show_gn", "Show GN: somun", flat, [], { limitations: ["GitHub만 지원"] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("한계") });
+    const full = "무엇을 만들었나\n- 초안\n\n왜 만들었나\n- 밀려서\n\n다른 점\n- 근거 숫자만\n\n피드백 받고 싶은 점\n- 채널?";
+    expect(rule(lintDraft("show_gn", "Show GN: somun", full, [], { limitations: [] }), "sections")?.ok).toBe(true);
+    expect(rule(lintDraft("show_gn", "Show GN: somun", full, [], { limitations: ["GitHub만 지원"] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("한계") });
+  });
+
+  it("asks the Show HN author comment to end with an open question", () => {
+    expect(rule(lintDraft("show_hn", "Show HN: somun – drafts", "I built somun. It drafts posts."), "open_question")?.ok).toBe(false);
+    expect(rule(lintDraft("show_hn", "Show HN: somun – drafts", "I built somun. How do you write updates?"), "open_question")?.ok).toBe(true);
+  });
+});
