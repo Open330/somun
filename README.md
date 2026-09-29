@@ -107,7 +107,7 @@ The interface is in English and Korean. It follows your browser language and can
 | Threads | one or two sentences, ends with a take or a question | ko |
 | LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |
 | Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |
-| Show GN (GeekNews) | what / why / how it differs / decisions / limits / feedback wanted | ko |
+| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
 Every draft passes a **slop lint** before you see it: banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.

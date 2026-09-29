@@ -19,7 +19,7 @@ vi.mock("../infra/llm/providers.js", async (original) => ({ ...await original<ty
 let ctx: AppContext, app: ReturnType<typeof createApp>, cid: number;
 const headers = { Authorization: "Bearer test", "Content-Type": "application/json" };
 const output = (json: unknown): LlmResult => ({ json, provider: "gemini", model: "test", latencyMs: 1 });
-const draft = { title: "", body: "v1 fixes CRLF positions. https://github.com/a/b" };
+const draft = { title: "", body: "Fixes CRLF positions. https://github.com/a/b" };
 const request = (path: string, body: unknown = {}) => app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
 const row = (id: number) => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!;
 const params = { targets: [{ channel: "x", lang: "en" }] };
@@ -273,4 +273,38 @@ it("allows the requested digest and update draft after publication, without auto
   expect(ctx.db.select().from(schema.drafts).get()?.purpose).toBe("update");
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
   expect(ctx.db.select().from(schema.judgments).all()).toHaveLength(0);
+});
+
+it("rewrites a draft once with the failed checks and keeps the repaired version when it is better", async () => {
+  await request(`/api/candidates/${cid}/redraft`, params);
+  const long = { title: "", body: `${"Fixes CRLF positions in the editor. ".repeat(10)}https://github.com/a/b` };
+  const fixed = { title: "", body: "Fixes CRLF positions in the editor. https://github.com/a/b" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(fixed));
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const repairPrompt = vi.mocked(runLlm).mock.calls[1][1].user;
+  expect(repairPrompt).toContain("## Fix these problems");
+  expect(repairPrompt).toContain("- length:");
+  expect(repairPrompt).toContain(long.body);
+  const saved = ctx.db.select().from(schema.drafts).all();
+  expect(saved).toHaveLength(1);
+  expect(saved[0].body).toBe(fixed.body);
+});
+
+it("keeps the first draft when the repair fails or is not better, and skips repair for clean drafts", async () => {
+  const long = { title: "", body: `${"Fixes CRLF positions in the editor. ".repeat(10)}https://github.com/a/b` };
+  await request(`/api/candidates/${cid}/redraft`, params);
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockRejectedValueOnce(new LlmError("quota", 429, true));
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(long.body);
+
+  await request(`/api/candidates/${cid}/redraft`, { ...params, instruction: "again" });
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(long));
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(long.body);
+
+  await request(`/api/candidates/${cid}/redraft`, { ...params, instruction: "clean" });
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output({ title: "", body: "Fixes CRLF positions in the editor. https://github.com/a/b" }));
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(1);
 });

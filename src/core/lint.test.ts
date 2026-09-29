@@ -172,16 +172,26 @@ describe("dogfooding guardrails", () => {
     expect(rule(lintDraft("x", undefined, "English only post https://a.b"), "no_transliterated_names")).toBeUndefined();
   });
 
-  it("requires the Show GN sections, and limitations only when the evidence has some", () => {
+  it("requires the Show GN what section, and limitations only when the evidence has some", () => {
     const flat = "somun을 소개합니다. 릴리스와 커밋을 읽어 초안을 씁니다.";
-    expect(rule(lintDraft("show_gn", "Show GN: somun", flat, [], { limitations: ["GitHub만 지원"] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("한계") });
-    const full = "무엇을 만들었나\n- 초안\n\n왜 만들었나\n- 밀려서\n\n다른 점\n- 근거 숫자만\n\n피드백 받고 싶은 점\n- 채널?";
-    expect(rule(lintDraft("show_gn", "Show GN: somun", full, [], { limitations: [] }), "sections")?.ok).toBe(true);
-    expect(rule(lintDraft("show_gn", "Show GN: somun", full, [], { limitations: ["GitHub만 지원"] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("한계") });
+    expect(rule(lintDraft("show_gn", "Show GN: somun", flat, [], { limitations: [] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("무엇") });
+    const what = "somun은 초안을 씁니다.\n\n무엇인가\n- 릴리스·PR·커밋을 읽어 채널마다 초안을 씁니다.";
+    expect(rule(lintDraft("show_gn", "Show GN: somun", what, [], { limitations: [] }), "sections")?.ok).toBe(true);
+    expect(rule(lintDraft("show_gn", "Show GN: somun", what, [], { limitations: ["GitHub만 지원"] }), "sections")).toMatchObject({ ok: false, detail: expect.stringContaining("한계") });
+    expect(rule(lintDraft("show_gn", "Show GN: somun", `${what}\n\n한계\n- GitHub만 지원`, [], { limitations: ["GitHub만 지원"] }), "sections")?.ok).toBe(true);
   });
 
   it("asks the Show HN author comment to end with an open question", () => {
     expect(rule(lintDraft("show_hn", "Show HN: somun – drafts", "I built somun. It drafts posts."), "open_question")?.ok).toBe(false);
     expect(rule(lintDraft("show_hn", "Show HN: somun – drafts", "I built somun. How do you write updates?"), "open_question")?.ok).toBe(true);
   });
+});
+
+it("asks introductions to link the homepage when the project has one", () => {
+  const candidate = { title: "somun", type: "new-repo", evidence: { repo: "Open330/somun", repoUrl: "https://github.com/Open330/somun", homepage: "https://somun.jiun.dev/" } };
+  const intro = draftLintFacts(candidate, undefined, "introduction");
+  const rule = (body: string, facts = intro) => lintDraft("x", undefined, body, [], facts).find((r) => r.rule === "preferred_link");
+  expect(rule("somun drafts posts. https://github.com/Open330/somun")).toMatchObject({ ok: false, detail: expect.stringContaining("https://somun.jiun.dev") });
+  expect(rule("somun drafts posts. https://somun.jiun.dev")?.ok).toBe(true);
+  expect(rule("somun drafts posts. https://github.com/Open330/somun", draftLintFacts(candidate, undefined, "update"))).toBeUndefined();
 });

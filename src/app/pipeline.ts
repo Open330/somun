@@ -139,6 +139,13 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
   return id;
 }
 
+/** 초안 하나의 린트. 저장할 때와 생성 직후 보정할 때 같은 기준을 쓴다. */
+export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null) {
+  const c = getCandidateRow(ctx, ownerId, candidateId);
+  const settings = getSettings(ctx, ownerId);
+  return lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), settings.ui?.locale);
+}
+
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
 export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
@@ -199,7 +206,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile), settings.ui?.locale), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" ? "published" : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });
