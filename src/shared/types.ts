@@ -115,6 +115,8 @@ export type Job = { continuation?: GenerationPlan; id: number; kind: JobKind; ca
 export type RepoProfile = {
   what: string;
   audience: string;
+  /** 왜 만들었나. 작성자가 README나 프로필에 직접 적은 동기만. 없으면 빈 문자열(초안은 동기를 지어내지 않는다). */
+  why: string;
   claims: string[];
   stage: "experiment" | "beta" | "stable" | "archived" | "unknown";
   limitations: string[];

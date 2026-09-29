@@ -308,3 +308,23 @@ it("keeps the first draft when the repair fails or is not better, and skips repa
   await processServerJob(ctx);
   expect(runLlm).toHaveBeenCalledTimes(1);
 });
+
+it("lets a local worker check its draft before submitting, with the same repair prompt and a renewed lease", async () => {
+  updateSettings(ctx, "local", { llm: { provider: "local-agent" } } as never);
+  await request(`/api/candidates/${cid}/redraft`, params);
+  const job = pendingJobs(ctx, "local")[0];
+  expect(job.kind).toBe("draft");
+  const { claimToken } = await (await request(`/api/jobs/${job.id}/claim`, { runner: "test" })).json();
+  const long = JSON.stringify({ title: "", body: `${"Fixes CRLF positions in the editor. ".repeat(10)}https://github.com/a/b` });
+  ctx.db.update(schema.llmJobs).set({ claimedAt: Date.now() - 60_000 }).where(eq(schema.llmJobs.id, job.id)).run();
+  const check = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: long })).json();
+  expect(check.issues.map((i: { rule: string }) => i.rule)).toContain("length");
+  expect(check.repairUser).toContain("## Fix these problems");
+  expect(row(job.id).claimedAt).toBeGreaterThan(Date.now() - 5_000);
+  const other = await (await request(`/api/jobs/${job.id}/check`, { claimToken: "00000000-0000-4000-8000-000000000000", resultJson: long })).json();
+  expect(other).toEqual({ issues: [] });
+  const clean = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "Fixes CRLF positions. https://github.com/a/b" }) })).json();
+  expect(clean).toEqual({ issues: [] });
+  const empty = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "" }) })).json();
+  expect(empty.issues).toEqual([{ rule: "empty_body" }]);
+});

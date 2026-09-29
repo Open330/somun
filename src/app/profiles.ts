@@ -16,7 +16,7 @@ import { localeOf, say } from "./i18n.js";
  * README 해시가 바뀌면 다시 만든다. 사용자가 고친 필드(edits)는 재생성 뒤에도 우선한다.
  */
 
-const EMPTY: RepoProfile = { what: "", audience: "", claims: [], stage: "unknown", limitations: [], naming: "", avoid: [] };
+const EMPTY: RepoProfile = { what: "", audience: "", why: "", claims: [], stage: "unknown", limitations: [], naming: "", avoid: [] };
 
 export function readmeHash(readme: string, description?: string): string {
   return createHash("sha1").update(readme).update("\n").update(description ?? "").digest("hex").slice(0, 16);
@@ -31,7 +31,7 @@ function normalize(raw: unknown, limits = GENERATED_LIMITS): RepoProfile {
   const r = (raw ?? {}) as Partial<RepoProfile>;
   const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim()).slice(0, n) : []);
   const stage = ["experiment", "beta", "stable", "archived", "unknown"].includes(String(r.stage)) ? (r.stage as RepoProfile["stage"]) : "unknown";
-  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid) };
+  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), why: String(r.why ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid) };
 }
 
 function merged(row: typeof schema.repoProfiles.$inferSelect): RepoProfileView {

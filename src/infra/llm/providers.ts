@@ -145,8 +145,10 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   const byLabel = new Map(all.map((k) => [k.label, k.key]));
   let lastErr: unknown;
   // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
-  for (let round = 0; round < 3; round++) {
-    if (round > 0) await new Promise((r) => setTimeout(r, 4000 * round));
+  // 초안은 뒤에서 도는 작업이라 상위 모델의 일시적 수요 폭주(503)를 조금 더 기다린다(약 50초). 503은 곧바로 돌아오므로 제한 시간 안이다.
+  const waits = kind === "draft" && model !== (config.model?.trim() || DEFAULT_MODEL.gemini) ? DRAFT_503_WAITS_MS : DEFAULT_WAITS_MS;
+  for (let round = 0; round < waits.length; round++) {
+    if (waits[round] > 0) await new Promise((r) => setTimeout(r, waits[round]));
     signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
     if (labels.length === 0) { lastErr = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true); break; }
@@ -178,6 +180,10 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
 }
+
+/** 바퀴 사이 대기. 첫 바퀴는 바로. */
+const DEFAULT_WAITS_MS = [0, 4000, 8000];
+export const DRAFT_503_WAITS_MS = [0, 5000, 15000, 30000];
 
 function rotateStateless(labels: string[]): string[] {
   const start = Math.floor(Math.random() * labels.length);

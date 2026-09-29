@@ -10,50 +10,20 @@ import { SIDE_JOB_KINDS } from "../shared/types.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps } from "./keys.js";
-import { lintDraftFor } from "./pipeline.js";
-import { CHANNELS } from "../core/channels.js";
-import type { LintResult } from "../core/lint.js";
+import { draftIssues, repairPrompt, worthRepairing } from "./draft-repair.js";
 import type { LlmResult } from "../infra/llm/providers.js";
 import type { Job } from "../shared/types.js";
-
-/** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-const REPAIRABLE = new Set(["length", "title_length", "sections", "open_question", "avoid_terms", "no_transliterated_names", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 /**
  * 생성한 초안이 고칠 수 있는 린트에 걸리면, 걸린 내용을 알려 주고 한 번만 다시 쓰게 한다.
  * 약한(대체) 모델이 채널 형식을 자주 놓친다. 다시 쓴 쪽이 더 나을 때만 바꾸고, 실패하면 처음 초안을 그대로 둔다.
  */
 async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: (user: string) => Promise<LlmResult>): Promise<LlmResult> {
-  const channel = job.channel!;
-  const purpose = job.user.includes("\n## First introduction\n") ? "introduction" : "update";
-  const read = (res: LlmResult) => {
-    const r = (res.json ?? {}) as { title?: unknown; body?: unknown };
-    return { title: CHANNELS[channel].hasTitle ? String(r.title ?? "").trim() || undefined : undefined, body: String(r.body ?? "").trim() };
-  };
-  const issues = (res: LlmResult): LintResult[] | null => {
-    const d = read(res);
-    return d.body ? lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose).filter((l) => !l.ok && REPAIRABLE.has(l.rule)) : null;
-  };
-  const before = issues(first);
-  if (!before?.length) return first;
-  // 기다리는 사이 글감을 버렸으면 다시 쓸 이유가 없다(결과는 반영 단계에서 어차피 거절된다).
-  const status = ctx.db.select({ status: schema.candidates.status }).from(schema.candidates).where(and(eq(schema.candidates.id, job.candidateId), eq(schema.candidates.ownerId, ownerId))).get()?.status;
-  if (!status || status === "dropped") return first;
-  const prev = read(first);
-  const user = [
-    job.user,
-    "",
-    "## Your previous draft",
-    prev.title ? `Title: ${prev.title}` : "",
-    prev.body,
-    "",
-    "## Fix these problems",
-    "Rewrite the previous draft so these checks pass. Keep every fact and link from Facts, and change only what is needed.",
-    ...before.map((l) => `- ${l.rule}${l.detail ? `: ${l.detail}` : ""}`),
-  ].join("\n");
+  const before = draftIssues(ctx, ownerId, job, first.json);
+  if (!before?.length || !worthRepairing(ctx, ownerId, job.candidateId)) return first;
   try {
-    const second = await run(user);
-    const after = issues(second);
+    const second = await run(repairPrompt(job, first.json, before));
+    const after = draftIssues(ctx, ownerId, job, second.json);
     const better = after !== null && after.length < before.length;
     ctx.log.info({ jobId: job.id, before: before.map((l) => l.rule), after: after?.map((l) => l.rule), kept: better ? "repaired" : "first" }, "draft repair");
     return better ? second : first;

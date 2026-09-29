@@ -52,7 +52,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   show_gn: {
     id: "show_gn", label: "Show GN", fixedLang: "ko", defaultLangs: ["ko"], maxChars: 3000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.",
+    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts: 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section; the profile's 'why it exists' supports a 왜 section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.",
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
     runbook: ["평일 오전 9~11시 등록이 첫 화면에 오래 남음", "사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],

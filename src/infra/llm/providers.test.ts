@@ -21,3 +21,24 @@ it("does not call a provider after the shared retry deadline has already expired
   await expect(runLlm({ provider: "gemini" }, prompt, "draft", undefined, '{"free-1":"test"}', signal)).rejects.toThrow("deadline");
   expect(fetcher).not.toHaveBeenCalled();
 });
+it("waits out a short demand spike on the draft model before falling back, but not for analysis", async () => {
+  vi.useFakeTimers();
+  try {
+    const ok = (model: string) => new Response(JSON.stringify({ model, choices: [{ message: { content: '{"title":"","body":"ok"}' } }] }), { status: 200 });
+    const busy = () => new Response('{"error":{"code":503,"message":"overloaded"}}', { status: 503 });
+    let flashCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      const model = JSON.parse(String(init.body)).model as string;
+      if (model === "gemini-3.7-flash") return ++flashCalls <= 3 ? busy() : ok(model);
+      return ok(model);
+    }));
+    const draft = runLlm({ provider: "gemini" }, prompt, "draft", undefined, '{"free-1":"test"}', new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect((await draft).model).toBe("gemini-3.7-flash");
+
+    flashCalls = 0;
+    const judged = runLlm({ provider: "gemini", draftModel: "gemini-3.7-flash" }, prompt, "judge", undefined, '{"free-1":"test"}', new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect((await judged).model).not.toBe("gemini-3.7-flash");
+  } finally { vi.useRealTimers(); }
+});

@@ -3,6 +3,10 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "왜 만들었나": "Why it exists",
+  "왜 만들었나:": "Why it exists:",
+  "직접 겪은 이유를 한두 문장으로. 비워 두면 초안은 동기를 쓰지 않습니다.":
+    "The reason in your own words, in a sentence or two. Leave it empty and drafts will not state a motivation.",
   "한계:": "Limitations:",
   판단: "Judgment",
   "만든 건 많은데,{br}{explain}가 어렵다면.": "Built a lot, but{br}hard to {explain}?",

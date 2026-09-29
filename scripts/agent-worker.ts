@@ -65,13 +65,36 @@ async function runAgent(job: Job): Promise<{ json: unknown; model: string }> {
   throw new Error(`unknown cli ${cli}`);
 }
 
+type Check = { issues: { rule: string }[]; repairUser?: string };
+
+/**
+ * 서버 작업자와 같은 자동 보정: 서버가 초안을 린트해 고칠 점을 알려 주면 한 번 더 쓰고, 덜 걸리는 쪽을 제출한다.
+ * 확인 API가 없는 예전 서버이거나 다시 쓰기가 실패하면 처음 결과를 그대로 낸다.
+ */
+async function repair(job: Job, claimToken: string, first: { json: unknown; model: string }): Promise<{ json: unknown; model: string }> {
+  let before: Check;
+  try { before = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(first.json) }); } catch { return first; }
+  if (!before.repairUser) return first;
+  try {
+    const again = await runAgent({ ...job, user: before.repairUser });
+    const after = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(again.json) });
+    const better = after.issues.length < before.issues.length;
+    console.log(`repair #${job.id}: ${before.issues.map((i) => i.rule).join(",")} → ${after.issues.map((i) => i.rule).join(",") || "ok"} (${better ? "repaired" : "kept first"})`);
+    return better ? again : first;
+  } catch (e) {
+    console.error(`repair failed #${job.id}: ${(e as Error).message}; keeping the first draft`);
+    return first;
+  }
+}
+
 async function tick(): Promise<number> {
   const jobs = await call<Job[]>("/jobs/pending");
   for (const job of jobs) {
     const { claimed, claimToken } = await call<{ claimed: boolean; claimToken?: string }>(`/jobs/${job.id}/claim`, { runner });
     if (!claimed || !claimToken) continue;
     try {
-      const { json, model } = await runAgent(job);
+      let { json, model } = await runAgent(job);
+      if (job.kind === "draft") ({ json, model } = await repair(job, claimToken, { json, model }));
       const { applied } = await call<{ applied: boolean }>(`/jobs/${job.id}/complete`, { claimToken, resultJson: JSON.stringify(json), model });
       console.log(`${applied ? "done" : "not applied"} ${job.kind}${job.channel ? `/${job.channel}` : ""} #${job.id}`);
     } catch (e) {

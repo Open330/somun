@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { collectAll, profileMaterialFor } from "../../app/collect.js";
+import { checkLocalResult } from "../../app/draft-repair.js";
 import { editProfile, EDIT_LIMITS, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, GUIDE_MAX_CHARS, listSuggestions } from "../../app/learning.js";
 import { learningStats } from "../../app/learning-stats.js";
@@ -148,7 +149,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // repo profiles (정체성 기준선)
   app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));
   app.get("/profiles/:owner/:name", (c) => { const p = getProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`); return p ? c.json(p) : c.json({ error: "no profile" }, 404); });
-  app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(EDIT_LIMITS.claims).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(EDIT_LIMITS.limitations).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(EDIT_LIMITS.avoid).optional() })))));
+  app.patch("/profiles/:owner/:name", async (c) => c.json(editProfile(ctx, c.get("ownerId"), `${c.req.param("owner")}/${c.req.param("name")}`, await body(c, z.object({ what: z.string().max(400).optional(), audience: z.string().max(400).optional(), why: z.string().max(400).optional(), claims: z.array(z.string().max(200)).max(EDIT_LIMITS.claims).optional(), stage: z.enum(["experiment", "beta", "stable", "archived", "unknown"]).optional(), limitations: z.array(z.string().max(300)).max(EDIT_LIMITS.limitations).optional(), naming: z.string().max(200).optional(), avoid: z.array(z.string().max(100)).max(EDIT_LIMITS.avoid).optional() })))));
   app.post("/profiles/:owner/:name/regenerate", async (c) => {
     const repo = `${c.req.param("owner")}/${c.req.param("name")}`;
     const r = await regenerateProfile(ctx, c.get("ownerId"), await profileMaterialFor(ctx, c.get("ownerId"), repo));
@@ -192,6 +193,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/jobs/status", (c) => c.json(generationStatus(ctx, c.get("ownerId"), c.req.query("candidateId") === undefined ? undefined : id(c.req.query("candidateId")!))));
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));
   app.post("/jobs/:id/claim", async (c) => c.json(claimJob(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ runner: z.string().min(1).max(200) }))).runner)));
+  app.post("/jobs/:id/check", async (c) => c.json(checkLocalResult(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().max(200_000) })))));
   app.post("/jobs/:id/complete", async (c) => c.json(await completeJob(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional() })))));
   const sessionsBody = z.object({ repos: z.array(z.object({ repo: z.string(), summary: z.string(), sessions: z.array(z.object({ sessionId: z.string(), source: z.string(), startedAt: z.number(), promptCount: z.number(), retries: z.number().optional(), topic: z.string() })) })) });
   app.post("/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
