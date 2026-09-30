@@ -43,6 +43,9 @@ export class NotFoundError extends Error {
 
 export class GenerationConflictError extends Error {}
 
+/** 사용자가 수정할 수 있는 입력 오류(400). */
+export class InvalidInputError extends Error {}
+
 /** 인증은 됐지만 이 작업을 할 권한이 없다(403). */
 export class ForbiddenError extends Error {}
 

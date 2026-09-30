@@ -5,6 +5,16 @@ import { patch, post } from "../../lib/api";
 import { t } from "../../i18n";
 
 const STAGE_LABEL: Record<string, string> = { experiment: "실험", beta: "베타", stable: "안정", archived: "보관", unknown: "단계 미상" };
+const FIELD_LABEL: Record<string, string> = {
+  what: "무엇인가",
+  audience: "누구를 위한 것인가",
+  why: "왜 만들었나",
+  claims: "핵심 주장",
+  limitations: "한계",
+  avoid: "쓰지 않음",
+  stage: "단계",
+  naming: "이름",
+};
 
 /** 프로젝트 프로필: 정체성의 기준선. 여기 적힌 것은 "변경"으로 다시 알리지 않는다. 사용자가 고치면 재생성해도 유지된다. */
 export default function ProfileBlock({ repo, view, showToast }: { repo: string; view?: RepoProfileView; showToast: (m: string) => void }) {
@@ -61,6 +71,18 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
           </span>
         )}
       </div>
+      {view && view.editedFields.length > 0 && (
+        <div className="inline-notice small" role="status">
+          <p>{t("직접 수정한 항목: {fields}", { fields: view.editedFields.map((field) => t(FIELD_LABEL[field] ?? field)).join(", ") })}</p>
+          <p>{t("이 값은 다시 생성해도 유지되며 초안의 사실로 사용됩니다. 지원 기능과 한계가 모순되지 않는지 원자료와 비교해 주세요.")}</p>
+        </div>
+      )}
+      {view && /^[\w.-]+\/[\w.-]+$/.test(repo) && (
+        <a className="small" href={`https://github.com/${repo}#readme`} target="_blank" rel="noreferrer">
+          {t("README 원자료 확인 ↗")}
+        </a>
+      )}
+      {view && <p className="tiny muted">{t("프로필 수정은 다음 초안부터 반영됩니다. 기존 초안은 다시 검토하거나 다시 써 주세요.")}</p>}
       {!view && !editing && (
         <p className="small muted profile-empty">
           {t(

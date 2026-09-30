@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Channel } from "../core/channels.js";
 import { editRatio } from "../core/metrics.js";
 import { schema } from "../infra/db/index.js";
@@ -29,7 +29,7 @@ function bucket(ratios: number[]): LearningBucket {
  * 원문은 첫 수정 기록의 before, 수정이 없었으면 지금 본문이다. 값은 복사 시점에 drafts.edit_ratio로 저장된다.
  */
 export function learningStats(ctx: AppContext, ownerId: string, weeks = 12): LearningStats {
-  const drafts = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.status, "copied"))).orderBy(asc(schema.drafts.updatedAt)).all();
+  const drafts = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), isNotNull(schema.drafts.copiedAt))).orderBy(asc(schema.drafts.copiedAt)).all();
   // 수정량은 복사할 때 저장된다. 그 전에 복사된 초안만 여기서 계산해 채운다.
   const ids = drafts.filter((d) => d.editRatio === null).map((d) => d.id);
   const firstEdit = new Map<number, string>();
@@ -44,7 +44,7 @@ export function learningStats(ctx: AppContext, ownerId: string, weeks = 12): Lea
     d.editRatio = editRatio(firstEdit.get(d.id) ?? d.body, d.body);
     ctx.db.update(schema.drafts).set({ editRatio: d.editRatio }).where(eq(schema.drafts.id, d.id)).run();
   }
-  const rows = drafts.map((d) => ({ at: d.updatedAt, createdAt: d.createdAt, channel: d.channel as Channel, styleKey: d.styleKey ?? "unknown", ratio: d.editRatio ?? 0 }));
+  const rows = drafts.map((d) => ({ at: d.copiedAt!, createdAt: d.createdAt, channel: d.channel as Channel, styleKey: d.styleKey ?? "unknown", ratio: d.editRatio ?? 0 }));
   const group = <K extends string>(key: (r: (typeof rows)[number]) => K) => {
     const m = new Map<K, typeof rows>();
     for (const r of rows) m.set(key(r), [...(m.get(key(r)) ?? []), r]);

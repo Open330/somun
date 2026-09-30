@@ -8,6 +8,8 @@ import { DEFAULT_SETTINGS } from "../../app/settings";
 import Inbox from "./Inbox";
 import DraftPanel from "./candidate/DraftPanel";
 import Candidate from "./Candidate";
+import Connectors from "./Connectors";
+import ProfileBlock from "./candidate/ProfileBlock";
 
 const { resources, post } = vi.hoisted(() => ({
   resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(),
@@ -33,6 +35,55 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+it("shows an actionable authentication failure instead of the raw server error", () => {
+  set("/connectors", { github: { installations: [] }, sessions: { sessionCount14d: 0 } });
+  set("/sources", [
+    {
+      id: 1,
+      kind: "github",
+      targets: ["me/tool"],
+      enabled: true,
+      lastError: "No GitHub token. Install the GitHub App or set GITHUB_TOKEN.",
+    },
+  ]);
+  set("/github/app", { configured: true, installUrl: "https://github.com/apps/test/installations/new" });
+  render(wrap(createElement(Connectors)));
+  expect(screen.getByText(/GitHub 인증이 필요합니다/)).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "GitHub 연결하기 →" }).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/No GitHub token/)).toBeNull();
+});
+
+it("explains which profile edits survive regeneration and links back to the source", () => {
+  render(
+    wrap(
+      createElement(ProfileBlock, {
+        repo: "me/tool",
+        showToast: vi.fn(),
+        view: {
+          repo: "me/tool",
+          model: "m",
+          updatedAt: 1,
+          editedFields: ["limitations"],
+          profile: {
+            what: "A tool",
+            audience: "Developers",
+            why: "",
+            claims: [],
+            limitations: ["A user-edited limitation"],
+            avoid: [],
+            stage: "beta",
+            naming: "tool",
+          },
+        },
+      }),
+    ),
+  );
+  expect(screen.getByText("직접 수정한 항목: 한계")).toBeTruthy();
+  expect(screen.getByText(/이 값은 다시 생성해도 유지되며/)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "README 원자료 확인 ↗" }).getAttribute("href")).toBe("https://github.com/me/tool#readme");
+  expect(screen.getByText(/기존 초안은 다시 검토하거나 다시 써 주세요/)).toBeTruthy();
 });
 
 describe("first useful outcome", () => {
@@ -109,6 +160,23 @@ const panel = (drafts = [draft]) =>
       showToast: vi.fn(),
     }),
   );
+
+it("shows the selected version's length and lint instead of the newest version's results", () => {
+  render(
+    panel([
+      { ...draft, body: "a".repeat(405), lint: [{ rule: "length", ok: false, detail: "405/280" }] },
+      { ...draft, id: 2, version: 2, body: "a".repeat(121), lint: [{ rule: "length", ok: true, detail: "121/280" }] },
+    ]),
+  );
+  expect(screen.getByText("121 / 280자")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("버전"), { target: { value: "1" } });
+  expect(screen.getByText("405 / 280자")).toBeTruthy();
+  expect(screen.queryByText("형식 점검 통과")).toBeNull();
+  expect(screen.getByText("405/280")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "현재 판으로" }));
+  expect(screen.getByText("121 / 280자")).toBeTruthy();
+  expect(screen.getByText("형식 점검 통과")).toBeTruthy();
+});
 describe("draft to publication", () => {
   it("lets users register an already-published post without copying first", async () => {
     render(panel());

@@ -169,7 +169,7 @@ it("records whether a lesson came from an edit even if the draft is dropped befo
 
 it("fills in the rewrite share for drafts copied before it was stored", () => {
   const id = draft("a b c d");
-  ctx.db.update(schema.drafts).set({ status: "copied" }).run();
+  ctx.db.update(schema.drafts).set({ status: "copied", copiedAt: Date.now() }).run();
   expect(learningStats(ctx, OWNER).copied).toBe(1);
   expect(ctx.db.select().from(schema.drafts).get()?.editRatio).toBe(0);
   void id;

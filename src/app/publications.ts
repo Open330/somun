@@ -5,7 +5,15 @@ import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
 import { schema } from "../infra/db/index.js";
 import type { PerformanceSummary, Channel, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
-import { emit, NotFoundError, type AppContext } from "./context.js";
+import { emit, InvalidInputError, NotFoundError, type AppContext } from "./context.js";
+import { publicationChannel } from "../core/publication-url.js";
+import { CHANNELS } from "../core/channels.js";
+import { localeOf, say } from "./i18n.js";
+
+function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: string): void {
+  const actual = publicationChannel(url);
+  if (actual && actual !== channel) throw new InvalidInputError(say(localeOf(ctx, ownerId), `이 링크는 ${CHANNELS[actual].label} 주소입니다. ${CHANNELS[channel].label} 게시글 링크를 입력하거나 해당 채널에서 등록해 주세요.`, `This is a ${CHANNELS[actual].label} URL. Enter a ${CHANNELS[channel].label} post URL or register it under the matching channel.`));
+}
 
 /** 이 저장소의 글을 한 번이라도 올렸는가. 없으면 다음 글은 첫 소개다. */
 export function hasPublication(ctx: AppContext, ownerId: string, repo: string): boolean {
@@ -15,6 +23,7 @@ export function hasPublication(ctx: AppContext, ownerId: string, repo: string): 
 
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
+  validateUrl(ctx, ownerId, input.channel, input.url);
   let introduction = false;
   if (input.draftId !== undefined) {
     const d = ctx.db.select({ id: schema.drafts.id, purpose: schema.drafts.purpose }).from(schema.drafts).where(and(eq(schema.drafts.id, input.draftId), eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, input.candidateId))).get();
@@ -24,7 +33,6 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
   const now = Date.now();
   const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url: input.url, publishedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
-  if (input.draftId) ctx.db.update(schema.drafts).set({ status: "copied", updatedAt: now }).where(eq(schema.drafts.id, input.draftId)).run();
   if (!introduction) markPublished(ctx, ownerId, input.candidateId, input.channel, now);
   channelResultsCache.get(ctx.db)?.delete(ownerId);
   // 등록 직후 한 번 반응을 받아 둔다 (기준선). 실패해도 등록은 된다.
@@ -36,6 +44,9 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
 
 /** 잘못 적은 발행 URL 고치기. 자동 반응은 새 URL로 다시 받는다. */
 export function updatePublicationUrl(ctx: AppContext, ownerId: string, id: number, url: string): void {
+  const publication = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
+  if (!publication) throw new NotFoundError("publication");
+  validateUrl(ctx, ownerId, publication.channel as Channel, url);
   const r = ctx.db.update(schema.publications).set({ url, autoStats: null, autoStatsAt: null }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
   if (r.changes === 0) throw new NotFoundError("publication");
   void refreshPublicationReactions(ctx, ownerId, id).catch(() => undefined);

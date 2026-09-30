@@ -5,6 +5,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
 import { collectAll, collectGithubSource, experimentalFrom, limitationsFrom } from "./collect.js";
 import type { AppContext } from "./context.js";
+import { upsertSource } from "./sources.js";
 
 describe("limitationsFrom", () => {
   it("skips an operational note in an IMPORTANT block", () => {
@@ -25,6 +26,25 @@ describe("collection guards", () => {
   let ctx: AppContext;
   beforeEach(() => { ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "pat" }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] }; });
   afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); });
+
+  it("normalizes saved URLs and also collects legacy URL targets without requesting a malformed API path", async () => {
+    const saved = upsertSource(ctx, "me", { kind: "github", targets: ["https://github.com/me/tool/"], enabled: true });
+    expect(saved.targets).toEqual(["me/tool"]);
+    ctx.db.update(schema.sources).set({ targets: ["https://github.com/me/tool"] }).run();
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => new Response(JSON.stringify({ full_name: "me/tool", fork: false, archived: false, pushed_at: "2000-01-01T00:00:00Z" })));
+    vi.stubGlobal("fetch", fetchMock);
+    await collectGithubSource(ctx, saved.id);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.github.com/repos/me/tool");
+    expect(() => upsertSource(ctx, "me", { kind: "github", targets: ["https://not-github.test/me/tool"], enabled: true })).toThrow(/GitHub/);
+    expect(ctx.db.select().from(schema.sources).all()).toHaveLength(1);
+  });
+
+  it.each([403, 404])("records an inaccessible repository (%s) as a failure, not an empty successful collection", async (status) => {
+    const saved = upsertSource(ctx, "me", { kind: "github", targets: ["me/missing"], enabled: true });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status })));
+    expect(await collectAll(ctx, "me")).toMatchObject({ [saved.id]: { error: "GitHub repository unavailable: me/missing" } });
+    expect(ctx.db.select().from(schema.sources).get()?.lastError).toContain("repository unavailable");
+  });
 
   it("runs one collection per owner even when the cron and a manual check overlap", async () => {
     ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "blog", targets: ["https://blog.example/feed.xml"], enabled: true }).run();

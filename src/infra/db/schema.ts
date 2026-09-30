@@ -82,6 +82,8 @@ export const drafts = sqliteTable("drafts", {
   styleKey: text("style_key"),
   /** 복사할 때 잰 수정량(생성 원문 → 복사본, 0~1). 학습 효과 지표. 복사 전이면 null. */
   editRatio: real("edit_ratio"),
+  /** 실제 복사 요청을 확인한 시각. URL 등록만으로는 채우지 않는다. */
+  copiedAt: integer("copied_at"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("drafts_candidate").on(t.candidateId), index("drafts_owner_status").on(t.ownerId, t.status)]);

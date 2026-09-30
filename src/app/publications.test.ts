@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { registerPublication, removePublication, updatePublicationUrl } from "./publications.js";
+import { learningStats } from "./learning-stats.js";
+import { saveDraftEdit } from "./review.js";
 
 let ctx: AppContext, candidateId: number;
 const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => new Response(JSON.stringify({ tweet: { likes: 7, retweets: 1, replies: 2 } }), { status: 200 }));
@@ -50,6 +52,29 @@ it("returns a candidate without drafts to its judged or new stage when its only 
 function purposeDraft(purpose: "introduction" | "update", version = 1) {
   return Number(ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel: "x", lang: "en", version, purpose, body: purpose === "introduction" ? "A tool for developers." : "Adds --watch.", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
 }
+
+it("rejects another channel's URL before writing a publication or changing the candidate", () => {
+  const draftId = purposeDraft("introduction");
+  expect(() => registerPublication(ctx, "me", { candidateId, draftId, channel: "x", url: "https://www.linkedin.com/posts/example" })).toThrow(/LinkedIn/);
+  expect(ctx.db.select().from(schema.publications).all()).toHaveLength(0);
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("drafted");
+  const id = registerPublication(ctx, "me", { candidateId, draftId, channel: "x", url: "https://x.com/me/status/1" });
+  expect(() => updatePublicationUrl(ctx, "me", id, "https://threads.net/@me/post/1")).toThrow(/Threads/);
+  expect(ctx.db.select().from(schema.publications).get()?.url).toBe("https://x.com/me/status/1");
+});
+
+it("does not infer a copy from a publication, even if a legacy row was marked copied", () => {
+  const draftId = purposeDraft("introduction");
+  registerPublication(ctx, "me", { candidateId, draftId, channel: "x", url: "https://x.com/me/status/1" });
+  expect(ctx.db.select().from(schema.drafts).get()).toMatchObject({ status: "proposed", copiedAt: null });
+  ctx.db.update(schema.drafts).set({ status: "copied", editRatio: 0 }).run();
+  expect(learningStats(ctx, "me").copied).toBe(0);
+  saveDraftEdit(ctx, "me", draftId, { body: "A tool for developers.", markCopied: true });
+  expect(learningStats(ctx, "me")).toMatchObject({ copied: 1, unchangedRate: 1 });
+  expect(ctx.db.select().from(schema.drafts).get()?.copiedAt).toBeGreaterThan(0);
+  saveDraftEdit(ctx, "me", draftId, { body: "An unsaved-for-copy revision.", markCopied: false });
+  expect(learningStats(ctx, "me")).toMatchObject({ copied: 1, unchangedRate: 1 });
+});
 
 it("does not announce changes when an introduction is posted", () => {
   registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction"), channel: "x", url: "https://x.com/me/status/1" });

@@ -1,7 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import type { Source, SourceKind } from "../shared/types.js";
-import { emit, NotFoundError, type AppContext } from "./context.js";
+import { emit, InvalidInputError, NotFoundError, type AppContext } from "./context.js";
+import { normalizeGithubTarget } from "../core/source-target.js";
+import { localeOf, say } from "./i18n.js";
 
 const toSource = (r: typeof schema.sources.$inferSelect): Source => ({ id: r.id, kind: r.kind as SourceKind, targets: r.targets, options: r.options ?? undefined, enabled: r.enabled, lastPolledAt: r.lastPolledAt ?? undefined, lastError: r.lastError ?? undefined });
 
@@ -15,6 +17,11 @@ export function listEnabledSources(ctx: AppContext, opts: { ownerId?: string; ki
 }
 
 export function upsertSource(ctx: AppContext, ownerId: string, input: { id?: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean }): Source {
+  if (input.kind === "github") {
+    const targets = input.targets.map(normalizeGithubTarget);
+    if (targets.some((target) => target === null)) throw new InvalidInputError(say(localeOf(ctx, ownerId), "GitHub 소유자/저장소 또는 https://github.com/소유자/저장소 형식으로 입력해 주세요.", "Enter a GitHub owner/repository or https://github.com/owner/repository."));
+    input = { ...input, targets: [...new Set(targets as string[])] };
+  }
   // 설치 ID는 이 소유자가 연결한 설치만 가리킬 수 있다. 다른 사람의 설치 토큰으로 읽는 것을 막는다.
   const inst = input.options?.installationId;
   // 이미 그 설치를 가리키던 내 소스를 고치는 경우는 그대로 둔다(설치 기록이 사라진 뒤에도 끄거나 대상을 바꿀 수 있게).

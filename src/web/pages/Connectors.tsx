@@ -5,6 +5,37 @@ import { ErrorState, Skeleton, relTime } from "../components/ui";
 import { del, post, useResource } from "../lib/api";
 import { t } from "../i18n";
 import { tr } from "../i18n/rich";
+import { sourceError } from "@shared/source-error";
+import { dateLocale } from "../i18n";
+
+function SourceFailure({ error, canInstall, onInstall }: { error: string; canInstall: boolean; onInstall: () => void }) {
+  const issue = sourceError(error);
+  const retry = issue.retryAt ? new Date(issue.retryAt) : undefined;
+  return (
+    <div className="small source-error" role="status">
+      <p>
+        {issue.kind === "auth"
+          ? t("GitHub 인증이 필요합니다. GitHub App을 연결하거나 운영자에게 서버 토큰 설정을 요청해 주세요.")
+          : issue.kind === "access"
+            ? t("저장소를 찾을 수 없거나 접근 권한이 없습니다. 소유자/저장소와 GitHub App의 읽기 권한을 확인해 주세요.")
+            : issue.kind === "invalid"
+              ? t("GitHub 저장소 주소 형식을 확인해 주세요. 연결을 해제한 뒤 올바른 소유자/저장소로 다시 연결할 수 있습니다.")
+              : issue.kind === "rate"
+                ? t("GitHub 요청 한도에 도달했습니다. 잠시 후 다시 수집해 주세요.")
+                : t("최근 수집에 실패했습니다. 주소와 접근 권한을 확인한 뒤 다시 수집해 주세요.")}
+      </p>
+      {retry && Number.isFinite(retry.getTime()) && (
+        <p>{t("{time} 이후 다시 시도할 수 있습니다.", { time: retry.toLocaleString(dateLocale()) })}</p>
+      )}
+      {issue.kind === "auth" && canInstall && (
+        <button className="sm" onClick={onInstall}>
+          {t("GitHub 연결하기 →")}
+        </button>
+      )}
+      <Link to="/">{t("글감 가져오러 가기 →")}</Link>
+    </div>
+  );
+}
 
 export default function Connectors() {
   const { data: view, error, reload } = useResource<ConnectorsView>("/connectors", ["sources", "candidates"]);
@@ -182,9 +213,7 @@ export default function Connectors() {
                     {source.lastPolledAt ? t("마지막 수집 {when}", { when: relTime(source.lastPolledAt) }) : t("아직 수집하지 않았어요")}
                   </p>
                   {source.lastError && (
-                    <p className="small source-error" role="status">
-                      {t("최근 수집에 실패했습니다. 주소와 접근 권한을 확인해 주세요.")}
-                    </p>
+                    <SourceFailure error={source.lastError} canInstall={Boolean(app?.installUrl)} onInstall={() => void startInstall()} />
                   )}
                 </div>
                 <div className="toolbar">

@@ -1,3 +1,4 @@
+import { normalizeGithubTarget } from "../core/source-target.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
 import { installationToken } from "../infra/github/app.js";
 import { GitHubClient, GitHubRateLimitError, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
@@ -24,10 +25,13 @@ const DAY = 24 * 3600 * 1000;
 
 async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<GhRepo[]> {
   const repos: GhRepo[] = [];
-  for (const t of targets) {
+  for (const raw of targets) {
+    const t = normalizeGithubTarget(raw);
+    if (!t) throw new Error("Invalid GitHub target");
     if (t.includes("/")) {
       const r = await gh.get<GhRepo>(`/repos/${t}`);
-      if (r) repos.push(r);
+      if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
+      repos.push(r);
       continue;
     }
     for (let page = 1; page <= 5; page++) {
@@ -197,7 +201,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         summary[name] = -1;
       }
     }
-    markPolled(ctx, sourceId);
+    markPolled(ctx, sourceId, Object.values(summary).some((n) => n < 0) ? "GitHub partial collection failure" : undefined);
   } catch (e) {
     markPolled(ctx, sourceId, (e as Error).message);
     throw e;

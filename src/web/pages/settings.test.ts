@@ -20,9 +20,15 @@ const initial = (): SettingsView => ({
   llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false },
 });
 function setup(tab = "model") {
-  const router = createMemoryRouter([{ path: "/settings", element: createElement(Settings) }], {
-    initialEntries: [`/settings?tab=${tab}`],
-  });
+  const router = createMemoryRouter(
+    [
+      { path: "/settings", element: createElement(Settings) },
+      { path: "/", element: createElement("p", null, "inbox") },
+    ],
+    {
+      initialEntries: [`/settings?tab=${tab}`],
+    },
+  );
   const tree = () => createElement(RouterProvider, { router });
   render(tree());
   return {
@@ -41,6 +47,39 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 const value = (name: string) => (screen.getByLabelText(name) as HTMLInputElement).value;
+
+it("protects settings on navigation and reload, preserving them when navigation is cancelled", async () => {
+  const { router } = setup();
+  fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "my-unsaved-model" } });
+  const reload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(reload);
+  expect(reload.defaultPrevented).toBe(true);
+  await act(async () => {
+    await router.navigate("/");
+  });
+  expect(router.state.location.pathname).toBe("/settings");
+  fireEvent.click(screen.getByRole("button", { name: "계속 수정" }));
+  expect(value("분석 모델 (다이제스트·판단)")).toBe("my-unsaved-model");
+  await act(async () => {
+    await router.navigate("/");
+  });
+  fireEvent.click(screen.getByRole("button", { name: "수정 내용 버리고 이동" }));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+});
+
+it("clears the leave guard after a successful save", async () => {
+  const { router } = setup();
+  fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "saved-model" } });
+  fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await waitFor(() => expect(screen.queryByText("저장하지 않은 설정 변경이 있습니다.")).toBeNull());
+  const reload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(reload);
+  expect(reload.defaultPrevented).toBe(false);
+  await act(async () => {
+    await router.navigate("/");
+  });
+  expect(router.state.location.pathname).toBe("/");
+});
 
 it("preserves unsaved model and judgment inputs across background updates and tab changes", async () => {
   const { refresh } = setup();

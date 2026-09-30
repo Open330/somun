@@ -340,6 +340,7 @@ function LearningPanel() {
           {t("학습 효과")} <span className="tiny muted">{t("복사한 초안 {n}건 기준", { n: data.copied })}</span>
         </h3>
         <p className="small muted learning-intro">
+          {t("실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.")}{" "}
           {t(
             '초안을 고치지 않고 그대로 쓴 비율과, 고친 경우 원문 대비 바꾼 단어 비율입니다. 지침·예시가 쌓일수록 "고친 양"이 줄어야 합니다.',
           )}

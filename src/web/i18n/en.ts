@@ -3,6 +3,30 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "핵심 주장": "Key claims",
+  "쓰지 않음": "Avoid",
+  단계: "Stage",
+  이름: "Name",
+  "GitHub 인증이 필요합니다. GitHub App을 연결하거나 운영자에게 서버 토큰 설정을 요청해 주세요.":
+    "GitHub authentication is required. Connect the GitHub App or ask the administrator to configure a server token.",
+  "저장소를 찾을 수 없거나 접근 권한이 없습니다. 소유자/저장소와 GitHub App의 읽기 권한을 확인해 주세요.":
+    "The repository could not be found or accessed. Check the owner/repository and the GitHub App read permissions.",
+  "GitHub 저장소 주소 형식을 확인해 주세요. 연결을 해제한 뒤 올바른 소유자/저장소로 다시 연결할 수 있습니다.":
+    "Check the GitHub repository address. Disconnect it and reconnect with the correct owner/repository.",
+  "GitHub 요청 한도에 도달했습니다. 잠시 후 다시 수집해 주세요.": "The GitHub request limit has been reached. Try collecting again later.",
+  "최근 수집에 실패했습니다. 주소와 접근 권한을 확인한 뒤 다시 수집해 주세요.":
+    "Collection failed. Check the address and access permissions, then try again.",
+  "{time} 이후 다시 시도할 수 있습니다.": "You can try again after {time}.",
+  "저장하지 않은 설정 변경이 있습니다.": "You have unsaved settings.",
+  "직접 수정한 항목: {fields}": "Fields you edited: {fields}",
+  "이 값은 다시 생성해도 유지되며 초안의 사실로 사용됩니다. 지원 기능과 한계가 모순되지 않는지 원자료와 비교해 주세요.":
+    "These values survive regeneration and are used as facts in drafts. Compare them with the source to check that supported features and limitations do not contradict each other.",
+  "README 원자료 확인 ↗": "Check the source README ↗",
+  "프로필 수정은 다음 초안부터 반영됩니다. 기존 초안은 다시 검토하거나 다시 써 주세요.":
+    "Profile changes apply to future drafts. Review or rewrite existing drafts.",
+  "실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.":
+    "Only observed draft copies are counted. Link-only registrations and edits made outside Somun are not included.",
+
   "왜 만들었나": "Why it exists",
   "왜 만들었나:": "Why it exists:",
   "직접 겪은 이유를 한두 문장으로. 비워 두면 초안은 동기를 쓰지 않습니다.":

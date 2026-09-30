@@ -269,8 +269,9 @@ export default function DraftPanel({
   const isOld = shown && shown.id !== latest.id;
   const postDraft = isOld ? (shown.id === copiedId ? shown : null) : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
-  const count = [...body].length;
-  const checks = latest.lint.filter((item) => !item.ok && item.detail);
+  const displayed = editing ? latest : (shown ?? latest);
+  const count = [...(editing ? body : displayed.body)].length;
+  const checks = displayed.lint.filter((item) => !item.ok && item.detail);
 
   return (
     <div className="card draft-card">
@@ -302,8 +303,8 @@ export default function DraftPanel({
       <div className="draft-head">
         <div className="meta">
           <LangSeg langs={langs} lang={lang} onLang={onLang} />
-          {!checks.length && <LintBadges lint={latest.lint} />}
-          {expectedModel && !latest.model.includes(expectedModel) && latest.model.startsWith("gemini/") && (
+          {!checks.length && <LintBadges lint={displayed.lint} />}
+          {expectedModel && !displayed.model.includes(expectedModel) && displayed.model.startsWith("gemini/") && (
             <span
               className="badge warn"
               title={t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", {
@@ -341,7 +342,7 @@ export default function DraftPanel({
         <details className="draft-check">
           <summary>
             <span>{t("초안에서 확인할 부분")}</span>
-            <LintBadges lint={latest.lint} />
+            <LintBadges lint={displayed.lint} />
           </summary>
           <p className="small muted">
             {t("저장된 초안의 자동 점검 결과입니다. 수정 후 저장하면 다시 점검합니다. 통과해도 사실 확인은 필요합니다.")}

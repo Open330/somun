@@ -61,7 +61,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const status = input.markCopied ? "copied" : changed ? "edited" : d.status;
   // 복사할 때 "생성 원문 → 복사본" 수정량을 한 번 재 둔다(학습 효과 지표). 원문은 첫 수정 기록의 before, 없으면 지금 본문.
   const original = input.markCopied ? ctx.db.select({ before: schema.draftEdits.before }).from(schema.draftEdits).where(eq(schema.draftEdits.draftId, id)).orderBy(asc(schema.draftEdits.createdAt), asc(schema.draftEdits.id)).get()?.before ?? d.body : undefined;
-  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint, status, updatedAt: now, ...(original !== undefined ? { editRatio: editRatio(original, input.body) } : {}) }).where(eq(schema.drafts.id, id)).run();
+  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint, status, updatedAt: now, ...(original !== undefined ? { editRatio: editRatio(original, input.body), copiedAt: now } : {}) }).where(eq(schema.drafts.id, id)).run();
   if (input.markCopied && lint.filter((r) => EXAMPLE_GATE.has(r.rule)).every((r) => r.ok)) {
     upsertOwnExample(ctx, ownerId, d, input, original !== d.body || changed ? "edited" : "approved", now);
     emit(ctx, ownerId, { resource: "examples" });

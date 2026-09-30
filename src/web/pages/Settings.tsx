@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useBlocker, useSearchParams } from "react-router-dom";
 import { ALL_CHANNELS, CHANNELS, LANGS, type Channel } from "@core/channels";
 import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "@core/models";
 import type { KeyStatus, SettingsView } from "@shared/types";
@@ -8,6 +8,7 @@ import { api, patch, post, useResource } from "../lib/api";
 import { dateLocale, getLocale, t } from "../i18n";
 import { tr } from "../i18n/rich";
 import VideoBridges from "./VideoBridges";
+import { setUnsaved } from "../lib/unsaved";
 
 type ModelForm = {
   provider: "gemini" | "anthropic" | "openai" | "local-agent";
@@ -81,6 +82,27 @@ export default function Settings() {
   const [bannedEdit, setBanned] = useState<string | null>(null);
   const [thresholdsEdit, setThresholds] = useState<{ draft: number; defer: number } | null>(null);
   const [llmEdit, setLlm] = useState<ModelForm | null>(null);
+  const dirty = Boolean(
+    settings &&
+    ((llmEdit && JSON.stringify(llmEdit) !== JSON.stringify(modelForm(settings))) ||
+      (bannedEdit !== null && bannedEdit !== settings.bannedPhrases.join("\n")) ||
+      (thresholdsEdit && (thresholdsEdit.draft !== settings.draftThreshold || thresholdsEdit.defer !== settings.deferThreshold)) ||
+      webhook),
+  );
+  // 같은 설정 페이지의 탭 이동은 입력을 보존한다. 다른 화면으로 나갈 때만 막는다.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    setUnsaved(dirty);
+    const beforeLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    if (dirty) window.addEventListener("beforeunload", beforeLeave);
+    return () => {
+      setUnsaved(false);
+      window.removeEventListener("beforeunload", beforeLeave);
+    };
+  }, [dirty]);
   const accountRef = useRef(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const accountAction = async (action: () => Promise<void>) => {
@@ -120,6 +142,18 @@ export default function Settings() {
         </div>
       </header>
       {error && <ErrorState title={t("최신 설정을 불러오지 못했습니다")} message={error} onRetry={reload} />}
+      {dirty && (
+        <p className="small muted" role="status">
+          {t("저장하지 않은 설정 변경이 있습니다.")}
+        </p>
+      )}
+      {blocker.state === "blocked" && (
+        <div className="inline-notice" role="alert">
+          <p>{t("저장하지 않은 수정 내용이 있습니다. 내용을 버리고 이동할까요?")}</p>
+          <button onClick={() => blocker.reset()}>{t("계속 수정")}</button>
+          <button onClick={() => blocker.proceed()}>{t("수정 내용 버리고 이동")}</button>
+        </div>
+      )}
       {saveError && (
         <div className="inline-notice is-error" role="alert">
           {saveError}
