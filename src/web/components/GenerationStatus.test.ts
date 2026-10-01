@@ -38,7 +38,9 @@ it("shows persisted running state on mount and polls after an SSE gap", () => {
   expect(resource.reload).toHaveBeenCalledOnce();
   resource.data = [{ ...job, status: "done" }];
   view.rerender(tree(onChange));
-  expect(screen.getByText("생성 작업이 완료됐어요")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "생성 진행 상태" })).toBeNull();
+  act(() => vi.advanceTimersByTime(10000));
+  expect(resource.reload).toHaveBeenCalledOnce();
   expect(onChange).toHaveBeenCalledTimes(2);
 });
 it("retries a failed job and keeps errors visible when retry fails", async () => {

@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { enabledTargets, targetKey, type Channel } from "@core/channels";
 import { DEFAULT_DRAFT_MODEL } from "@core/models";
 import { voicePreset } from "@core/voice";
-import type { CandidateDetail, Draft, KeyStatus, SettingsView } from "@shared/types";
+import type { CandidateDetail, Draft, JobProgress, KeyStatus, SettingsView } from "@shared/types";
 import {
   channelLabel,
   typeLabel,
@@ -46,6 +46,7 @@ export default function Candidate() {
   ]);
   const { data: settings, error: settingsError, reload: reloadSettings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: keys } = useResource<KeyStatus[]>("/keys", ["keys"]);
+  const [jobs, setJobs] = useState<JobProgress[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
   const [generationNotice, setGenerationNotice] = useState<{ text: string; error?: boolean } | null>(null);
@@ -261,8 +262,7 @@ export default function Candidate() {
           </div>
         </div>
         {j && (
-          <details className="judge-details">
-            <summary>{t("추천점수 {n} · 평가 기준 보기", { n: j.total })}</summary>
+          <div className="judge-details" role="group" aria-label={t("평가 기준")}>
             <div className="cand-judge">
               <Meter scores={j.scores} />
               <span className="small muted">
@@ -275,7 +275,7 @@ export default function Candidate() {
                 {j.overriddenDecision ? ` · ${t("수동")} ${j.overriddenDecision}` : ""}
               </span>
             </div>
-          </details>
+          </div>
         )}
       </div>
 
@@ -300,7 +300,7 @@ export default function Candidate() {
           </button>
         </div>
       )}
-      <GenerationStatus candidateId={cid} onChange={reload} />
+      <GenerationStatus candidateId={cid} onChange={reload} onJobs={setJobs} />
       <div className="cand-layout">
         <section className="cand-main">
           <div className="draft-section-head">
@@ -340,23 +340,30 @@ export default function Candidate() {
                 )
                 .filter(Boolean) as Draft[];
               const pub = live.length === ls.length && live.every((d) => publications.some((p) => p.draftId === d.id));
-              // 탭 옆의 짧은 상태 글. 낭독기와 툴팁에는 뜻을 풀어 쓴 문장을 준다.
-              // attn: 모든 언어에 초안이 있지만 자동 점검(lint)에 걸린 항목이 있다.
-              const [tone, short, long] = pub
-                ? ["done", t("게시함"), t("이 채널의 모든 언어를 게시했습니다")]
-                : live.length === ls.length
-                  ? live.every((d) => d.lint.every((l) => l.ok))
-                    ? ["ready", t("준비됨"), t("초안 준비됨")]
-                    : ["attn", t("확인 필요"), t("자동 점검에서 확인할 부분이 있습니다")]
-                  : live.length
-                    ? [
-                        "partial",
-                        `${live.length}/${ls.length}`,
-                        t("언어 {total}개 중 {n}개 초안 있음", { total: ls.length, n: live.length }),
-                      ]
-                    : busy === "draft" || stage.busy
-                      ? ["busy", t("쓰는 중"), t("쓰는 중")]
-                      : ["", "", ""];
+              // 아이콘은 간결하게, 낭독기와 툴팁에는 전체 상태를 전달한다.
+              // 새 작업의 진행·실패는 이미 있는 초안보다 우선 표시한다.
+              const channelJobs = jobs.filter((job) => job.candidateId === cid && job.channel === ch);
+              const running = channelJobs.some((job) => job.status === "pending" || job.status === "claimed");
+              const failed = channelJobs.some((job) => job.status === "failed");
+              const [tone, short, long] = running
+                ? ["busy", "◷", t("쓰는 중")]
+                : failed
+                  ? ["attn", "!", t("생성 상태를 확인해 주세요")]
+                  : pub
+                    ? ["done", "✓✓", t("이 채널의 모든 언어를 게시했습니다")]
+                    : live.length === ls.length
+                      ? live.every((d) => d.lint.every((l) => l.ok))
+                        ? ["ready", "✓", t("초안 준비됨")]
+                        : ["attn", "!", t("자동 점검에서 확인할 부분이 있습니다")]
+                      : live.length
+                        ? [
+                            "partial",
+                            `${live.length}/${ls.length}`,
+                            t("언어 {total}개 중 {n}개 초안 있음", { total: ls.length, n: live.length }),
+                          ]
+                        : busy === "draft" || stage.busy
+                          ? ["busy", "◷", t("쓰는 중")]
+                          : ["empty", "−", t("초안 없음")];
               return (
                 <button
                   key={ch}
@@ -571,15 +578,39 @@ export default function Candidate() {
           <section className="side-block">
             <details className="raw">
               <summary>{t("원자료 · 릴리스 노트, 머지된 PR, 커밋 제목")}</summary>
-              <pre className="evidence">
-                {[
-                  e.releaseNotes && `${t("릴리스 노트")}\n${e.releaseNotes}`,
-                  e.mergedPrTitles?.length && `${t("머지된 PR")}\n- ${e.mergedPrTitles.join("\n- ")}`,
-                  e.commitSubjects?.length && `${t("커밋")}\n- ${e.commitSubjects.slice(0, 40).join("\n- ")}`,
-                ]
-                  .filter(Boolean)
-                  .join("\n\n") || t("(없음)")}
-              </pre>
+              <div className="source-evidence">
+                {e.releaseNotes && (
+                  <section>
+                    <h3>{t("릴리스 노트")}</h3>
+                    <div className="source-notes">{e.releaseNotes}</div>
+                  </section>
+                )}
+                {e.mergedPrTitles?.length ? (
+                  <section>
+                    <h3>
+                      {t("머지된 PR")} <span>{e.mergedPrTitles.length}</span>
+                    </h3>
+                    <ul>
+                      {e.mergedPrTitles.map((title, i) => (
+                        <li key={i}>{title}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+                {e.commitSubjects?.length ? (
+                  <section>
+                    <h3>
+                      {t("커밋")} <span>{e.commitSubjects.length}</span>
+                    </h3>
+                    <ul>
+                      {e.commitSubjects.map((subject, i) => (
+                        <li key={i}>{subject}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+                {!e.releaseNotes && !e.mergedPrTitles?.length && !e.commitSubjects?.length && <p className="muted">{t("(없음)")}</p>}
+              </div>
             </details>
           </section>
 

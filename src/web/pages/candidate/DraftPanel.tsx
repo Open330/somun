@@ -442,22 +442,27 @@ export default function DraftPanel({
               {t("{n}자", { n: `${count}${spec.maxChars ? ` / ${spec.maxChars}` : ""}` })}
             </span>
             {versions.length > 1 ? (
-              <select
-                className="ver"
-                disabled={editing}
-                value={shown?.id ?? latest.id}
-                onChange={(ev) => setViewId(Number(ev.target.value))}
-                aria-label={t("버전")}
-                title={t("버전")}
-              >
-                {versions.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    v{d.version}
-                    {d.status === "dropped" ? t(" (버림)") : d.id === latest.id ? t(" (현재)") : ""} ·{" "}
-                    {d.model.split("@")[0].replace("gemini/", "")}
-                  </option>
-                ))}
-              </select>
+              <span className="version-select">
+                <select
+                  className="ver"
+                  disabled={editing}
+                  value={shown?.id ?? latest.id}
+                  onChange={(ev) => setViewId(Number(ev.target.value))}
+                  aria-label={t("버전")}
+                  title={t("버전")}
+                >
+                  {versions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      v{d.version}
+                      {d.status === "dropped" ? t(" (버림)") : d.id === latest.id ? t(" (현재)") : ""} ·{" "}
+                      {d.model.split("@")[0].replace("gemini/", "")}
+                    </option>
+                  ))}
+                </select>
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m4 6 4 4 4-4" />
+                </svg>
+              </span>
             ) : (
               <span>
                 v{latest.version} · {latest.model.split("@")[0].replace("gemini/", "")}
@@ -467,27 +472,28 @@ export default function DraftPanel({
           {!isOld && (
             <div className="draft-actions">
               <div className="toolbar">
-                <button className="primary" title={t("단축키 c")} disabled={action !== null} onClick={() => void copy()}>
+                <button
+                  className="primary"
+                  title={t("단축키 c")}
+                  aria-keyshortcuts="c"
+                  disabled={action !== null}
+                  onClick={() => void copy()}
+                >
                   {action === "copy" ? t("복사 중…") : t("초안 복사")}
                 </button>
-                <button title="e" onClick={beginEdit}>
+                <button title={t("단축키 e")} aria-keyshortcuts="e" onClick={beginEdit}>
                   {t("수정")}
                 </button>
-                <button className={rewriteOpen ? "active" : ""} title="r" disabled={busy} onClick={() => setRewriteOpen((o) => !o)}>
+                <button
+                  className={rewriteOpen ? "active" : ""}
+                  title={t("단축키 r")}
+                  aria-keyshortcuts="r"
+                  disabled={busy}
+                  onClick={() => setRewriteOpen((o) => !o)}
+                >
                   {busy ? t("쓰는 중…") : t("다시 쓰기")}
                 </button>
               </div>
-              <span className="tiny muted">
-                <span className="kbd">c</span> <span className="kbd">e</span> <span className="kbd">r</span>
-              </span>
-            </div>
-          )}
-          {!isOld && outgoing !== full && (
-            <div className="tiny muted mt-6">
-              {t(
-                "복사할 때 링크에 채널 표시(utm_source={channel})를 붙여 어느 글에서 왔는지 셀 수 있게 합니다. 설정 → 채널에서 끌 수 있습니다.",
-                { channel },
-              )}
             </div>
           )}
           {rewriteOpen && !isOld && (
@@ -574,14 +580,20 @@ export default function DraftPanel({
               </a>
             )}
           </div>
-          <p className="small muted mt-10">
-            {t("소문이 대신 게시하지는 않습니다. 채널에서 직접 올린 뒤 링크를 등록하면 발행 기록에 남습니다.")}
-          </p>
-          <p className="tiny muted">
-            {t("자동 점검은 사실 확인을 대신하지 않습니다. 변경 근거와 대조해 경험·수치·변경 내용을 확인하세요.")}
-          </p>
-          <details className="raw">
+          <p className="small muted post-caption">{t("채널에 직접 게시한 뒤 링크를 저장하세요.")}</p>
+          <details className="raw post-help">
             <summary>{t("게시 전 확인할 점")}</summary>
+            <p className="small muted">
+              {t("자동 점검은 사실 확인을 대신하지 않습니다. 변경 근거와 대조해 경험·수치·변경 내용을 확인하세요.")}
+            </p>
+            {!isOld && outgoing !== full && (
+              <div className="tiny muted mt-6">
+                {t(
+                  "복사할 때 링크에 채널 표시(utm_source={channel})를 붙여 어느 글에서 왔는지 셀 수 있게 합니다. 설정 → 채널에서 끌 수 있습니다.",
+                  { channel },
+                )}
+              </div>
+            )}
             <ol>
               {spec.runbook.map((r, i) => (
                 <li key={i}>{t(r)}</li>

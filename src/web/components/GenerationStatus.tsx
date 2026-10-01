@@ -16,10 +16,12 @@ export function GenerationStatus({
   candidateId,
   candidateTitles,
   onChange,
+  onJobs,
 }: {
   candidateId?: number;
   candidateTitles?: Record<number, string>;
   onChange: () => void;
+  onJobs?: (jobs: JobProgress[]) => void;
 }) {
   const { data, error, reload } = useResource<JobProgress[]>(
     `/jobs/status${candidateId === undefined ? "" : `?candidateId=${candidateId}`}`,
@@ -31,6 +33,9 @@ export function GenerationStatus({
   useEffect(() => {
     if (signature) onChange();
   }, [signature, onChange]);
+  useEffect(() => {
+    if (data) onJobs?.(data);
+  }, [data, onJobs]);
   const pending = (data ?? []).some((job) => job.status === "pending" || job.status === "claimed");
   // SSE is the fast path; polling covers missed events, only while work is in flight and the tab is visible.
   useEffect(() => {
@@ -47,27 +52,19 @@ export function GenerationStatus({
         <button onClick={reload}>{t("상태 다시 확인")}</button>
       </div>
     );
-  const jobs = (data ?? []).filter((job) => candidateId !== undefined || job.status !== "done");
+  const jobs = (data ?? []).filter((job) => job.status !== "done");
   if (!jobs.length) return null;
   const active = jobs.some((job) => job.status === "pending" || job.status === "claimed");
   return (
     <section className="generation-status" aria-label={t("생성 진행 상태")}>
       <div className="row between wrap">
-        <b>
-          {active
-            ? t("초안을 준비하고 있어요")
-            : jobs.some((job) => job.status === "failed")
-              ? t("생성 상태를 확인해 주세요")
-              : t("생성 작업이 완료됐어요")}
-        </b>
+        <b>{active ? t("초안을 준비하고 있어요") : t("생성 상태를 확인해 주세요")}</b>
         <span className="tiny muted">{t("새로고침해도 상태가 유지됩니다")}</span>
       </div>
       <p className="small muted">
         {active
           ? t("모델 응답이나 사용 한도 때문에 기다릴 수 있습니다. 이 화면을 떠나도 접수한 작업은 계속됩니다.")
-          : jobs.some((job) => job.status === "failed")
-            ? t("실패 이유를 확인한 뒤 다시 시도해 주세요. 이미 완성된 초안은 유지됩니다.")
-            : t("단계별 처리 결과와 완성된 초안을 확인해 주세요.")}
+          : t("실패 이유를 확인한 뒤 다시 시도해 주세요. 이미 완성된 초안은 유지됩니다.")}
       </p>
       <ul className="generation-jobs" aria-live="polite">
         {jobs.map((job) => (
@@ -78,16 +75,14 @@ export function GenerationStatus({
                 {job.repo ? ` · ${job.repo}` : ""}
                 {job.channel ? ` · ${channelLabel(job.channel)} ${job.lang?.toUpperCase()}` : ""}
               </span>
-              <span className={`badge ${job.status === "failed" ? "bad" : job.status === "done" ? "ok" : "outline"}`}>
+              <span className={`badge ${job.status === "failed" ? "bad" : "outline"}`}>
                 {job.status === "claimed"
                   ? t("진행 중")
                   : job.status === "pending"
                     ? job.executor === "local"
                       ? t("로컬 워커 대기")
                       : t("순서 대기")
-                    : job.status === "done"
-                      ? t("완료")
-                      : t("실패")}
+                    : t("실패")}
               </span>
               {candidateId === undefined && job.candidateId > 0 && (
                 <Link to={`/c/${job.candidateId}`}>{candidateTitles?.[job.candidateId] ?? t("글감 보기")}</Link>

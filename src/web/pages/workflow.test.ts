@@ -577,8 +577,13 @@ describe("draft version and publication consistency", () => {
   });
 });
 
-it("labels channel tabs with a readable draft status instead of a bare symbol", async () => {
-  set("/settings", { ...DEFAULT_SETTINGS, channelLangs: { x: ["en"], linkedin: ["ko"] } } as SettingsView);
+it.each([
+  ["done", "X, 자동 점검에서 확인할 부분이 있습니다"],
+  ["claimed", "X, 쓰는 중"],
+  ["failed", "X, 생성 상태를 확인해 주세요"],
+])("keeps channel status icons accessible when the job is %s", async (status, label) => {
+  set("/jobs/status?candidateId=1", [{ id: 9, candidateId: 1, kind: "draft", channel: "x", lang: "en", executor: "server", status }]);
+  set("/settings", { ...DEFAULT_SETTINGS, channelLangs: { x: ["en"], linkedin: ["ko"], show_hn: ["en"] } } as SettingsView);
   set("/keys", []);
   set("/candidates/1", {
     candidate: {
@@ -607,7 +612,9 @@ it("labels channel tabs with a readable draft status instead of a bare symbol", 
       router: createMemoryRouter([{ path: "/c/:id", element: createElement(Candidate) }], { initialEntries: ["/c/1"] }),
     }),
   );
-  await waitFor(() => expect(screen.getByRole("button", { name: /X, 자동 점검에서 확인할 부분이 있습니다/ })).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("button", { name: label })).toBeTruthy());
   expect(screen.getByRole("button", { name: /LinkedIn, 초안 준비됨/ })).toBeTruthy();
-  expect(screen.getAllByText("확인 필요").length).toBeGreaterThan(0);
+  expect(screen.getByRole("button", { name: "Show HN, 초안 없음" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: label }).getAttribute("title")).toBe(label.slice(3));
+  expect(screen.queryByText("생성 작업이 완료됐어요")).toBeNull();
 });

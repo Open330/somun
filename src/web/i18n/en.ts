@@ -3,6 +3,10 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "평가 기준": "Evaluation criteria",
+  "단축키 e": "Shortcut: e",
+  "단축키 r": "Shortcut: r",
+  "채널에 직접 게시한 뒤 링크를 저장하세요.": "Publish on the channel, then save the link here.",
   "핵심 주장": "Key claims",
   "쓰지 않음": "Avoid",
   단계: "Stage",
