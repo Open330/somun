@@ -80,3 +80,5 @@
   .film-post { font-size: 13.5px; }
   .film-foot { left: 14px; right: 14px; }
 }
+.film-caption { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 11px; line-height: 1.6; color: var(--muted); }
+.film-caption a { color: var(--accent); white-space: nowrap; }

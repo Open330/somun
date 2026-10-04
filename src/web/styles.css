@@ -798,3 +798,5 @@ button.chip { min-height: 28px; }
 .model-availability p { margin: 6px 0; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .workspace-dialog { padding: 18px; } .mobile-work-button { padding: 6px 8px; font-size: 12px; } }
 @media (max-width: 640px) { .topbar .mobile-work-button { position: sticky; left: -12px; margin-left: -12px; padding: 0 12px; align-self: stretch; z-index: 1; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: var(--surface); } }
+.landing-review-note { max-width: 62em; margin-top: 20px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.landing #why h2 { word-break: keep-all; }

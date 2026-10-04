@@ -1000,4 +1000,69 @@ export const en: Record<string, string> = {
   "진행 중인 작업 {n}건": "{n} work items in progress",
   "모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요.": "Add an API key or select a local agent in model settings.",
   "대기 {n}": "Queued {n}",
+  "알릴 내용만,{br}{explain}.": "Say what matters.{br}{explain}.",
+  "읽기 쉽게": "Make it easy to read",
+  "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 막연한 찬사보다 무엇이 달라졌는지 먼저 씁니다. 마지막 말투와 사실 확인은 당신이 맡습니다.":
+    "somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It leads with what changed instead of vague praise. You check the facts and make the wording yours.",
+  "어떻게 줄이는가 ↓": "How it selects and edits ↓",
+  "글이 되기 전에 먼저 추립니다": "Select before drafting",
+  "작업 기록을 요약하고, 알릴 가치와 독자를 판단한 뒤 초안을 씁니다. 바뀐 점과 근거를 초안 옆에서 확인할 수 있습니다.":
+    "somun summarizes your work, considers who would care, and then drafts. Review the changes and evidence alongside the text.",
+  "1 기록 읽기": "1 Read the work",
+  "GitHub와 블로그 등 연결한 소스에서 작업 기록을 모읍니다.": "Gather work from connected sources, including GitHub and blogs.",
+  "2 변화 추리기": "2 Select the changes",
+  "독자가 볼 변화와 근거를 요약합니다.": "Summarize changes that matter to readers and their evidence.",
+  "3 알릴지 판단하기": "3 Decide what to share",
+  "게시 가치의 점수와 이유를 보여줍니다. 기준은 조정할 수 있습니다.": "See a score and reasons for sharing. Adjust the criteria.",
+  "4 초안과 점검": "4 Draft and check",
+  "채널 형식에 맞춰 쓰고 표현·수치·길이 등의 경고를 표시합니다.":
+    "Draft for the channel and flag wording, numbers, length, and other issues.",
+  "5 직접 검토하기": "5 Review it yourself",
+  "근거를 확인하고 고쳐 복사합니다. 게시는 직접 합니다.": "Check the evidence, edit, and copy. You publish it yourself.",
+  "6 다음 글에 반영하기": "6 Inform the next draft",
+  "복사한 글은 문체 예시로, 검토한 지침은 다음 초안에 사용합니다.":
+    "Use copied posts as voice examples and reviewed guidance in future drafts.",
+  "왼쪽에서 검토할 글감을 고르고, 오른쪽에서 근거와 초안을 함께 봅니다. 경고가 남은 초안도 직접 확인하고 고칠 수 있습니다.":
+    "Choose a candidate on the left. Review its evidence and draft together on the right. Drafts with warnings stay available for you to check and edit.",
+  "읽는 사람이 내용을 찾느라 애쓰지 않도록": "Give readers less to sift through",
+  "AI slop은 그럴듯한 말은 많은데 정작 할 말이 흐린 글입니다. 소문은 초안을 쓰기 전의 선택과 쓴 뒤의 검토를 기본 흐름으로 둡니다.":
+    "AI slop has plenty of polished words and little to say. somun makes selection before drafting and review after drafting part of the workflow.",
+  "알릴 가치부터 따집니다": "Start with what is worth sharing",
+  "모든 커밋을 게시글로 늘리지 않습니다. 알릴 만한 변화인지 먼저 판단하고, 가치가 낮은 글감은 보류하도록 기준을 정할 수 있습니다.":
+    "Assess whether a change is worth sharing before turning it into a post. Set criteria that leave low-value candidates on hold.",
+  "찬사보다 바뀐 점을 씁니다": "Describe changes, skip the praise",
+  "‘혁신적’ 같은 과장 표현과 근거에서 찾지 못한 숫자를 점검합니다. 문장을 채우기 위한 수치나 배경 이야기를 만들지 않도록 지시합니다.":
+    "Flag hype such as “revolutionary” and numbers missing from the evidence. Instruct the model to avoid invented metrics and backstories.",
+  "쓴 사람의 말투를 남깁니다": "Keep your voice in the process",
+  "사용자가 고쳐 복사한 글을 다음 초안의 문체 예시로 씁니다. 지침 제안도 검토해 적용합니다. 다듬지 않은 AI 말투를 계속 반복할 필요가 없습니다.":
+    "Use posts you edited and copied as examples for the next draft. Review suggested guidance before applying it. Your edits give future drafts a voice to follow.",
+  "소문도 AI로 초안을 씁니다. 자동 점검이 재미나 모든 사실을 보증하지는 않습니다. 원자료와 나란히 읽고 고쳐서, 최종 글은 당신이 정합니다.":
+    "somun uses AI to draft, too. Automated checks do not guarantee an interesting or fully accurate post. Read it alongside the source, edit it, and decide what goes out.",
+  "짧은 핵심 문장과 링크. 근거가 있는 숫자만.": "Short key points and a link. Numbers only with evidence.",
+  "제목과 첫 댓글. 확인된 사용 조건과 질문.": "A title and first comment, with supported requirements and a question.",
+  "무엇을 하는지 먼저. 이유와 한계는 근거가 있을 때만.": "Lead with what it does. Motivation and limitations only with evidence.",
+  "첫 문장에 핵심을 두고 짧은 문단으로.": "Lead with the point, then use short paragraphs.",
+  "짧은 본문. 채널에 맞는 말투와 길이.": "Brief text, with tone and length suited to the channel.",
+  "프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 만든 요약만 올립니다.":
+    "Connect project records and published posts. The session uploader sends only summaries prepared locally.",
+  "말만 그럴듯하면": "When the words are just polished",
+  "핵심을 남기면": "When the point comes through",
+  "무엇을 하는지 흐림": "Unclear what it does",
+  "추상적인 찬사 반복": "Repeated vague praise",
+  "사용 조건 없음": "No requirements stated",
+  "무엇을 하는지 먼저": "Lead with what it does",
+  "실제 동작을 구체적으로": "Name the actual operation",
+  "사용 조건도 함께": "Include requirements",
+  "첫 문장에서 하는 일을": "Say what it does in the first line",
+  "실제 동작을 짧은 문장으로": "Describe the operation briefly",
+  "사용 조건과 링크를 함께": "Include requirements and a link",
+  "제목에서 용도를": "State the use in the title",
+  "할 수 있는 동작을": "Describe what you can do",
+  "사용 조건을 함께": "Include the requirements",
+  "추상적인 홍보글과 핵심을 남긴 초안 비교, 18초": "Vague promotional text compared with a concrete draft, 18 seconds",
+  "README에서 확인할 수 있는 동작과 사용 조건을 골랐습니다.": "Select the operations and requirements supported by the README.",
+  "점검 예시": "Example checks",
+  "README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 모델과 입력에 따라 달라집니다.":
+    "Editorial examples based on the README. Actual drafts vary with the model and input.",
+  "원자료 보기": "View the source",
 };

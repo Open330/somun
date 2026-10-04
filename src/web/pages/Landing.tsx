@@ -11,7 +11,7 @@ import { tr } from "../i18n/rich";
 import { LocaleSwitch } from "../components/LocaleSwitch";
 import HeroFilm from "../components/HeroFilm";
 
-/** 로그아웃 상태의 첫 화면. 약속 한 문장, 실제 초안 예시, 어떻게 생각하는가, 로그인. */
+/** 로그아웃 상태의 첫 화면. 약속 한 문장, 실제 초안 예시, 글이 되기 전에 먼저 추립니다, 로그인. */
 export default function Landing({ onToken }: { onToken?: () => void }) {
   const auth = useAuth();
   const ref = useRef<HTMLDivElement>(null);
@@ -39,10 +39,10 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
 
       <section className="hero">
         <div className="hero-copy">
-          <h1>{tr("만든 건 많은데,{br}{explain}가 어렵다면.", { br: <br />, explain: <em>{t("설명하기")}</em> })}</h1>
+          <h1>{tr("알릴 내용만,{br}{explain}.", { br: <br />, explain: <em>{t("읽기 쉽게")}</em> })}</h1>
           <p className="sub">
             {t(
-              "직접 쓰면 '버그 수정과 개선'으로 끝나는 글을, 소문은 겪은 문제와 실제 숫자로 시작하는 초안으로 바꿉니다. 근거는 릴리스·PR·커밋에서만 가져오고, 올리는 건 직접 합니다.",
+              "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 막연한 찬사보다 무엇이 달라졌는지 먼저 씁니다. 마지막 말투와 사실 확인은 당신이 맡습니다.",
             )}
           </p>
           <div className="toolbar">
@@ -55,42 +55,82 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
               </button>
             )}
             <a className="btn ghost" href="#how">
-              {t("어떻게 생각하는가 ↓")}
+              {t("어떻게 줄이는가 ↓")}
             </a>
           </div>
         </div>
         <HeroFilm />
       </section>
 
-      <section className="section" id="how" data-reveal>
-        <h2>{t("어떻게 생각하는가")}</h2>
+      <section className="section" id="why" data-reveal>
+        <h2>{t("읽는 사람이 내용을 찾느라 애쓰지 않도록")}</h2>
         <p className="lede">
-          {t("커밋을 트윗으로 바꾸는 도구가 아닙니다. 원자료는 다이제스트만 보고, 판단과 초안은 추려진 사실과 숫자만 봅니다.")}
+          {t(
+            "AI slop은 그럴듯한 말은 많은데 정작 할 말이 흐린 글입니다. 소문은 초안을 쓰기 전의 선택과 쓴 뒤의 검토를 기본 흐름으로 둡니다.",
+          )}
+        </p>
+        <div className="three">
+          <div className="principle">
+            <h3>{t("알릴 가치부터 따집니다")}</h3>
+            <p>
+              {t(
+                "모든 커밋을 게시글로 늘리지 않습니다. 알릴 만한 변화인지 먼저 판단하고, 가치가 낮은 글감은 보류하도록 기준을 정할 수 있습니다.",
+              )}
+            </p>
+          </div>
+          <div className="principle">
+            <h3>{t("찬사보다 바뀐 점을 씁니다")}</h3>
+            <p>
+              {t(
+                "‘혁신적’ 같은 과장 표현과 근거에서 찾지 못한 숫자를 점검합니다. 문장을 채우기 위한 수치나 배경 이야기를 만들지 않도록 지시합니다.",
+              )}
+            </p>
+          </div>
+          <div className="principle">
+            <h3>{t("쓴 사람의 말투를 남깁니다")}</h3>
+            <p>
+              {t(
+                "사용자가 고쳐 복사한 글을 다음 초안의 문체 예시로 씁니다. 지침 제안도 검토해 적용합니다. 다듬지 않은 AI 말투를 계속 반복할 필요가 없습니다.",
+              )}
+            </p>
+          </div>
+        </div>
+        <p className="landing-review-note">
+          {t(
+            "소문도 AI로 초안을 씁니다. 자동 점검이 재미나 모든 사실을 보증하지는 않습니다. 원자료와 나란히 읽고 고쳐서, 최종 글은 당신이 정합니다.",
+          )}
+        </p>
+      </section>
+
+      <section className="section" id="how" data-reveal>
+        <h2>{t("글이 되기 전에 먼저 추립니다")}</h2>
+        <p className="lede">
+          {t("작업 기록을 요약하고, 알릴 가치와 독자를 판단한 뒤 초안을 씁니다. 바뀐 점과 근거를 초안 옆에서 확인할 수 있습니다.")}
         </p>
         <div className="flow">
           <div className="st" style={{ "--i": 0 } as React.CSSProperties}>
-            <b>{t("1 관찰")}</b>
-            <span>{t("GitHub 릴리스·PR·커밋, npm, 코딩 에이전트 세션 요약")}</span>
+            <b>{t("1 기록 읽기")}</b>
+            <span>{t("GitHub와 블로그 등 연결한 소스에서 작업 기록을 모읍니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 1 } as React.CSSProperties}>
-            <b>{t("2 다이제스트")}</b>
-            <span>{t("바깥 독자가 관심 가질 변화·숫자·되돌린 결정만 남김")}</span>
+            <b>{t("2 변화 추리기")}</b>
+            <span>{t("독자가 볼 변화와 근거를 요약합니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 2 } as React.CSSProperties}>
-            <b>{t("3 판단")}</b>
-            <span>{t("실행 가능·숫자·배움·새로움·청중, 각 0~2점과 반박 가능한 이유")}</span>
+            <b>{t("3 알릴지 판단하기")}</b>
+            <span>{t("게시 가치의 점수와 이유를 보여줍니다. 기준은 조정할 수 있습니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 3 } as React.CSSProperties}>
-            <b>{t("4 초안")}</b>
-            <span>{t("채널마다 그 형식과 언어로. 슬롭 린트를 통과해야 보임")}</span>
+            <b>{t("4 초안과 점검")}</b>
+            <span>{t("채널 형식에 맞춰 쓰고 표현·수치·길이 등의 경고를 표시합니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 4 } as React.CSSProperties}>
-            <b>{t("5 검수")}</b>
-            <span>{t("복사 · 수정 후 복사 · 버리기(사유) · 올린 URL 등록")}</span>
+            <b>{t("5 직접 검토하기")}</b>
+            <span>{t("근거를 확인하고 고쳐 복사합니다. 게시는 직접 합니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 5 } as React.CSSProperties}>
-            <b>{t("6 학습")}</b>
-            <span>{t("수정은 문체 예시로, 버림은 판단 보정으로, URL은 지표로")}</span>
+            <b>{t("6 다음 글에 반영하기")}</b>
+            <span>{t("복사한 글은 문체 예시로, 검토한 지침은 다음 초안에 사용합니다.")}</span>
           </div>
         </div>
       </section>
@@ -98,9 +138,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       <section className="section" id="shots" data-reveal>
         <h2>{t("실제 화면")}</h2>
         <p className="lede">
-          {t(
-            "왼쪽은 오늘 검수할 글감 목록, 오른쪽은 한 글감의 사실·판단 이유·채널별 초안입니다. 초안 옆의 숫자는 근거에 있는 값만 씁니다.",
-          )}
+          {t("왼쪽에서 검토할 글감을 고르고, 오른쪽에서 근거와 초안을 함께 봅니다. 경고가 남은 초안도 직접 확인하고 고칠 수 있습니다.")}
         </p>
         <div className="shots">
           <figure>
@@ -127,49 +165,27 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       </section>
 
       <section className="section" data-reveal>
-        <h2>{t("세 가지 원칙")}</h2>
-        <div className="three">
-          <div className="principle">
-            <h3>{t("사실은 시스템이, 목소리는 사람이")}</h3>
-            <p>
-              {t("초안은 근거에 있는 숫자만 씁니다. 없으면 지어내는 대신 빈칸으로 남깁니다. 문체는 사용자가 고친 문장에서만 배웁니다.")}
-            </p>
-          </div>
-          <div className="principle">
-            <h3>{t("글감이 아닐 수 있다")}</h3>
-            <p>{t('"이번 주는 알릴 게 없다"가 정상 답입니다. 리팩터링과 잡일은 다이제스트에서 버려지고, 4점 미만은 묻기만 합니다.')}</p>
-          </div>
-          <div className="principle">
-            <h3>{t("대신 올리지 않는다")}</h3>
-            <p>
-              {t("예약 발행이 없습니다. 복사 버튼과 각 채널의 작성 화면으로 가는 링크뿐입니다. 올린 뒤 URL을 붙여 넣으면 그때부터 잽니다.")}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="section" data-reveal>
         <h2>{t("채널")}</h2>
         <div className="channels">
           <div>
             <span>X</span>
-            <span>{t("세 줄: 문제 · 무엇 · 숫자 하나 + 링크")}</span>
+            <span>{t("짧은 핵심 문장과 링크. 근거가 있는 숫자만.")}</span>
           </div>
           <div>
             <span>Show HN</span>
-            <span>{t("제목 + 작성자 첫 댓글, 한계와 질문 포함")}</span>
+            <span>{t("제목과 첫 댓글. 확인된 사용 조건과 질문.")}</span>
           </div>
           <div>
             <span>Show GN</span>
-            <span>{t("무엇 / 왜 / 다른 점 / 한계 / 피드백")}</span>
+            <span>{t("무엇을 하는지 먼저. 이유와 한계는 근거가 있을 때만.")}</span>
           </div>
           <div>
             <span>LinkedIn</span>
-            <span>{t("접힘선 위 훅, 3~5문단")}</span>
+            <span>{t("첫 문장에 핵심을 두고 짧은 문단으로.")}</span>
           </div>
           <div>
             <span>Threads</span>
-            <span>{t("한두 문장, 입장이나 질문으로 끝")}</span>
+            <span>{t("짧은 본문. 채널에 맞는 말투와 길이.")}</span>
           </div>
           <div>
             <span>{t("블로그")}</span>
@@ -180,7 +196,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
 
       <section className="section" data-reveal>
         <h2>{t("무엇을 읽는가")}</h2>
-        <p className="lede">{t("세 가지 커넥터. 프롬프트 원문은 사용자의 컴퓨터를 떠나지 않습니다.")}</p>
+        <p className="lede">{t("프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 만든 요약만 올립니다.")}</p>
         <div className="three">
           <div className="principle">
             <h3>GitHub</h3>

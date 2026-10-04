@@ -8,8 +8,8 @@ import "./hero-film.css";
  * 1 직접 쓴 글 — 흔한 릴리스 홍보 글과 무엇이 빠졌는지
  * 2 소문이 읽은 것 — 실제 작업물에서 가져온 근거
  * 3 소문이 쓴 초안 — 한 부분씩 쓰이며 왜 좋은지 녹색 펜으로 표시
- * 4 복사 — 점검을 통과하면 복사하고, 게시는 직접
- * 조작은 보는 데 필요한 만큼만: 재생·일시정지, 단계 고르기, 채널 고르기. 숫자와 글은 Open330/muxa의 실제 값이다.
+ * 4 복사 — 점검 위치를 보여주고, 게시는 직접
+ * 조작은 보는 데 필요한 만큼만: 재생·일시정지, 단계 고르기, 채널 고르기. 설명용 글은 Open330/muxa README의 기능과 사용 조건에 근거한 편집 예시다.
  * 화면 밖이거나 탭이 가려지면 멈추고, reduced-motion이면 자동 재생 없이 완성된 초안에서 시작한다.
  */
 
@@ -20,9 +20,9 @@ const STEPS = [
   { start: 15200, end: 18000 },
 ];
 const TOTAL = 18000;
-const stepText = () => [t("직접 쓰면"), t("소문이 읽은 것"), t("소문이 쓰면"), t("올리는 건 직접")];
+const stepText = () => [t("말만 그럴듯하면"), t("소문이 읽은 것"), t("핵심을 남기면"), t("올리는 건 직접")];
 /** 직접 쓴 글에 빠진 것. 세 채널 모두 같은 문제다. */
-const missingText = () => [t("무엇이 바뀌었는지 없음"), t("읽는 사람이 얻는 것 없음"), t("근거 있는 숫자 없음")];
+const missingText = () => [t("무엇을 하는지 흐림"), t("추상적인 찬사 반복"), t("사용 조건 없음")];
 
 /** 채널 예시 글은 그 채널의 언어 그대로 둔다(화면 언어와 무관). mark는 초안 옆 녹색 메모 번호. */
 const CHANNELS = [
@@ -30,65 +30,63 @@ const CHANNELS = [
     tab: "X · EN",
     limit: 280,
     before: [
-      { post: "Muxa v0.8.47 is out! 🎉\n" },
-      { post: "Bug fixes and performance improvements.\n" },
-      { post: "Check it out 👉 github.com/Open330/muxa" },
+      { post: "Muxa revolutionizes developer productivity.\n" },
+      { post: "Seamless workflows, powerful automation, endless possibilities.\n" },
+      { post: "https://github.com/Open330/muxa" },
     ],
     after: [
-      { post: "I ran agents in tmux and lost track of their sessions.", mark: 0 },
+      { post: "Muxa shows which tmux coding agent is waiting for input.", mark: 0 },
       { post: "\n\n" },
-      { post: "Muxa adds keyboard navigation and natural language automation rules to orchestrate agent sessions.", mark: 1 },
+      { post: "muxa attend jumps to the pane that has waited longest.", mark: 1 },
       { post: "\n\n" },
-      { post: "61 releases, still 0.x", mark: 2 },
-      { post: ": https://github.com/Open330/muxa" },
+      { post: "Requires tmux and a Unix-like OS.", mark: 2 },
+      { post: "\nhttps://github.com/Open330/muxa" },
     ],
-    notes: () => [t("겪은 문제로 시작"), t("무엇을 하는지 한 문장"), t("근거 있는 숫자와 한계")],
+    notes: () => [t("무엇을 하는지 먼저"), t("실제 동작을 구체적으로"), t("사용 조건도 함께")],
   },
   {
     tab: "LinkedIn · KO",
     limit: 0,
     before: [
-      { post: "muxa v0.8.47을 출시했습니다! 🎉\n" },
-      { post: "여러 버그를 수정하고 성능을 개선했습니다.\n" },
-      { post: "많은 관심 부탁드립니다 🙏" },
+      { post: "개발 생산성의 새로운 시대를 여는 혁신적인 도구입니다.\n" },
+      { post: "강력한 자동화와 원활한 워크플로로 개발 경험을 한 단계 높입니다.\n" },
+      { post: "무한한 가능성을 지금 경험해 보세요." },
     ],
     after: [
-      { post: "에이전트가 멈춘 걸 30분 뒤에 알았습니다.", mark: 0 },
+      { post: "Muxa는 tmux의 코딩 에이전트가 입력을 기다리는지 보여줍니다.", mark: 0 },
       { post: "\n\n" },
-      { post: "코딩 에이전트를 tmux 창마다 하나씩 띄워 놓고 일한 지 반년쯤 됐습니다. 문제는 늘 같았습니다.", mark: 1 },
+      { post: "muxa attend 명령으로 가장 오래 기다린 패널에 이동합니다.", mark: 1 },
       { post: "\n\n" },
-      { post: "그래서 muxa를 만들었습니다. 4월에 시작해 릴리스 61회를 냈습니다.", mark: 2 },
-      { post: " 아직 Windows는 없습니다." },
+      { post: "기존 tmux 세션에서 사용합니다. tmux와 Unix 계열 운영체제가 필요합니다.", mark: 2 },
+      { post: "\n\nhttps://github.com/Open330/muxa" },
     ],
-    notes: () => [t("접힘선 위에서 멈추게 하는 첫 문장"), t("겪은 문제를 구체적으로"), t("근거 있는 숫자와 한계")],
+    notes: () => [t("첫 문장에서 하는 일을"), t("실제 동작을 짧은 문장으로"), t("사용 조건과 링크를 함께")],
   },
   {
     tab: "Show HN",
     limit: 0,
     before: [
-      { post: "Show HN: Muxa v0.8.47\n\n" },
-      { post: "New release with bug fixes and improvements.\n" },
-      { post: "Feedback welcome!" },
+      { post: "Show HN: Muxa — the next generation of developer productivity\n\n" },
+      { post: "A seamless, game-changing experience for modern developers.\n" },
+      { post: "Unlock your full potential." },
     ],
     after: [
-      { post: "Show HN: Muxa – keep track of coding agents running in tmux", mark: 0 },
+      { post: "Show HN: Muxa — see which tmux coding agent needs input", mark: 0 },
       { post: "\n\n" },
-      {
-        post: "Author here. I run several agents side by side and kept missing the one waiting on a permission prompt. Muxa reads each pane's state and jumps to the one that has waited longest.",
-        mark: 1,
-      },
+      { post: "Muxa reads agent states in existing tmux panes. muxa attend jumps to the pane that has waited longest.", mark: 1 },
       { post: "\n\n" },
-      { post: "Still 0.x: the API may change before 1.0. No Windows support.", mark: 2 },
+      { post: "Requires tmux and a Unix-like OS.", mark: 2 },
+      { post: " Which agent states would you want to see?" },
     ],
-    notes: () => [t("제목에 무엇인지"), t("작성자가 겪은 문제와 해결"), t("한계를 먼저 말함")],
+    notes: () => [t("제목에서 용도를"), t("할 수 있는 동작을"), t("사용 조건을 함께")],
   },
 ];
 const EVIDENCE = [
-  { kind: "release", title: "v0.8.47 · attend --cycle" },
-  { kind: "pr #214", title: "Jump to the pane that waited longest" },
-  { kind: "readme", title: "Limitations: API may change before 1.0" },
+  { kind: "readme", title: "muxa attend — jump to the agent that waited longest" },
+  { kind: "readme", title: "Reads the agent sessions already running in tmux" },
+  { kind: "readme", title: "Requires tmux and a Unix-like OS" },
 ];
-const FACTS = ["releases=61", "commits=707", "stars=28"];
+const FACTS = ["tmux", "muxa attend", "Unix-like OS"];
 
 const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 /** a~b 구간에서의 진행도(0~1), 끝을 부드럽게. */
@@ -188,7 +186,7 @@ export default function HeroFilm() {
       ref={root}
       role="region"
       aria-roledescription={t("영상")}
-      aria-label={t("직접 쓴 글과 소문이 쓴 초안 비교, 18초")}
+      aria-label={t("추상적인 홍보글과 핵심을 남긴 초안 비교, 18초")}
       tabIndex={0}
       onKeyDown={onKey}
     >
@@ -206,7 +204,7 @@ export default function HeroFilm() {
             </button>
           ))}
         </div>
-        <span className="film-repo">Open330/muxa v0.8.47</span>
+        <span className="film-repo">Muxa · README</span>
       </div>
 
       <div className="film-stage" aria-live="off">
@@ -254,7 +252,7 @@ export default function HeroFilm() {
             })}
           </div>
           <p className="film-aside" style={{ opacity: seg(T, 6900, 7300) }}>
-            {t("잡일 커밋과 리팩터링은 버리고, 바깥 독자가 볼 변화와 숫자만 남겼습니다.")}
+            {t("README에서 확인할 수 있는 동작과 사용 조건을 골랐습니다.")}
           </p>
         </div>
 
@@ -283,7 +281,7 @@ export default function HeroFilm() {
           </ol>
           <div className="film-foot">
             <span className="film-lint" style={{ opacity: lint }}>
-              {t("린트 통과")}
+              {t("점검 예시")}
               {c.limit ? ` · ${chars(afterText)}/${c.limit}` : ""}
             </span>
             <span className={`film-copy ${press ? "pressed" : ""}`} style={{ opacity: seg(T, 14000, 14300) }}>
@@ -327,6 +325,12 @@ export default function HeroFilm() {
           ))}
         </ol>
       </div>
+      <p className="film-caption">
+        {t("README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 모델과 입력에 따라 달라집니다.")}{" "}
+        <a href="https://github.com/Open330/muxa#readme" target="_blank" rel="noreferrer">
+          {t("원자료 보기")}
+        </a>
+      </p>
     </div>
   );
 }
