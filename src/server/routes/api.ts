@@ -1,8 +1,9 @@
+import { localeOf, say } from "../../app/i18n.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { ALL_CHANNELS, type Channel } from "../../core/channels.js";
+import { ALL_CHANNELS, enabledTargets, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { collectAll, profileMaterialFor } from "../../app/collect.js";
 import { checkLocalResult } from "../../app/draft-repair.js";
@@ -12,7 +13,7 @@ import { learningStats } from "../../app/learning-stats.js";
 import { sendWeeklySummary } from "../../app/notify.js";
 import { deleteAccount, exportAccount } from "../../app/account.js";
 import { refreshReactions } from "../../app/reactions.js";
-import { isTrusted, NotFoundError, type AppContext } from "../../app/context.js";
+import { isTrusted, InvalidInputError, NotFoundError, type AppContext } from "../../app/context.js";
 import { assertPublicUrl } from "../../infra/net.js";
 import { retryGeneration, generationStatus, claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
 import { keyStatus } from "../../app/keys.js";
@@ -23,7 +24,7 @@ import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
 import { queueStep, requestedIntroduction } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublicationUrl } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
-import { getSettingsView, updateSettings } from "../../app/settings.js";
+import { getSettings, getSettingsView, updateSettings } from "../../app/settings.js";
 import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
@@ -97,6 +98,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // Persist first, acknowledge immediately; clients follow the status resource.
   app.post("/candidates/judge", async (c) => {
     const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) }));
+    if (!enabledTargets(getSettings(ctx, c.get("ownerId")).channelLangs).length) throw new InvalidInputError(say(localeOf(ctx, c.get("ownerId")), "초안을 만들 채널과 언어를 먼저 선택해 주세요.", "Choose a channel and language before preparing drafts."));
     const jobs = ctx.db.$client.transaction(() => [...new Set(ids)].map((cid) => queueStep(ctx, c.get("ownerId"), "digest", cid))).immediate();
     c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5");
     return c.json({ started: jobs.length, jobs }, 202);

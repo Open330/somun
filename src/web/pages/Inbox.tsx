@@ -1,3 +1,4 @@
+import { enabledTargets } from "@core/channels";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { CandidateListItem, JobProgress, SettingsView, Source } from "@shared/types";
@@ -33,7 +34,7 @@ export default function Inbox() {
     [jobs],
   );
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; error?: boolean; model?: boolean } | null>(null);
+  const [message, setMessage] = useState<{ text: string; error?: boolean; model?: boolean; channels?: boolean } | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [requested, setRequested] = useState<number[]>([]);
@@ -87,6 +88,10 @@ export default function Inbox() {
   async function judge(id: number) {
     if (settingsError || !settings) {
       setMessage({ text: t("모델 설정을 확인할 수 없습니다. 설정을 다시 불러온 뒤 시도해 주세요."), error: true, model: true });
+      return;
+    }
+    if (!enabledTargets(settings.channelLangs).length) {
+      setMessage({ text: t("초안을 만들 채널과 언어를 먼저 선택해 주세요."), error: true, channels: true });
       return;
     }
     if (settings.llm.credentialsConfigured === false) {
@@ -165,6 +170,8 @@ export default function Inbox() {
                 <Link to="/settings?tab=model">{t("모델 설정")}</Link>
                 {(settingsError || !settings) && <button onClick={reloadSettings}>{t("설정 다시 불러오기")}</button>}
               </>
+            ) : message.channels ? (
+              <Link to="/settings?tab=channels">{t("채널 선택하기")}</Link>
             ) : (
               <Link to="/connectors">{t("연결 확인")}</Link>
             ))}
@@ -176,7 +183,7 @@ export default function Inbox() {
       <GenerationStatus candidateTitles={Object.fromEntries(rows.map((row) => [row.id, row.title]))} onChange={reload} />
       {firstUse ? (
         <>
-          <Onboarding rows={rows} sources={sources} />
+          <Onboarding rows={rows} sources={sources} settings={settings} />
           {collectable.length > 0 && (
             <div className="next-action">
               <div>

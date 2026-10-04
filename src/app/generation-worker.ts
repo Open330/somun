@@ -1,3 +1,4 @@
+import { isBetterRepair } from "../core/draft-repair.js";
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
@@ -24,7 +25,7 @@ async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: Ll
   try {
     const second = await run(repairPrompt(job, first.json, before));
     const after = draftIssues(ctx, ownerId, job, second.json);
-    const better = after !== null && after.length < before.length;
+    const better = isBetterRepair(before, after);
     ctx.log.info({ jobId: job.id, before: before.map((l) => l.rule), after: after?.map((l) => l.rule), kept: better ? "repaired" : "first" }, "draft repair");
     return better ? second : first;
   } catch (err) {

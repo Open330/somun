@@ -781,3 +781,5 @@ button.chip { min-height: 28px; }
 .source-evidence li { padding: 9px 0; border-bottom: 1px solid var(--line); }
 .source-evidence li:last-child { border-bottom: 0; }
 .source-notes { white-space: pre-wrap; }
+
+.onboarding-setup { display: grid; gap: 8px; margin: 18px 0; }

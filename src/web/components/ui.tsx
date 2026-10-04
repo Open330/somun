@@ -193,6 +193,12 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     no_invented_limit: t("한계 확인"),
     numbers_need_review: t("수치 확인"),
     paragraphs: t("문단"),
+    sections: t("구성 확인"),
+    open_question: t("끝맺음 질문"),
+    no_transliterated_names: t("이름 표기"),
+    mixed_korean_terms: t("표현 확인"),
+    avoid_terms: t("금지어"),
+    preferred_link: t("홈페이지 링크"),
   };
   return (
     <>

@@ -3,6 +3,15 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "표현 확인": "Check wording",
+  금지어: "Avoided terms",
+  "구성 확인": "Check sections",
+  "끝맺음 질문": "Closing question",
+  "이름 표기": "Name spelling",
+  "홈페이지 링크": "Homepage link",
+  "초안을 만들 채널과 언어를 먼저 선택해 주세요.": "Choose a channel and language before preparing drafts.",
+  "초안을 만들 채널과 언어 선택 →": "Choose a channel and language →",
+  "초안 생성 모델 연결 →": "Connect a model for draft generation →",
   "평가 기준": "Evaluation criteria",
   "단축키 e": "Shortcut: e",
   "단축키 r": "Shortcut: r",

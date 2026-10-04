@@ -328,3 +328,22 @@ it("lets a local worker check its draft before submitting, with the same repair 
   const empty = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "" }) })).json();
   expect(empty.issues).toEqual([{ rule: "empty_body" }]);
 });
+
+it('keeps the grounded first draft when a shorter repair invents a measurement', async () => {
+  updateSettings(ctx, 'local', { channelLangs: {show_gn:['ko']} });
+  await request(`/api/candidates/${cid}/redraft`, { targets:[{channel:'show_gn',lang:'ko'}] });
+  const first = { title:'Show GN: b', body:`${'Fixes CRLF positions. '.repeat(160)}https://github.com/a/b` };
+  const repair = { title:'Show GN: b', body:'무엇이 달라졌나\nCRLF positions are fixed, now 40% faster. https://github.com/a/b' };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repair));
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(ctx.db.select().from(schema.drafts).all()[0].body).toBe(first.body);
+});
+
+it('rejects prepare-drafts requests without a target before enqueuing model calls', async () => {
+  updateSettings(ctx, 'local', {channelLangs:{x:[], linkedin:[], show_hn:[], show_gn:[]}});
+  const response=await request('/api/candidates/judge', {ids:[cid]});
+  expect(response.status).toBe(400);
+  expect((await response.json()).error).toContain('채널과 언어');
+  expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
+});

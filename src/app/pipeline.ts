@@ -85,7 +85,7 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
   for (const c of rows) {
     const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
     settingsByOwner.set(c.ownerId, s);
-    if (s.watch.mode !== "auto") continue;
+    if (s.watch.mode !== "auto" || !enabledTargets(s.channelLangs).length) continue;
     // 로컬 워커가 이 저장소의 프로필을 만드는 중이면 기다린다. 프로필이 반영되면 jobs.completeJob이 다시 부른다.
     if (s.llm.provider === "local-agent" && pendingProfileJob(ctx, c.ownerId, c.repo)) continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;

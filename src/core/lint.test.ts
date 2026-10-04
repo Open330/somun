@@ -203,3 +203,16 @@ it("asks for a Show GN why section only when the profile states why the project 
   expect(sections({ limitations: [], why: "만든 건 많은데, 설명하기가 어렵습니다." })).toMatchObject({ ok: false, detail: expect.stringContaining("왜") });
   expect(lintDraft("show_gn", "Show GN: somun", `${body}\n\n왜 만들었나\n- 만든 건 많은데 설명하기가 어려웠습니다.`, [], { limitations: [], why: "x" }).find((r) => r.rule === "sections")?.ok).toBe(true);
 });
+
+it.each(['### ', '**', ''])('accepts Show GN section headings with %s formatting', (prefix) => {
+  const suffix = prefix === '**' ? '**' : '';
+  const body = `${prefix}무엇인가${suffix}\n소문은 게시글 초안을 작성합니다.\n\n${prefix}왜 만들었나${suffix}\n변경을 설명하기 어려웠습니다.\n\n${prefix}한계${suffix}\n직접 게시해야 합니다.`;
+  expect(lintDraft('show_gn', 'Show GN: somun', body, [], { why:'변경을 설명하기 어려웠습니다.', limitations:['직접 게시해야 합니다.'] }).find(x=>x.rule==='sections')?.ok).toBe(true);
+});
+
+it('flags mixed Korean prose without rejecting English posts or technical identifiers', () => {
+  const mixed=lintDraft('x', undefined, '소셜 media 게시글과 마케팅 copy를 작성합니다. https://example.test');
+  expect(mixed.find(x=>x.rule==='mixed_korean_terms')).toMatchObject({ok:false,detail:expect.stringContaining('소셜 media')});
+  expect(lintDraft('x', undefined, '소셜 미디어 게시글과 홍보 문구를 작성합니다. PR과 media_type 값은 그대로입니다. https://example.test').find(x=>x.rule==='mixed_korean_terms')?.ok).toBe(true);
+  expect(lintDraft('x', undefined, 'Draft social media posts and marketing copy. https://example.test').find(x=>x.rule==='mixed_korean_terms')).toBeUndefined();
+});

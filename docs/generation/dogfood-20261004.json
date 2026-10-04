@@ -1,0 +1,631 @@
+{
+  "date": "2026-10-04",
+  "environment": "Isolated SQLite; real public GitHub source; Gemini gemini-3.5-flash-lite; no production writes or external publishing",
+  "source": "https://github.com/Open330/somun",
+  "signals": 29,
+  "timingMs": {
+    "fourDraftRegeneration": 11537,
+    "firstPreparationToFourDrafts": 15587
+  },
+  "initialSamples": [
+    {
+      "channel": "x",
+      "lang": "ko",
+      "version": 1,
+      "body": "소프트웨어 개발은 많이 하지만 홍보가 어려운 개발자들을 위해 릴리스와 커밋 노트를 바탕으로 소셜 미디어 초안을 자동으로 작성해주는 somun을 만듭니다.\n\nsomun은 릴리스와 풀 리퀘스트 및 커밋을 읽어 소셜 미디어 초안을 작성합니다.\n\nhttps://somun.jiun.dev",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "156/280"
+        }
+      ]
+    },
+    {
+      "channel": "x",
+      "lang": "en",
+      "version": 1,
+      "body": "somun reads releases, PRs, and commits to generate social media post drafts for developers who struggle with marketing.\n\nIt drafts posts for X, Threads, LinkedIn, and GeekNews while performing slop-linting to catch banned phrases.\n\nhttps://somun.jiun.dev",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "254/280"
+        }
+      ]
+    },
+    {
+      "channel": "linkedin",
+      "lang": "ko",
+      "version": 1,
+      "body": "릴리스와 커밋을 읽어 소셜 미디어 초안을 자동으로 작성하는 툴을 만들었습니다. 개발은 많이 하지만 홍보가 어려운 개발자들을 위해 somun을 만들었습니다.\n\nsomun은 릴리스와 PR 및 커밋을 읽어 소셜 미디어에 공유할 시점을 판단합니다. X, Threads, LinkedIn, Show HN, GeekNews 등 여러 채널에 맞는 포스트 초안을 작성합니다.\n\n초안에 금지된 문구와 누락된 링크가 있는지 검사하는 슬롭 린팅 기능을 제공합니다. 사용자가 수정한 내역을 바탕으로 사용자의 문체를 학습합니다.\n\n한계 사항으로 단기 비디오 기능은 실험 단계이며 로컬 설정에서만 제한적으로 동작합니다.\n\nhttps://somun.jiun.dev\n\n#somun #개발 #오픈소스",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "paragraphs",
+          "ok": true,
+          "detail": "문단 6개. 3~5문단으로 나눠 주세요."
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "374/3000"
+        }
+      ]
+    },
+    {
+      "channel": "show_gn",
+      "lang": "ko",
+      "version": 1,
+      "body": "somun은 개발은 많이 하지만 홍보가 어려운 개발자들을 위해 릴리스와 커밋 노트를 바탕으로 소셜 미디어 초안을 자동으로 작성해주는 웹 애플리케이션입니다. 릴리스와 PR 및 커밋을 읽어 소식을 전할 가치가 있는지 판단합니다. X, Threads, LinkedIn, Show HN, GeekNews 등 여러 채널을 위한 초안을 작성합니다. 금지된 문구와 발명된 숫자를 잡아내기 위해 초안에 대한 slop-linting을 수행합니다. 사용자의 수정과 복사 내역을 바탕으로 게시물 성과를 추적하고 사용자의 문체를 학습합니다. 홈페이지 주소는 https://somun.jiun.dev 입니다. 단문 동영상 기능은 실험 단계이며 로컬 설정으로 제한됩니다.",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "sections",
+          "ok": false,
+          "detail": "빠진 절: 무엇, 왜, 한계"
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "361/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "55/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "fourChannelSamples": [
+    {
+      "channel": "x",
+      "lang": "ko",
+      "version": 3,
+      "body": "somun은 소프트웨어 프로젝트 업데이트로부터 소셜 미디어 포스트 초안과 마케팅 카피를 생성하는 웹 애플리케이션입니다.\n\n프로젝트 업데이트의 릴리스와 PR 및 커밋을 읽어 X와 Threads와 LinkedIn과 Show HN과 GeekNews와 블로그용 포스트 초안을 생성합니다.\n\nhttps://somun.jiun.dev",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "180/280"
+        }
+      ]
+    },
+    {
+      "channel": "x",
+      "lang": "en",
+      "version": 3,
+      "body": "somun is a web app for developers who struggle with marketing and writing promotional content for their projects.\n\nIt reads releases, PRs, and commits to generate post drafts for multiple channels.\n\nhttps://somun.jiun.dev",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "no_exclamation",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "221/280"
+        }
+      ]
+    },
+    {
+      "channel": "linkedin",
+      "lang": "ko",
+      "version": 3,
+      "body": "소프트웨어 프로젝트 업데이트로 홍보 문구를 생성합니다.\n\nsomun은 마케팅과 글쓰기에 어려움을 겪는 개발자를 위해, 릴리스와 PR 및 커밋을 읽어 X, Threads, LinkedIn, Show HN, GeekNews, 블로그 등 여러 채널에 맞는 게시물 초안을 생성하는 웹 애플리케이션입니다. 특정 기준에 따른 점수와 근거로 후보 업데이트를 평가하며, 금지된 표현이나 검증되지 않은 숫자 그리고 누락된 링크를 확인하는 슬롭 린팅을 수행합니다.\n\nsomun은 90개의 커밋을 거쳐 개발되었으며, 한국어와 영어를 지원하는 사용자 인터페이스를 제공합니다. 사용자는 변경 사항 요약 없이도 서비스를 명시적으로 소개할 수 있습니다.\n\n한계로는 로컬 환경에 한정된 실험적 기능인 숏폼 비디오가 있습니다.\n\nhttps://somun.jiun.dev\n\n#TypeScript #소프트웨어개발 #마케팅",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "has_link",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "paragraphs",
+          "ok": true,
+          "detail": "문단 6개. 3~5문단으로 나눠 주세요."
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "440/3000"
+        }
+      ]
+    },
+    {
+      "channel": "show_gn",
+      "lang": "ko",
+      "version": 3,
+      "body": "무엇\nsomun은 프로젝트의 릴리즈와 PR, 커밋을 읽어 X, Threads, LinkedIn, Show HN, GeekNews, 블로그 등 여러 채널에 맞는 소셜 미디어 게시물 초안과 마케팅 문구를 생성하는 웹 애플리케이션입니다. 홍보와 마케팅 글 작성에 어려움을 겪는 개발자를 위해 만들었습니다. 90개의 커밋을 거쳐 개발되었습니다. 홈페이지(https://somun.jiun.dev)에서 서비스를 제공합니다.\n\n한계\n단문 영상 기능은 실험 단계이며 로컬 설정에서만 사용할 수 있습니다.",
+      "lint": [
+        {
+          "rule": "banned_phrases",
+          "ok": true
+        },
+        {
+          "rule": "no_emoji_bullets",
+          "ok": true
+        },
+        {
+          "rule": "no_transliterated_names",
+          "ok": true
+        },
+        {
+          "rule": "numbers_need_review",
+          "ok": true
+        },
+        {
+          "rule": "no_placeholder",
+          "ok": true
+        },
+        {
+          "rule": "repo_name",
+          "ok": true
+        },
+        {
+          "rule": "preferred_link",
+          "ok": true,
+          "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+        },
+        {
+          "rule": "sections",
+          "ok": true
+        },
+        {
+          "rule": "length",
+          "ok": true,
+          "detail": "274/3000"
+        },
+        {
+          "rule": "title_length",
+          "ok": true,
+          "detail": "62/80"
+        },
+        {
+          "rule": "no_vote_request",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "finalXKorean": {
+    "channel": "x",
+    "lang": "ko",
+    "version": 5,
+    "body": "somun은 프로젝트 변경 내용을 읽어 소셜 미디어 게시글 초안을 만드는 웹 앱입니다.\n\n개발자가 마케팅 문구 작성을 쉽게 하도록 지원합니다.\n\nhttps://somun.jiun.dev",
+    "lint": [
+      {
+        "rule": "banned_phrases",
+        "ok": true
+      },
+      {
+        "rule": "no_emoji_bullets",
+        "ok": true
+      },
+      {
+        "rule": "no_transliterated_names",
+        "ok": true
+      },
+      {
+        "rule": "mixed_korean_terms",
+        "ok": true
+      },
+      {
+        "rule": "numbers_need_review",
+        "ok": true
+      },
+      {
+        "rule": "no_placeholder",
+        "ok": true
+      },
+      {
+        "rule": "repo_name",
+        "ok": true
+      },
+      {
+        "rule": "has_link",
+        "ok": true
+      },
+      {
+        "rule": "preferred_link",
+        "ok": true,
+        "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+      },
+      {
+        "rule": "no_exclamation",
+        "ok": true
+      },
+      {
+        "rule": "length",
+        "ok": true,
+        "detail": "103/280"
+      }
+    ]
+  },
+  "copyEvidence": {
+    "original": "somun은 소프트웨어 프로젝트 업데이트로부터 소셜 미디어 포스트 초안과 마케팅 카피를 생성하는 웹 애플리케이션입니다.\n\n프로젝트 업데이트의 릴리스와 PR 및 커밋을 읽어 X와 Threads와 LinkedIn과 Show HN과 GeekNews와 블로그용 포스트 초안을 생성합니다.\n\nhttps://somun.jiun.dev",
+    "prepared": "소문은 GitHub의 릴리스·PR·커밋을 읽어 채널별 게시글 초안을 만듭니다.\n\n초안을 검토하고 수정한 뒤 복사해 직접 게시할 수 있습니다.\n\nhttps://somun.jiun.dev",
+    "clipboard": "소문은 GitHub의 릴리스·PR·커밋을 읽어 채널별 게시글 초안을 만듭니다.\n\n초안을 검토하고 수정한 뒤 복사해 직접 게시할 수 있습니다.\n\nhttps://somun.jiun.dev/?utm_source=x&utm_medium=social&utm_campaign=somun",
+    "learning": {
+      "copied": 1,
+      "unchangedRate": 0,
+      "avgEditRatio": 0.97,
+      "byWeek": [
+        {
+          "week": "2026-09-28",
+          "copied": 1,
+          "unchangedRate": 0,
+          "avgEditRatio": 0.97
+        }
+      ],
+      "byStyle": [
+        {
+          "styleKey": "038bcfa4",
+          "firstAt": 1791101098717,
+          "current": true,
+          "copied": 1,
+          "unchangedRate": 0,
+          "avgEditRatio": 0.97
+        }
+      ],
+      "byChannel": [
+        {
+          "channel": "x",
+          "copied": 1,
+          "unchangedRate": 0,
+          "avgEditRatio": 0.97
+        }
+      ],
+      "guideLines": 0,
+      "activeOwnExamples": 1
+    },
+    "publicationCount": 0
+  },
+  "browserScenarios": [
+    {
+      "persona": "minseo",
+      "viewport": "1440x1000",
+      "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+      "steps": [
+        {
+          "label": "빈 계정에서 첫 소스 연결 발견",
+          "status": "pass",
+          "automationMs": 286
+        },
+        {
+          "label": "블로그 연결과 실제 RSS 수집",
+          "status": "pass",
+          "automationMs": 389
+        },
+        {
+          "label": "생성 전에 모델 설정 안내와 불필요한 작업 방지",
+          "status": "pass",
+          "automationMs": 80
+        },
+        {
+          "label": "모델 설정에서 로컬 워커로 전환",
+          "status": "pass",
+          "automationMs": 644
+        },
+        {
+          "label": "소개글 수정과 복사",
+          "status": "pass",
+          "automationMs": 120
+        },
+        {
+          "label": "게시 링크 기록과 새로고침 유지",
+          "status": "pass",
+          "automationMs": 236
+        }
+      ],
+      "pageErrors": [],
+      "findings": []
+    },
+    {
+      "persona": "alex",
+      "viewport": "1440x1000",
+      "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+      "steps": [
+        {
+          "label": "게시 완료 화면에서 한국어로 전환",
+          "status": "pass",
+          "automationMs": 186
+        },
+        {
+          "label": "다른 언어 소개글 생성과 검토 목록 복귀",
+          "status": "pass",
+          "automationMs": 394
+        },
+        {
+          "label": "한국어 게시 후 같은 언어 새 버전 생성",
+          "status": "pass",
+          "automationMs": 374
+        },
+        {
+          "label": "LinkedIn 추가 채널 생성",
+          "status": "pass",
+          "automationMs": 170
+        }
+      ],
+      "pageErrors": [],
+      "findings": [
+        {
+          "kind": "navigation-count",
+          "observed": "미게시 초안은 검토 목록에 있지만 탐색 메뉴의 초안 개수 표시 요소는 1개다."
+        },
+        {
+          "kind": "review-entry",
+          "observed": "검토할 초안으로 진입했다."
+        }
+      ]
+    },
+    {
+      "persona": "jisu",
+      "viewport": "390x844",
+      "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+      "steps": [
+        {
+          "label": "설정 조회 실패에도 초안 확인과 설정 재시도",
+          "status": "pass",
+          "automationMs": 277
+        },
+        {
+          "label": "390px 모바일에서 수정 시작",
+          "status": "pass",
+          "automationMs": 183
+        },
+        {
+          "label": "저장 실패에도 입력 보존",
+          "status": "pass",
+          "automationMs": 120
+        },
+        {
+          "label": "저장 전 언어 전환 취소 시 입력 보존",
+          "status": "pass",
+          "automationMs": 74
+        },
+        {
+          "label": "오류 해소 후 재저장과 게시 기록",
+          "status": "pass",
+          "automationMs": 258
+        }
+      ],
+      "pageErrors": [],
+      "findings": []
+    }
+  ],
+  "limits": [
+    "One project and one model; generated drafts still require human factual and wording review.",
+    "Browser scenario responses are fixtures; live model samples above are separate.",
+    "Automation timings do not measure human time savings or learning effectiveness.",
+    "OAuth sign-in and external SNS posting were not exercised."
+  ]
+}

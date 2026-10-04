@@ -73,6 +73,12 @@ describe("hourly sweep", () => {
   });
   const queued = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.status === "pending").map((j) => j.kind);
 
+  it("does not spend model calls when all draft targets are disabled", async () => {
+    updateSettings(ctx, "test", { channelLangs: { x: [], linkedin: [], show_hn: [], show_gn: [] } });
+    expect(await processNewCandidates(ctx)).toBe(0);
+    expect(queued()).toEqual([]);
+  });
+
   it("continues with judge instead of digesting again once a digest exists", async () => {
     const at = Date.now();
     ctx.db.update(schema.candidates).set({ updatedAt: at, evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: at } }).run();

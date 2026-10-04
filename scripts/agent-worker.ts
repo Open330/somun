@@ -3,6 +3,7 @@
  * 사용자의 Claude Code 또는 Codex CLI(본인 구독)로 처리하고 결과를 돌려준다.
  *   npm run agent-worker -- --cli claude   # 또는 --cli codex, --once, --interval 30
  */
+import { isBetterRepair } from "../src/core/draft-repair.js";
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
@@ -65,7 +66,7 @@ async function runAgent(job: Job): Promise<{ json: unknown; model: string }> {
   throw new Error(`unknown cli ${cli}`);
 }
 
-type Check = { issues: { rule: string }[]; repairUser?: string };
+type Check = { issues: { rule: string; detail?: string }[]; repairUser?: string };
 
 /**
  * 서버 작업자와 같은 자동 보정: 서버가 초안을 린트해 고칠 점을 알려 주면 한 번 더 쓰고, 덜 걸리는 쪽을 제출한다.
@@ -78,7 +79,7 @@ async function repair(job: Job, claimToken: string, first: { json: unknown; mode
   try {
     const again = await runAgent({ ...job, user: before.repairUser });
     const after = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(again.json) });
-    const better = after.issues.length < before.issues.length;
+    const better = isBetterRepair(before.issues, after.issues);
     console.log(`repair #${job.id}: ${before.issues.map((i) => i.rule).join(",")} → ${after.issues.map((i) => i.rule).join(",") || "ok"} (${better ? "repaired" : "kept first"})`);
     return better ? again : first;
   } catch (e) {

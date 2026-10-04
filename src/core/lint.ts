@@ -48,7 +48,7 @@ const TRANSLITERATED: [RegExp, string][] = ([
  * Show GN 본문에 있어야 할 절(채널 규칙). 무엇을 했는지는 항상, 왜는 프로필에 만든 이유가 있을 때만, 한계는 근거에 한계가 있을 때만 요구한다.
  * 왜·다른 점·기술 결정은 근거가 있을 때만 쓰는 절이라 요구하지 않는다(요구하면 지어내게 된다). 댓글 요청은 규칙이 금한다.
  */
-const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^\s*(무엇|변경 내용|what)/im]];
+const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(무엇|변경 내용|what)/im]];
 
 /**
  * 생성과 사용자 수정에 같은 근거를 적용한다. 숫자는 요약이 아니라 원자료와 맞춰 본다.
@@ -94,6 +94,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   if (/[가-힣]/.test(body)) {
     const found = TRANSLITERATED.flatMap(([re, en]) => [...text.matchAll(re)].map((m) => `${m[0]} → ${en}`));
     results.push({ rule: "no_transliterated_names", ok: found.length === 0, detail: found.length ? say(`이름은 원래 철자로 씁니다: ${[...new Set(found)].join(", ")}`, `Keep names in their original spelling: ${[...new Set(found)].join(", ")}`) : undefined });
+    const mixed = [...text.matchAll(/소셜[\t ]+media\b|마케팅[\t ]+copy\b/gi)].map((m) => m[0]);
+    results.push({ rule: "mixed_korean_terms", ok: mixed.length === 0, detail: mixed.length ? say(`한국어 표현으로 고쳐 주세요: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`, `Use consistent Korean terms: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`) : undefined });
   }
 
   if (facts.sourceText !== undefined) {
@@ -136,7 +138,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   // 채널 규칙의 필수 구성. Show GN은 절, Show HN 작성자 댓글은 열린 질문으로 끝난다.
   if (channel === "show_gn") {
-    const need: [string, RegExp][] = [...SHOW_GN_SECTIONS, ...(facts.why ? [["왜", /^\s*(왜|why)/im] as [string, RegExp]] : []), ...(facts.limitations?.length ? [["한계", /^\s*(한계|limitations?)/im] as [string, RegExp]] : [])];
+    const need: [string, RegExp][] = [...SHOW_GN_SECTIONS, ...(facts.why ? [["왜", /^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(왜|why)/im] as [string, RegExp]] : []), ...(facts.limitations?.length ? [["한계", /^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(한계|limitations?)/im] as [string, RegExp]] : [])];
     const missing = need.filter(([, re]) => !re.test(body)).map(([name]) => name);
     results.push({ rule: "sections", ok: missing.length === 0, detail: missing.length ? say(`빠진 절: ${missing.join(", ")}`, `Missing sections: ${missing.join(", ")}`) : undefined });
   }

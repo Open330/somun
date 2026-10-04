@@ -93,6 +93,21 @@ describe("first useful outcome", () => {
     expect(screen.queryByText("검수할 초안이 없습니다")).toBeNull();
     expect(screen.getByLabelText("초안 완성 예시")).toBeTruthy();
   });
+  it("shows missing channel and model setup before the first generation", () => {
+    set("/settings", { ...DEFAULT_SETTINGS, channelLangs: {}, llm: { ...DEFAULT_SETTINGS.llm, credentialsConfigured: false } });
+    render(wrap(createElement(Inbox)));
+    expect(screen.getByRole("link", { name: "초안을 만들 채널과 언어 선택 →" }).getAttribute("href")).toBe("/settings?tab=channels");
+    expect(screen.getByRole("link", { name: "초안 생성 모델 연결 →" }).getAttribute("href")).toBe("/settings?tab=model");
+  });
+  it("directs draft preparation to channel setup without sending an empty request", async () => {
+    set("/settings", { ...DEFAULT_SETTINGS, channelLangs: {} });
+    set("/candidates", [{ id: 1, repo: "a/b", title: "A change", type: "release", status: "new", updatedAt: Date.now(), evidence: {} }]);
+    render(wrap(createElement(Inbox)));
+    fireEvent.click(screen.getByRole("button", { name: /^초안 준비$/ }));
+    expect(screen.getByRole("alert").textContent).toContain("채널과 언어");
+    expect(screen.getByRole("link", { name: "채널 선택하기" }).getAttribute("href")).toBe("/settings?tab=channels");
+    expect(post).not.toHaveBeenCalled();
+  });
   it("allows collection with a blog-only source and reports partial failure", async () => {
     set("/sources", [{ id: 1, kind: "blog", targets: ["https://blog.test/rss"], enabled: true }]);
     post.mockResolvedValue({ 1: { error: "offline" } });

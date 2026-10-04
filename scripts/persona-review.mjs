@@ -181,6 +181,7 @@ const scenarios = {
       await page.getByRole('link', { name: '모델 설정 확인', exact: true }).click();
       await page.getByRole('button', { name: '로컬 에이전트', exact: true }).click();
       await page.getByRole('button', { name: '저장', exact: true }).click();
+      await page.getByText('저장하지 않은 설정 변경이 있습니다.', { exact: true }).waitFor({ state: 'hidden' });
       const cid = db.select().from(schema.candidates).get().id;
       await page.goto(`${base}/c/${cid}`);
       await page.getByRole('button', { name: '서비스 처음 소개하기', exact: true }).click();

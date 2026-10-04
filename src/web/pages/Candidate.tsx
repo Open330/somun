@@ -49,7 +49,7 @@ export default function Candidate() {
   const [jobs, setJobs] = useState<JobProgress[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [unsaved, setUnsaved] = useState(false);
-  const [generationNotice, setGenerationNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [generationNotice, setGenerationNotice] = useState<{ text: string; error?: boolean; channels?: boolean } | null>(null);
   const switchDraft = (change: () => void) => {
     if (!unsaved || window.confirm(t("저장하지 않은 수정 내용이 있습니다. 내용을 버리고 이동할까요?"))) change();
   };
@@ -161,7 +161,14 @@ export default function Candidate() {
       setBusy(null);
     }
   };
-  const redraftAll = () => redraft(enabledTargets(settings?.channelLangs ?? {}));
+  const redraftAll = () => {
+    const targets = enabledTargets(settings?.channelLangs ?? {});
+    if (!targets.length) {
+      setGenerationNotice({ text: t("초안을 만들 채널과 언어를 먼저 선택해 주세요."), error: true, channels: true });
+      return Promise.resolve(false);
+    }
+    return redraft(targets);
+  };
 
   return (
     <>
@@ -294,7 +301,9 @@ export default function Candidate() {
       {generationNotice && (
         <div className={`inline-notice ${generationNotice.error ? "is-error" : ""}`} role={generationNotice.error ? "alert" : "status"}>
           <span>{generationNotice.text}</span>
-          <Link to="/settings?tab=model">{t("모델 설정 확인")}</Link>
+          <Link to={generationNotice.channels ? "/settings?tab=channels" : "/settings?tab=model"}>
+            {generationNotice.channels ? t("채널 선택하기") : t("모델 설정 확인")}
+          </Link>
           <button className="ghost sm" aria-label={t("안내 닫기")} onClick={() => setGenerationNotice(null)}>
             ×
           </button>

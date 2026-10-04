@@ -29,7 +29,7 @@
 
 You built a lot. Explaining it is the hard part.
 
-somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Every fact comes from your actual work. You review, copy, and post it yourself. Every edit you make teaches it your voice. Every post you register gets measured.
+somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
 
 It never posts for you. It never writes from thin air. It never says "excited to announce".
 
@@ -110,9 +110,9 @@ The interface is in English and Korean. It follows your browser language and can
 | Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
-Every draft passes a **slop lint** before you see it: banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.
+Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.
 
-**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. If the guide and examples work, the rewrite share goes down. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
+**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
 
 <br />
 

@@ -60,7 +60,7 @@ describe("voice examples come only from copied drafts", () => {
   });
 
   it("keeps only the most recent own examples active per channel", () => {
-    for (let i = 0; i < OWN_EXAMPLE_CAP + 2; i++) { const id = draft(`Post ${i} https://github.com/me/tool`); saveDraftEdit(ctx, OWNER, id, { body: `Post ${i} https://github.com/me/tool`, markCopied: true }); }
+    for (let i = 0; i < OWN_EXAMPLE_CAP + 2; i++) { const id = draft(`Post ${String.fromCharCode(65 + i)} https://github.com/me/tool`); saveDraftEdit(ctx, OWNER, id, { body: `Post ${String.fromCharCode(65 + i)} https://github.com/me/tool`, markCopied: true }); }
     expect(examples().filter((e) => e.active)).toHaveLength(OWN_EXAMPLE_CAP);
   });
 
@@ -147,7 +147,7 @@ it("accepts a suggestion that repeats an existing guide line even when the guide
 it("never retires examples the user added by hand", () => {
   const now = Date.now();
   ctx.db.insert(schema.examples).values({ ownerId: OWNER, channel: "x", lang: "en", body: "hand written", source: "approved", active: true, createdAt: now - 10_000 }).run();
-  for (let i = 0; i < OWN_EXAMPLE_CAP + 1; i++) { const id = draft(`Post ${i} https://github.com/me/tool`); saveDraftEdit(ctx, OWNER, id, { body: `Post ${i} https://github.com/me/tool`, markCopied: true }); }
+  for (let i = 0; i < OWN_EXAMPLE_CAP + 1; i++) { const id = draft(`Post ${String.fromCharCode(65 + i)} https://github.com/me/tool`); saveDraftEdit(ctx, OWNER, id, { body: `Post ${String.fromCharCode(65 + i)} https://github.com/me/tool`, markCopied: true }); }
   expect(examples().find((e) => e.body === "hand written")?.active).toBe(true);
 });
 
@@ -286,4 +286,19 @@ it("keeps the author's stated motivation and hands it to drafts only when there 
   expect(view.profile.why).toBe("I kept missing which agent was waiting for me.");
   expect(profileBlock(view.profile)).toContain("why it exists (the author's own words; the only allowed motivation): I kept missing");
   expect(profileBlock({ ...view.profile, why: "" })).not.toContain("why it exists");
+});
+
+it.each([
+  ['Now 40% faster. https://github.com/me/tool', 'Now handles line endings. https://github.com/me/tool'],
+  ['소셜 media 게시글을 작성합니다. https://github.com/me/tool', '소셜 미디어 게시글을 작성합니다. https://github.com/me/tool'],
+])('records copying but withholds an unsafe voice example until its warnings are corrected', (unsafe, fixed) => {
+  const id=draft(unsafe);
+  const copied=saveDraftEdit(ctx, OWNER, id, {body:unsafe,markCopied:true});
+  expect(copied.status).toBe("copied");
+  expect(ctx.db.select().from(schema.drafts).all().find((d) => d.id === id)?.copiedAt).toBeTruthy();
+  expect(learningStats(ctx, OWNER).copied).toBe(1);
+  expect(examples()).toHaveLength(0);
+  saveDraftEdit(ctx, OWNER, id, {body:fixed,markCopied:true});
+  expect(examples()).toHaveLength(1);
+  expect(examples()[0].body).toBe(fixed);
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useBlocker, useSearchParams } from "react-router-dom";
 import { ALL_CHANNELS, CHANNELS, LANGS, type Channel } from "@core/channels";
 import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "@core/models";
@@ -91,7 +91,8 @@ export default function Settings() {
   );
   // 같은 설정 페이지의 탭 이동은 입력을 보존한다. 다른 화면으로 나갈 때만 막는다.
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
-  useEffect(() => {
+  // 이탈 보호를 화면의 미저장 상태와 같은 커밋에서 갱신한다. 저장 직후 남은 리스너가 이동을 막지 않게 한다.
+  useLayoutEffect(() => {
     setUnsaved(dirty);
     const beforeLeave = (event: BeforeUnloadEvent) => {
       event.preventDefault();
