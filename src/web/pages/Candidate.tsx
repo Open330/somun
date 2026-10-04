@@ -309,7 +309,7 @@ export default function Candidate() {
           </button>
         </div>
       )}
-      <GenerationStatus candidateId={cid} onChange={reload} onJobs={setJobs} />
+      <GenerationStatus candidateId={cid} onChange={reload} onJobs={setJobs} compact />
       <div className="cand-layout">
         <section className="cand-main">
           <div className="draft-section-head">

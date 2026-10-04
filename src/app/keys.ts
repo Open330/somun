@@ -1,9 +1,28 @@
 import { eq } from "drizzle-orm";
-import { classifyGeminiError, ptDayKey, RPD_SOFT_CAP } from "../core/keypool.js";
+import { classifyGeminiError, nextPtMidnight, ptDayKey, RPD_SOFT_CAP } from "../core/keypool.js";
 import { schema } from "../infra/db/index.js";
-import type { KeyPoolOps } from "../infra/llm/providers.js";
-import type { KeyStatus } from "../shared/types.js";
+import { freeGeminiKeys, modelFor, type KeyPoolOps } from "../infra/llm/providers.js";
+import type { KeyStatus, ModelAvailability } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
+import { getSettings } from "./settings.js";
+
+export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.now()): ModelAvailability {
+  const { llm } = getSettings(ctx, ownerId);
+  const keys = freeGeminiKeys(ctx.env.geminiKeys);
+  const mode: ModelAvailability["mode"] = llm.provider === "local-agent" ? "local" : llm.apiKey ? "user" : llm.provider === "gemini" && keys.length ? "shared" : "missing";
+  const rows = new Map(ctx.db.select().from(schema.llmKeyState).all().map((r) => [r.label, r]));
+  const models = (["analysis", "draft"] as const).map((purpose): ModelAvailability["models"][number] => {
+    const model = modelFor(llm, purpose === "draft" ? "draft" : "judge");
+    if (mode !== "shared") return { purpose, model, state: mode === "user" ? "unknown" : mode };
+    const waits = keys.map(({ label }) => {
+      const row = rows.get(`${label}|${model}`);
+      return Math.max(row?.cooldownUntil ?? 0, row?.dayKey === ptDayKey(now) && row.dayCount >= RPD_SOFT_CAP ? nextPtMidnight(now) : 0);
+    });
+    const retryAt = Math.min(...waits);
+    return retryAt > now ? { purpose, model, state: "waiting", retryAt } : { purpose, model, state: "ready" };
+  });
+  return { mode, checkedAt: now, models };
+}
 
 /** 서버 Gemini 무료 키 풀 상태 (AI_API.md 운영 기준). */
 export function keyPoolOps(ctx: AppContext): KeyPoolOps {

@@ -185,7 +185,9 @@ const scenarios = {
       const cid = db.select().from(schema.candidates).get().id;
       await page.goto(`${base}/c/${cid}`);
       await page.getByRole('button', { name: '서비스 처음 소개하기', exact: true }).click();
-      await page.getByText('로컬 워커 대기', { exact: true }).waitFor();
+      await page.getByRole('button', { name: '작업 보기', exact: true }).click();
+      await page.getByRole('dialog', { name: '내 계정 작업' }).getByText('로컬 워커 대기', { exact: true }).waitFor();
+      await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
       await worker();
       await page.getByRole('button', { name: '초안 복사', exact: true }).waitFor();
     });

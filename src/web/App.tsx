@@ -11,6 +11,7 @@ import Landing from "./pages/Landing";
 import TokenLogin from "./pages/TokenLogin";
 import NotFound from "./pages/NotFound";
 import { Lockup, Mark } from "./components/Mark";
+import { useWorkspaceStatus, WorkStatusButton, WorkStatusPanel } from "./components/WorkspaceStatus";
 import { t } from "./i18n";
 
 // 로그인 뒤 화면은 필요할 때 받는다. 첫 화면(랜딩·로그인)이 가벼워진다.
@@ -89,6 +90,7 @@ export default function App() {
 
 function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
   const location = useLocation();
+  const work = useWorkspaceStatus();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
   const signOut = async () => {
@@ -133,6 +135,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
         <nav className="nav" aria-label={t("주 메뉴")}>
           {links}
         </nav>
+        <WorkStatusButton state={work} />
         <div className="spacer" />
         <div className="sidebar-note">
           <b>{t("만드는 일에 집중하세요.")}</b>
@@ -153,6 +156,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
           <div className="brand">
             <Mark size={26} />
           </div>
+          <WorkStatusButton state={work} mobile />
           {links}
           <span className="mobile-locale">
             <LocaleSwitch compact />
@@ -161,6 +165,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
             {signingOut ? t("로그아웃 중…") : t("나가기")}
           </button>
         </div>
+        <WorkStatusPanel state={work} candidates={rows ?? []} />
         <main className="main" id="main-content" tabIndex={-1}>
           {signOutError && (
             <div className="inline-notice is-error" role="alert">

@@ -105,6 +105,12 @@ export type PublicationWithMetrics = Publication & {
 export type Example = { id: number; channel: Channel; lang: string; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
 
 export type KeyStatus = { label: string; todayCount: number; cap: number; cooldownUntil?: number; cooldownReason?: string; lastUsedAt?: number; lastQuotaId?: string };
+/** 현재 계정의 모델 이용 상태. 공유 키 식별자·사용량은 노출하지 않는다. */
+export type ModelAvailability = {
+  mode: "shared" | "user" | "local" | "missing";
+  checkedAt: number;
+  models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "unknown" | "local" | "missing"; retryAt?: number }[];
+};
 
 export type GenerationPlan = { introduction?: boolean; targets: { channel: Channel; lang: string }[]; instruction?: string };
 export type JobProgress = { id: number; kind: JobKind; candidateId: number; /** profile 작업의 저장소. */ repo?: string; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };

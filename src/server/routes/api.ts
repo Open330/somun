@@ -16,7 +16,7 @@ import { refreshReactions } from "../../app/reactions.js";
 import { isTrusted, InvalidInputError, NotFoundError, type AppContext } from "../../app/context.js";
 import { assertPublicUrl } from "../../infra/net.js";
 import { retryGeneration, generationStatus, claimJob, completeJob, pendingJobs } from "../../app/jobs.js";
-import { keyStatus } from "../../app/keys.js";
+import { keyStatus, modelAvailability } from "../../app/keys.js";
 import { ingestSessions } from "../../app/sessions.js";
 import { connectorsView, githubAppConfig, issueInstallLink, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import type { Config } from "../config.js";
@@ -191,6 +191,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // keys · jobs · omp
   // 서버 키 풀 상태는 운영자만. 다른 계정에는 빈 목록.
   app.get("/keys", (c) => c.json(isTrusted(ctx, c.get("ownerId")) ? keyStatus(ctx) : []));
+  app.get("/model-availability", (c) => c.json(modelAvailability(ctx, c.get("ownerId"))));
   app.post("/jobs/:id/retry", (c) => { const job = retryGeneration(ctx, c.get("ownerId"), id(c.req.param("id"))); c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5"); return c.json({ started: "queued", jobs: [job] }, 202); });
   app.get("/jobs/status", (c) => c.json(generationStatus(ctx, c.get("ownerId"), c.req.query("candidateId") === undefined ? undefined : id(c.req.query("candidateId")!))));
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));

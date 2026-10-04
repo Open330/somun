@@ -180,7 +180,7 @@ export default function Inbox() {
           </button>
         </div>
       )}
-      <GenerationStatus candidateTitles={Object.fromEntries(rows.map((row) => [row.id, row.title]))} onChange={reload} />
+      <GenerationStatus onChange={reload} compact />
       {firstUse ? (
         <>
           <Onboarding rows={rows} sources={sources} settings={settings} />

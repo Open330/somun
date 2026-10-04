@@ -4,24 +4,20 @@ import type { JobProgress } from "@shared/types";
 import { post, useResource } from "../lib/api";
 import { channelLabel } from "./ui";
 import { t } from "../i18n";
+import { JOB_LABELS, openWorkspaceStatus } from "./WorkspaceStatus";
 
-const labels: Record<JobProgress["kind"], string> = {
-  digest: "변경 내용 정리",
-  judge: "게시 가치 판단",
-  draft: "초안 작성",
-  lesson: "문체 규칙 찾기",
-  profile: "프로젝트 프로필 만들기",
-};
 export function GenerationStatus({
   candidateId,
   candidateTitles,
   onChange,
   onJobs,
+  compact = false,
 }: {
   candidateId?: number;
   candidateTitles?: Record<number, string>;
   onChange: () => void;
   onJobs?: (jobs: JobProgress[]) => void;
+  compact?: boolean;
 }) {
   const { data, error, reload } = useResource<JobProgress[]>(
     `/jobs/status${candidateId === undefined ? "" : `?candidateId=${candidateId}`}`,
@@ -55,6 +51,23 @@ export function GenerationStatus({
   const jobs = (data ?? []).filter((job) => job.status !== "done");
   if (!jobs.length) return null;
   const active = jobs.some((job) => job.status === "pending" || job.status === "claimed");
+  if (compact)
+    return (
+      <div className="inline-notice" role="status">
+        <span>
+          {jobs.some((job) => job.status === "failed")
+            ? t("생성 상태를 확인해 주세요")
+            : candidateId === undefined
+              ? t("진행 중인 작업 {n}건", { n: jobs.length })
+              : jobs
+                  .map(
+                    (job) => `${t(JOB_LABELS[job.kind])}${job.channel ? ` · ${channelLabel(job.channel)} ${job.lang?.toUpperCase()}` : ""}`,
+                  )
+                  .join(" / ")}
+        </span>
+        <button onClick={openWorkspaceStatus}>{t("작업 보기")}</button>
+      </div>
+    );
   return (
     <section className="generation-status" aria-label={t("생성 진행 상태")}>
       <div className="row between wrap">
@@ -71,7 +84,7 @@ export function GenerationStatus({
           <li key={job.id}>
             <div className="row wrap">
               <span>
-                {t(labels[job.kind])}
+                {t(JOB_LABELS[job.kind])}
                 {job.repo ? ` · ${job.repo}` : ""}
                 {job.channel ? ` · ${channelLabel(job.channel)} ${job.lang?.toUpperCase()}` : ""}
               </span>
