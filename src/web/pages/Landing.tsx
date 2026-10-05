@@ -42,7 +42,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           <h1>{tr("알릴 내용만,{br}{explain}.", { br: <br />, explain: <em>{t("읽기 쉽게")}</em> })}</h1>
           <p className="sub">
             {t(
-              "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 막연한 찬사보다 무엇이 달라졌는지 먼저 씁니다. 마지막 말투와 사실 확인은 당신이 맡습니다.",
+              "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 흩어진 작업 기록을 모으고, 독자가 알아야 할 핵심부터 정리합니다.",
             )}
           </p>
           <div className="toolbar">
@@ -55,7 +55,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
               </button>
             )}
             <a className="btn ghost" href="#how">
-              {t("어떻게 줄이는가 ↓")}
+              {t("어떻게 만드는가 ↓")}
             </a>
           </div>
         </div>
@@ -65,9 +65,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
       <section className="section" id="why" data-reveal>
         <h2>{t("읽는 사람이 내용을 찾느라 애쓰지 않도록")}</h2>
         <p className="lede">
-          {t(
-            "AI slop은 그럴듯한 말은 많은데 정작 할 말이 흐린 글입니다. 소문은 초안을 쓰기 전의 선택과 쓴 뒤의 검토를 기본 흐름으로 둡니다.",
-          )}
+          {t("무엇을 하는지, 무엇이 달라졌는지 바로 읽히도록. 알릴 내용을 고르고, 근거로 쓰고, 내 말투로 다듬습니다.")}
         </p>
         <div className="three">
           <div className="principle">
@@ -126,7 +124,7 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           </div>
           <div className="st" style={{ "--i": 4 } as React.CSSProperties}>
             <b>{t("5 직접 검토하기")}</b>
-            <span>{t("근거를 확인하고 고쳐 복사합니다. 게시는 직접 합니다.")}</span>
+            <span>{t("근거를 초안 옆에서 확인하고, 필요한 문장을 고칩니다.")}</span>
           </div>
           <div className="st" style={{ "--i": 5 } as React.CSSProperties}>
             <b>{t("6 다음 글에 반영하기")}</b>

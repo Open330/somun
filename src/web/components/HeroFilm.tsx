@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 import "./hero-film.css";
 
 /**
@@ -8,9 +8,9 @@ import "./hero-film.css";
  * 1 직접 쓴 글 — 흔한 릴리스 홍보 글과 무엇이 빠졌는지
  * 2 소문이 읽은 것 — 실제 작업물에서 가져온 근거
  * 3 소문이 쓴 초안 — 한 부분씩 쓰이며 왜 좋은지 녹색 펜으로 표시
- * 4 복사 — 점검 위치를 보여주고, 게시는 직접
+ * 4 근거 확인 — 원자료 링크와 함께 검토
  * 조작은 보는 데 필요한 만큼만: 재생·일시정지, 단계 고르기, 채널 고르기. 설명용 글은 Open330/muxa README의 기능과 사용 조건에 근거한 편집 예시다.
- * 화면 밖이거나 탭이 가려지면 멈추고, reduced-motion이면 자동 재생 없이 완성된 초안에서 시작한다.
+ * 완성된 예시부터 보여주고 재생은 사용자가 고른다. 화면 밖이거나 탭이 가려지면 멈춘다.
  */
 
 const STEPS = [
@@ -20,73 +20,73 @@ const STEPS = [
   { start: 15200, end: 18000 },
 ];
 const TOTAL = 18000;
-const stepText = () => [t("말만 그럴듯하면"), t("소문이 읽은 것"), t("핵심을 남기면"), t("올리는 건 직접")];
+const stepText = () => [t("말만 그럴듯하면"), t("소문이 읽은 것"), t("핵심을 남기면"), t("근거를 나란히")];
 /** 직접 쓴 글에 빠진 것. 세 채널 모두 같은 문제다. */
 const missingText = () => [t("무엇을 하는지 흐림"), t("추상적인 찬사 반복"), t("사용 조건 없음")];
 
-/** 채널 예시 글은 그 채널의 언어 그대로 둔다(화면 언어와 무관). mark는 초안 옆 녹색 메모 번호. */
-const CHANNELS = [
+/** 예시 본문과 채널은 화면 언어에 맞춘다. mark는 초안 옆 녹색 메모 번호. */
+const channels = (locale: "ko" | "en") => [
   {
-    tab: "X · EN",
+    tab: `X · ${locale.toUpperCase()}`,
     limit: 280,
     before: [
-      { post: "Muxa revolutionizes developer productivity.\n" },
-      { post: "Seamless workflows, powerful automation, endless possibilities.\n" },
+      { post: t("Muxa는 개발 생산성을 혁신합니다.") + "\n" },
+      { post: t("원활한 작업 흐름, 강력한 자동화, 무한한 가능성.") + "\n" },
       { post: "https://github.com/Open330/muxa" },
     ],
     after: [
-      { post: "Muxa shows which tmux coding agent is waiting for input.", mark: 0 },
+      { post: t("Muxa는 tmux 코딩 에이전트의 입력 대기 상태를 보여줍니다."), mark: 0 },
       { post: "\n\n" },
-      { post: "muxa attend jumps to the pane that has waited longest.", mark: 1 },
+      { post: t("muxa attend로 가장 오래 기다린 패널로 이동합니다."), mark: 1 },
       { post: "\n\n" },
-      { post: "Requires tmux and a Unix-like OS.", mark: 2 },
+      { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
       { post: "\nhttps://github.com/Open330/muxa" },
     ],
     notes: () => [t("무엇을 하는지 먼저"), t("실제 동작을 구체적으로"), t("사용 조건도 함께")],
   },
   {
-    tab: "LinkedIn · KO",
+    tab: `LinkedIn · ${locale.toUpperCase()}`,
     limit: 0,
     before: [
-      { post: "개발 생산성의 새로운 시대를 여는 혁신적인 도구입니다.\n" },
-      { post: "강력한 자동화와 원활한 워크플로로 개발 경험을 한 단계 높입니다.\n" },
-      { post: "무한한 가능성을 지금 경험해 보세요." },
+      { post: t("개발 생산성의 새로운 시대를 여는 혁신적인 도구입니다.") + "\n" },
+      { post: t("강력한 자동화와 원활한 워크플로로 개발 경험을 한 단계 높입니다.") + "\n" },
+      { post: t("무한한 가능성을 지금 경험해 보세요.") },
     ],
     after: [
-      { post: "Muxa는 tmux의 코딩 에이전트가 입력을 기다리는지 보여줍니다.", mark: 0 },
+      { post: t("Muxa는 tmux의 코딩 에이전트가 입력을 기다리는지 보여줍니다."), mark: 0 },
       { post: "\n\n" },
-      { post: "muxa attend 명령으로 가장 오래 기다린 패널에 이동합니다.", mark: 1 },
+      { post: t("muxa attend 명령으로 가장 오래 기다린 패널에 이동합니다."), mark: 1 },
       { post: "\n\n" },
-      { post: "기존 tmux 세션에서 사용합니다. tmux와 Unix 계열 운영체제가 필요합니다.", mark: 2 },
+      { post: t("기존 tmux 세션에서 사용합니다. tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
       { post: "\n\nhttps://github.com/Open330/muxa" },
     ],
     notes: () => [t("첫 문장에서 하는 일을"), t("실제 동작을 짧은 문장으로"), t("사용 조건과 링크를 함께")],
   },
   {
-    tab: "Show HN",
+    tab: locale === "ko" ? "Show GN" : "Show HN",
     limit: 0,
     before: [
-      { post: "Show HN: Muxa — the next generation of developer productivity\n\n" },
-      { post: "A seamless, game-changing experience for modern developers.\n" },
-      { post: "Unlock your full potential." },
+      { post: `${locale === "ko" ? "Show GN" : "Show HN"}: ${t("Muxa — 개발 생산성의 새로운 시대")}\n\n` },
+      { post: t("개발자를 위한 원활하고 획기적인 경험입니다.") + "\n" },
+      { post: t("잠재력을 마음껏 펼쳐보세요.") },
     ],
     after: [
-      { post: "Show HN: Muxa — see which tmux coding agent needs input", mark: 0 },
+      { post: `${locale === "ko" ? "Show GN" : "Show HN"}: ${t("Muxa — 입력을 기다리는 tmux 코딩 에이전트 확인하기")}`, mark: 0 },
       { post: "\n\n" },
-      { post: "Muxa reads agent states in existing tmux panes. muxa attend jumps to the pane that has waited longest.", mark: 1 },
+      { post: t("Muxa는 기존 tmux 패널의 에이전트 상태를 읽습니다. muxa attend로 가장 오래 기다린 패널에 이동합니다."), mark: 1 },
       { post: "\n\n" },
-      { post: "Requires tmux and a Unix-like OS.", mark: 2 },
-      { post: " Which agent states would you want to see?" },
+      { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
+      { post: t(" 어떤 에이전트 상태가 보이면 좋을까요?") },
     ],
     notes: () => [t("제목에서 용도를"), t("할 수 있는 동작을"), t("사용 조건을 함께")],
   },
 ];
-const EVIDENCE = [
-  { kind: "readme", title: "muxa attend — jump to the agent that waited longest" },
-  { kind: "readme", title: "Reads the agent sessions already running in tmux" },
-  { kind: "readme", title: "Requires tmux and a Unix-like OS" },
+const evidence = () => [
+  { kind: "readme", title: t("muxa attend — 가장 오래 기다린 에이전트로 이동") },
+  { kind: "readme", title: t("기존 tmux 세션에서 실행 중인 에이전트 상태 읽기") },
+  { kind: "readme", title: t("tmux와 Unix 계열 운영체제가 필요합니다.") },
 ];
-const FACTS = ["tmux", "muxa attend", "Unix-like OS"];
+const facts = () => ["tmux", "muxa attend", t("Unix 계열 운영체제")];
 
 const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 /** a~b 구간에서의 진행도(0~1), 끝을 부드럽게. */
@@ -101,7 +101,6 @@ const stepAt = (ms: number) =>
     0,
     STEPS.findIndex((s) => ms >= s.start && ms < s.end),
   );
-const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const chars = (s: string) => [...s].length;
 
 /** 조각들을 앞에서부터 n글자만큼 보여준다. 조각마다 다 쓰였는지도 함께 돌려준다. */
@@ -116,9 +115,10 @@ function typeOut<T extends { post: string }>(parts: T[], n: number) {
 }
 
 export default function HeroFilm() {
-  const still = reducedMotion();
-  const [time, setTime] = useState(still ? STEPS[3].start + 400 : 0);
-  const [playing, setPlaying] = useState(!still);
+  const locale = useLocale();
+  const examples = channels(locale);
+  const [time, setTime] = useState(STEPS[3].start + 400);
+  const [playing, setPlaying] = useState(false);
   const [visible, setVisible] = useState(true);
   const [channel, setChannel] = useState(0);
   const root = useRef<HTMLDivElement>(null);
@@ -151,7 +151,10 @@ export default function HeroFilm() {
   }, [playing, visible]);
 
   const go = useCallback((ms: number) => setTime(clamp(ms, 0, TOTAL - 1)), []);
-  const toggle = useCallback(() => setPlaying((p) => !p), []);
+  const toggle = useCallback(() => {
+    if (!playing && time >= STEPS[3].start) setTime(0);
+    setPlaying(!playing);
+  }, [playing, time]);
   const onKey = (ev: React.KeyboardEvent) => {
     if (ev.target instanceof HTMLElement && ev.target.closest("button")) return;
     if (ev.key === " " || ev.key === "k") {
@@ -164,7 +167,7 @@ export default function HeroFilm() {
   const step = stepAt(T);
   const steps = stepText();
   const missing = missingText();
-  const c = CHANNELS[channel];
+  const c = examples[channel];
   const notes = c.notes();
 
   // 1: 직접 쓴 글이 쓰이고, 빠진 것이 하나씩 표시된다.
@@ -177,7 +180,6 @@ export default function HeroFilm() {
   const after = typeOut(c.after, typedN);
   const doneMarks = new Set(after.filter((p) => p.mark !== undefined && p.done).map((p) => p.mark));
   const lint = seg(T, 13800, 14200);
-  const press = T >= 15700 && T < 15950;
   const toast = seg(T, 15900, 16200) * (1 - seg(T, 17400, 17800));
 
   return (
@@ -192,7 +194,7 @@ export default function HeroFilm() {
     >
       <div className="film-head">
         <div className="film-tabs" role="tablist" aria-label={t("채널")}>
-          {CHANNELS.map((x, i) => (
+          {examples.map((x, i) => (
             <button
               key={x.tab}
               role="tab"
@@ -231,7 +233,7 @@ export default function HeroFilm() {
         <div className="film-layer" style={{ opacity: layer(T, 4800, 8000) }} aria-hidden={step !== 1}>
           <span className="film-label">{steps[1]}</span>
           <ul className="film-evidence">
-            {EVIDENCE.map((e, i) => {
+            {evidence().map((e, i) => {
               const p = seg(T, 5000 + i * 320, 5400 + i * 320);
               return (
                 <li key={e.kind} style={{ "--p": p } as React.CSSProperties}>
@@ -242,7 +244,7 @@ export default function HeroFilm() {
             })}
           </ul>
           <div className="film-facts">
-            {FACTS.map((f, i) => {
+            {facts().map((f, i) => {
               const p = seg(T, 6200 + i * 220, 6550 + i * 220);
               return (
                 <span key={f} style={{ opacity: p }}>
@@ -284,12 +286,18 @@ export default function HeroFilm() {
               {t("점검 예시")}
               {c.limit ? ` · ${chars(afterText)}/${c.limit}` : ""}
             </span>
-            <span className={`film-copy ${press ? "pressed" : ""}`} style={{ opacity: seg(T, 14000, 14300) }}>
-              {t("복사")}
-            </span>
+            <a
+              className="film-source"
+              href="https://github.com/Open330/muxa#readme"
+              target="_blank"
+              rel="noreferrer"
+              style={{ opacity: seg(T, 14000, 14300) }}
+            >
+              {t("원자료 보기")}
+            </a>
           </div>
           <span className="film-toast" style={{ "--p": toast } as React.CSSProperties}>
-            {t("복사했습니다. 게시는 직접 합니다.")}
+            {t("원자료를 보며 초안을 다듬습니다.")}
           </span>
         </div>
       </div>

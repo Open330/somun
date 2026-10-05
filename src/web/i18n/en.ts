@@ -1065,4 +1065,35 @@ export const en: Record<string, string> = {
   "README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 모델과 입력에 따라 달라집니다.":
     "Editorial examples based on the README. Actual drafts vary with the model and input.",
   "원자료 보기": "View the source",
+  "Muxa는 개발 생산성을 혁신합니다.": "Muxa revolutionizes developer productivity.",
+  "원활한 작업 흐름, 강력한 자동화, 무한한 가능성.": "Seamless workflows, powerful automation, endless possibilities.",
+  "Muxa는 tmux 코딩 에이전트의 입력 대기 상태를 보여줍니다.": "Muxa shows which tmux coding agent is waiting for input.",
+  "muxa attend로 가장 오래 기다린 패널로 이동합니다.": "muxa attend jumps to the pane that has waited longest.",
+  "tmux와 Unix 계열 운영체제가 필요합니다.": "Requires tmux and a Unix-like OS.",
+  "개발 생산성의 새로운 시대를 여는 혁신적인 도구입니다.": "An innovative tool opening a new era of developer productivity.",
+  "강력한 자동화와 원활한 워크플로로 개발 경험을 한 단계 높입니다.":
+    "Powerful automation and seamless workflows take development to the next level.",
+  "무한한 가능성을 지금 경험해 보세요.": "Experience endless possibilities today.",
+  "Muxa는 tmux의 코딩 에이전트가 입력을 기다리는지 보여줍니다.": "Muxa shows which coding agent in tmux is waiting for input.",
+  "muxa attend 명령으로 가장 오래 기다린 패널에 이동합니다.": "The muxa attend command jumps to the pane that has waited longest.",
+  "기존 tmux 세션에서 사용합니다. tmux와 Unix 계열 운영체제가 필요합니다.":
+    "It works with existing tmux sessions. Requires tmux and a Unix-like OS.",
+  "Muxa — 개발 생산성의 새로운 시대": "Muxa — the next generation of developer productivity",
+  "개발자를 위한 원활하고 획기적인 경험입니다.": "A seamless, game-changing experience for modern developers.",
+  "잠재력을 마음껏 펼쳐보세요.": "Unlock your full potential.",
+  "Muxa — 입력을 기다리는 tmux 코딩 에이전트 확인하기": "Muxa — see which tmux coding agent needs input",
+  "Muxa는 기존 tmux 패널의 에이전트 상태를 읽습니다. muxa attend로 가장 오래 기다린 패널에 이동합니다.":
+    "Muxa reads agent states in existing tmux panes. muxa attend jumps to the pane that has waited longest.",
+  " 어떤 에이전트 상태가 보이면 좋을까요?": " Which agent states would you want to see?",
+  "muxa attend — 가장 오래 기다린 에이전트로 이동": "muxa attend — jump to the agent that waited longest",
+  "기존 tmux 세션에서 실행 중인 에이전트 상태 읽기": "Reads the agent sessions already running in tmux",
+  "Unix 계열 운영체제": "Unix-like OS",
+  "근거를 나란히": "Review beside the source",
+  "원자료를 보며 초안을 다듬습니다.": "Refine the draft alongside its source.",
+  "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 흩어진 작업 기록을 모으고, 독자가 알아야 할 핵심부터 정리합니다.":
+    "Somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
+  "어떻게 만드는가 ↓": "How it works ↓",
+  "무엇을 하는지, 무엇이 달라졌는지 바로 읽히도록. 알릴 내용을 고르고, 근거로 쓰고, 내 말투로 다듬습니다.":
+    "Make what it does and what changed easy to find. Choose what to share, write from evidence, and refine it in your voice.",
+  "근거를 초안 옆에서 확인하고, 필요한 문장을 고칩니다.": "Check the evidence beside the draft and edit what needs changing.",
 };
