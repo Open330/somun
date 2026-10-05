@@ -1088,7 +1088,7 @@ export const en: Record<string, string> = {
   "muxa attend — 가장 오래 기다린 에이전트로 이동": "muxa attend — jump to the agent that waited longest",
   "기존 tmux 세션에서 실행 중인 에이전트 상태 읽기": "Reads the agent sessions already running in tmux",
   "Unix 계열 운영체제": "Unix-like OS",
-  "근거를 나란히": "Review beside the source",
+  "근거를 나란히": "Source review",
   "원자료를 보며 초안을 다듬습니다.": "Refine the draft alongside its source.",
   "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 흩어진 작업 기록을 모으고, 독자가 알아야 할 핵심부터 정리합니다.":
     "Somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
@@ -1096,4 +1096,38 @@ export const en: Record<string, string> = {
   "무엇을 하는지, 무엇이 달라졌는지 바로 읽히도록. 알릴 내용을 고르고, 근거로 쓰고, 내 말투로 다듬습니다.":
     "Make what it does and what changed easy to find. Choose what to share, write from evidence, and refine it in your voice.",
   "근거를 초안 옆에서 확인하고, 필요한 문장을 고칩니다.": "Check the evidence beside the draft and edit what needs changing.",
+  "X는 핵심과 달라지는 일을 짧게, 링크는 마지막에.": "X keeps the point and the change brief, with the link last.",
+  "Muxa: tmux 에이전트의 입력 대기 상태 확인.": "Muxa: see which tmux agent is waiting for input.",
+  "muxa attend로 가장 오래 기다린 패널로 이동.": "muxa attend jumps to the pane that waited longest.",
+  "tmux·Unix 계열 운영체제 필요.": "Requires tmux and a Unix-like OS.",
+  "핵심부터 짧게": "Lead with a brief point",
+  "달라지는 일을 한 문장으로": "One sentence on what changes",
+  "사용 조건과 링크로 마무리": "Close with requirements and a link",
+  "LinkedIn은 첫 줄에 주제를, 짧은 문단에 작업 맥락과 쓰임을.":
+    "LinkedIn leads with the topic, then explains the work context and use in short paragraphs.",
+  "tmux 안의 에이전트, 지금 입력을 기다릴까요?": "Which tmux agent needs your input?",
+  "Muxa는 이미 실행 중인 tmux 세션에서 코딩 에이전트의 상태를 읽습니다. 새 터미널로 옮기지 않고 기존 작업 환경에서 확인할 수 있습니다.":
+    "Muxa reads coding agent states in the tmux sessions already running. You can check them in your existing setup without moving to a new terminal.",
+  "상태를 살펴보고, muxa attend로 가장 오래 기다린 패널에 이동합니다. 여러 에이전트를 함께 쓰는 작업에서 다음에 확인할 대상을 찾는 데 쓰입니다.":
+    "Check their states and use muxa attend to jump to the pane that waited longest. When working with several agents, it helps identify which one to check next.",
+  "접히기 전 첫 줄에 주제": "Topic in the opening line",
+  "짧은 문단으로 작업 맥락 설명": "Work context in short paragraphs",
+  "사용 조건 뒤에 링크": "Requirements followed by the link",
+  "Show GN은 설명형 제목과 기능·사용 방법·조건을 나눠서.": "Show GN separates a descriptive title, features, usage, and requirements.",
+  "Show HN은 제목과 첫 댓글을 나누고, 기술 설명 뒤에 질문을.":
+    "Show HN separates the title and first comment, with a question after the technical explanation.",
+  "Show GN: Muxa - tmux 코딩 에이전트의 대기 상태 확인": "Show GN: Muxa - see which tmux coding agent needs input",
+  기능: "Features",
+  "• 기존 tmux 세션에서 에이전트 상태 읽기": "• Read agent states in existing tmux sessions",
+  "• 입력을 기다리는 에이전트 확인": "• Identify agents waiting for input",
+  "사용 방법": "Usage",
+  "가장 오래 기다린 패널로 이동합니다.": "Jump to the pane that waited longest.",
+  "사용 조건": "Requirements",
+  "첫 댓글": "First comment",
+  "어떤 에이전트 상태가 보이면 좋을까요?": "Which agent states would you want to see?",
+  "설명형 제목": "Descriptive title",
+  "기능과 명령을 나눠 제시": "Features and command shown separately",
+  "사용 조건을 별도 항목으로": "Requirements in their own section",
+  "첫 댓글에 동작 원리": "Mechanism in the first comment",
+  "한계와 열린 질문으로 마무리": "Close with limitations and an open question",
 };

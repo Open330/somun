@@ -24,10 +24,23 @@ const stepText = () => [t("말만 그럴듯하면"), t("소문이 읽은 것"), 
 /** 직접 쓴 글에 빠진 것. 세 채널 모두 같은 문제다. */
 const missingText = () => [t("무엇을 하는지 흐림"), t("추상적인 찬사 반복"), t("사용 조건 없음")];
 
-/** 예시 본문과 채널은 화면 언어에 맞춘다. mark는 초안 옆 녹색 메모 번호. */
-const channels = (locale: "ko" | "en") => [
+/** 같은 근거를 채널별 길이·문단·제목 구조로 다듬은 예시. */
+type ExamplePart = { post: string; mark?: number; kind?: "title" | "heading" | "command" };
+const channels = (
+  locale: "ko" | "en",
+): {
+  tab: string;
+  layout: "x" | "linkedin" | "community";
+  summary: string;
+  limit: number;
+  before: ExamplePart[];
+  after: ExamplePart[];
+  notes: () => string[];
+}[] => [
   {
     tab: `X · ${locale.toUpperCase()}`,
+    layout: "x",
+    summary: t("X는 핵심과 달라지는 일을 짧게, 링크는 마지막에."),
     limit: 280,
     before: [
       { post: t("Muxa는 개발 생산성을 혁신합니다.") + "\n" },
@@ -35,17 +48,19 @@ const channels = (locale: "ko" | "en") => [
       { post: "https://github.com/Open330/muxa" },
     ],
     after: [
-      { post: t("Muxa는 tmux 코딩 에이전트의 입력 대기 상태를 보여줍니다."), mark: 0 },
+      { post: t("Muxa: tmux 에이전트의 입력 대기 상태 확인."), mark: 0 },
       { post: "\n\n" },
-      { post: t("muxa attend로 가장 오래 기다린 패널로 이동합니다."), mark: 1 },
+      { post: t("muxa attend로 가장 오래 기다린 패널로 이동."), mark: 1 },
       { post: "\n\n" },
-      { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
-      { post: "\nhttps://github.com/Open330/muxa" },
+      { post: t("tmux·Unix 계열 운영체제 필요."), mark: 2 },
+      { post: " https://github.com/Open330/muxa" },
     ],
-    notes: () => [t("무엇을 하는지 먼저"), t("실제 동작을 구체적으로"), t("사용 조건도 함께")],
+    notes: () => [t("핵심부터 짧게"), t("달라지는 일을 한 문장으로"), t("사용 조건과 링크로 마무리")],
   },
   {
     tab: `LinkedIn · ${locale.toUpperCase()}`,
+    layout: "linkedin",
+    summary: t("LinkedIn은 첫 줄에 주제를, 짧은 문단에 작업 맥락과 쓰임을."),
     limit: 0,
     before: [
       { post: t("개발 생산성의 새로운 시대를 여는 혁신적인 도구입니다.") + "\n" },
@@ -53,32 +68,70 @@ const channels = (locale: "ko" | "en") => [
       { post: t("무한한 가능성을 지금 경험해 보세요.") },
     ],
     after: [
-      { post: t("Muxa는 tmux의 코딩 에이전트가 입력을 기다리는지 보여줍니다."), mark: 0 },
+      { post: t("tmux 안의 에이전트, 지금 입력을 기다릴까요?"), mark: 0, kind: "title" },
       { post: "\n\n" },
-      { post: t("muxa attend 명령으로 가장 오래 기다린 패널에 이동합니다."), mark: 1 },
+      {
+        post: t(
+          "Muxa는 이미 실행 중인 tmux 세션에서 코딩 에이전트의 상태를 읽습니다. 새 터미널로 옮기지 않고 기존 작업 환경에서 확인할 수 있습니다.",
+        ),
+      },
       { post: "\n\n" },
-      { post: t("기존 tmux 세션에서 사용합니다. tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
+      {
+        post: t(
+          "상태를 살펴보고, muxa attend로 가장 오래 기다린 패널에 이동합니다. 여러 에이전트를 함께 쓰는 작업에서 다음에 확인할 대상을 찾는 데 쓰입니다.",
+        ),
+        mark: 1,
+      },
+      { post: "\n\n" },
+      { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
       { post: "\n\nhttps://github.com/Open330/muxa" },
     ],
-    notes: () => [t("첫 문장에서 하는 일을"), t("실제 동작을 짧은 문장으로"), t("사용 조건과 링크를 함께")],
+    notes: () => [t("접히기 전 첫 줄에 주제"), t("짧은 문단으로 작업 맥락 설명"), t("사용 조건 뒤에 링크")],
   },
   {
     tab: locale === "ko" ? "Show GN" : "Show HN",
+    layout: "community",
+    summary:
+      locale === "ko"
+        ? t("Show GN은 설명형 제목과 기능·사용 방법·조건을 나눠서.")
+        : t("Show HN은 제목과 첫 댓글을 나누고, 기술 설명 뒤에 질문을."),
     limit: 0,
     before: [
       { post: `${locale === "ko" ? "Show GN" : "Show HN"}: ${t("Muxa — 개발 생산성의 새로운 시대")}\n\n` },
       { post: t("개발자를 위한 원활하고 획기적인 경험입니다.") + "\n" },
       { post: t("잠재력을 마음껏 펼쳐보세요.") },
     ],
-    after: [
-      { post: `${locale === "ko" ? "Show GN" : "Show HN"}: ${t("Muxa — 입력을 기다리는 tmux 코딩 에이전트 확인하기")}`, mark: 0 },
-      { post: "\n\n" },
-      { post: t("Muxa는 기존 tmux 패널의 에이전트 상태를 읽습니다. muxa attend로 가장 오래 기다린 패널에 이동합니다."), mark: 1 },
-      { post: "\n\n" },
-      { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
-      { post: t(" 어떤 에이전트 상태가 보이면 좋을까요?") },
-    ],
-    notes: () => [t("제목에서 용도를"), t("할 수 있는 동작을"), t("사용 조건을 함께")],
+    after:
+      locale === "ko"
+        ? [
+            { post: t("Show GN: Muxa - tmux 코딩 에이전트의 대기 상태 확인"), mark: 0, kind: "title" },
+            { post: "\n\n" },
+            { post: t("기능") + "\n", kind: "heading" },
+            { post: t("• 기존 tmux 세션에서 에이전트 상태 읽기") + "\n" },
+            { post: t("• 입력을 기다리는 에이전트 확인"), mark: 1 },
+            { post: "\n\n" },
+            { post: t("사용 방법") + "\n", kind: "heading" },
+            { post: "muxa attend\n", kind: "command" },
+            { post: t("가장 오래 기다린 패널로 이동합니다.") },
+            { post: "\n\n" },
+            { post: t("사용 조건") + "\n", kind: "heading" },
+            { post: t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
+            { post: "\n\nhttps://github.com/Open330/muxa" },
+          ]
+        : [
+            { post: "Show HN: Muxa - see which tmux coding agent needs input", mark: 0, kind: "title" },
+            { post: "\n\n" },
+            { post: t("첫 댓글") + "\n", kind: "heading" },
+            { post: t("Muxa는 기존 tmux 패널의 에이전트 상태를 읽습니다. muxa attend로 가장 오래 기다린 패널에 이동합니다."), mark: 1 },
+            { post: "\n\n" },
+            { post: "Limitations: " + t("tmux와 Unix 계열 운영체제가 필요합니다."), mark: 2 },
+            { post: "\n\n" },
+            { post: t("어떤 에이전트 상태가 보이면 좋을까요?") },
+          ],
+    notes: () =>
+      locale === "ko"
+        ? [t("설명형 제목"), t("기능과 명령을 나눠 제시"), t("사용 조건을 별도 항목으로")]
+        : [t("설명형 제목"), t("첫 댓글에 동작 원리"), t("한계와 열린 질문으로 마무리")],
   },
 ];
 const evidence = () => [
@@ -209,7 +262,8 @@ export default function HeroFilm() {
         <span className="film-repo">Muxa · README</span>
       </div>
 
-      <div className="film-stage" aria-live="off">
+      <p className="film-channel-hint">{c.summary}</p>
+      <div className={`film-stage film-stage-${c.layout}`} aria-live="off">
         <div className="film-layer" style={{ opacity: layer(T, 0, 4800) }} aria-hidden={step !== 0}>
           <span className="film-label">{steps[0]}</span>
           <div className="film-post film-before">
@@ -236,7 +290,7 @@ export default function HeroFilm() {
             {evidence().map((e, i) => {
               const p = seg(T, 5000 + i * 320, 5400 + i * 320);
               return (
-                <li key={e.kind} style={{ "--p": p } as React.CSSProperties}>
+                <li key={e.title} style={{ "--p": p } as React.CSSProperties}>
                   <span>{e.kind}</span>
                   {e.title}
                 </li>
@@ -264,10 +318,12 @@ export default function HeroFilm() {
             <s>{beforeText.replace(/\s+/g, " ")}</s>
           </div>
           <span className="film-label is-good">{steps[2]}</span>
-          <div className="film-post film-after">
+          <div className={`film-post film-after film-${c.layout}`}>
             {after.map((p, i) => (
-              <span key={i} className={p.mark !== undefined && doneMarks.has(p.mark) ? "good" : ""}>
-                {p.mark !== undefined && doneMarks.has(p.mark) && <sup aria-hidden>{p.mark + 1}</sup>}
+              <span
+                key={i}
+                className={`${p.mark !== undefined && doneMarks.has(p.mark) ? "good" : ""} ${p.kind ? `film-part-${p.kind}` : ""}`}
+              >
                 {p.shown}
               </span>
             ))}
