@@ -1,9 +1,11 @@
 import { EventEmitter } from "node:events";
+import { eq } from "drizzle-orm";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { applyResult, buildPrompt, processNewCandidates, queueStep, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
+import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
+import { retryGeneration } from "./jobs.js";
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
@@ -159,12 +161,30 @@ it("drafts a first introduction until something from the repository is published
 
 it("treats a copied draft as announced even without a registered post URL", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
-  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## Introducing the project to new readers");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft body" } });
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
   ctx.db.update(schema.drafts).set({ copiedAt: 2 }).run();
-  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## Introducing the project to new readers");
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+});
+
+it("redrafts the same channel as an update once its introduction was copied, and retries stale introductions as updates", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
+  expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(true);
+  // 첫 소개 작업이 실패해 남아 있는 상태에서 다른 초안을 복사한다.
+  const failed = queueStep(ctx, "test", "draft", id, "linkedin", "ko", { introduction: true });
+  ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: Date.now(), createdAt: Date.now() - 1000 }).where(eq(schema.llmJobs.id, failed)).run();
+  ctx.db.update(schema.drafts).set({ copiedAt: Date.now() }).run();
+  expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(false);
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).not.toContain("## First introduction");
+  const retried = retryGeneration(ctx, "test", failed);
+  const job = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retried)).get();
+  expect(job?.meta?.draftPurpose).toBe("update");
+  expect(job?.user).not.toContain("## First introduction");
+  // 명시한 첫 소개는 그대로 따른다.
+  expect(requestedIntroduction(ctx, "test", id, "x", "en", true)).toBe(true);
 });
 
 it("tells the introduction judge not to call an established project a first release", () => {

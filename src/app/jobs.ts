@@ -7,7 +7,7 @@ import { schema } from "../infra/db/index.js";
 import { SIDE_JOB_KINDS, type Channel, type ChangeEvent, type GenerationKind, type Job, type JobKind, type JobProgress } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getCandidateRow } from "./candidates.js";
-import { applyResult, buildPrompt, enqueueJob, processNewCandidates } from "./pipeline.js";
+import { announcedSince, applyResult, buildPrompt, enqueueJob, processNewCandidates } from "./pipeline.js";
 import { applyLesson } from "./learning.js";
 import { applyProfile, pendingProfileJob } from "./profiles.js";
 import { getSettings } from "./settings.js";
@@ -164,6 +164,11 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
     if (candidate.status === "dropped" || (candidate.status === "published" && job.kind !== "draft" && !(job.kind === "digest" && job.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
     // 다이제스트·판단은 지금의 근거와 계정 언어로 다시 만든다. 초안은 요청한 지침이 프롬프트에 들어 있으므로 저장된 것을 그대로 쓴다.
+    // 단, 첫 소개로 실패한 초안인데 그 뒤에 저장소를 알렸다면(복사·게시) 낡은 첫 소개 대신 지금 상태로 다시 만든다.
+    const storedPurpose = job.meta?.draftPurpose ?? (job.user.includes("\n## First introduction\n") ? "introduction" : "update");
+    if (job.kind === "draft" && job.channel && job.lang && storedPurpose === "introduction" && announcedSince(ctx, ownerId, job.candidateId, job.createdAt)) {
+      return enqueueJob(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, buildPrompt(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, { introduction: false }), job.continuation ?? undefined);
+    }
     const prompt = job.kind === "draft" ? { draftPurpose: job.meta?.draftPurpose ?? (job.user.includes("\n## First introduction\n") ? "introduction" as const : "update" as const), system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();

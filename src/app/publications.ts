@@ -21,11 +21,17 @@ function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: st
  * 그렇지 않으면 이 사용자의 모든 글이 영원히 첫 소개가 되어 실제 변경점을 다루지 못한다.
  */
 export function hasAnnounced(ctx: AppContext, ownerId: string, repo: string): boolean {
-  const published = ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
-    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).get();
-  if (published) return true;
-  return Boolean(ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
-    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt))).get());
+  return lastAnnouncedAt(ctx, ownerId, repo) !== undefined;
+}
+
+/** 이 저장소를 마지막으로 알린 시각(게시 등록 또는 초안 복사). 알린 적이 없으면 undefined. */
+export function lastAnnouncedAt(ctx: AppContext, ownerId: string, repo: string): number | undefined {
+  const published = ctx.db.select({ at: schema.publications.publishedAt }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).orderBy(desc(schema.publications.publishedAt)).get()?.at;
+  const copied = ctx.db.select({ at: schema.drafts.copiedAt }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
+    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt))).orderBy(desc(schema.drafts.copiedAt)).get()?.at ?? undefined;
+  const times = [published, copied].filter((t): t is number => typeof t === "number");
+  return times.length ? Math.max(...times) : undefined;
 }
 
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {

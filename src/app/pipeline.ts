@@ -2,7 +2,7 @@ import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
@@ -11,7 +11,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge, hasAnnounced } from "./publications.js";
+import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -60,12 +60,24 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
   return ctx.db.select().from(schema.feedback).where(eq(schema.feedback.ownerId, ownerId)).orderBy(desc(schema.feedback.createdAt)).limit(limit).all().map((f) => ({ targetType: f.targetType, reason: f.reason, note: f.note ?? undefined }));
 }
 
-/** 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다. */
+/**
+ * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
+ * 단, 첫 소개 초안을 만든 뒤에 이 저장소를 알렸다면(복사·게시 등록) 더는 첫 소개가 아니다. 다시 쓰면 업데이트가 된다.
+ */
 export function requestedIntroduction(ctx: AppContext, ownerId: string, candidateId: number, channel?: Channel, lang?: string, explicit?: boolean): boolean | undefined {
   if (explicit !== undefined) return explicit;
   if (!channel || !lang) return undefined;
   const previous = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
-  return previous?.purpose ? previous.purpose === "introduction" : undefined;
+  if (!previous?.purpose) return undefined;
+  if (previous.purpose === "introduction" && announcedSince(ctx, ownerId, candidateId, previous.createdAt)) return false;
+  return previous.purpose === "introduction";
+}
+
+/** 이 글감의 저장소를 at 이후에(같은 시각 포함) 알렸는가. */
+export function announcedSince(ctx: AppContext, ownerId: string, candidateId: number, at: number): boolean {
+  const repo = getCandidateRow(ctx, ownerId, candidateId).repo;
+  const last = lastAnnouncedAt(ctx, ownerId, repo);
+  return last !== undefined && last >= at;
 }
 
 export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
@@ -216,7 +228,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
-    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : String(r.reasoning ?? "");
+    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
     const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();

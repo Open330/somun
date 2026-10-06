@@ -188,7 +188,8 @@ suggestedChannels: subset of the enabled channels.`,
 }
 
 /** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
-const INTRODUCTION_JUDGE = `## First introduction
+export const INTRODUCTION_JUDGE_HEADING = "## Introducing the project to new readers";
+const INTRODUCTION_JUDGE = `${INTRODUCTION_JUDGE_HEADING}
 The editor has not announced this repository through this tool yet (no copied drafts or registered posts). This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
 - novelty: the project itself is new to readers.
@@ -219,6 +220,15 @@ const EXAMPLE_LABEL: Record<string, string> = {
   authored: " (author's own)",
   accepted: " (an earlier generated draft the author copied without edits: follow its shape, not as the author's own voice)",
 };
+
+/** 프로젝트가 이미 여러 번 릴리스됐는데 판단 이유가 "첫 공개·첫 릴리스"라고 쓰는 문장. 지시해도 약한 모델이 되풀이해서 지운다. */
+const FALSE_FIRST = /(?:첫|최초)\s?(?:공개|출시|릴리스|배포)|first (?:public )?(?:release|launch)|newly (?:released|launched|published)|just (?:released|launched)/i;
+
+export function withoutFalseFirstClaims(reasoning: string, releaseCount: number | undefined): string {
+  if ((releaseCount ?? 0) <= 1 || !FALSE_FIRST.test(reasoning)) return reasoning;
+  const kept = reasoning.split(/(?<=[.!?。]|다\.)\s+/).filter((sentence) => !FALSE_FIRST.test(sentence));
+  return kept.join(" ").trim();
+}
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
