@@ -17,6 +17,10 @@ export type EvidenceLike = {
   milestones?: { metric: string; threshold: number; at: number }[];
   /** README가 실험·로컬 전용으로 표시한 기능. 지금 쓸 수 있는 것처럼 쓰지 않는다. */
   experimental?: string[];
+  /** 이 글감에 묶인 릴리스 태그(오래된 것부터). 둘 이상이면 변경을 최신 태그 하나에 몰아 쓰지 않게 알린다. 프롬프트를 만들 때 채운다. */
+  windowReleases?: string[];
+  /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
+  unreleasedPrTitles?: string[];
 };
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
@@ -48,6 +52,8 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     `repo: ${e.repo} — ${e.repoUrl}`,
     profile ? profileBlock(profile) : e.description ? `what it is: ${e.description}` : "",
     e.version ? `latest version: ${e.version}` : "",
+    e.windowReleases && e.windowReleases.length > 1 ? `releases in this window: ${e.windowReleases.join(", ")} (the changes below span all of them; attribute a change to a version only when that version's release notes say so, otherwise do not name a version)` : "",
+    e.unreleasedPrTitles?.length ? `merged after ${e.version ?? "the latest release"}, not in any release yet (never say a version adds these; say they are on the main branch):\n- ${e.unreleasedPrTitles.join("\n- ")}` : "",
     e.firstReleaseAt ? `first release: ${e.firstReleaseAt}` : "",
     e.releaseCount !== undefined ? `releases: ${e.releaseCount}` : "",
     e.commitCount !== undefined ? `commits: ${e.commitCount}` : "",

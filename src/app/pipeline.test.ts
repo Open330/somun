@@ -214,3 +214,18 @@ it("scales the weighted rubric to 10 so raising a weight does not lower the bar"
   expect(rubricTotal(scores, { ...ones, numbers: 3 })).toBe(4.3);
   expect(rubricTotal(scores, { runnable: 0, numbers: 0, lesson: 0, novelty: 0, audience: 0 })).toBe(0);
 });
+
+it("tells drafts which releases a window spans and which PRs are not released yet", () => {
+  const sig = (kind: string, ref: string, title: string, at: number, payload: Record<string, unknown> = {}) =>
+    ctx.db.insert(schema.signals).values({ ownerId: "test", sourceId: 1, kind, repo: "vitejs/vite", ref, title, payload, occurredAt: at, candidateId: id }).run();
+  sig("release", "r1", "vite v0.8.55", 1000, { tag: "v0.8.55" });
+  sig("release", "r2", "vite v0.8.56", 2000, { tag: "v0.8.56" });
+  sig("pr_merged", "p1", "Add dashboard rail", 1500);
+  sig("pr_merged", "p2", "Native app tab dragging", 3000);
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", version: "v0.8.56", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  const user = buildPrompt(ctx, "test", "draft", id, "x", "en", { introduction: false }).user;
+  expect(user).toContain("releases in this window: v0.8.55, v0.8.56");
+  expect(user).toContain("merged after v0.8.56, not in any release yet");
+  expect(user).toContain("- Native app tab dragging");
+  expect(user).not.toContain("- Add dashboard rail");
+});

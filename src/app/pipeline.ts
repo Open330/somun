@@ -61,6 +61,21 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
 }
 
 /**
+ * 글감 창에 묶인 릴리스와, 최신 릴리스 뒤에 머지되어 아직 릴리스되지 않은 PR.
+ * 초안이 창의 모든 변경을 최신 태그 하나에 몰아 "v0.8.56 adds …"라고 쓰지 않게 사실로 넘긴다.
+ */
+export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
+  const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
+  const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
+  const latestAt = releases.at(-1)?.occurredAt;
+  const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt).map((s) => s.title);
+  return {
+    ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
+    ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
+  };
+}
+
+/**
  * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
  * 단, 첫 소개 초안을 만든 뒤에 이 저장소를 알렸다면(복사·게시 등록) 더는 첫 소개가 아니다. 다시 쓰면 업데이트가 된다.
  */
@@ -82,7 +97,7 @@ export function announcedSince(ctx: AppContext, ownerId: string, candidateId: nu
 
 export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
-  const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
+  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId) } };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
