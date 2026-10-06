@@ -14,11 +14,14 @@ function rateLimited(res: Response): boolean {
 }
 
 export class GitHubClient {
+  /** 권한 없음(403)으로 null을 돌려준 경로. 빈 결과와 구분해 사용자에게 알리려고 남긴다. */
+  readonly denied = new Set<string>();
   constructor(private readonly token: string) {}
 
   async get<T>(path: string): Promise<T | null> {
     const res = await fetch(`${GH}${path}`, { headers: this.headers(), signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (rateLimited(res)) throw new GitHubRateLimitError(path, Number(res.headers.get("x-ratelimit-reset")) * 1000 || undefined);
+    if (res.status === 403) this.denied.add(path);
     if (res.status === 404 || res.status === 403) return null;
     if (!res.ok) throw new Error(`GitHub ${path} → ${res.status}`);
     return (await res.json()) as T;

@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom } from "./collect.js";
+import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -116,6 +116,26 @@ describe("collection guards", () => {
     const [cand] = ctx.db.select().from(schema.candidates).all();
     expect(cand?.type).toBe("in-progress");
     expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "pr_merged").every((s) => s.candidateId === cand.id)).toBe(true);
+  });
+
+  it("collects an explicitly listed fork or quiet repository and reports missing read permissions", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/fork"], enabled: true }).run().lastInsertRowid);
+    const repo = { full_name: "me/fork", html_url: "https://github.com/me/fork", description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: "2020-01-01T00:00:00Z", fork: true, archived: false, private: false };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/fork")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.includes("/pulls") || url.includes("/traffic/")) return new Response("{}", { status: 403 });
+      if (url.includes("/releases") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await collectGithubSource(ctx, id);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/repos/me/fork/releases"))).toBe(true);
+    // 트래픽 403은 관리 권한 문제라 알리지 않는다. PR 403은 알린다.
+    expect(ctx.db.select().from(schema.sources).get()?.lastError).toBe("GitHub permission missing: me/fork (pull requests)");
+  });
+
+  it("names the readable kinds a repository lacked", () => {
+    expect(missingReads(["/repos/a/b/pulls?state=closed", "/repos/a/b/traffic/views", "/repos/a/b/readme", "/repos/a/c/releases"], "a/b")).toEqual(["pull requests", "contents"]);
   });
 
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {

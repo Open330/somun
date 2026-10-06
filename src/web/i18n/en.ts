@@ -37,6 +37,10 @@ export const en: Record<string, string> = {
     "GitHub authentication is required. Connect the GitHub App or ask the administrator to configure a server token.",
   "저장소를 찾을 수 없거나 접근 권한이 없습니다. 소유자/저장소와 GitHub App의 읽기 권한을 확인해 주세요.":
     "The repository could not be found or accessed. Check the owner/repository and the GitHub App read permissions.",
+  "읽기 권한이 없어 일부를 읽지 못했습니다: {detail}. GitHub App 또는 토큰에 Pull requests·Contents 읽기 권한을 주세요.":
+    "Some data couldn't be read without permission: {detail}. Grant the GitHub App or token read access to Pull requests and Contents.",
+  "공개 저장소만 읽을 수 있어 비공개 저장소를 건너뛰었습니다: {detail}. 비공개 저장소는 GitHub App으로 연결해 주세요.":
+    "Only public repositories can be read here, so these private ones were skipped: {detail}. Connect private repositories through the GitHub App.",
   "GitHub 저장소 주소 형식을 확인해 주세요. 연결을 해제한 뒤 올바른 소유자/저장소로 다시 연결할 수 있습니다.":
     "Check the GitHub repository address. Disconnect it and reconnect with the correct owner/repository.",
   "GitHub 요청 한도에 도달했습니다. 잠시 후 다시 수집해 주세요.": "The GitHub request limit has been reached. Try collecting again later.",

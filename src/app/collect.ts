@@ -23,26 +23,42 @@ const DAY = 24 * 3600 * 1000;
  * 저장소별로: 릴리스·머지 PR·새 레포·스타/다운로드 임계 신호, 근거 갱신, 지표 스냅샷, 릴리스 후보 병합.
  */
 
-async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<GhRepo[]> {
-  const repos: GhRepo[] = [];
+/**
+ * 수집할 저장소. 조직·사용자 단위로 넓힐 때만 fork·보관·60일 넘게 멈춘 저장소를 거른다.
+ * 사용자가 직접 지정한 저장소는 거르지 않는다(조용히 빠지면 왜 글감이 없는지 알 수 없다). 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
+ */
+export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; skipped: string[] }> {
+  const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
     if (t.includes("/")) {
       const r = await gh.get<GhRepo>(`/repos/${t}`);
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
-      repos.push(r);
+      if (publicOnly && r.private !== false) skipped.push(r.full_name);
+      else explicit.push(r);
       continue;
     }
     for (let page = 1; page <= 5; page++) {
       const list = (await gh.get<GhRepo[]>(`/orgs/${t}/repos?per_page=100&page=${page}&sort=pushed`)) ?? (await gh.get<GhRepo[]>(`/users/${t}/repos?per_page=100&page=${page}&sort=pushed`));
       if (!list?.length) break;
-      repos.push(...list);
+      expanded.push(...list);
       if (list.length < 100) break;
     }
   }
   // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
-  return repos.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
+  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY);
+  const seen = new Set<string>();
+  const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
+  return { repos, skipped };
+}
+
+/** 글감 판단에 필요한데 권한 없음으로 읽지 못한 것. 트래픽은 관리 권한이 있어야 해서 늘 빠질 수 있으므로 세지 않는다. */
+export function missingReads(denied: Iterable<string>, repo: string): string[] {
+  const kinds: [RegExp, string][] = [[/\/pulls\b/, "pull requests"], [/\/releases\b/, "releases"], [/\/(?:readme|contents)\b/, "contents"], [/\/commits\b/, "commits"]];
+  const prefix = `/repos/${repo}/`;
+  const paths = [...denied].filter((p) => p.startsWith(prefix));
+  return kinds.filter(([re]) => paths.some((p) => re.test(p))).map(([, label]) => label);
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
@@ -130,7 +146,9 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
-    for (const repo of await expandTargets(gh, source.targets, publicOnly)) {
+    const { repos, skipped } = await expandTargets(gh, source.targets, publicOnly);
+    const missing: string[] = [];
+    for (const repo of repos) {
       const name = repo.full_name;
       try {
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
@@ -224,7 +242,14 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         summary[name] = -1;
       }
     }
-    markPolled(ctx, sourceId, Object.values(summary).some((n) => n < 0) ? "GitHub partial collection failure" : undefined);
+    for (const repo of repos) {
+      const lacks = missingReads(gh.denied, repo.full_name);
+      if (lacks.length) missing.push(`${repo.full_name} (${lacks.join(", ")})`);
+    }
+    if (missing.length) ctx.log.warn({ sourceId, missing }, "GitHub permission missing");
+    markPolled(ctx, sourceId, Object.values(summary).some((n) => n < 0) ? "GitHub partial collection failure"
+      : missing.length ? `GitHub permission missing: ${missing.join("; ")}`
+        : skipped.length ? `GitHub repositories skipped (private): ${skipped.join(", ")}` : undefined);
   } catch (e) {
     markPolled(ctx, sourceId, (e as Error).message);
     throw e;
