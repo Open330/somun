@@ -1,5 +1,5 @@
 import { sharedUsage } from "./shared-quota.js";
-import { eq } from "drizzle-orm";
+import { desc, eq, like } from "drizzle-orm";
 import { classifyGeminiError, nextPtMidnight, ptDayKey, RPD_SOFT_CAP } from "../core/keypool.js";
 import { schema } from "../infra/db/index.js";
 import { freeGeminiKeys, modelFor, type KeyPoolOps } from "../infra/llm/providers.js";
@@ -15,8 +15,8 @@ export const UPSTREAM_FAILURE_WINDOW_MS = 10 * 60_000;
  * 쿨다운만 보면 "요청 가능"으로 보인다. 마지막 호출이 성공했으면 회복된 것으로 본다.
  */
 export function recentUpstreamFailure(ctx: AppContext, model: string, now = Date.now()): number | undefined {
-  const rows = ctx.db.select().from(schema.llmKeyState).all().filter((r) => r.label.endsWith(`|${model}`));
-  const last = rows.sort((a, b) => b.lastUsedAt - a.lastUsedAt)[0];
+  // 생성 요청과 상태 조회마다 불리므로 표 전체를 읽지 않고 이 모델의 가장 최근 호출 한 행만 본다.
+  const last = ctx.db.select().from(schema.llmKeyState).where(like(schema.llmKeyState.label, `%|${model}`)).orderBy(desc(schema.llmKeyState.lastUsedAt)).limit(1).get();
   if (!last?.lastErrorAt || last.lastErrorAt !== last.lastUsedAt || now - last.lastErrorAt > UPSTREAM_FAILURE_WINDOW_MS) return undefined;
   const status = Number(/^upstream-(\d+)$/.exec(last.cooldownReason ?? "")?.[1]);
   return Number.isFinite(status) ? status : undefined;

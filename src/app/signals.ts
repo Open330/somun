@@ -69,6 +69,8 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       const titles: string[] = [];
       for (const o of orphans) {
         if (cand.updatedAt - o.occurredAt > span) continue;
+        // 최근 릴리스에 이미 들어간 PR(릴리스 시점 이전)은 진행 중 작업이 아니다.
+        if (cand.type === "in-progress" && cluster.latestReleaseAt !== undefined && o.occurredAt <= cluster.latestReleaseAt) continue;
         tx.update(schema.signals).set({ candidateId: cand.id }).where(eq(schema.signals.id, o.id)).run();
         titles.push(o.title);
       }
@@ -89,8 +91,8 @@ export function latestForRepo(ctx: AppContext, ownerId: string, repo: string) {
   return {
     latestReleaseAt: latestRelease?.occurredAt,
     recentPrCount: rows.filter((r) => r.kind === "pr_merged" && Date.now() - r.occurredAt < 7 * DAY).length,
-    /** 최근 7일에 이미 저장한 PR. 수집할 때마다 같은 PR을 다시 받아 오므로 개수는 ref로 중복을 빼고 센다. */
-    recentPrRefs: rows.filter((r) => r.kind === "pr_merged" && Date.now() - r.occurredAt < 7 * DAY).map((r) => r.ref),
+    /** 최근 7일에 이미 저장한 PR(ref·머지 시각). 수집할 때마다 같은 PR을 다시 받아 오므로 개수는 ref로 중복을 빼고 센다. */
+    recentPrs: rows.filter((r) => r.kind === "pr_merged" && Date.now() - r.occurredAt < 7 * DAY).map((r) => ({ ref: r.ref, at: r.occurredAt })),
     lastStarThreshold: num(rows.find((r) => r.kind === "star_milestone")),
     lastDownloadThreshold: num(rows.find((r) => r.kind === "download_milestone")),
   };

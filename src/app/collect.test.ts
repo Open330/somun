@@ -197,3 +197,11 @@ it("does not treat bot, deploy, or templated cron commits as reader-visible work
   expect(commitBatch(Array.from({ length: 6 }, (_, i) => c(`b${i}`, `Add feature ${"abcdef"[i]}`, { login: "renovate[bot]", type: "Bot" })), since)).toBeNull();
   expect(commitBatch(["Add export", "Fix crash", "Support CSV", "Add --watch", "Speed up parser"].map((m, i) => c(`v${i}`, m)), since)).not.toBeNull();
 });
+
+it("does not read a repository name as a missing permission and skips squash-merge commits", () => {
+  expect(missingReads(["/repos/acme/commits-lint/traffic/views"], "acme/commits-lint")).toEqual([]);
+  expect(missingReads(["/repos/acme/commits-lint/pulls?state=closed"], "acme/commits-lint")).toEqual(["pull requests"]);
+  const now = Date.now();
+  const c = (sha: string, message: string) => ({ sha, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
+  expect(commitBatch(["feat: a (#1)", "fix: b (#2)", "Add c (#3)", "Add d (#4)", "Add e (#5)"].map((m, i) => c(`s${i}`, m)), now - 14 * 86400e3)).toBeNull();
+});

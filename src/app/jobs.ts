@@ -1,4 +1,5 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
+import { draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { and, asc, eq, gt, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
@@ -96,7 +97,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       }
       if (j.kind === "profile") profileApplied = true;
       else if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.meta?.draftPurpose ?? (j.kind === "draft" ? (j.user.includes("\n## First introduction\n") ? "introduction" : "update") : undefined), promptText: j.user, model }, j.continuation ?? undefined);
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, promptText: j.user, model }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
@@ -165,11 +166,12 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     if (candidate.status === "dropped" || (candidate.status === "published" && job.kind !== "draft" && !(job.kind === "digest" && job.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
     // 다이제스트·판단은 지금의 근거와 계정 언어로 다시 만든다. 초안은 요청한 지침이 프롬프트에 들어 있으므로 저장된 것을 그대로 쓴다.
     // 단, 첫 소개로 실패한 초안인데 그 뒤에 저장소를 알렸다면(복사·게시) 낡은 첫 소개 대신 지금 상태로 다시 만든다.
-    const storedPurpose = job.meta?.draftPurpose ?? (job.user.includes("\n## First introduction\n") ? "introduction" : "update");
-    if (job.kind === "draft" && job.channel && job.lang && storedPurpose === "introduction" && announcedSince(ctx, ownerId, job.candidateId, job.createdAt)) {
-      return enqueueJob(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, buildPrompt(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, { introduction: false }), job.continuation ?? undefined);
+    // 편집 지시는 저장된 프롬프트에서 되찾아 그대로 넘긴다.
+    const storedPurpose = draftPurposeOf(job.meta, job.user);
+    if (job.kind === "draft" && job.channel && job.lang && storedPurpose === "introduction" && announcedSince(ctx, ownerId, job.candidateId, job.createdAt, job.channel as Channel)) {
+      return enqueueJob(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, buildPrompt(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, { introduction: false, instruction: instructionOf(job.user) }), job.continuation ?? undefined);
     }
-    const prompt = job.kind === "draft" ? { draftPurpose: job.meta?.draftPurpose ?? (job.user.includes("\n## First introduction\n") ? "introduction" as const : "update" as const), system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
+    const prompt = job.kind === "draft" ? { draftPurpose: storedPurpose, system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();
 }

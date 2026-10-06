@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, factsBlock, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, instructionOf, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
@@ -78,5 +78,15 @@ describe("judge reasoning", () => {
     expect(withoutFalseFirstClaims(text, 69)).toBe("데모 GIF가 있어 바로 써 볼 수 있습니다.");
     expect(withoutFalseFirstClaims("This is the first release. It runs today.", 69)).toBe("It runs today.");
     expect(withoutFalseFirstClaims(text, 1)).toBe(text);
+  });
+});
+
+describe("stored draft prompts", () => {
+  it("recovers the editor instruction and purpose from a stored prompt", () => {
+    const user = draftPrompt(candidate, "x", "en", [], undefined, { instruction: "Make it shorter", introduction: true }).user;
+    expect(instructionOf(user)).toBe("Make it shorter");
+    expect(draftPurposeOf(null, user)).toBe("introduction");
+    expect(draftPurposeOf({ draftPurpose: "update" }, user)).toBe("update");
+    expect(instructionOf(draftPrompt(candidate, "x", "en", []).user)).toBeUndefined();
   });
 });

@@ -173,9 +173,10 @@ it("redrafts the same channel as an update once its introduction was copied, and
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
   expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(true);
-  // 첫 소개 작업이 실패해 남아 있는 상태에서 다른 초안을 복사한다.
-  const failed = queueStep(ctx, "test", "draft", id, "linkedin", "ko", { introduction: true });
-  ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: Date.now(), createdAt: Date.now() - 1000 }).where(eq(schema.llmJobs.id, failed)).run();
+  // 같은 채널(X)의 첫 소개 다시 쓰기 요청이 실패해 남아 있는 상태에서, X 초안을 복사한다.
+  const failed = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true, instruction: "Make it shorter" });
+  const linkedin = queueStep(ctx, "test", "draft", id, "linkedin", "ko", { introduction: true });
+  ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: Date.now(), createdAt: Date.now() - 1000 }).run();
   ctx.db.update(schema.drafts).set({ copiedAt: Date.now() }).run();
   expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(false);
   expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).not.toContain("## First introduction");
@@ -183,6 +184,11 @@ it("redrafts the same channel as an update once its introduction was copied, and
   const job = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retried)).get();
   expect(job?.meta?.draftPurpose).toBe("update");
   expect(job?.user).not.toContain("## First introduction");
+  // 편집 지시는 다시 만든 프롬프트에도 남는다.
+  expect(job?.user).toContain("Make it shorter");
+  // 다른 채널(LinkedIn)은 X에서 알린 것으로 소개된 것이 아니다. 첫 소개 그대로 다시 시도한다.
+  const linkedinRetry = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retryGeneration(ctx, "test", linkedin))).get();
+  expect(linkedinRetry?.meta?.draftPurpose).toBe("introduction");
   // 명시한 첫 소개는 그대로 따른다.
   expect(requestedIntroduction(ctx, "test", id, "x", "en", true)).toBe(true);
 });

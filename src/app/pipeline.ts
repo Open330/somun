@@ -84,14 +84,15 @@ export function requestedIntroduction(ctx: AppContext, ownerId: string, candidat
   if (!channel || !lang) return undefined;
   const previous = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   if (!previous?.purpose) return undefined;
-  if (previous.purpose === "introduction" && announcedSince(ctx, ownerId, candidateId, previous.createdAt)) return false;
+  // 다른 채널에서 알린 것은 이 채널 독자에게 소개한 것이 아니다. 같은 채널에서 알렸을 때만 업데이트로 바꾼다.
+  if (previous.purpose === "introduction" && announcedSince(ctx, ownerId, candidateId, previous.createdAt, channel)) return false;
   return previous.purpose === "introduction";
 }
 
-/** 이 글감의 저장소를 at 이후에(같은 시각 포함) 알렸는가. */
-export function announcedSince(ctx: AppContext, ownerId: string, candidateId: number, at: number): boolean {
+/** 이 글감의 저장소를 at 이후에(같은 시각 포함) 알렸는가. channel을 주면 그 채널에서 알린 것만 본다. */
+export function announcedSince(ctx: AppContext, ownerId: string, candidateId: number, at: number, channel?: Channel): boolean {
   const repo = getCandidateRow(ctx, ownerId, candidateId).repo;
-  const last = lastAnnouncedAt(ctx, ownerId, repo);
+  const last = lastAnnouncedAt(ctx, ownerId, repo, channel);
   return last !== undefined && last >= at;
 }
 

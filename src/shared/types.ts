@@ -44,6 +44,8 @@ export type Evidence = {
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };
 
 export type Settings = {
+  /** 판단 합계의 척도. 10이면 가중 합계를 10점 만점으로 환산한 척도로 기준값을 저장한 것이다. 없으면 예전(가중 원점수) 척도. */
+  rubricScale?: 10;
   rubricWeights: RubricScores;
   draftThreshold: number;
   deferThreshold: number;

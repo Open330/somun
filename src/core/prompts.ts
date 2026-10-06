@@ -210,6 +210,22 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
+const INSTRUCTION_HEADING = "\n## Editor instruction for this rewrite\n";
+
+/** 초안 작업의 목적. 메타가 없던 예전 작업은 프롬프트의 첫 소개 절로 판단한다. 서버·재시도·보정이 같은 규칙을 쓴다. */
+export function draftPurposeOf(meta: { draftPurpose?: import("../shared/types.js").DraftPurpose } | null | undefined, user: string): import("../shared/types.js").DraftPurpose {
+  return meta?.draftPurpose ?? (user.includes("\n## First introduction\n") ? "introduction" : "update");
+}
+
+/** 저장된 초안 프롬프트에서 편집 지시를 되찾는다(다시 만들 때 사용자의 요청을 잃지 않게). */
+export function instructionOf(user: string): string | undefined {
+  const at = user.indexOf(INSTRUCTION_HEADING);
+  if (at < 0) return undefined;
+  const rest = user.slice(at + INSTRUCTION_HEADING.length);
+  const end = rest.search(/\n(?:\n|#)/);
+  return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
+}
+
 export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
@@ -281,7 +297,7 @@ Hard rules:
       opts.guide ? `## Voice guide\n${opts.guide}` : "",
       lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
       opts.previous ? `\n## Previous version (rewrite this; do not repeat it verbatim)\n${opts.previous.title ? `Title: ${opts.previous.title}\n` : ""}${opts.previous.body}` : "",
-      opts.instruction ? `\n## Editor instruction for this rewrite\n${opts.instruction}` : "",
+      opts.instruction ? `${INSTRUCTION_HEADING}${opts.instruction}` : "",
       opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",

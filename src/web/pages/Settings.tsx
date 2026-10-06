@@ -270,6 +270,7 @@ export default function Settings() {
                       type="number"
                       step="0.5"
                       min="0"
+                      max="5"
                       className="weight-input"
                       value={settings.rubricWeights[k]}
                       onChange={(ev) => void update({ rubricWeights: { ...settings.rubricWeights, [k]: Number(ev.target.value) } })}

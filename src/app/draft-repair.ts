@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { CHANNELS, type Channel } from "../core/channels.js";
 import type { LintResult } from "../core/lint.js";
+import { draftPurposeOf } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { NotFoundError } from "./context.js";
@@ -26,7 +27,7 @@ export function readDraft(channel: Channel, json: unknown): { title?: string; bo
 export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, json: unknown): LintResult[] | null {
   const channel = job.channel as Channel;
   const d = readDraft(channel, json);
-  const purpose = job.user.includes("\n## First introduction\n") ? "introduction" : "update";
+  const purpose = draftPurposeOf(null, job.user);
   return d.body ? lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose).filter((l) => !l.ok && REPAIRABLE.has(l.rule)) : null;
 }
 
