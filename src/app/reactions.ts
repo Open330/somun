@@ -13,8 +13,9 @@ const DAY = 86400e3;
 const UA = "somun/1.0 (+https://somun.jiun.dev)";
 
 export function parseXStatus(url: string): { user: string; id: string } | null {
-  const m = /^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([\w]+)\/status\/(\d+)/i.exec(url);
-  return m ? { user: m[1], id: m[2] } : null;
+  // 모바일 주소(mobile.x.com)와 사용자 없는 공유 주소(x.com/i/web/status/…)도 읽는다. FxTwitter는 사용자 자리에 i를 받는다.
+  const m = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/(?:i(?:\/web)?|([\w]+))\/status(?:es)?\/(\d+)/i.exec(url);
+  return m ? { user: m[1] ?? "i", id: m[2] } : null;
 }
 export function parseHnItem(url: string): string | null {
   const m = /news\.ycombinator\.com\/item\?id=(\d+)/i.exec(url);

@@ -51,8 +51,10 @@ export function backfillStarPoints(currentStars: number, starTimes: number[], pu
  */
 export function editRatio(before: string, after: string): number {
   const MAX_TOKENS = 600;
-  const a = before.split(/\s+/).filter(Boolean).slice(0, MAX_TOKENS);
-  const b = after.split(/\s+/).filter(Boolean).slice(0, MAX_TOKENS);
+  // 낱말 앞뒤의 문장부호는 떼고 비교한다. 마침표 하나를 붙였다고 그 어절을 새로 쓴 것으로 세지 않게.
+  const words = (text: string) => text.split(/\s+/).map((w) => w.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, "").toLowerCase()).filter(Boolean).slice(0, MAX_TOKENS);
+  const a = words(before);
+  const b = words(after);
   if (a.length === 0) return b.length === 0 ? 0 : 1;
   let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {

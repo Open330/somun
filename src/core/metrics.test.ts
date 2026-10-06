@@ -38,3 +38,9 @@ it("rebuilds pre-post star counts from recent star times", () => {
   const times = [...Array.from({ length: 8 }, (_, i) => pub - 7 * DAY + i * 3600e3), ...Array.from({ length: 22 }, (_, i) => pub - 0.5 * DAY + i * 3600e3)];
   expect(backfillStarPoints(120, times, pub)).toEqual([{ at: pub - 8 * DAY, stars: 90 }, { at: pub - DAY, stars: 98 }]);
 });
+
+it("does not count punctuation-only or case-only changes as rewritten words", () => {
+  expect(editRatio("소문은 초안을 만듭니다 링크는 아래", "소문은 초안을 만듭니다. 링크는 아래.")).toBe(0);
+  expect(editRatio("Ships today", "ships today!")).toBe(0);
+  expect(editRatio("one two three four", "one two five four")).toBe(0.25);
+});
