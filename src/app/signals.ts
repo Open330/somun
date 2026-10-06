@@ -40,10 +40,7 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           let title = existing.title;
           if (type !== existing.type) title = ck.title;
           else if (ck.type === "release" && existing.type === "release") {
-            // 가장 최근에 게시한 릴리스가 제목이 된다. 태그 문자열 비교는 모노레포(pkg-b@0.1.0 > pkg-a@1.2.0)에서 틀린다.
-            const latestAt = Math.max(...tx.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"))).all().map((r) => r.at), -Infinity);
-            const newer = String(s.payload.tag ?? "").localeCompare(existing.title.split(" ").pop() ?? "", undefined, { numeric: true }) > 0;
-            if (s.occurredAt > latestAt || (s.occurredAt === latestAt && newer)) title = ck.title;
+            if (outranksTitle(String(s.payload.tag ?? ""), s.occurredAt, existing.title.split(" ").pop() ?? "", Math.max(...tx.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"))).all().map((r) => r.at), -Infinity))) title = ck.title;
           }
           // 판단 뒤에 더 강한 신호(새 릴리스·유형 승격)가 합쳐지면 예전 판단이 지금 내용을 설명하지 못한다. 다시 판단받도록 되돌린다.
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
@@ -84,12 +81,25 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   return { inserted, candidates: [...touched] };
 }
 
+/**
+ * 새 릴리스가 지금 제목의 릴리스를 대신하는가.
+ * 같은 줄기(숫자 앞 접두사가 같은 태그: v8.3.3과 v6.4.4)는 버전이 높은 쪽이다. 옛 줄기의 백포트가 늦게 나왔다고 제목이 되지 않게.
+ * 다른 패키지(pkg-a@, pkg-b@)는 버전을 비교할 수 없으므로 더 최근에 게시한 쪽이다.
+ */
+export function outranksTitle(tag: string, at: number, currentTag: string, currentAt: number): boolean {
+  const line = (t: string) => t.replace(/\d.*$/, "");
+  const byVersion = tag.localeCompare(currentTag, undefined, { numeric: true });
+  if (line(tag) === line(currentTag)) return byVersion > 0;
+  return at > currentAt || (at === currentAt && byVersion > 0);
+}
+
 /** 릴리스 신호의 노트를 글감 근거에 쌓는다(같은 태그는 한 번). */
 function withReleaseNote(notes: Evidence["windowReleaseNotes"], s: IncomingSignal): Evidence["windowReleaseNotes"] {
   if (s.kind !== "release") return notes;
   const tag = String(s.payload.tag ?? s.ref);
   if (notes?.some((n) => n.tag === tag)) return notes;
-  return [...(notes ?? []), { tag, notes: String(s.payload.body ?? "").slice(0, 1500) }].slice(-10);
+  // 수집기는 최신 릴리스부터 보낸다. 게시 시각으로 정렬한 뒤 최신 10개를 남긴다(오래된 것부터, 끝이 최신).
+  return [...(notes ?? []), { tag, notes: String(s.payload.body ?? "").slice(0, 1500), at: s.occurredAt }].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)).slice(-10);
 }
 
 export function latestForRepo(ctx: AppContext, ownerId: string, repo: string) {

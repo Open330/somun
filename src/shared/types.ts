@@ -40,7 +40,7 @@ export type Evidence = {
   /** 이 창에서 넘은 임계. 글감이 아니라 사실로 쓴다. */
   milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
   /** 이 글감에 묶인 릴리스들의 노트(최신 릴리스 포함). 요약과 수치 대조가 최신 노트 하나만 보지 않게. */
-  windowReleaseNotes?: { tag: string; notes: string }[];
+  windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
 };
 
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };

@@ -4,7 +4,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
+import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES, windowFacts } from "./pipeline.js";
 import { retryGeneration } from "./jobs.js";
 import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
@@ -280,4 +280,20 @@ it("adds one under-posted everyday channel to the judge's picks, never launch ch
   for (const ch of ["linkedin", "threads", "threads"]) ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: ch, url: `https://example.test/${ch}/${Math.random()}`, publishedAt: 2 }).run();
   judge();
   expect(drafted()).toEqual(["x"]);
+});
+
+it("does not call release housekeeping PRs unreleased work", () => {
+  const sig = (kind: string, ref: string, title: string, at: number, payload: Record<string, unknown> = {}) =>
+    ctx.db.insert(schema.signals).values({ ownerId: "test", sourceId: 1, kind, repo: "vitejs/vite", ref, title, payload, occurredAt: at, candidateId: id }).run();
+  sig("release", "r1", "vite v0.6.0", 1000, { tag: "v0.6.0" });
+  sig("pr_merged", "p1", "chore(release): 0.6.0 is out", 1200);
+  sig("pr_merged", "p2", "Add grouped session views", 3000);
+  ctx.db.update(schema.candidates).set({ title: "vitejs/vite v0.6.0" }).run();
+  expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Add grouped session views"]);
+});
+
+it("keeps a candidate deferred when drafts that were already running finish", () => {
+  ctx.db.update(schema.candidates).set({ status: "deferred", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft" } });
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("deferred");
 });

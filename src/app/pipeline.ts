@@ -67,8 +67,12 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
 export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
   const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
   const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
-  const latestAt = releases.at(-1)?.occurredAt;
-  const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt).map((s) => s.title);
+  // 기준은 글감 제목의 릴리스(같은 줄기의 최신판). 옛 줄기의 백포트가 늦게 나왔다고 그 사이 main의 PR을 출시된 것으로 보지 않는다.
+  const titleTag = getCandidateRow(ctx, ownerId, candidateId).title.split(" ").pop();
+  const latestAt = (releases.find((s) => String((s.payload as { tag?: string }).tag) === titleTag) ?? releases.at(-1))?.occurredAt;
+  // 릴리스 직후의 정리 PR(chore(release): 0.6.0, changelog, version bump)은 그 릴리스의 일부다.
+  const housekeeping = /^(?:chore|ci|build|docs)(?:\([^)]*\))?!?:|\brelease\b|changelog|version bump|bump version/i;
+  const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt && !housekeeping.test(s.title)).map((s) => s.title);
   return {
     ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
     ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
@@ -282,7 +286,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
   const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
-  ctx.db.update(schema.candidates).set({ status: c.status === "published" ? "published" : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+  ctx.db.update(schema.candidates).set({ status: c.status === "published" || c.status === "deferred" ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });
   return { kind: "draft", draftId };

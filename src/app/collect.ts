@@ -201,8 +201,11 @@ async function backfillRepo(ctx: AppContext, ownerId: string, name: string, publ
   const { gh, publicOnly } = await githubAccess(ctx, ownerId, src?.options?.installationId ? Number(src.options.installationId) : undefined);
   const repo = await gh.get<GhRepo>(`/repos/${name}`);
   if (!repo || (publicOnly && repo.private !== false)) return 0;
-  const { times, complete } = await gh.recentStarTimes(name, repo.stargazers_count, publishedAt - 9 * DAY);
-  if (!complete) return 0;
+  const { times, complete, status } = await gh.recentStarTimes(name, repo.stargazers_count, publishedAt - 9 * DAY);
+  if (!complete) {
+    ctx.log.info({ repo: name, status, read: times.length }, status === 404 ? "star history unavailable: GitHub lists stargazers only for repositories this token can access" : "star history incomplete: more recent stars than the backfill reads");
+    return 0;
+  }
   let inserted = 0;
   for (const p of backfillStarPoints(repo.stargazers_count, times, publishedAt)) {
     if (snaps.some((s) => Math.abs(s.at - p.at) < 12 * 3600e3)) continue;

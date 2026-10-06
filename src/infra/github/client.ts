@@ -40,14 +40,15 @@ export class GitHubClient {
    * 최근에 스타를 준 시각들(최신 쪽 페이지부터 거꾸로). since 이전 스타가 나오면 멈춘다.
    * complete: since 이후의 스타를 모두 읽었는가(최대 maxPages쪽). 스타 취소는 알 수 없다.
    */
-  async recentStarTimes(repo: string, totalStars: number, since: number, maxPages = 5): Promise<{ times: number[]; complete: boolean }> {
+  async recentStarTimes(repo: string, totalStars: number, since: number, maxPages = 5): Promise<{ times: number[]; complete: boolean; status?: number }> {
     const times: number[] = [];
     const last = Math.max(1, Math.ceil(totalStars / 100));
     for (let page = last, read = 0; page >= 1 && read < maxPages; page--, read++) {
       const path = `/repos/${repo}/stargazers?per_page=100&page=${page}`;
       const res = await fetch(`${GH}${path}`, { headers: { ...this.headers(), Accept: "application/vnd.github.star+json" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (rateLimited(res)) throw new GitHubRateLimitError(path, Number(res.headers.get("x-ratelimit-reset")) * 1000 || undefined);
-      if (!res.ok) return { times, complete: false };
+      // GitHub은 접근 권한이 있는 저장소에만 스타 목록을 준다(남의 저장소는 404).
+      if (!res.ok) return { times, complete: false, status: res.status };
       const list = (await res.json()) as { starred_at?: string }[];
       const at = list.map((s) => Date.parse(s.starred_at ?? "")).filter(Number.isFinite);
       times.push(...at);
