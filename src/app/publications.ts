@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, ne } from "drizzle-orm";
 import { publicationEffect } from "../core/metrics.js";
 import { markPublished, unmarkPublished } from "./ledger.js";
 import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
@@ -119,12 +119,18 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
   return out;
 }
 
-/** 하루 한 번 스냅샷. 20시간 안이면 덮어쓴다. */
-export function snapshotMetrics(ctx: AppContext, ownerId: string, m: { repo: string; stars: number; forks: number; viewsUniques14d?: number; referrers?: { referrer: string; uniques: number }[]; npmDownloadsMonth?: number }): void {
+/**
+ * 하루 한 번 스냅샷. 20시간 안이면 덮어쓴다.
+ * 단, 마지막 스냅샷 뒤에 이 저장소의 글을 올렸다면 덮어쓰지 않고 새로 남긴다. 덮어쓰면 발행 전 기준값이
+ * 발행 뒤 값으로 바뀌어(스타 webhook마다 수집이 다시 돈다) 발행 효과가 기준선과 추세에 흡수된다.
+ */
+export function snapshotMetrics(ctx: AppContext, ownerId: string, m: { repo: string; stars: number; forks: number; viewsUniques14d?: number; referrers?: { referrer: string; uniques: number }[]; npmDownloadsMonth?: number }, now = Date.now()): void {
   const last = ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, m.repo))).orderBy(desc(schema.metricSnapshots.at)).get();
   const values = { ownerId, repo: m.repo, stars: m.stars, forks: m.forks, viewsUniques14d: m.viewsUniques14d ?? null, referrers: m.referrers ?? null, npmDownloadsMonth: m.npmDownloadsMonth ?? null };
-  if (last && Date.now() - last.at < 20 * 3600 * 1000) ctx.db.update(schema.metricSnapshots).set(values).where(eq(schema.metricSnapshots.id, last.id)).run();
-  else ctx.db.insert(schema.metricSnapshots).values({ ...values, at: Date.now() }).run();
+  const postedSince = last && Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, m.repo), gt(schema.publications.publishedAt, last.at))).get());
+  if (last && now - last.at < 20 * 3600 * 1000 && !postedSince) ctx.db.update(schema.metricSnapshots).set(values).where(eq(schema.metricSnapshots.id, last.id)).run();
+  else ctx.db.insert(schema.metricSnapshots).values({ ...values, at: now }).run();
 }
 
 export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
