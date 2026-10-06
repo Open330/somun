@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import pino from "pino";
 import { openDb, schema } from "../infra/db/index.js";
@@ -31,6 +32,25 @@ describe("repo-window candidates", () => {
     expect(rows[0].key.startsWith("repo:a/x:")).toBe(true);
     const e = rows[0].evidence as Evidence;
     expect(e.milestones?.map((m) => `${m.metric}-${m.threshold}`)).toEqual(["stars-25", "downloads-100"]);
+  });
+
+  it("reopens a judged candidate for judgment when a newer release joins it, but keeps drafted ones", () => {
+    const ctx = makeCtx();
+    const now = Date.now();
+    ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x", "a/y"], enabled: true }).run();
+    const rel = (repo: string, tag: string) => ({ kind: "release" as const, repo, ref: `r:${repo}@${tag}`, title: `${repo} ${tag}`, payload: { tag }, occurredAt: now });
+    ingestSignals(ctx, "o", 1, [rel("a/x", "v1.0.0")], {}, ev("a/x"));
+    ingestSignals(ctx, "o", 1, [rel("a/y", "v1.0.0")], {}, ev("a/y"));
+    ctx.db.update(schema.candidates).set({ status: "judged" }).where(eq(schema.candidates.repo, "a/x")).run();
+    ctx.db.update(schema.candidates).set({ status: "drafted" }).where(eq(schema.candidates.repo, "a/y")).run();
+    ingestSignals(ctx, "o", 1, [{ kind: "star_milestone", repo: "a/x", ref: "s:a/x#25", title: "a/x stars 25", payload: { threshold: 25 }, occurredAt: now }], {}, ev("a/x"));
+    expect(ctx.db.select().from(schema.candidates).where(eq(schema.candidates.repo, "a/x")).get()?.status).toBe("judged");
+    ingestSignals(ctx, "o", 1, [rel("a/x", "v1.1.0")], {}, ev("a/x"));
+    ingestSignals(ctx, "o", 1, [rel("a/y", "v1.1.0")], {}, ev("a/y"));
+    const x = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.repo, "a/x")).get();
+    expect(x?.title).toBe("a/x v1.1.0");
+    expect(x?.status).toBe("new");
+    expect(ctx.db.select().from(schema.candidates).where(eq(schema.candidates.repo, "a/y")).get()?.status).toBe("drafted");
   });
 
   it("opens a new window after 10 days", () => {

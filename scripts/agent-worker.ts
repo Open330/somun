@@ -79,7 +79,7 @@ async function repair(job: Job, claimToken: string, first: { json: unknown; mode
   try {
     const again = await runAgent({ ...job, user: before.repairUser });
     const after = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(again.json) });
-    const better = isBetterRepair(before.issues, after.issues);
+    const better = isBetterRepair(before.issues, after.issues, { before: JSON.stringify(first.json ?? ""), after: JSON.stringify(again.json ?? "") });
     console.log(`repair #${job.id}: ${before.issues.map((i) => i.rule).join(",")} → ${after.issues.map((i) => i.rule).join(",") || "ok"} (${better ? "repaired" : "kept first"})`);
     return better ? again : first;
   } catch (e) {

@@ -22,6 +22,8 @@ const schema = z.object({
   AUTH_AUDIENCE: z.string().default("somun"),
   GITHUB_TOKEN: z.string().optional(),
   GEMINI_API_KEYS: z.string().optional(),
+  SOMUN_SHARED_MODEL_DAILY_LIMIT: z.coerce.number().int().min(1).max(10000).default(50),
+  SOMUN_SHARED_MODEL_PENDING_LIMIT: z.coerce.number().int().min(1).max(1000).default(20),
   /** UTC cron. 기본 00:00 UTC = 09:00 KST */
   CRON: z.string().default("0 0 * * *"),
   WEB_DIST: z.string().default("./dist/web"),

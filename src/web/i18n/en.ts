@@ -3,6 +3,19 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "공유 모델의 현재 요청 가능 여부와 내 계정의 실행 한도입니다. 제공사 응답에 따라 이용 상태가 달라질 수 있습니다.":
+    "Current shared model availability and your account’s execution limit. Availability may change with provider responses.",
+  "개요 형식": "Outline format",
+  "개요로 작성해 주세요: 제목 후보 3줄, 사실을 배치할 절 4~6줄, 마지막에 독자에게 물을 실제 질문 1줄. 문단형 본문을 쓰지 말고 각 항목을 줄바꿈해 주세요.":
+    "Write an outline: three title candidates, four to six section lines assigning supplied facts, and an actual reader question on the last line. Put each item on its own line rather than writing the article.",
+  "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.":
+    "Review author role: {phrases}. A connected repository does not establish that the poster developed or released the project; review the source and the poster’s role.",
+  "작성자 역할 확인": "Review author role",
+  "오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}":
+    "Shared model executions today: {used}/{limit} · Up to {pending} queued/running jobs · Resets {reset}",
+  "로그인을 완료하지 못했습니다. 로그인 화면에서 다시 시작해 주세요.": "Sign-in could not be completed. Start again from the sign-in page.",
+  "로그인 화면으로": "Back to sign in",
+  "연결 관리로 돌아가기": "Back to connections",
   "표현 확인": "Check wording",
   금지어: "Avoided terms",
   "구성 확인": "Check sections",

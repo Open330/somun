@@ -7,6 +7,7 @@ import { applyResult, buildPrompt, processNewCandidates, queueStep, SWEEP_BACKOF
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
+import { reserveSharedExecution } from "./shared-quota.js";
 
 let ctx: AppContext;
 let id: number;
@@ -108,6 +109,21 @@ describe("hourly sweep", () => {
     job("digest", "pending");
     expect(await processNewCandidates(ctx)).toBe(0);
   });
+
+  it.each(["daily", "pending"])("continues with other owners when one owner's %s capacity is exhausted", async (limit) => {
+    ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+    ctx.env.sharedModelDailyLimit = 1;
+    ctx.env.sharedModelPendingLimit = 1;
+    if (limit === "daily") reserveSharedExecution(ctx, "test");
+    else job("lesson", "pending");
+    updateSettings(ctx, "other", { watch: { mode: "auto", recentDays: 30 } });
+    const source = ctx.db.select().from(schema.candidates).get()!;
+    ctx.db.insert(schema.candidates).values({ ...source, id: undefined, ownerId: "other", key: "other" }).run();
+    expect(await processNewCandidates(ctx)).toBe(1);
+    const digests = ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "digest");
+    expect(digests.map((j) => j.ownerId)).toEqual(["other"]);
+    expect(await processNewCandidates(ctx, "test")).toBe(0);
+  });
 });
 
 it("filters unverified highlights before keeping eight, and checks against the text the digest actually saw", () => {
@@ -139,6 +155,21 @@ it("drafts a first introduction until something from the repository is published
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
   ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "x", url: "https://x.com/a/status/1", publishedAt: 1 }).run();
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+});
+
+it("treats a copied draft as announced even without a registered post URL", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## First introduction");
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft body" } });
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
+  ctx.db.update(schema.drafts).set({ copiedAt: 2 }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+});
+
+it("tells the introduction judge not to call an established project a first release", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("never call it a first release");
 });
 
 

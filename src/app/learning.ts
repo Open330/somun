@@ -1,3 +1,4 @@
+import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
@@ -47,7 +48,10 @@ export function queueLesson(ctx: AppContext, ownerId: string, input: { draftId: 
   try {
     const settings = getSettings(ctx, ownerId);
     const prompt = editLessonPrompt({ channel: input.channel, lang: input.lang, before: input.before, after: input.after, dropReason: input.dropReason, note: input.note, currentGuide: settings.voice.guide || undefined });
-    return Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId: input.candidateId, draftId: input.draftId, lessonKind: input.after !== undefined ? "edit" : "drop", channel: input.channel, lang: input.lang, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: settings.llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+    return ctx.db.$client.transaction(() => {
+      assertSharedQueueCapacity(ctx, ownerId);
+      return Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind: "lesson", candidateId: input.candidateId, draftId: input.draftId, lessonKind: input.after !== undefined ? "edit" : "drop", channel: input.channel, lang: input.lang, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), executor: settings.llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
+    }).immediate();
   } catch (e) {
     ctx.log.warn({ err: (e as Error).message }, "queueLesson failed");
     return undefined;

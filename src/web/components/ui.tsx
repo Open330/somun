@@ -165,6 +165,11 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
 export function lintDetail(l: { rule: string; detail?: string; args?: Record<string, string> }): string | undefined {
   if (l.rule === "numbers_need_review" && l.args?.numbers)
     return t("제공된 근거에서 찾지 못한 수치: {numbers}. 원문과 단위를 확인해 주세요.", { numbers: l.args.numbers });
+  if (l.rule === "author_role_need_review" && l.args?.phrases)
+    return t(
+      "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.",
+      { phrases: l.args.phrases },
+    );
   return l.detail === undefined ? undefined : t(l.detail);
 }
 
@@ -192,6 +197,8 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     repo_name: t("이름 왜곡"),
     no_invented_limit: t("한계 확인"),
     numbers_need_review: t("수치 확인"),
+    author_role_need_review: t("작성자 역할 확인"),
+    outline_structure: t("개요 형식"),
     paragraphs: t("문단"),
     sections: t("구성 확인"),
     open_question: t("끝맺음 질문"),

@@ -128,7 +128,9 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       ]);
       const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
       // 게시되지 않은 초안 릴리스는 published_at이 null이라 날짜 계산을 깨뜨린다.
-      const allReleases = (releases ?? []).filter((r) => r.published_at && !Number.isNaN(Date.parse(r.published_at)));
+      // GitHub 목록 순서는 게시일 순이 아니다(오래된 릴리스가 맨 앞에 올 수 있다). 최신 판·첫 릴리스 계산을 위해 게시일 내림차순으로 맞춘다.
+      const allReleases = (releases ?? []).filter((r) => r.published_at && !Number.isNaN(Date.parse(r.published_at)))
+        .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at));
       const prev = latestForRepo(ctx, ownerId, name);
       const last = lastSnapshot(ctx, ownerId, name);
       const signals: IncomingSignal[] = [];

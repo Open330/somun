@@ -40,11 +40,15 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           let title = existing.title;
           if (type !== existing.type) title = ck.title;
           else if (ck.type === "release" && existing.type === "release") {
-            const oldTag = (cur.version ?? existing.title.split(" ").pop() ?? "");
+            // 비교 기준은 지금 제목의 태그. evidence.version은 수집 시점의 값이라 이번 묶음의 다른 릴리스와 어긋날 수 있다.
+            const oldTag = existing.title.split(" ").pop() ?? cur.version ?? "";
             const newTag = String(s.payload.tag ?? "");
             if (newTag.localeCompare(oldTag, undefined, { numeric: true }) > 0) title = ck.title;
           }
-          tx.update(schema.candidates).set({ type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          // 판단 뒤에 더 강한 신호(새 릴리스·유형 승격)가 합쳐지면 예전 판단이 지금 내용을 설명하지 못한다. 다시 판단받도록 되돌린다.
+          // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
+          const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status);
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));

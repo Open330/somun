@@ -1,0 +1,16 @@
+{
+  "name": "pre-release-20261006",
+  "cases": "pre-release-cases.json",
+  "variants": [
+    {
+      "id": "production",
+      "provider": "gemini",
+      "model": "gemini-3.7-flash"
+    },
+    {
+      "id": "fallback",
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite"
+    }
+  ]
+}

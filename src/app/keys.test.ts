@@ -74,3 +74,18 @@ it("exposes safe aggregate availability to a non-admin without shared key identi
   expect(JSON.parse(text).mode).toBe("shared");
   for (const secret of ["free-a", "test-key", "paid-1", "dayCount", "cap"]) expect(text).not.toContain(secret);
 });
+
+it("shows only this account's shared execution usage and stops claiming readiness at its daily limit", async () => {
+  const { reserveSharedExecution } = await import("./shared-quota.js");
+  ctx.env.sharedModelDailyLimit = 1;
+  reserveSharedExecution(ctx, "local", now);
+  const view = modelAvailability(ctx, "local", now);
+  expect(view.sharedUsage).toMatchObject({ used: 1, limit: 1, pendingLimit: 20 });
+  expect(view.models.every((m) => m.state === "waiting" && m.retryAt === view.sharedUsage!.resetAt)).toBe(true);
+  expect(modelAvailability(ctx, "other", now).sharedUsage!.used).toBe(0);
+  updateSettings(ctx, "local", { llm: {
+    provider: "gemini",
+    apiKey: "dummy-user-key",
+  } });
+  expect(modelAvailability(ctx, "local", now).sharedUsage).toBeUndefined();
+});

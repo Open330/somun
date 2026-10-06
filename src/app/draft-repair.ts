@@ -13,7 +13,7 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["length", "title_length", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 type DraftJob = { id: number; candidateId: number; channel?: Channel | null; user: string };
 
@@ -43,6 +43,9 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[])
     "## Fix these problems",
     "Rewrite the previous draft so these checks pass. Keep every fact and link from Facts, and change only what is needed.",
     ...issues.map((l) => `- ${l.rule}${l.detail ? `: ${l.detail}` : ""}`),
+    ...(issues.some((l) => l.rule === "numbers_need_review")
+      ? ["For numbers_need_review: use the exact figure from Facts, or delete the claim. Never swap the number for vague size words (dramatically, significantly, halved, much faster, 대폭, 크게, 절반)."]
+      : []),
   ].join("\n");
 }
 

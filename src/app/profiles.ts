@@ -1,3 +1,4 @@
+import { reserveSharedExecution } from "./shared-quota.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
@@ -143,6 +144,7 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const cfg = getSettings(ctx, ownerId).llm;
   const startedAt = Date.now();
   let res;
+  reserveSharedExecution(ctx, ownerId, Date.now(), cfg);
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg) }); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });

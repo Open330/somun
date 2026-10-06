@@ -1,3 +1,4 @@
+import { SharedQuotaError } from "../app/shared-quota.js";
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -28,6 +29,7 @@ export function createApp(ctx: AppContext, config: Config) {
   app.onError((err, c) => {
     if (err instanceof HTTPException && err.status < 500) return c.json({ error: err.message }, err.status);
     if (err instanceof ZodError) return c.json({ error: "invalid request", issues: err.issues }, 400);
+    if (err instanceof SharedQuotaError) { c.header("Retry-After", String(Math.max(1, Math.ceil((err.retryAt - Date.now()) / 1000)))); return c.json({ error: err.message, retryAt: err.retryAt }, 429); }
     if (err instanceof GenerationConflictError) return c.json({ error: err.message }, 409);
     if (err instanceof InvalidInputError) return c.json({ error: err.message }, 400);
     if (err instanceof NotFoundError) return c.json({ error: err.message }, 404);

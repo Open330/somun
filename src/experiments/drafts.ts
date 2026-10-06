@@ -9,19 +9,21 @@ const draftSchema = z.object({ title: z.string(), body: z.string().trim().min(1)
 const evidenceSchema = z.object({
   repo: z.string().min(1), repoUrl: z.string().url(), description: z.string().optional(),
   version: z.string().optional(), releaseNotes: z.string().optional(), readmeExcerpt: z.string().optional(),
-  highlights: z.array(z.string()).min(1), limitations: z.array(z.string()).default([]),
+  highlights: z.array(z.string()), limitations: z.array(z.string()).default([]),
   stars: z.number().optional(), forks: z.number().optional(), commitCount: z.number().optional(),
   releaseCount: z.number().optional(), firstReleaseAt: z.string().optional(),
   language: z.string().optional(), license: z.string().optional(), homepage: z.string().optional(),
   npmPackage: z.string().optional(), npmMonthlyDownloads: z.number().optional(), demoAsset: z.string().optional(),
 }).strict();
 export const casesSchema = z.array(z.object({
+  introduction: z.boolean().optional(),
   id, channel: z.enum(["x", "threads", "linkedin", "show_hn", "show_gn", "blog"]), lang: z.string().min(2),
   candidate: z.object({ title: z.string(), type: z.string(), evidence: evidenceSchema }).strict(),
   required: z.array(z.string().min(1)).default([]),
   requiredAny: z.array(z.object({ id, phrases: z.array(z.string().min(1)).min(1) }).strict()).optional(), forbidden: z.array(z.string().min(1)).default([]),
   reviewNotes: z.string(),
 }).strict()).min(1).max(100).superRefine((rows, ctx) => {
+  if (rows.some((r) => !r.introduction && !r.candidate.evidence.highlights.length)) ctx.addIssue({ code: "custom", message: "updates need grounded highlights" });
   if (new Set(rows.map((r) => r.id)).size !== rows.length) ctx.addIssue({ code: "custom", message: "duplicate case IDs" });
 });
 export const configSchema = z.object({
@@ -60,7 +62,7 @@ export type Generate = (variant: Variant, prompt: PromptSpec) => Promise<LlmResu
 const HUMAN_JUDGED_RULES = new Set(["sections", "open_question"]);
 
 export function evaluate(test: ExperimentCase, draft: z.infer<typeof draftSchema>): LintResult[] {
-  const checks = lintDraft(test.channel, draft.title, draft.body, undefined, draftLintFacts(test.candidate as CandidateLike)).filter((c) => !HUMAN_JUDGED_RULES.has(c.rule));
+  const checks = lintDraft(test.channel, draft.title, draft.body, undefined, draftLintFacts(test.candidate as CandidateLike, undefined, test.introduction ? "introduction" : "update")).filter((c) => !HUMAN_JUDGED_RULES.has(c.rule));
   const text = `${draft.title}\n${draft.body}`.toLowerCase();
   for (const phrase of test.required) checks.push({ rule: `required:${phrase}`, ok: text.includes(phrase.toLowerCase()), detail: `필수 사실: ${phrase}` });
   for (const group of test.requiredAny ?? []) checks.push({ rule: `required_any:${group.id}`, ok: group.phrases.some((phrase) => text.includes(phrase.toLowerCase())), detail: `필수 개념: ${group.phrases.join(" / ")}` });
@@ -85,7 +87,7 @@ export async function execute(config: ExperimentConfig, report: Report, generate
   for (const test of report.cases) for (let sample = 1; sample <= config.repeats; sample++) {
     const variants = sample % 2 ? config.variants : [...config.variants].reverse();
     for (const variant of variants) {
-      const prompt = draftPrompt(test.candidate, test.channel, test.lang, [], undefined, { instruction: variant.instruction });
+      const prompt = draftPrompt(test.candidate, test.channel, test.lang, [], undefined, { instruction: variant.instruction, introduction: test.introduction });
       const row: Result = {
         caseId: test.id, variantId: variant.id, sample,
         blindId: hash([report.startedAt, test.id, variant.id, sample]).slice(0, 16),

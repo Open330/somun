@@ -17,7 +17,7 @@ export const openWorkspaceStatus = () => window.dispatchEvent(new Event(OPEN_EVE
 
 export function useWorkspaceStatus() {
   const jobs = useResource<JobProgress[]>("/jobs/status", ["jobs"]);
-  const availability = useResource<ModelAvailability>("/model-availability", ["keys", "settings"]);
+  const availability = useResource<ModelAvailability>("/model-availability", ["keys", "settings", "jobs"]);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const show = () => setOpen(true);
@@ -84,7 +84,7 @@ const modelStateLabel = (state: ModelAvailability["models"][number]["state"], sh
   })[state];
 const modelExplanation = (mode: ModelAvailability["mode"]) =>
   ({
-    shared: t("공유 모델의 현재 요청 가능 여부입니다. 계정별 남은 횟수가 아니며 제공사 응답에 따라 달라질 수 있습니다."),
+    shared: t("공유 모델의 현재 요청 가능 여부와 내 계정의 실행 한도입니다. 제공사 응답에 따라 이용 상태가 달라질 수 있습니다."),
     user: t("개인 API 키의 남은 한도는 제공사에서 확인해 주세요."),
     local: t("로컬 워커 실행 여부와 구독 한도는 이 화면에서 확인할 수 없습니다."),
     missing: t("모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요."),
@@ -286,6 +286,21 @@ export function WorkStatusPanel({ state, candidates }: { state: WorkspaceState; 
               ))}
             </ul>
             <p className="small muted">{modelExplanation(state.availability.data.mode)}</p>
+            {state.availability.data.sharedUsage && (
+              <p className="small muted">
+                {t("오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}", {
+                  used: state.availability.data.sharedUsage.used,
+                  limit: state.availability.data.sharedUsage.limit,
+                  pending: state.availability.data.sharedUsage.pendingLimit,
+                  reset: new Date(state.availability.data.sharedUsage.resetAt).toLocaleString(dateLocale(), {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                })}
+              </p>
+            )}
           </>
         )}
         <Link to="/settings?tab=model" onClick={() => state.setOpen(false)}>

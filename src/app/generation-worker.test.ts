@@ -347,3 +347,54 @@ it('rejects prepare-drafts requests without a target before enqueuing model call
   expect((await response.json()).error).toContain('채널과 언어');
   expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
 });
+
+it("preserves a completed digest when the daily limit blocks its next stage", async () => {
+  ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+  ctx.env.sharedModelDailyLimit = 1;
+  const id = queueStep(ctx, "local", "digest", cid);
+  vi.mocked(runLlm).mockReset().mockResolvedValue(output({ highlights: ["Fixes CRLF positions."], limitations: [] }));
+  await processServerJob(ctx);
+  expect(row(id).status).toBe("done");
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as { highlights: string[] }).highlights).toEqual(["Fixes CRLF positions."]);
+  const judge = ctx.db.select().from(schema.llmJobs).all().find((job) => job.kind === "judge")!;
+  expect(judge.status).toBe("failed");
+  expect(judge.error).toContain("공유 모델 실행 한도");
+  expect(runLlm).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the first draft when automatic repair has no shared execution capacity left", async () => {
+  ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+  ctx.env.sharedModelDailyLimit = 1;
+  const long = { title: "", body: `${"Fixes CRLF positions. ".repeat(25)}https://github.com/a/b` };
+  await request(`/api/candidates/${cid}/redraft`, params);
+  vi.mocked(runLlm).mockReset().mockResolvedValue(output(long));
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(long.body);
+  expect(runLlm).toHaveBeenCalledTimes(1);
+  expect(ctx.usage.record).toHaveBeenCalledTimes(1);
+});
+
+it("releases the completed stage's queue slot before admitting its follow-up", async () => {
+  ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+  ctx.env.sharedModelPendingLimit = 1;
+  const id = queueStep(ctx, "local", "digest", cid);
+  vi.mocked(runLlm).mockReset().mockResolvedValue(output({ highlights: ["Fixes CRLF positions."], limitations: [] }));
+  await processServerJob(ctx);
+  expect(row(id).status).toBe("done");
+  expect(ctx.db.select().from(schema.llmJobs).all().find((job) => job.kind === "judge")!.status).toBe("pending");
+});
+
+it("charges repair against the actual shared model config even if settings change during generation", async () => {
+  ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+  ctx.env.sharedModelDailyLimit = 1;
+  const long = { title: "", body: `${"Fixes CRLF positions. ".repeat(25)}https://github.com/a/b` };
+  await request(`/api/candidates/${cid}/redraft`, params);
+  vi.mocked(runLlm).mockReset().mockImplementation(async () => {
+    updateSettings(ctx, "local", { llm: { provider: "local-agent" } });
+    return output(long);
+  });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(1);
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(long.body);
+  expect(ctx.usage.record).toHaveBeenCalledTimes(1);
+});

@@ -63,7 +63,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
  * 링크 경로와 목록 번호는 주장 수치로 취급하지 않는다. "40 percent", "40 퍼센트"는 40%와 같다.
  * 단위가 붙은 숫자(800ms, 3GB, 12개)는 단위를 떼어 "800 ms"와 같게 본다. 배수(3x, 3배)는 그대로 둔다.
  */
-const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "").replace(/(\d)\s*(?:percent|퍼센트|%)/gi, "$1%")
+const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replace(/^\s*\d+[.)]\s+/gm, "").replace(/(?:(?:\btitle[\t ]+candidate|(?:제목|타이틀)[\t ]*후보)|\bsection|섹션)[\t ]*\d+[\t ]*[:：][\t ]*/gi, "").replace(/(\d)\s*(?:percent|퍼센트|%)/gi, "$1%")
   .replace(/(?<![\w.])(v?\d+(?:[.,]\d+)*)(?![x×](?![\w-])|배)([a-wyzA-WYZ가-힣]+)/g, "$1 $2");
 /** v1.2 = 1.2 */
 const canonical = (value: string) => value.replace(/^v/, "");
@@ -96,6 +96,11 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "no_transliterated_names", ok: found.length === 0, detail: found.length ? say(`이름은 원래 철자로 씁니다: ${[...new Set(found)].join(", ")}`, `Keep names in their original spelling: ${[...new Set(found)].join(", ")}`) : undefined });
     const mixed = [...text.matchAll(/소셜[\t ]+media\b|마케팅[\t ]+copy\b/gi)].map((m) => m[0]);
     results.push({ rule: "mixed_korean_terms", ok: mixed.length === 0, detail: mixed.length ? say(`한국어 표현으로 고쳐 주세요: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`, `Use consistent Korean terms: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`) : undefined });
+  }
+
+  if (facts.sourceText !== undefined) {
+    const roleClaims = [...text.matchAll(/\b(?:I|we)\s+(?:built|made|developed|released|launched)\b|(?:만들|개발|출시|공개)(?:했습니다|했어요|하였습니다|하였어요|했으며)/gi)].map((m) => m[0]);
+    results.push({ rule: "author_role_need_review", ok: roleClaims.length === 0, detail: roleClaims.length ? say(`작성자 역할 확인: ${roleClaims.join(", ")}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.`, `Review author role: ${roleClaims.join(", ")}. A connected repository does not establish that the poster developed or released the project; review the source and the poster's role.`) : undefined, args: roleClaims.length ? { phrases: roleClaims.join(", ") } : undefined });
   }
 
   if (facts.sourceText !== undefined) {
@@ -137,6 +142,12 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
 
   // 채널 규칙의 필수 구성. Show GN은 절, Show HN 작성자 댓글은 열린 질문으로 끝난다.
+  if (channel === "blog") {
+    const lines = body.split("\n").map((line) => line.trim()).filter(Boolean);
+    const outline = lines.length >= 8 && /[?？]$/.test(lines.at(-1) ?? "");
+    results.push({ rule: "outline_structure", ok: outline, detail: outline ? undefined : say("개요로 작성해 주세요: 제목 후보 3줄, 사실을 배치할 절 4~6줄, 마지막에 독자에게 물을 실제 질문 1줄. 문단형 본문을 쓰지 말고 각 항목을 줄바꿈해 주세요.", "Write an outline: three title candidates, four to six section lines assigning supplied facts, and an actual reader question on the last line. Put each item on its own line rather than writing the article.") });
+  }
+
   if (channel === "show_gn") {
     const need: [string, RegExp][] = [...SHOW_GN_SECTIONS, ...(facts.why ? [["왜", /^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(왜|why)/im] as [string, RegExp]] : []), ...(facts.limitations?.length ? [["한계", /^[\t ]*(?:#{1,6}[\t ]+)?(?:\*\*)?(한계|limitations?)/im] as [string, RegExp]] : [])];
     const missing = need.filter(([, re]) => !re.test(body)).map(([name]) => name);

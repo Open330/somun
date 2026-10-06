@@ -111,6 +111,23 @@ export const DIGEST_SCHEMA = {
 
 export type DigestContext = { profile?: ProfileLike; alreadyTold?: string[]; disputed?: string[] };
 
+const DIGEST_HEADINGS = { alreadyTold: "## Already told", disputed: "## Flagged as wrong by the author" } as const;
+
+/**
+ * 다이제스트 프롬프트에서 근거로 쓸 수 있는 부분만 남긴다.
+ * "이미 알린 것"과 "작성자가 틀렸다고 표시한 것"은 원자료가 아니므로, 그 안의 수치가 요약의 근거로 인정되면 안 된다.
+ */
+export function digestGroundingFromPrompt(user: string): string {
+  const skip = Object.values(DIGEST_HEADINGS);
+  const out: string[] = [];
+  let dropping = false;
+  for (const line of user.split("\n")) {
+    if (line.startsWith("#")) dropping = skip.some((h) => line.startsWith(h));
+    if (!dropping) out.push(line);
+  }
+  return out.join("\n");
+}
+
 export function digestPrompt(c: CandidateLike, ctx: DigestContext = {}): PromptSpec {
   return {
     schemaName: "digest",
@@ -126,8 +143,8 @@ If an "Already told" list is given, drop any highlight that says the same thing 
 Drop highlights about features listed under "not generally available": readers cannot use them yet.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
-      ctx.alreadyTold?.length ? `\n## Already told (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
-      ctx.disputed?.length ? `\n## Flagged as wrong by the author (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
+      ctx.alreadyTold?.length ? `\n${DIGEST_HEADINGS.alreadyTold} (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
+      ctx.disputed?.length ? `\n${DIGEST_HEADINGS.disputed} (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
       `\n# Raw material\n${rawBlock(c, Boolean(ctx.profile)) || "(no raw material)"}`,
     ].filter(Boolean).join("\n"),
   };
@@ -172,7 +189,7 @@ suggestedChannels: subset of the enabled channels.`,
 
 /** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
 const INTRODUCTION_JUDGE = `## First introduction
-Nothing from this repository has been announced yet (no registered posts). Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
+The editor has not announced this repository through this tool yet (no copied drafts or registered posts). This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
 - novelty: the project itself is new to readers.
 - audience: who it is for, from the profile.
@@ -199,6 +216,9 @@ export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduct
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
+  // Introductions describe capabilities, not how much repository activity produced them.
+  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
+  const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
     : "";
@@ -214,6 +234,9 @@ Hard rules:
 - Refer to the project by "how to name it" from the profile when Facts has one; otherwise by the repo name after the slash. Use the full owner/name only inside links. Never shorten, respell or invent owners or names.
 - Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with ${opts.introduction ? "what the project is and who it is for" : "what changed"}.
 - A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", "만듭니다", "만들었습니다", "개발했습니다", or "출시했습니다" without that evidence. For a first introduction, default to "<project> is/does ..." or "<프로젝트>는 ... 도구입니다"; a profile describing the project is not evidence that the current author created it.
+- Passive wording can imply authorship too: avoid "made for", "built to solve", "만들었습니다", "만들었으며", or "만들기 위해" about the author unless their role and motivation are explicitly supported. Describe the project’s task and audience directly instead.
+- Repository bookkeeping (commit counts, release counts, stars, first-release dates) is context, not a product capability or proof of maturity. Omit it unless the supplied change or Editor instruction specifically announces that milestone. Never turn "commits: 90" into "developed through 90 commits".
+- For Korean updates without an established author role, use "<project> <version> 변경 사항입니다" or describe the operation directly. Avoid "<project> <version>을 출시했습니다"; it reads as the poster announcing their own release.
 - Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.
 - When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.
 - Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).
@@ -225,10 +248,11 @@ Hard rules:
 - title must be an empty string if the channel has no title.`,
     user: [
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
+      publicName ? `Public project name: ${publicName}. Use this exact name in prose; owner/repo belongs only inside URLs.` : "",
       langInstruction(lang),
       `Rules: ${spec.rules}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
-      spec.hasTitle ? `A title is required (max ${spec.titleMaxChars} chars).` : "No title (return empty string).",
+      spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
       "",
       opts.guide ? `## Voice guide\n${opts.guide}` : "",
@@ -238,7 +262,7 @@ Hard rules:
       opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",
-      factsBlock(c, opts.profile),
+      factsBlock(publicCandidate, opts.profile),
       opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,

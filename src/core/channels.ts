@@ -45,7 +45,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   show_hn: {
     id: "show_hn", label: "Show HN", fixedLang: "en", defaultLangs: ["en"], maxChars: 2000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Paragraph 2: what it does and the mechanism, 2-3 sentences. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
+    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Explain what it does using Facts. Include a mechanism or architecture paragraph only when Facts explicitly describes that mechanism; release bullet points do not establish an architecture. Omit this paragraph otherwise. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
     mediaHint: "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
     composeUrl: "https://news.ycombinator.com/submit",
     runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁", "제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함", "제출 직후 위 본문을 첫 댓글로", "48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게", "어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
@@ -59,7 +59,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   blog: {
     id: "blog", label: "블로그 개요", defaultLangs: ["ko"], maxChars: 2000, hasTitle: true, titleMaxChars: 60,
-    rules: "Do not write the article. Outline only: 3 title candidates (each under 30 characters, with a number or a concrete situation), 4-6 sections each with one line on which facts, numbers or screenshots go there, and a final line 'what to ask the reader'.",
+    rules: "Do not write the article. Outline only: 3 title candidates, each under 30 characters and describing a concrete task or change. Put each title on a separate line. Do not add numeric claims or title character counts to make titles concrete. Then write 4-6 short sections, each on its own line stating which supplied facts belong there, and a final line with an actual question to ask the reader, ending with a question mark.",
     mediaHint: "",
     composeUrl: "",
     runbook: ["개요를 블로그 저장소의 초안으로 옮겨 본문을 씀", "발행 후 URL을 등록하면 다른 채널에 재배포 후보가 됨"],
