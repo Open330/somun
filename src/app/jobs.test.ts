@@ -4,7 +4,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { claimJob, completeJob, generationStatus, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration } from "./jobs.js";
+import { claimJob, completeJob, generationStatus, holdsClaim, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration } from "./jobs.js";
 import { updateSettings } from "./settings.js";
 import { enqueueJob } from "./pipeline.js";
 
@@ -23,6 +23,14 @@ describe("local worker job lifecycle", () => {
   const valid = JSON.stringify({ body: "A test draft with 1 limitation: beta. https://github.com/a/x" });
   const row = () => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!;
   const claim = () => claimJob(ctx, "a", jobId, "worker").claimToken!;
+
+  it("lets only the live claim report completion (so local usage is counted once)", () => {
+    const token = claim();
+    expect(holdsClaim(ctx, "a", jobId, token)).toBe(true);
+    expect(holdsClaim(ctx, "a", jobId, "00000000-0000-4000-8000-000000000000")).toBe(false);
+    completeJob(ctx, "a", jobId, { claimToken: token, resultJson: valid });
+    expect(holdsClaim(ctx, "a", jobId, token)).toBe(false);
+  });
 
   it("stops showing a failure once a newer draft for the same channel and language exists", () => {
     completeJob(ctx, "a", jobId, { claimToken: claim(), error: "claude exited 1: Not logged in" });

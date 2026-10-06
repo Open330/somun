@@ -164,7 +164,13 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
     if (waits[round] > 0) await new Promise((r) => setTimeout(r, waits[round]));
     signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
-    if (labels.length === 0) { lastErr = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true); break; }
+    if (labels.length === 0) {
+      // 요청을 보내지 않았으므로 사용량 보고 대상이 아니다. 호출한 쪽이 실패 이벤트를 하나 더 만들지 않게 표시한다.
+      const none = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true);
+      none.reported = Boolean(opts.onAttemptFailed);
+      lastErr = none;
+      break;
+    }
     for (const label of labels) {
       const key = byLabel.get(label)!;
       const attemptAt = Date.now();

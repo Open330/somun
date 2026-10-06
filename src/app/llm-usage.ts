@@ -32,12 +32,14 @@ export function recordFailedAttempt(ctx: AppContext, ownerId: string, attempt: F
  * 로컬 워커가 사용자의 Claude Code·Codex 구독으로 처리한 호출. provider는 과금한 벤더(anthropic·openai)이고,
  * 서버 키가 아니므로 키 라벨은 없다. 워커가 보낸 값이라 개수와 크기를 제한한다.
  */
-export function recordLocalUsage(ctx: AppContext, ownerId: string, calls: LocalUsage[]): void {
+export function recordLocalUsage(ctx: AppContext, ownerId: string, calls: LocalUsage[], now = Date.now()): void {
   const cap = (n: number) => Math.min(5_000_000, Math.max(0, Math.floor(Number(n) || 0)));
-  for (const c of calls.slice(0, 5)) {
+  // 워커 시계는 믿지 않는다. 지난 하루 ~ 지금 사이가 아니면 받은 시각으로 둔다(잘못된 값이 응답을 깨거나 집계 날짜를 흔들지 않게).
+  const when = (t: number) => (Number.isFinite(t) && t >= now - 86_400_000 && t <= now + 60_000 ? t : now);
+  for (const c of calls) {
     const input = cap(c.inputTokens), output = cap(c.outputTokens);
     ctx.usage.record({
-      userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(c.startedAt).toISOString(), latencyMs: cap(c.latencyMs), provider: c.provider, model: c.model.slice(0, 100), status: c.status,
+      userId: UsageReporter.userIdOf(ownerId), occurredAt: new Date(when(c.startedAt)).toISOString(), latencyMs: cap(c.latencyMs), provider: c.provider, model: c.model, status: c.status,
       inputTokens: input, outputTokens: output, cachedInputTokens: Math.min(input, cap(c.cachedInputTokens)), totalTokens: input + output,
     });
   }

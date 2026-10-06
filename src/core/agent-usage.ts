@@ -17,3 +17,14 @@ export function codexUsage(lines: Record<string, unknown>[], model: string, star
   const sum = (k: "input_tokens" | "cached_input_tokens" | "output_tokens") => turns.reduce((a, u) => a + (u[k] ?? 0), 0);
   return [{ provider: "openai", model, startedAt, latencyMs, status: "success", inputTokens: sum("input_tokens"), outputTokens: sum("output_tokens"), cachedInputTokens: sum("cached_input_tokens") }];
 }
+
+/** 답을 쓴 모델. modelUsage에는 보조 모델(haiku 등)이 함께 들어 있을 수 있어, 출력 토큰이 가장 많은 모델을 고른다. */
+export function mainModel(modelUsage: Record<string, { outputTokens?: number }> | undefined): string | undefined {
+  return Object.entries(modelUsage ?? {}).sort((a, b) => (b[1].outputTokens ?? 0) - (a[1].outputTokens ?? 0))[0]?.[0];
+}
+
+/** Codex config.toml의 최상위 model. [profiles.*] 같은 표 안의 model은 지금 쓰는 모델이 아닐 수 있어 보지 않는다. */
+export function codexModelFrom(configToml: string): string {
+  const top = configToml.split(/^\s*\[/m)[0];
+  return /^\s*model\s*=\s*"([^"]+)"/m.exec(top)?.[1] ?? "codex";
+}

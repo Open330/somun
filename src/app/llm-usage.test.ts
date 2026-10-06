@@ -31,3 +31,10 @@ it("records local CLI usage with the billing vendor and bounded numbers", () => 
   expect(record.mock.calls[0][0]).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", inputTokens: 19927, outputTokens: 8, cachedInputTokens: 19927, totalTokens: 19935, status: "success" });
   expect(record.mock.calls[0][0].apiKeyLabel).toBeUndefined();
 });
+
+it("does not trust the worker clock", () => {
+  const { ctx, record } = ctxWith();
+  const now = Date.parse("2026-10-06T12:00:00Z");
+  recordLocalUsage(ctx, OWNER, [{ provider: "openai", model: "gpt-5", startedAt: 1e16, latencyMs: 1, status: "success", inputTokens: 1, outputTokens: 1, cachedInputTokens: 0 }], now);
+  expect(record.mock.calls[0][0].occurredAt).toBe("2026-10-06T12:00:00.000Z");
+});
