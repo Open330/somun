@@ -63,3 +63,11 @@ describe("digest grounding", () => {
     expect(unsupportedNumbers("Startup 40% faster", grounding)).toEqual([]);
   });
 });
+
+describe("voice example labels", () => {
+  it("does not present an unedited generated draft as the author's own voice", () => {
+    const user = draftPrompt(candidate, "x", "en", [{ source: "accepted", body: "model text" }, { source: "authored", body: "my text" }]).user;
+    expect(user).toContain("### Example 1 (an earlier generated draft the author copied without edits");
+    expect(user).toContain("### Example 2 (author's own)");
+  });
+});

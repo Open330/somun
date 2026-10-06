@@ -214,13 +214,19 @@ export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduct
   return ["## Required change checklist", "Preserve every distinct change below, including its component and operation. Shorten background and repetition rather than omit changes. Use compact sentences or a list within the channel character limit. Before returning, check every item against the draft. Do not add new effects or measurements.", ...highlights.map((text) => `- ${text}`)].join("\n");
 }
 
+const EXAMPLE_LABEL: Record<string, string> = {
+  seed: " (best practice)",
+  authored: " (author's own)",
+  accepted: " (an earlier generated draft the author copied without edits: follow its shape, not as the author's own voice)",
+};
+
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
   // Introductions describe capabilities, not how much repository activity produced them.
   const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
-    ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
+    ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${EXAMPLE_LABEL[e.source] ?? " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
     : "";
   return {
     schemaName: "draft",

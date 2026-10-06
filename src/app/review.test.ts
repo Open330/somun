@@ -64,15 +64,22 @@ describe("voice examples come only from copied drafts", () => {
     expect(examples().filter((e) => e.active)).toHaveLength(OWN_EXAMPLE_CAP);
   });
 
-  it("prefers own examples in prompts once there are two, and fills with seeds before that", () => {
+  it("prefers the author's own examples once there are two, and ranks unedited copies after seeds", () => {
     const now = Date.now();
     for (let i = 0; i < 3; i++) ctx.db.insert(schema.examples).values({ ownerId: OWNER, channel: "x", lang: "en", body: `seed ${i}`, source: "seed", active: true, createdAt: now - 1000 }).run();
     const a = draft("Mine A https://github.com/me/tool");
     saveDraftEdit(ctx, OWNER, a, { body: "Mine A https://github.com/me/tool", markCopied: true });
-    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.source)).toEqual(["approved", "seed", "seed", "seed"]);
+    // 고치지 않고 복사한 초안은 모델 출력이다. 참고 예시 뒤로 밀리고 작성자 글로 세지 않는다.
+    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.source)).toEqual(["seed", "seed", "seed", "accepted"]);
     const b = draft("Mine B https://github.com/me/tool");
-    saveDraftEdit(ctx, OWNER, b, { body: "Mine B https://github.com/me/tool", markCopied: true });
-    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.source)).toEqual(["approved", "approved"]);
+    saveDraftEdit(ctx, OWNER, b, { body: "Mine B, rewritten https://github.com/me/tool", markCopied: true });
+    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.source)).toEqual(["authored", "seed", "seed", "seed"]);
+    const c = draft("Mine C https://github.com/me/tool");
+    saveDraftEdit(ctx, OWNER, c, { body: "Mine C, in my words https://github.com/me/tool", markCopied: true });
+    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.source)).toEqual(["authored", "authored"]);
+    // 직접 써서 넣은 예시는 작성자 글이다.
+    ctx.db.insert(schema.examples).values({ ownerId: OWNER, channel: "x", lang: "en", body: "hand written", source: "approved", active: true, createdAt: now + 10_000 }).run();
+    expect(examplesFor(ctx, OWNER, "x", "en", 4).map((e) => e.body)).toEqual(["hand written", "Mine C, in my words https://github.com/me/tool", "Mine B, rewritten https://github.com/me/tool"]);
   });
 });
 

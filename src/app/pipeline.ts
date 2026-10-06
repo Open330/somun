@@ -22,13 +22,24 @@ import { voiceGuideFor } from "../core/voice.js";
 
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
 
-/** 문체 예시. 내가 복사한 글이 2개 이상이면 그것만(최근 3개), 모자라면 참고 예시로 채운다. */
-export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number) {
+export type ExampleOrigin = "authored" | "accepted" | "seed";
+
+/**
+ * 예시의 출처. 사용자가 고쳐서 복사했거나 직접 써서 넣은 글만 작성자의 목소리다(authored).
+ * 고치지 않고 복사한 초안(accepted)은 모델 출력이므로 작성자 글로 내밀면 모델이 자기 글을 베끼게 된다.
+ */
+export function exampleOrigin(e: { source: string; draftId: number | null }): ExampleOrigin {
+  if (e.source === "seed") return "seed";
+  return e.source === "approved" && e.draftId !== null ? "accepted" : "authored";
+}
+
+/** 문체 예시. 작성자의 글이 2개 이상이면 그것만(최근 3개), 모자라면 참고 예시, 그다음 고치지 않고 승인한 초안으로 채운다. */
+export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number): { source: ExampleOrigin; title?: string; body: string }[] {
   const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt), desc(schema.examples.id)).limit(50).all();
-  const own = rows.filter((r) => r.source !== "seed");
-  const seed = rows.filter((r) => r.source === "seed");
-  const picked = own.length >= 2 ? own.slice(0, Math.min(3, limit)) : [...own, ...seed].slice(0, limit);
-  return picked.map((e) => ({ source: e.source, title: e.title ?? undefined, body: e.body }));
+  const of = (origin: ExampleOrigin) => rows.filter((r) => exampleOrigin(r) === origin);
+  const authored = of("authored");
+  const picked = authored.length >= 2 ? authored.slice(0, Math.min(3, limit)) : [...authored, ...of("seed"), ...of("accepted")].slice(0, limit);
+  return picked.map((e) => ({ source: exampleOrigin(e), title: e.title ?? undefined, body: e.body }));
 }
 
 function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
