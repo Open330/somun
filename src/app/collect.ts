@@ -62,18 +62,40 @@ export function missingReads(denied: Iterable<string>, repo: string): string[] {
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
+/**
+ * 100개씩 끝까지(최대 maxPages쪽) 읽는다. 릴리스가 100개를 넘는 저장소에서 개수와 첫 릴리스 날짜가 틀리지 않게.
+ * 첫 쪽이 null(없음·권한 없음)이면 null을 그대로 돌려준다.
+ */
+export async function pagedList<T>(gh: GitHubClient, path: string, maxPages = 10): Promise<T[] | null> {
+  const out: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const list = await gh.get<T[]>(`${path}?per_page=100&page=${page}`);
+    if (!list) return page === 1 ? null : out;
+    out.push(...list);
+    if (list.length < 100) break;
+  }
+  return out;
+}
+
 /** 진행 중 글감이 되는 최소 커밋 수. 오타·설정 몇 개로 글감이 생기지 않게 한다. */
 export const COMMIT_BATCH_MIN = 5;
 /** 독자에게 보이지 않는 커밋. Conventional Commits의 문서·테스트·CI·잡일과 병합·의존성 갱신·릴리스 커밋. */
-const INVISIBLE_COMMIT = /^(?:merge\b|bump\b|release v?\d|(?:chore|ci|docs?|test|tests|style|build|refactor)(?:\([^)]*\))?!?:)/i;
+const INVISIBLE_COMMIT = /^(?:merge\b|bump\b|release v?\d|auto-?update\b|(?:chore|ci|docs?|test|tests|style|build|refactor|deploy)(?:\([^)]*\))?!?:)/i;
 
-/** 수집 창 안의 의미 있는 커밋 묶음. 모자라면 null. head는 가장 최근 커밋이라 새 커밋이 생길 때만 새 신호가 된다. */
-export function commitBatch(commits: { sha: string; commit: { message: string; committer?: { date?: string } | null } }[], since: number): { head: string; at: number; subjects: string[] } | null {
+/** 같은 틀로 찍어 내는 자동 커밋("🔮 horoscope 2026-10-01")을 한 종류로 보기 위한 틀. 숫자·날짜·기호를 지운다. */
+const commitTemplate = (subject: string) => subject.toLowerCase().replace(/[\d\p{Extended_Pictographic}]+/gu, "").replace(/[^\p{L}]+/gu, " ").trim();
+
+/**
+ * 수집 창 안의 의미 있는 커밋 묶음. 모자라면 null. head는 가장 최근 커밋이라 새 커밋이 생길 때만 새 신호가 된다.
+ * 봇 커밋, 배포·잡일 커밋은 세지 않고, 같은 틀의 반복 커밋은 한 번으로 센다(매일 도는 자동 커밋이 글감이 되지 않게).
+ */
+export function commitBatch(commits: { sha: string; author?: { login?: string; type?: string } | null; commit: { message: string; committer?: { date?: string } | null } }[], since: number): { head: string; at: number; subjects: string[] } | null {
   const visible = commits
+    .filter((c) => c.author?.type !== "Bot" && !c.author?.login?.endsWith("[bot]"))
     .map((c) => ({ sha: c.sha, at: Date.parse(c.commit.committer?.date ?? ""), subject: c.commit.message.split("\n")[0].trim() }))
     .filter((c) => c.subject && Number.isFinite(c.at) && c.at >= since && !INVISIBLE_COMMIT.test(c.subject))
     .sort((a, b) => b.at - a.at);
-  if (visible.length < COMMIT_BATCH_MIN) return null;
+  if (new Set(visible.map((c) => commitTemplate(c.subject))).size < COMMIT_BATCH_MIN) return null;
   return { head: visible[0].sha, at: visible[0].at, subjects: visible.map((c) => c.subject) };
 }
 
@@ -153,7 +175,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       try {
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
-        gh.get<GhRelease[]>(`/repos/${name}/releases?per_page=100`),
+        pagedList<GhRelease>(gh, `/repos/${name}/releases`),
         gh.get<GhPull[]>(`/repos/${name}/pulls?state=closed&sort=updated&direction=desc&per_page=30`),
         gh.get<{ uniques: number }>(`/repos/${name}/traffic/views`),
         gh.get<{ referrer: string; uniques: number }[]>(`/repos/${name}/traffic/referrers`),
@@ -202,7 +224,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       // 커밋 창: 이 저장소를 마지막으로 다이제스트한 시각부터. 없으면 마지막 릴리스나 14일.
       const digestedAt = lastDigestAt(ctx, ownerId, name);
       const sinceIso = new Date(digestedAt ?? (latest ? Math.min(Date.parse(latest.published_at), since) : since)).toISOString();
-      const commits = await gh.get<{ sha: string; commit: { message: string; committer?: { date?: string } | null } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
+      const commits = await gh.get<{ sha: string; author?: { login?: string; type?: string } | null; commit: { message: string; committer?: { date?: string } | null } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
       const commitSubjects = (commits ?? []).map((c) => c.commit.message.split("\n")[0].trim()).filter((m) => m && !/^(merge|chore\(deps|bump|release v?\d)/i.test(m)).slice(0, 80);
       // PR 없이 main에 바로 올리는 저장소는 릴리스·PR 신호가 없다. 수집 창 안의 의미 있는 커밋이 쌓이면 진행 중 글감으로 본다.
       const batch = commitBatch(commits ?? [], since);

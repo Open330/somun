@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads } from "./collect.js";
+import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -171,11 +171,29 @@ it("counts only reader-visible commits inside the collection window", () => {
   const now = Date.now();
   const c = (sha: string, message: string, ago: number) => ({ sha, commit: { message, committer: { date: new Date(now - ago).toISOString() } } });
   const since = now - 14 * 86400e3;
-  const visible = Array.from({ length: COMMIT_BATCH_MIN - 1 }, (_, i) => c(`v${i}`, `Add feature ${i}`, (i + 2) * 3600e3));
+  const visible = Array.from({ length: COMMIT_BATCH_MIN - 1 }, (_, i) => c(`v${i}`, `Add ${["search", "export", "themes", "sync", "alerts", "tags"][i]}`, (i + 2) * 3600e3));
   const noise = [c("d", "docs: readme", 1000), c("t", "test(api): cover x", 1000), c("m", "Merge branch main", 1000), c("old", "Add old thing", 20 * 86400e3)];
   expect(commitBatch([...visible, ...noise], since)).toBeNull();
-  const batch = commitBatch([c("new", "Add export\n\nbody", 3600e3), ...visible, ...noise], since);
+  const batch = commitBatch([c("new", "Add webhooks\n\nbody", 3600e3), ...visible, ...noise], since);
   expect(batch?.head).toBe("new");
-  expect(batch?.subjects[0]).toBe("Add export");
+  expect(batch?.subjects[0]).toBe("Add webhooks");
   expect(batch?.subjects).toHaveLength(COMMIT_BATCH_MIN);
+});
+
+it("reads every page of a list instead of stopping at 100", async () => {
+  const pages: Record<string, number[]> = { "1": Array.from({ length: 100 }, (_, i) => i), "2": [100, 101] };
+  const gh = { get: async (path: string) => pages[/[?&]page=(\d+)/.exec(path)?.[1] ?? ""] ?? [] } as unknown as Parameters<typeof pagedList>[0];
+  expect(await pagedList<number>(gh, "/repos/a/b/releases")).toHaveLength(102);
+  const none = { get: async () => null } as unknown as Parameters<typeof pagedList>[0];
+  expect(await pagedList(none, "/repos/a/b/releases")).toBeNull();
+});
+
+it("does not treat bot, deploy, or templated cron commits as reader-visible work", () => {
+  const now = Date.now(), since = now - 14 * 86400e3;
+  const c = (sha: string, message: string, author?: { login: string; type: string }) => ({ sha, author, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
+  const cron = Array.from({ length: 14 }, (_, i) => c(`h${i}`, `🔮 horoscope 2026-10-${String(i + 1).padStart(2, "0")}`));
+  expect(commitBatch(cron, since)).toBeNull();
+  expect(commitBatch(Array.from({ length: 10 }, (_, i) => c(`d${i}`, `deploy: Swiq gallery ${i}`)), since)).toBeNull();
+  expect(commitBatch(Array.from({ length: 6 }, (_, i) => c(`b${i}`, `Add feature ${"abcdef"[i]}`, { login: "renovate[bot]", type: "Bot" })), since)).toBeNull();
+  expect(commitBatch(["Add export", "Fix crash", "Support CSV", "Add --watch", "Speed up parser"].map((m, i) => c(`v${i}`, m)), since)).not.toBeNull();
 });
