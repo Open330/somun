@@ -58,6 +58,12 @@ export function claimJob(ctx: AppContext, ownerId: string, id: number, runner: s
   return result;
 }
 
+/** 이 클레임이 아직 유효한가(완료를 보고할 자격). completeJob과 같은 조건이다. */
+export function holdsClaim(ctx: AppContext, ownerId: string, id: number, claimToken: string, executor: "local" | "server" = "local"): boolean {
+  const j = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
+  return Boolean(j && j.executor === executor && j.claimToken === claimToken && j.status === "claimed" && j.claimedAt !== null && j.claimedAt > Date.now() - JOB_LEASE_MS);
+}
+
 export function completeJob(ctx: AppContext, ownerId: string, id: number, input: { claimToken: string; resultJson?: string; error?: string; model?: string }, executor: "local" | "server" = "local"): { applied: boolean } {
   // Publish only committed changes. The next pipeline jobs are persisted in the same transaction.
   const events: (ChangeEvent & { ownerId: string })[] = [];
@@ -67,7 +73,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
   const result = ctx.db.$client.transaction(() => {
     const j = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
     if (!j) throw new NotFoundError("job");
-    if (j.executor !== executor || j.claimToken !== input.claimToken || j.status !== "claimed" || j.claimedAt === null || j.claimedAt <= Date.now() - JOB_LEASE_MS) return { applied: false };
+    if (!holdsClaim(ctx, ownerId, id, input.claimToken, executor)) return { applied: false };
     const candidate = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, j.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     // lesson은 발행 뒤에도 반영한다(수정 후 복사·발행이 가장 흔한 흐름).
     if (!input.error && !isSideJob(j.kind) && (!candidate || (candidate.status === "dropped" || (candidate.status === "published" && j.kind !== "draft" && !(j.kind === "digest" && j.continuation))))) {

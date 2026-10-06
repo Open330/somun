@@ -78,3 +78,18 @@ it("falls back to the default model when slow 503s use up the upper-model budget
     expect(called.filter((m) => m === "gemini-3.7-flash").length).toBeLessThanOrEqual(2);
   } finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
 });
+
+it("reports every failed key attempt and marks the final error as already reported", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response('{"error":{"code":429,"message":"quota"}}', { status: 429 })));
+  const attempts: { keyLabel?: string; status?: number }[] = [];
+  const pending = runLlm({ provider: "gemini" }, prompt, "judge", undefined, '{"free-1":"a","free-2":"b"}', new AbortController().signal, { onAttemptFailed: (a) => attempts.push(a) }).catch((e) => e);
+  await vi.advanceTimersByTimeAsync(60_000);
+  const err = await pending;
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  expect(attempts.length).toBeGreaterThanOrEqual(2);
+  expect(new Set(attempts.map((a) => a.keyLabel))).toEqual(new Set(["free-1", "free-2"]));
+  expect(attempts.every((a) => a.status === 429)).toBe(true);
+  expect((err as { reported?: boolean }).reported).toBe(true);
+});

@@ -43,6 +43,9 @@ export type Evidence = {
   windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
 };
 
+/** 로컬 워커가 CLI 출력에서 읽은 호출 사용량. 서버가 계정에 귀속해 jiun-api로 보고한다. */
+export type LocalUsage = { provider: "anthropic" | "openai"; model: string; startedAt: number; latencyMs: number; inputTokens: number; outputTokens: number; cachedInputTokens: number; status: "success" | "error" };
+
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };
 
 export type Settings = {

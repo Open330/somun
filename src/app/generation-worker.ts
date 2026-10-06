@@ -3,7 +3,7 @@ import { isBetterRepair } from "../core/draft-repair.js";
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
-import { recordLlmUsage } from "./llm-usage.js";
+import { recordFailedAttempt, recordLlmUsage } from "./llm-usage.js";
 import { guardsModelEndpoint } from "./net-policy.js";
 import { isBlockedError } from "../infra/net.js";
 import { localeOf, say } from "./i18n.js";
@@ -61,18 +61,21 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     // lesson은 분석 모델(다이제스트와 같은 기본 모델)로 돌린다.
     // profile 작업은 로컬 워커만 처리하므로(profiles.queueProfile) 여기에는 생성 단계와 lesson만 온다.
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
+    let mainRecorded = false;
     try {
-      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config) }); };
+      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); };
+      // 본 호출은 끝나는 즉시 기록한다. 뒤의 보정·반영이 실패해도 이미 쓴 호출이 오류로 잘못 남지 않게.
       let res = await call(job.user);
+      mainRecorded = true;
+      recordLlmUsage(ctx, ownerId, config, started, { res });
       if (job.kind === "draft" && job.channel && job.lang) {
         res = await repairDraft(ctx, ownerId, job, res, async (user) => {
           const t = Date.now();
           try { const r = await call(user); recordLlmUsage(ctx, ownerId, config, t, { res: r }); return r; }
-          catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, t, { failedModel: modelFor(config, modelKind) }); throw err; }
+          catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, t, { failedModel: modelFor(config, modelKind), error: err }); throw err; }
         });
       }
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
-      recordLlmUsage(ctx, ownerId, config, started, { res });
     } catch (err) {
       // Upstream error bodies may echo credentials; persist only a bounded diagnostic.
       const lc = settings.ui?.locale;
@@ -86,7 +89,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
         : err instanceof LlmError && err.status ? say(lc, `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`, `Model request failed (HTTP ${err.status}). Check the model settings and usage limits, then try again.`)
         : say(lc, "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.", "Generation failed. Check the model settings, API key, and response format, then try again.");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error }, "server");
-      if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, started, { failedModel: modelFor(config, modelKind) });
+      if (!mainRecorded && !(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, started, { failedModel: modelFor(config, modelKind), error: err });
       ctx.log.warn({ jobId: job.id, error }, "generation failed");
     }
     return true;

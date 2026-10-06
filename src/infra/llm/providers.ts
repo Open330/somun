@@ -42,10 +42,15 @@ const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/ope
 const OPENAI_BASE = "https://api.openai.com/v1";
 
 export class LlmError extends Error {
+  /** 이 실패가 이미 시도별 사용량(onAttemptFailed)으로 보고되었는가. 호출한 쪽이 같은 실패를 한 번 더 세지 않게. */
+  reported = false;
   constructor(message: string, public readonly status?: number, public readonly retryable = false, public readonly body?: string) {
     super(message);
   }
 }
+
+/** 실패한 모델 요청 한 번(키 순환·재시도 중의 시도 포함). 사용량 보고는 jikji처럼 시도마다 오류 이벤트를 남긴다. */
+export type FailedAttempt = { model: string; keyLabel?: string; status?: number; startedAt: number; latencyMs: number };
 
 /** GEMINI_API_KEYS JSON 맵에서 무료 키만 순서대로. paid-1은 절대 순환에 넣지 않는다. */
 export function freeGeminiKeys(raw: string | undefined): { label: string; key: string }[] {
@@ -126,7 +131,7 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest, sig
  * 설정에 따라 호출. gemini 서버 키 풀은 429/5xx 때 다음 키로 넘어간다.
  * local-agent는 여기 오면 안 된다 (호출자가 큐로 보낸다).
  */
-export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000), opts: { guardBaseUrl?: boolean } = {}): Promise<LlmResult> {
+export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000), opts: { guardBaseUrl?: boolean; onAttemptFailed?: (attempt: FailedAttempt) => void } = {}): Promise<LlmResult> {
   signal.throwIfAborted();
   const provider = config.provider;
   if (provider === "local-agent") throw new LlmError("local-agent는 워커가 처리합니다");
@@ -159,9 +164,16 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
     if (waits[round] > 0) await new Promise((r) => setTimeout(r, waits[round]));
     signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
-    if (labels.length === 0) { lastErr = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true); break; }
+    if (labels.length === 0) {
+      // 요청을 보내지 않았으므로 사용량 보고 대상이 아니다. 호출한 쪽이 실패 이벤트를 하나 더 만들지 않게 표시한다.
+      const none = new LlmError("쓸 수 있는 Gemini 무료 키가 없습니다 (전부 쿨다운 또는 일일 상한)", 429, true);
+      none.reported = Boolean(opts.onAttemptFailed);
+      lastErr = none;
+      break;
+    }
     for (const label of labels) {
       const key = byLabel.get(label)!;
+      const attemptAt = Date.now();
       try {
         const res = await openaiCompatible(GEMINI_OPENAI_BASE, key, model, req, label, signal);
         await pool?.report({ label, model, ok: true });
@@ -171,6 +183,10 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
         lastErr = e;
         if (e instanceof LlmError) {
           await pool?.report({ label, model, ok: false, status: e.status, body: e.body });
+          if (opts.onAttemptFailed) {
+            opts.onAttemptFailed({ model, keyLabel: label, status: e.status, startedAt: attemptAt, latencyMs: Date.now() - attemptAt });
+            e.reported = true;
+          }
           if (e.retryable) {
             if (e.status === 503) break; // 모델 수요 문제: 키를 바꿔도 같다. 쉬었다 다음 바퀴
             continue; // 429: 이 키는 쿨다운에 들어갔고 다음 키로
