@@ -34,7 +34,17 @@ export const DEFAULT_BANNED_PHRASES = [
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
 const LINK = /https?:\/\/\S+/;
-const EXCLAMATION = /!/;
+const EXCLAMATION = /[!！]/;
+
+/** 금지어 비교용. 전각·호환 문자, 보이지 않는 문자, 여러 칸 띄우기와 줄바꿈, 하이픈 변형으로 피해 가지 못하게 한다. */
+export const normalizeForMatch = (value: string) =>
+  value.normalize("NFKC").replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "").replace(/[\u2010-\u2015\u2212]/g, "-").replace(/\s+/g, " ").toLowerCase();
+
+/** 숫자 없이 하는 최상급·최초·유일 주장. 원자료에 같은 말이 없으면 근거 없는 주장이다. */
+const SUPERLATIVE_CLAIMS = /\b(?:the (?:fastest|first|only|best|smallest|lightest|simplest)|fastest|world'?s first|first-ever|best-in-class|industry-leading|unmatched|unrivall?ed|blazing(?:ly)?[ -]fast|zero bugs|used by thousands)\b|최초의?|유일한|가장 (?:빠른|가벼운|작은|쉬운|강력한)|업계 최고|세계 최초/gi;
+
+/** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
+const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
 export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string };
 
@@ -85,9 +95,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const spec = CHANNELS[channel];
   const text = `${title ?? ""}\n${body}`;
   const lower = text.toLowerCase();
+  const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
 
-  const hits = banned.filter((p) => lower.includes(p.toLowerCase()));
+  const hits = banned.filter((p) => normalizeForMatch(p).trim() && normalized.includes(normalizeForMatch(p).trim()));
   results.push({ rule: "banned_phrases", ok: hits.length === 0, detail: hits.length ? hits.join(", ") : undefined });
 
   results.push({ rule: "no_emoji_bullets", ok: !EMOJI_BULLET.test(body) });
@@ -113,19 +124,27 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const missing = unsupportedNumbers(text, facts.sourceText);
     results.push({ rule: "numbers_need_review", ok: missing.length === 0, detail: missing.length ? say(`제공된 근거에서 찾지 못한 수치: ${missing.join(", ")}. 원문과 단위를 확인해 주세요.`, `Numbers not found in the evidence: ${missing.join(", ")}. Check the source and units.`) : undefined, args: missing.length ? { numbers: missing.join(", ") } : undefined });
   }
+  if (facts.sourceText !== undefined) {
+    const source = normalizeForMatch(facts.sourceText);
+    const claims = [...new Set([...normalizeForMatch(text).matchAll(SUPERLATIVE_CLAIMS)].map((m) => m[0]))].filter((c) => !source.includes(c));
+    results.push({ rule: "claims_need_review", ok: claims.length === 0, detail: claims.length ? say(`근거에서 찾지 못한 최상급·최초 주장: ${claims.join(", ")}. 원문에 있는 사실로 바꾸거나 빼 주세요.`, `Superlative or "first" claims not found in the evidence: ${claims.join(", ")}. Replace them with sourced facts or remove them.`) : undefined, args: claims.length ? { phrases: claims.join(", ") } : undefined });
+  }
   const placeholder = /\[(number needed|숫자 확인)\]/i.test(body);
   results.push({ rule: "no_placeholder", ok: !placeholder, detail: placeholder ? say("채우지 못한 숫자가 있습니다", "There is an unfilled number placeholder") : undefined });
 
   // 저장소 이름 왜곡: 사실의 repo가 owner/name일 때, 같은 name을 다른 owner로 쓴 토큰 (예: ja/settings) 을 잡는다.
   if (facts.repo && facts.repo.includes("/")) {
     const [owner, name] = facts.repo.split("/");
-    const re = new RegExp(`(?<![\\w./-])([\\w.-]+)/${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w.-])`, "g");
-    const wrong = [...text.matchAll(re)].map((m) => m[1]).filter((o) => o !== owner);
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // 문장 끝 마침표(evil/somun.)와 GitHub 주소 안(github.com/evil/somun)도 잡는다. 이름이 비슷한 다른 저장소(somun-cli)는 건너뛴다.
+    const re = new RegExp(`(?:(?<![\\w./-])|(?<=github\\.com/))([\\w.-]+)/${escaped}(?![\\w-]|\\.\\w)`, "gi");
+    const wrong = [...text.matchAll(re)].map((m) => m[1]).filter((o) => o.toLowerCase() !== owner.toLowerCase());
     results.push({ rule: "repo_name", ok: wrong.length === 0, detail: wrong.length ? `${wrong[0]}/${name} ≠ ${facts.repo}` : undefined });
   }
   // 지어낸 한계: 사실에 한계가 없는데 "API가 바뀔 수 있다" 류를 쓴 경우.
   if (facts.limitations !== undefined && facts.limitations.length === 0) {
-    const invented = /(API가 바뀔|API may (still )?change|아직 (0\.x|베타)|still (0\.x|beta)|not yet tested)/i.test(body);
+    const source = (facts.sourceText ?? "").toLowerCase();
+    const invented = [...body.matchAll(INVENTED_LIMITS)].some((m) => !source.includes(m[0].toLowerCase()));
     results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? say("제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요.", "This limitation is not in the evidence. Check the source.") : undefined });
   }
 
@@ -144,7 +163,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
 
   if (channel === "show_hn" || channel === "x") {
-    results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(body) });
+    results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(text) });
   }
 
   // 채널 규칙의 필수 구성. Show GN은 절, Show HN 작성자 댓글은 열린 질문으로 끝난다.
@@ -172,7 +191,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "title_length", ok: len > 0 && len <= spec.titleMaxChars, detail: `${len}/${spec.titleMaxChars}` });
   }
   if (channel === "show_hn" || channel === "show_gn") {
-    const asksVotes = /(upvote|vote|추천 부탁|투표|좋아요 부탁)/i.test(text);
+    const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|추천\s?부탁|추천(?:을|해)?\s?(?:눌러|주세요)|투표\s?(?:부탁|해\s?주세요)|좋아요\s?(?:부탁|눌러)/i.test(normalizeForMatch(text));
     results.push({ rule: "no_vote_request", ok: !asksVotes });
   }
   return results;
@@ -206,7 +225,7 @@ export function numberTokens(input: string): string[] {
     });
   }
   // 배수는 별도 토큰으로 본다. 원문에 없는 "3배 빨라짐"을 잡기 위해.
-  for (const m of text.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?=[xX×](?![\w-])|배(?![포치열경송달너터정우려]))/g)) out.add(`${m[1]}x`);
+  for (const m of text.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?=[xX×](?![\w-])|\s?times\b|\s?배(?![포치열경송달너터정우려]))/g)) out.add(`${m[1]}x`);
   for (const [re, token] of MULTIPLIER_WORDS) if (re.test(text)) out.add(token);
   return [...out];
 }
@@ -230,7 +249,7 @@ function unitAfter(rest: string): { suffix?: string; scale?: number } | undefine
  * 숫자 바로 뒤(띄어쓰기 없이)의 배수 표시. 소문자 x·× 뒤에 영숫자나 하이픈이 오면 배수가 아니다(1920x1080, 0x1F, 3 X-ray).
  * "배" 뒤에 포·치·열처럼 다른 낱말이 이어지면 배수가 아니다(배포, 배치, 배열).
  */
-const MULTIPLIER_SUFFIX = /^(?:[xX×](?![\w-])|배(?![포치열경송달너터정우려]))/;
+const MULTIPLIER_SUFFIX = /^(?:[xX×](?![\w-])|\s?times\b|\s?배(?![포치열경송달너터정우려]))/;
 
 /** 숫자 없이 쓰는 배수 표현. 원문에 같은 배수가 없으면 지어낸 주장이다. 합성어(twice-weekly, 스물두 배)는 배수로 보지 않는다. */
 const MULTIPLIER_WORDS: [RegExp, string][] = [
@@ -246,6 +265,8 @@ const MULTIPLIER_WORDS: [RegExp, string][] = [
   [/(?<![가-힣])백\s?배(?![포치열경송달너터정우려])/, "100x"],
   // 막연한 크기. 원문에 같은 말이 없으면 지어낸 규모다.
   [/몇\s?배|수십\s?배|수백\s?배/, "N배"],
+  [/\ba (?:million|billion)\b/i, "a million+"], [/(?<![가-힣\d]\s?)천\s?(?:명|개|건)/, "1000"],
+  [/#\s?1\b|\bnumber one\b/i, "#1"], [/\b(?:zero|0) (?:dependencies|deps|bugs|config(?:uration)?)\b/i, "0"],
   [/\bhundreds of\b/i, "hundreds"], [/\bthousands of\b/i, "thousands"], [/\bdozens of\b/i, "dozens"], [/\bmillions of\b/i, "millions"],
   [/(?<![가-힣])수백(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수백"], [/(?<![가-힣])수천(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수천"], [/(?<![가-힣])수십(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수십"],
 ];

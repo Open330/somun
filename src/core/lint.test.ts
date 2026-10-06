@@ -278,3 +278,40 @@ it("flags an article or a placeholder question when the Blog channel promises an
   expect(lintDraft("blog", "CRLF handling", outline, [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(true);
   expect(lintDraft("blog", "CRLF handling", outline.replace("What part of CRLF handling matters to you?", "what to ask the reader"), [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(false);
 });
+
+describe("claims and evasions", () => {
+  const facts = { repo: "open330/somun", sourceText: "somun drafts posts. The fastest path is the CLI.", limitations: [] };
+  const rule = (r: ReturnType<typeof lintDraft>, name: string) => r.find((x) => x.rule === name);
+  it("flags superlative and 'first' claims the evidence does not make", () => {
+    expect(rule(lintDraft("x", undefined, "The only tool you need. 세계 최초. https://x.y", [], facts), "claims_need_review")?.args?.phrases).toBe("the only, 세계 최초");
+    expect(rule(lintDraft("x", undefined, "The fastest path is the CLI. https://x.y", [], facts), "claims_need_review")?.ok).toBe(true);
+  });
+  it("normalizes banned phrases against spacing, invisible characters, and compatibility forms", () => {
+    expect(rule(lintDraft("x", undefined, "We are excited  to\nannounce it https://x.y"), "banned_phrases")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "excited to an​nounce https://x.y"), "banned_phrases")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "game‑changer https://x.y"), "banned_phrases")?.ok).toBe(false);
+  });
+  it("finds a wrong owner at a sentence end and inside a GitHub URL, but not similar repository names", () => {
+    expect(rule(lintDraft("x", undefined, "See evil/somun.", [], facts), "repo_name")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "https://github.com/evil/somun", [], facts), "repo_name")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "https://github.com/Open330/somun and evil/somun-cli", [], facts), "repo_name")?.ok).toBe(true);
+  });
+  it("catches fullwidth and title exclamation marks, real vote asks, and invented beta notes", () => {
+    expect(rule(lintDraft("x", undefined, "Done！ https://x.y"), "no_exclamation")?.ok).toBe(false);
+    expect(rule(lintDraft("show_hn", "Show HN: somun!", "Body?"), "no_exclamation")?.ok).toBe(false);
+    expect(rule(lintDraft("show_hn", "Show HN: somun", "We devote time to a vote counter feature. Thoughts?"), "no_vote_request")?.ok).toBe(true);
+    expect(rule(lintDraft("show_hn", "Show HN: somun", "Please give it a star. Thoughts?"), "no_vote_request")?.ok).toBe(false);
+    expect(rule(lintDraft("show_gn", "소문", "추천 눌러 주세요"), "no_vote_request")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "It is still experimental. https://x.y", [], facts), "no_invented_limit")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "It is still experimental. https://x.y", [], { ...facts, sourceText: "This is still experimental." }), "no_invented_limit")?.ok).toBe(true);
+  });
+});
+
+it("reads spaced multipliers, rank claims, and word-sized quantities as claims to ground", () => {
+  expect(unsupportedNumbers("3 times faster", "fixed 3 bugs")).toEqual(["3x"]);
+  expect(unsupportedNumbers("2 배 빨라짐", "2개 수정")).toEqual(["2x"]);
+  expect(unsupportedNumbers("#1 on HN", "a tool")).toEqual(["#1"]);
+  expect(unsupportedNumbers("0 dependencies", "a tool")).toEqual(["0"]);
+  expect(unsupportedNumbers("a million downloads", "a tool")).toEqual(["a million+"]);
+  expect(unsupportedNumbers("천 명 이상이 사용", "a tool")).toEqual(["1000"]);
+});
