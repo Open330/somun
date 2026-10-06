@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { inWindow } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Channel, Decision, Draft, Evidence, FeedbackReason, Judgment, Publication, SignalKind } from "../shared/types.js";
@@ -10,7 +10,7 @@ import { crossLangNumberDiff } from "../core/lint.js";
 const DAY = 24 * 3600 * 1000;
 
 export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: r.evidence as Evidence, status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
-export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
+export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | "defer" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ purpose: r.purpose ?? undefined, id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toPublication = (r: typeof schema.publications.$inferSelect): Publication => ({ id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, channel: r.channel as Channel, lang: r.lang ?? undefined, url: r.url, publishedAt: r.publishedAt, manualStats: r.manualStats ?? undefined, autoStats: r.autoStats ?? undefined, autoStatsAt: r.autoStatsAt ?? undefined });
 
@@ -69,7 +69,13 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
 }
 
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
-  getCandidateRow(ctx, ownerId, id);
+  const c = getCandidateRow(ctx, ownerId, id);
+  // 판단이 "초안"이라 한 글감을 사용자가 보류하면 그것도 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
+  const judgment = c.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, c.latestJudgmentId)).get() : undefined;
+  if (status === "deferred" && judgment && judgment.decision === "draft" && !judgment.overriddenDecision) {
+    ctx.db.update(schema.judgments).set({ overriddenDecision: "defer", overrideReason: "deferred by editor" }).where(eq(schema.judgments.id, judgment.id)).run();
+    ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(judgment.id), reason: "other", note: "deferred by editor", createdAt: Date.now() }).run();
+  }
   ctx.db.update(schema.candidates).set({ status, updatedAt: Date.now() }).where(eq(schema.candidates.id, id)).run();
   emit(ctx, ownerId, { resource: "candidates", id });
 }
@@ -81,6 +87,21 @@ export function overrideJudgment(ctx: AppContext, ownerId: string, id: number, d
   ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(c.latestJudgmentId ?? id), reason, note: note ?? null, createdAt: Date.now() }).run();
   ctx.db.update(schema.candidates).set({ status: decision === "drop" ? "dropped" : "judged", updatedAt: Date.now() }).where(eq(schema.candidates.id, id)).run();
   emit(ctx, ownerId, { resource: "candidates", id });
+}
+
+/**
+ * 최근의 판단 번복. 글감 제목·점수·판단·사용자의 결정을 함께 넘겨, 판단이 "어떤 글감을 왜 뒤집었는지"를 보고 기준을 맞추게 한다.
+ * (예전에는 "other: manual draft request" 한 줄만 남아 무엇을 뒤집었는지 알 수 없었다.) 가중치는 자동으로 바꾸지 않는다.
+ */
+export function recentOverrides(ctx: AppContext, ownerId: string, limit = 5): string[] {
+  const rows = ctx.db.select({ j: schema.judgments, title: schema.candidates.title }).from(schema.judgments).innerJoin(schema.candidates, eq(schema.candidates.id, schema.judgments.candidateId))
+    .where(and(eq(schema.judgments.ownerId, ownerId), isNotNull(schema.judgments.overriddenDecision))).orderBy(desc(schema.judgments.id)).limit(limit).all();
+  return rows.map(({ j, title }) => {
+    const s = j.scores as Record<string, number>;
+    const scores = ["runnable", "numbers", "lesson", "novelty", "audience"].map((k) => `${k} ${s[k] ?? 0}`).join(", ");
+    const why = j.overrideReason && j.overrideReason !== "manual draft request" ? ` (${j.overrideReason})` : "";
+    return `"${title}": you said ${j.decision} (${j.total}/10; ${scores}) → editor chose ${j.overriddenDecision}${why}`;
+  });
 }
 
 export function listByStatus(ctx: AppContext, status: CandidateStatus, ownerId?: string) {

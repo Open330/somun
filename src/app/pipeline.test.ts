@@ -6,6 +6,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
 import { retryGeneration } from "./jobs.js";
+import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
@@ -245,4 +246,13 @@ it("drops an introduction-era angle from update drafts and marks unreleased high
   const update = buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user;
   expect(update).not.toContain("Introduce vite to new readers");
   expect(update).toContain("Items marked (unreleased) are on the main branch");
+});
+
+it("shows the judge what the editor overrode, including deferring a draft verdict", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 1, lesson: 1, novelty: 1, audience: 2 }, reasoning: "r" } });
+  setCandidateStatus(ctx, "test", id, "deferred");
+  const user = buildPrompt(ctx, "test", "judge", id).user;
+  expect(user).toContain("The editor overrode these past judgments");
+  expect(user).toContain('"Dependency maintenance": you said draft (7/10; runnable 2, numbers 1, lesson 1, novelty 1, audience 2) → editor chose defer (deferred by editor)');
 });

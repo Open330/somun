@@ -177,7 +177,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean; overrides?: string[] }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -193,7 +193,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in ${ctx.locale === "en" ? "English" : "Korean"}, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", ctx.overrides?.length ? `\nThe editor overrode these past judgments (most recent first). Match the editor's bar for similar candidates:\n- ${ctx.overrides.join("\n- ")}` : "", feedbackText].join("\n"),
   };
 }
 

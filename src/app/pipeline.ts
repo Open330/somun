@@ -5,7 +5,7 @@ import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
-import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
+import { getCandidateRow, recentOverrides, recentPublishedTitles } from "./candidates.js";
 import { emit, GenerationConflictError, type AppContext } from "./context.js";
 import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
@@ -105,7 +105,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
   const introduction = requested ?? !hasAnnounced(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.

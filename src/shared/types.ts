@@ -76,7 +76,7 @@ export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmCon
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 
-export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop"; overrideReason?: string; createdAt: number };
+export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop" | "defer"; overrideReason?: string; createdAt: number };
 
 /** 올리기 전 홈페이지 점검. items가 비어 있으면 점검할 홈페이지가 없거나(GitHub 페이지 포함) 열리지 않은 것. */
 export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean };
