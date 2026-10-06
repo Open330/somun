@@ -586,11 +586,13 @@ export const en: Record<string, string> = {
   "최근 {days}일 안에 생긴 글감만": "Only candidates from the last {days} days",
   "일 수": "Days",
   임계: "Thresholds",
-  "다섯 항목(각 0~2, 가중치 적용) 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.":
-    "If the sum of five criteria (0–2 each, weighted) meets the draft threshold, drafts are written for each channel. Below the defer threshold, it only asks.",
+  "다섯 항목(각 0~2, 가중치 적용)을 10점 만점으로 환산한 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.":
+    "If the five criteria (0–2 each, weighted), scaled to 10, meet the draft threshold, drafts are written for each channel. Below the defer threshold, it only asks.",
   "초안 임계": "Draft threshold",
   "보류 임계": "Defer threshold",
   가중치: "Weights",
+  "항목 사이의 상대적 중요도입니다. 합계는 늘 10점 만점으로 환산해 기준과 비교합니다.":
+    "Relative importance between criteria. The total is always scaled to 10 before it's compared with the thresholds.",
   "초안에 이 표현이 있으면 린트에 걸립니다. 한 줄에 하나.": "Drafts containing these phrases fail lint. One per line.",
   "채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).":
     "Choose the languages to write drafts in for each channel. A channel with no languages is off. Channels with a fixed language, like Show HN and Show GN, only need to be turned on. Add languages not in the list by code (e.g. ja, zh, es).",

@@ -21,3 +21,9 @@ it("reports model credentials without exposing server keys or confusing provider
     expect(updateSettings(ctx, "a", { llm: { provider: "local-agent" } }, false).llm.credentialsConfigured).toBe(true);
   } finally { ctx.db.$client.close(); }
 });
+
+it("rejects a defer threshold above the draft threshold", () => {
+  const ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: { record() {} } } as unknown as AppContext;
+  expect(() => updateSettings(ctx, "me", { deferThreshold: 7 })).toThrow("보류 기준");
+  expect(updateSettings(ctx, "me", { draftThreshold: 8, deferThreshold: 7 }).deferThreshold).toBe(7);
+});

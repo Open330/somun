@@ -20,6 +20,20 @@ import { voiceGuideFor } from "../core/voice.js";
  * 모든 단계는 큐(llm_jobs)를 거친다. local-agent면 사용자의 워커가, 아니면 서버 워커가 처리한다. 결과 반영은 applyResult 한 곳.
  */
 
+type Rubric = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
+
+/**
+ * 판단 합계. 가중치는 항목 사이의 상대적 중요도이고, 합계는 늘 10점 만점으로 환산한다(기본 가중치 1이면 항목 점수의 합과 같다).
+ * 가중치를 키워도 만점이 커지지 않으므로 초안·보류 기준점(6/4)의 뜻이 바뀌지 않는다.
+ */
+export function rubricTotal(scores: Rubric, weights: Rubric): number {
+  const keys = Object.keys(scores) as (keyof Rubric)[];
+  const wsum = keys.reduce((a, k) => a + Math.max(0, weights[k]), 0);
+  if (wsum <= 0) return 0;
+  const raw = keys.reduce((a, k) => a + scores[k] * Math.max(0, weights[k]), 0);
+  return Math.round((raw / (2 * wsum)) * 100) / 10;
+}
+
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
 
 export type ExampleOrigin = "authored" | "accepted" | "seed";
@@ -197,8 +211,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const r = args.result as { scores?: Record<string, unknown>; reasoning?: string; suggestedChannels?: unknown; angle?: string };
     const clamp = (n: unknown) => Math.max(0, Math.min(2, Math.round(Number(n) || 0)));
     const scores = { runnable: clamp(r.scores?.runnable), numbers: clamp(r.scores?.numbers), lesson: clamp(r.scores?.lesson), novelty: clamp(r.scores?.novelty), audience: clamp(r.scores?.audience) };
-    const w = settings.rubricWeights;
-    const total = scores.runnable * w.runnable + scores.numbers * w.numbers + scores.lesson * w.lesson + scores.novelty * w.novelty + scores.audience * w.audience;
+    const total = rubricTotal(scores, settings.rubricWeights);
     const noChanges = Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs);

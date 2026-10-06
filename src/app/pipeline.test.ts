@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { applyResult, buildPrompt, processNewCandidates, queueStep, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
+import { applyResult, buildPrompt, processNewCandidates, queueStep, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
@@ -183,4 +183,14 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
   expect(prompt.system).toContain("open with what the project is and who it is for");
+});
+
+it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {
+  const scores = { runnable: 2, numbers: 0, lesson: 0, novelty: 2, audience: 2 };
+  const ones = { runnable: 1, numbers: 1, lesson: 1, novelty: 1, audience: 1 };
+  expect(rubricTotal(scores, ones)).toBe(6);
+  // 예전 방식이면 2배 가중치로 합이 12가 되어 근거 없는 글감도 초안 기준을 넘었다.
+  expect(rubricTotal(scores, { ...ones, runnable: 2, novelty: 2, audience: 2, numbers: 2, lesson: 2 })).toBe(6);
+  expect(rubricTotal(scores, { ...ones, numbers: 3 })).toBe(4.3);
+  expect(rubricTotal(scores, { runnable: 0, numbers: 0, lesson: 0, novelty: 0, audience: 0 })).toBe(0);
 });

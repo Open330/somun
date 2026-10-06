@@ -7,7 +7,8 @@ import { schema } from "../infra/db/index.js";
 import { freeGeminiKeys } from "../infra/llm/providers.js";
 import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
 import type { Settings, SettingsView } from "../shared/types.js";
-import { emit, type AppContext } from "./context.js";
+import { emit, InvalidInputError, type AppContext } from "./context.js";
+import { say } from "../shared/locale.js";
 
 export const DEFAULT_SETTINGS: Settings = {
   rubricWeights: { runnable: 1, numbers: 1, lesson: 1, novelty: 1, audience: 1 },
@@ -109,6 +110,7 @@ export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<
   // 화면 상태는 항목별로 합친다(언어를 바꿔도 온보딩 닫은 시각이 지워지지 않게).
   if (patch.ui) next.ui = { ...current.ui, ...patch.ui };
   if (patch.llm) next.llm = { ...patch.llm, apiKey: patch.llm.apiKey || (keepApiKey ? current.llm.apiKey : undefined) };
+  if (next.deferThreshold > next.draftThreshold) throw new InvalidInputError(say(current.ui?.locale ?? "ko", "보류 기준은 초안 기준보다 클 수 없습니다.", "The defer threshold can't be higher than the draft threshold."));
   saveSettings(ctx, ownerId, next);
   emit(ctx, ownerId, { resource: "settings" });
   return getSettingsView(ctx, ownerId);

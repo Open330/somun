@@ -63,8 +63,9 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/settings", (c) => c.json(getSettingsView(ctx, c.get("ownerId"))));
   app.patch("/settings", async (c) => {
     const input = await body(c, z.object({
-      rubricWeights: z.object({ runnable: z.number(), numbers: z.number(), lesson: z.number(), novelty: z.number(), audience: z.number() }).optional(),
-      draftThreshold: z.number().optional(), deferThreshold: z.number().optional(),
+      rubricWeights: z.object({ runnable: z.number().min(0).max(5), numbers: z.number().min(0).max(5), lesson: z.number().min(0).max(5), novelty: z.number().min(0).max(5), audience: z.number().min(0).max(5) })
+        .refine((w) => Object.values(w).some((v) => v > 0), "At least one weight must be above 0").optional(),
+      draftThreshold: z.number().min(0).max(10).optional(), deferThreshold: z.number().min(0).max(10).optional(),
       channelLangs: z.record(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
