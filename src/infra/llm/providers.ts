@@ -152,7 +152,10 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
   // 초안은 뒤에서 도는 작업이라 상위 모델의 일시적 수요 폭주(503)를 조금 더 기다린다(약 50초). 503은 곧바로 돌아오므로 제한 시간 안이다.
   const waits = kind === "draft" && model !== (config.model?.trim() || DEFAULT_MODEL.gemini) ? DRAFT_503_WAITS_MS : DEFAULT_WAITS_MS;
+  const started = Date.now();
   for (let round = 0; round < waits.length; round++) {
+    // 상위 모델의 503은 응답까지 수십 초가 걸리기도 한다. 기다리는 데 예산을 다 쓰면 기본 모델로 넘어갈 시간도 없이 작업 제한 시간에 걸린다.
+    if (round > 0 && model !== base && Date.now() - started + waits[round] > UPPER_MODEL_BUDGET_MS) break;
     if (waits[round] > 0) await new Promise((r) => setTimeout(r, waits[round]));
     signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
@@ -188,6 +191,8 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
 /** 바퀴 사이 대기. 첫 바퀴는 바로. */
 const DEFAULT_WAITS_MS = [0, 4000, 8000];
 export const DRAFT_503_WAITS_MS = [0, 5000, 15000, 30000];
+/** 상위 모델을 붙잡는 최대 시간. 넘기면 기본 모델로 넘어간다(작업 제한 시간 180초 안에 대체 모델이 끝날 여유를 남긴다). */
+export const UPPER_MODEL_BUDGET_MS = 60_000;
 
 function rotateStateless(labels: string[]): string[] {
   const start = Math.floor(Math.random() * labels.length);
