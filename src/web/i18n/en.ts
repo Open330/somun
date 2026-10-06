@@ -997,6 +997,8 @@ export const en: Record<string, string> = {
   "분석·판단": "Analysis and evaluation",
   "요청 가능": "Requests available",
   "일시 대기": "Temporarily waiting",
+  불안정: "Unstable",
+  "응답 불안정 · 기본 모델로 대체": "Unstable · falling back to the default model",
   "제공사 한도 확인 필요": "Check provider limits",
   "로컬 워커 사용": "Uses local worker",
   "모델 연결 필요": "Connect a model",

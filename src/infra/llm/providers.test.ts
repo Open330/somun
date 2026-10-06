@@ -42,3 +42,17 @@ it("waits out a short demand spike on the draft model before falling back, but n
     expect((await judged).model).not.toBe("gemini-3.7-flash");
   } finally { vi.useRealTimers(); }
 });
+
+it("goes straight to the default model while the draft model is known to be failing", async () => {
+  const called: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+    const model = JSON.parse(String(init.body)).model as string;
+    called.push(model);
+    return new Response(JSON.stringify({ model, choices: [{ message: { content: '{"title":"","body":"ok"}' } }] }), { status: 200 });
+  }));
+  const pool = { order: async (labels: string[]) => labels, report: async () => {}, unavailable: async (model: string) => model === "gemini-3.7-flash" };
+  const res = await runLlm({ provider: "gemini", draftModel: "gemini-3.7-flash" }, prompt, "draft", pool, '{"free-1":"test"}', new AbortController().signal);
+  expect(called).not.toContain("gemini-3.7-flash");
+  expect(res.model).not.toBe("gemini-3.7-flash");
+  vi.unstubAllGlobals();
+});

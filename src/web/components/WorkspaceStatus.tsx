@@ -78,6 +78,7 @@ const modelStateLabel = (state: ModelAvailability["models"][number]["state"], sh
   ({
     ready: t("요청 가능"),
     waiting: t("일시 대기"),
+    degraded: short ? t("불안정") : t("응답 불안정 · 기본 모델로 대체"),
     unknown: short ? t("제공사 한도") : t("제공사 한도 확인 필요"),
     local: short ? t("로컬 워커") : t("로컬 워커 사용"),
     missing: short ? t("연결 필요") : t("모델 연결 필요"),
@@ -278,6 +279,7 @@ export function WorkStatusPanel({ state, candidates }: { state: WorkspaceState; 
                   <p className="small">{model.model}</p>
                   <span className="small">
                     {modelStateLabel(model.state)}
+                    {model.lastStatus ? ` · HTTP ${model.lastStatus}` : ""}
                     {model.retryAt
                       ? ` · ${t("{when}부터 재시도 가능", { when: new Date(model.retryAt).toLocaleString(dateLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) })}`
                       : ""}

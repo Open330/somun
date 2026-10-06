@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { modelAvailability } from "./keys.js";
+import { modelAvailability, UPSTREAM_FAILURE_WINDOW_MS } from "./keys.js";
 import { updateSettings } from "./settings.js";
 import { ptDayKey, nextPtMidnight, RPD_SOFT_CAP } from "../core/keypool.js";
 import { createApp } from "../server/app.js";
@@ -46,6 +46,14 @@ it("waits for both daily cap reset and cooldown, but doesn't treat one blocked k
   blocked("free-b", "draft-model", nextPtMidnight(now) + 60000, RPD_SOFT_CAP);
   expect(modelAvailability(ctx, "me", now).models[1].retryAt).toBe(nextPtMidnight(now));
   expect(modelAvailability(ctx, "me", nextPtMidnight(now)).models[1].state).toBe("ready");
+});
+it("shows a model as degraded while its last call failed with a server error, even though 5xx sets no cooldown", () => {
+  ctx.db.insert(schema.llmKeyState).values({ label: "free-a|draft-model", dayKey: ptDayKey(now), dayCount: 3, lastUsedAt: now, lastErrorAt: now, cooldownUntil: now, cooldownReason: "upstream-503" }).run();
+  expect(modelAvailability(ctx, "me", now + 1000).models[1]).toEqual({ purpose: "draft", model: "draft-model", state: "degraded", lastStatus: 503 });
+  expect(modelAvailability(ctx, "me", now + UPSTREAM_FAILURE_WINDOW_MS + 1).models[1].state).toBe("ready");
+  // 다른 키의 다음 호출이 성공하면 회복으로 본다.
+  ctx.db.insert(schema.llmKeyState).values({ label: "free-b|draft-model", dayKey: ptDayKey(now), dayCount: 1, lastUsedAt: now + 500 }).run();
+  expect(modelAvailability(ctx, "me", now + 1000).models[1].state).toBe("ready");
 });
 it("uses the current account's provider and never claims to know personal key or worker quotas", () => {
   updateSettings(ctx, "other", { llm: {

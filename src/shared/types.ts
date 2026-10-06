@@ -110,7 +110,7 @@ export type ModelAvailability = {
   mode: "shared" | "user" | "local" | "missing";
   sharedUsage?: { used: number; limit: number; resetAt: number; pendingLimit: number };
   checkedAt: number;
-  models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "unknown" | "local" | "missing"; retryAt?: number }[];
+  models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "degraded" | "unknown" | "local" | "missing"; retryAt?: number; /** degraded: 최근 실패한 HTTP 상태(예: 503). */ lastStatus?: number }[];
 };
 
 export type GenerationPlan = { introduction?: boolean; targets: { channel: Channel; lang: string }[]; instruction?: string };
