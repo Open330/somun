@@ -112,6 +112,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const found = TRANSLITERATED.flatMap(([re, en]) => [...text.matchAll(re)].map((m) => `${m[0]} → ${en}`));
     results.push({ rule: "no_transliterated_names", ok: found.length === 0, detail: found.length ? say(`이름은 원래 철자로 씁니다: ${[...new Set(found)].join(", ")}`, `Keep names in their original spelling: ${[...new Set(found)].join(", ")}`) : undefined });
     const mixed = [...text.matchAll(/소셜[\t ]+media\b|마케팅[\t ]+copy\b/gi)].map((m) => m[0]);
+    const english = englishSentences(body);
+    results.push({ rule: "mixed_language", ok: english.length === 0, detail: english.length ? say(`한국어 글에 영어 문장이 그대로 있습니다: ${english.join(" / ")}`, `An English sentence was left in the Korean post: ${english.join(" / ")}`) : undefined });
     results.push({ rule: "mixed_korean_terms", ok: mixed.length === 0, detail: mixed.length ? say(`한국어 표현으로 고쳐 주세요: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`, `Use consistent Korean terms: ${[...new Set(mixed)].join(", ")} (소셜 미디어·홍보 문구)`) : undefined });
   }
 
@@ -197,6 +199,17 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   return results;
 }
 
+/**
+ * 한국어 글 안에 번역하지 않고 남은 영어 문장. 이름 나열("Claude Code, Codex, Gemini CLI")이나 명령은 문장이 아니므로,
+ * 한글이 없고 영어 낱말이 다섯 개 이상이며 기능어(the, is, may…)가 있는 문장만 본다.
+ */
+export function englishSentences(body: string): string[] {
+  return body.split(/\n+|(?<=[.!?])\s+/)
+    .map((s) => s.replace(/https?:\/\/\S+/g, "").trim())
+    .filter((s) => s && !/[가-힣]/.test(s) && !/[`$]/.test(s) && !/^#/.test(s))
+    .filter((s) => (s.match(/[A-Za-z][A-Za-z'-]*/g) ?? []).length >= 5 && /\b(?:the|is|are|was|may|will|can|to|of|with|for|it|this|that|still|before|now)\b/i.test(s));
+}
+
 export function lintPassed(results: LintResult[]): boolean {
   return results.every((r) => r.ok);
 }
@@ -208,7 +221,8 @@ export function lintPassed(results: LintResult[]): boolean {
 export function numberTokens(input: string): string[] {
   const text = input.normalize("NFKC");
   const out = new Set<string>();
-  for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?![\w.])/gi)) {
+  // 문장 끝 마침표·쉼표(40 bugs., before 1.0.)는 수에 붙은 것이 아니다. 예전에는 이런 수를 아예 읽지 않아 문장 끝 수치가 검사를 빠져나갔다.
+  for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?!\w|[.,]\w)/gi)) {
     const rest = text.slice((m.index ?? 0) + m[0].length);
     // 배수(3x, 3×, 3배)의 숫자는 아래에서 배수 토큰으로만 센다.
     if (MULTIPLIER_SUFFIX.test(rest)) continue;

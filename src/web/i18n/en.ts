@@ -12,6 +12,7 @@ export const en: Record<string, string> = {
     "Review author role: {phrases}. A connected repository does not establish that the poster developed or released the project; review the source and the poster’s role.",
   "작성자 역할 확인": "Review author role",
   "주장 확인": "Review claims",
+  "영어 문장": "English sentence",
   "근거에서 찾지 못한 최상급·최초 주장: {phrases}. 원문에 있는 사실로 바꾸거나 빼 주세요.":
     'Superlative or "first" claims not found in the evidence: {phrases}. Replace them with sourced facts or remove them.',
   "오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}":

@@ -315,3 +315,17 @@ it("reads spaced multipliers, rank claims, and word-sized quantities as claims t
   expect(unsupportedNumbers("a million downloads", "a tool")).toEqual(["a million+"]);
   expect(unsupportedNumbers("천 명 이상이 사용", "a tool")).toEqual(["1000"]);
 });
+
+it("reads numbers at the end of a sentence", () => {
+  expect(unsupportedNumbers("We fixed 40 bugs.", "Fixed 12 bugs.")).toEqual(["40"]);
+  expect(unsupportedNumbers("1.0 버전 전까지 API가 바뀔 수 있습니다", "APIs may still change before 1.0.")).toEqual([]);
+  expect(unsupportedNumbers("Released in 2026.", "a tool")).toEqual(["2026"]);
+});
+
+it("flags an untranslated English sentence in a Korean post but not names or commands", () => {
+  const rule = (body: string) => lintDraft("x", undefined, body).find((r) => r.rule === "mixed_language");
+  expect(rule("muxa는 tmux 안의 에이전트를 지켜봅니다. APIs may still change before 1.0. https://github.com/Open330/muxa")?.ok).toBe(false);
+  expect(rule("Claude Code, Codex, Gemini CLI, Aider 세션을 봅니다. https://x.y")?.ok).toBe(true);
+  expect(rule("설치는 다음과 같습니다.\n`npm install -g muxa and run it in the terminal`")?.ok).toBe(true);
+  expect(rule("Claude Code, Codex, Gemini CLI, OpenCode, Aider\n위 도구를 지원합니다.")?.ok).toBe(true);
+});
