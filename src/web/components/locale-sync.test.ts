@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { createElement } from "react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SettingsView } from "@shared/types";
 import { DEFAULT_SETTINGS } from "../../app/settings";
-import { clearPendingChoice, getLocale, hasPendingChoice, setLocale } from "../i18n";
+import { clearPendingChoice, getLocale, hasPendingChoice, loadCatalog, setLocale } from "../i18n";
 import { setUnsaved } from "../lib/unsaved";
-import { resetLocaleSync, useAccountLocaleSync } from "./LocaleSwitch";
+import { LocaleSwitch, resetLocaleSync, useAccountLocaleSync } from "./LocaleSwitch";
 
 const { patch } = vi.hoisted(() => ({ patch: vi.fn() }));
 vi.mock("../lib/api", () => ({ patch }));
@@ -20,6 +21,9 @@ beforeEach(() => {
   setUnsaved(false);
 });
 afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  setUnsaved(false);
   setLocale("ko", { choice: false });
   clearPendingChoice();
 });
@@ -59,4 +63,26 @@ it("does not switch language under unsaved edits", () => {
 it("stores the current language when the account has none", () => {
   renderHook(() => useAccountLocaleSync(view()));
   expect(patch).toHaveBeenCalledWith("/settings", { ui: { locale: "ko" } });
+});
+
+it("keeps native language labels and switches the interface through the selector", async () => {
+  await loadCatalog("en");
+  render(createElement(LocaleSwitch, { compact: true }));
+  const select = screen.getByRole("combobox", { name: "화면 언어" });
+  expect([...select.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["한국어", "English"]);
+  fireEvent.change(select, { target: { value: "en" } });
+  expect(getLocale()).toBe("en");
+  expect(screen.getByRole("combobox", { name: "Language" })).toHaveProperty("value", "en");
+  act(() => setLocale("ko", { choice: false }));
+});
+
+it("restores the selected language when an unsaved change warning is cancelled", () => {
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  setUnsaved(true);
+  render(createElement(LocaleSwitch, { compact: true }));
+  const select = screen.getByRole("combobox", { name: "화면 언어" });
+  fireEvent.change(select, { target: { value: "en" } });
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(getLocale()).toBe("ko");
+  expect(select).toHaveProperty("value", "ko");
 });

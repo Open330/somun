@@ -51,7 +51,7 @@ it("uses Korean examples in every tab and links the evidence instead of pitching
     expect(document.querySelector(".film-after")!.textContent).toContain("Unix 계열 운영체제");
     expect(document.querySelector(".film-after")!.textContent).not.toContain("Requires");
   }
-  expect(document.querySelector(".film-source")!.getAttribute("href")).toBe("https://github.com/Open330/muxa#readme");
+  expect(document.querySelector(".film-source")!.getAttribute("href")).toBe("https://github.com/Open330/muxa");
   expect(screen.queryByText(/게시는 직접/)).toBeNull();
 });
 
@@ -90,4 +90,26 @@ it("changes the actual structure to suit X, LinkedIn and Show GN", () => {
   expect(post().querySelector(".film-part-command")!.textContent!.trim()).toBe("muxa attend");
   expect(text()).not.toContain("?");
   expect(screen.getByText("Show GN은 설명형 제목과 기능·사용 방법·조건을 나눠서.")).toBeTruthy();
+});
+
+it("distinguishes supported collection sources from the linked evidence used in this example", () => {
+  render(createElement(HeroFilm));
+  expect(document.querySelector(".film-evidence")!.closest(".film-layer")!.hasAttribute("inert")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "2단계: 소문이 읽은 것" }));
+  expect(screen.getByText("이 예시에 쓴 근거")).toBeTruthy();
+  expect(document.querySelector(".film-evidence")!.closest(".film-layer")!.hasAttribute("inert")).toBe(false);
+  expect(document.querySelector(".film-evidence")!.closest(".film-layer")!.getAttribute("aria-hidden")).toBe("false");
+  expect([...document.querySelectorAll<HTMLElement>(".film-evidence li")].every((row) => row.style.getPropertyValue("--p") === "1")).toBe(
+    true,
+  );
+  expect(document.querySelector(".film-source-types")!.textContent).toContain("블로그 · RSS/Atom");
+  expect(document.querySelector(".film-source-types")!.textContent).toContain("npm · 다운로드 지표");
+  expect(document.querySelector(".film-source-types")!.textContent).toContain("개발 세션 · 요약 업로드");
+  const links = [...document.querySelectorAll<HTMLAnchorElement>(".film-evidence a")].map((a) => a.href);
+  expect(links).toEqual([
+    "https://github.com/Open330/muxa/pull/36",
+    "https://github.com/Open330/muxa/commit/9c493a1320ed753dc4347398de6d4d60f466a82d",
+    "https://github.com/Open330/muxa#readme",
+  ]);
+  expect(document.querySelector(".film-caption")!.textContent).toContain("편집 예시");
 });

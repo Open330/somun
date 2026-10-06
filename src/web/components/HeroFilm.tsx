@@ -9,7 +9,7 @@ import "./hero-film.css";
  * 2 소문이 읽은 것 — 실제 작업물에서 가져온 근거
  * 3 소문이 쓴 초안 — 한 부분씩 쓰이며 왜 좋은지 녹색 펜으로 표시
  * 4 근거 확인 — 원자료 링크와 함께 검토
- * 조작은 보는 데 필요한 만큼만: 재생·일시정지, 단계 고르기, 채널 고르기. 설명용 글은 Open330/muxa README의 기능과 사용 조건에 근거한 편집 예시다.
+ * 조작은 보는 데 필요한 만큼만: 재생·일시정지, 단계 고르기, 채널 고르기. 설명용 글은 Open330/muxa의 공개 PR·커밋·README에 근거한 편집 예시다.
  * 완성된 예시부터 보여주고 재생은 사용자가 고른다. 화면 밖이거나 탭이 가려지면 멈춘다.
  */
 
@@ -135,9 +135,13 @@ const channels = (
   },
 ];
 const evidence = () => [
-  { kind: "readme", title: t("muxa attend — 가장 오래 기다린 에이전트로 이동") },
-  { kind: "readme", title: t("기존 tmux 세션에서 실행 중인 에이전트 상태 읽기") },
-  { kind: "readme", title: t("tmux와 Unix 계열 운영체제가 필요합니다.") },
+  { kind: "PR #36", title: t("muxa attend — 가장 오래 기다린 에이전트로 이동"), href: "https://github.com/Open330/muxa/pull/36" },
+  {
+    kind: t("커밋"),
+    title: t("기존 tmux 세션에서 실행 중인 에이전트 상태 읽기"),
+    href: "https://github.com/Open330/muxa/commit/9c493a1320ed753dc4347398de6d4d60f466a82d",
+  },
+  { kind: "README", title: t("tmux와 Unix 계열 운영체제가 필요합니다."), href: "https://github.com/Open330/muxa#readme" },
 ];
 const facts = () => ["tmux", "muxa attend", t("Unix 계열 운영체제")];
 
@@ -203,13 +207,18 @@ export default function HeroFilm() {
     return () => cancelAnimationFrame(raf);
   }, [playing, visible]);
 
-  const go = useCallback((ms: number) => setTime(clamp(ms, 0, TOTAL - 1)), []);
+  const go = useCallback((ms: number) => {
+    const selected = STEPS.find((s) => s.start === ms);
+    // 단계를 고르면 그 장면의 내용을 바로 읽을 수 있게 완성된 위치에서 멈춘다.
+    setPlaying(false);
+    setTime(clamp(selected ? (selected === STEPS[3] ? selected.start + 400 : selected.end - 400) : ms, 0, TOTAL - 1));
+  }, []);
   const toggle = useCallback(() => {
     if (!playing && time >= STEPS[3].start) setTime(0);
     setPlaying(!playing);
   }, [playing, time]);
   const onKey = (ev: React.KeyboardEvent) => {
-    if (ev.target instanceof HTMLElement && ev.target.closest("button")) return;
+    if (ev.target instanceof HTMLElement && ev.target.closest("button, a")) return;
     if (ev.key === " " || ev.key === "k") {
       ev.preventDefault();
       toggle();
@@ -259,7 +268,7 @@ export default function HeroFilm() {
             </button>
           ))}
         </div>
-        <span className="film-repo">Muxa · README</span>
+        <span className="film-repo">Muxa · GitHub</span>
       </div>
 
       <p className="film-channel-hint">{c.summary}</p>
@@ -284,15 +293,25 @@ export default function HeroFilm() {
           </ul>
         </div>
 
-        <div className="film-layer" style={{ opacity: layer(T, 4800, 8000) }} aria-hidden={step !== 1}>
+        <div className="film-layer" style={{ opacity: layer(T, 4800, 8000) }} aria-hidden={step !== 1} inert={step !== 1}>
           <span className="film-label">{steps[1]}</span>
+          <p className="film-source-summary">{t("연결한 소스와 업로드한 요약에서 글감을 모읍니다.")}</p>
+          <div className="film-source-types" aria-label={t("수집 소스")}>
+            <span>{t("GitHub · 릴리스·PR·커밋")}</span>
+            <span>{t("블로그 · RSS/Atom")}</span>
+            <span>{t("npm · 다운로드 지표")}</span>
+            <span>{t("개발 세션 · 요약 업로드")}</span>
+          </div>
+          <span className="film-evidence-label">{t("이 예시에 쓴 근거")}</span>
           <ul className="film-evidence">
             {evidence().map((e, i) => {
               const p = seg(T, 5000 + i * 320, 5400 + i * 320);
               return (
                 <li key={e.title} style={{ "--p": p } as React.CSSProperties}>
                   <span>{e.kind}</span>
-                  {e.title}
+                  <a href={e.href} target="_blank" rel="noreferrer">
+                    {e.title}
+                  </a>
                 </li>
               );
             })}
@@ -308,11 +327,11 @@ export default function HeroFilm() {
             })}
           </div>
           <p className="film-aside" style={{ opacity: seg(T, 6900, 7300) }}>
-            {t("README에서 확인할 수 있는 동작과 사용 조건을 골랐습니다.")}
+            {t("공개 PR·커밋·README에서 확인한 기능과 사용 조건을 골랐습니다.")}
           </p>
         </div>
 
-        <div className="film-layer" style={{ opacity: layer(T, 8000, TOTAL) }} aria-hidden={step < 2}>
+        <div className="film-layer" style={{ opacity: layer(T, 8000, TOTAL) }} aria-hidden={step < 2} inert={step < 2}>
           <div className="film-was" style={{ opacity: seg(T, 8100, 8500) }}>
             <span>{steps[0]}</span>
             <s>{beforeText.replace(/\s+/g, " ")}</s>
@@ -344,7 +363,7 @@ export default function HeroFilm() {
             </span>
             <a
               className="film-source"
-              href="https://github.com/Open330/muxa#readme"
+              href="https://github.com/Open330/muxa"
               target="_blank"
               rel="noreferrer"
               style={{ opacity: seg(T, 14000, 14300) }}
@@ -390,8 +409,8 @@ export default function HeroFilm() {
         </ol>
       </div>
       <p className="film-caption">
-        {t("README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 모델과 입력에 따라 달라집니다.")}{" "}
-        <a href="https://github.com/Open330/muxa#readme" target="_blank" rel="noreferrer">
+        {t("공개 PR·커밋·README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 연결한 소스와 모델에 따라 달라집니다.")}{" "}
+        <a href="https://github.com/Open330/muxa" target="_blank" rel="noreferrer">
           {t("원자료 보기")}
         </a>
       </p>

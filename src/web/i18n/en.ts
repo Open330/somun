@@ -1130,4 +1130,15 @@ export const en: Record<string, string> = {
   "사용 조건을 별도 항목으로": "Requirements in their own section",
   "첫 댓글에 동작 원리": "Mechanism in the first comment",
   "한계와 열린 질문으로 마무리": "Close with limitations and an open question",
+  "연결한 소스와 업로드한 요약에서 글감을 모읍니다.": "Collect story ideas from connected sources and uploaded summaries.",
+  "수집 소스": "Collection sources",
+  "GitHub · 릴리스·PR·커밋": "GitHub · releases, PRs, commits",
+  "블로그 · RSS/Atom": "Blogs · RSS/Atom",
+  "npm · 다운로드 지표": "npm · download metrics",
+  "개발 세션 · 요약 업로드": "Dev sessions · uploaded summaries",
+  "이 예시에 쓴 근거": "Evidence used in this example",
+  "공개 PR·커밋·README에서 확인한 기능과 사용 조건을 골랐습니다.":
+    "Select the features and requirements supported by the public PR, commit, and README.",
+  "공개 PR·커밋·README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 연결한 소스와 모델에 따라 달라집니다.":
+    "Editorial examples based on a public PR, commit, and README. Actual drafts vary with connected sources and the model.",
 };

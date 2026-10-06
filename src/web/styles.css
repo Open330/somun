@@ -609,7 +609,9 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 
 /* 화면 언어 선택 */
 .locale-switch { display: inline-flex; align-items: center; gap: 8px; }
-.locale-switch select { padding: 4px 8px; font-size: 13px; }
+.locale-select { position: relative; display: inline-flex; flex: none; }
+.locale-switch select { appearance: none; min-width: 96px; padding: 6px 28px 6px 10px; font-size: 13px; cursor: pointer; }
+.locale-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; pointer-events: none; }
 .sidebar .who-locale { padding: 4px 10px 8px; }
 .topbar .mobile-locale { display: none; }
 @media (max-width: 860px) { .topbar .mobile-locale { display: inline-flex; } }
@@ -623,7 +625,7 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; flex: n
 /* 입력과 버튼 높이를 36px 한 줄로 맞춘다(작은 것은 32px). */
 input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])), select { min-height: 36px; padding: 6px 11px; line-height: 1.4; }
 input.sm { min-height: 32px; padding: 4px 9px; font-size: 13px; }
-.locale-switch select { min-height: 32px; padding: 4px 8px; }
+.locale-switch select { min-height: 36px; padding: 6px 28px 6px 10px; }
 .draft-toolbar select.ver { min-height: 28px; padding: 3px 8px; }
 .publication-form button { min-height: 36px; }
 /* 비활성 버튼은 hover에도 변하지 않는다. */

@@ -19,13 +19,18 @@ export function LocaleSwitch({ compact }: { compact?: boolean }) {
   return (
     <label className={`locale-switch ${compact ? "compact" : ""}`}>
       <span className={compact ? "sr-only" : "small muted"}>{t("화면 언어")}</span>
-      <select value={locale} onChange={(ev) => change(ev.target)} aria-label={t("화면 언어")}>
-        {LOCALES.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.label}
-          </option>
-        ))}
-      </select>
+      <span className="locale-select">
+        <select value={locale} onChange={(ev) => change(ev.target)} aria-label={t("화면 언어")}>
+          {LOCALES.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <svg className="locale-chevron" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m4 6 4 4 4-4" />
+        </svg>
+      </span>
     </label>
   );
 }

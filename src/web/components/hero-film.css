@@ -88,3 +88,11 @@
 .film-part-command { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); padding: 2px 5px; border-radius: 4px; }
 
 .film-stage-x { min-height: 0; }
+
+.film-source-summary { margin: 0 0 10px; font-size: 13px; line-height: 1.6; color: var(--ink-2); word-break: keep-all; }
+.film-source-types { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.film-source-types span { font-size: 11px; line-height: 1.5; padding: 4px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-2); background: var(--surface); }
+.film-evidence-label { margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.film-evidence a { color: var(--ink); text-decoration: none; line-height: 1.5; padding: 8px 0; word-break: keep-all; overflow-wrap: anywhere; }
+.film-evidence a:hover { color: var(--accent); text-decoration: underline; }
+.film-evidence a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
