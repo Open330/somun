@@ -1,6 +1,8 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
+import { CHANNELS, type Channel } from "../core/channels.js";
+import { channelTag } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
 import type { GuideSuggestion } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
@@ -24,10 +26,14 @@ export function listSuggestions(ctx: AppContext, ownerId: string, status: GuideS
   return ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.ownerId, ownerId), eq(schema.guideSuggestions.status, status))).orderBy(desc(schema.guideSuggestions.count), desc(schema.guideSuggestions.updatedAt)).all().map(toSuggestion);
 }
 
+/** 지침 줄의 채널 표시("[X] …"). 없으면 모든 채널. 같은 표시끼리만 같은 규칙으로 본다. */
+const tagOf = (rule: string) => /^\s*\[([^\]]+)\]/.exec(rule)?.[1] ?? "";
+const sameRule = (a: { rule: string; normalized: string }, b: { rule: string; normalized: string }) => tagOf(a.rule) === tagOf(b.rule) && similar(a.normalized, b.normalized);
+
 function upsertSuggestion(ctx: AppContext, ownerId: string, rule: string, category: string, source: { kind: "edit" | "drop"; draftId: number; at: number }): GuideSuggestion {
   const norm = normalizeText(rule);
   const rows = ctx.db.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.ownerId, ownerId)).all();
-  const dup = rows.find((r) => r.status !== "dismissed" && similar(r.normalized, norm));
+  const dup = rows.find((r) => r.status !== "dismissed" && sameRule(r, { rule, normalized: norm }));
   const now = Date.now();
   if (dup) {
     ctx.db.update(schema.guideSuggestions).set({ count: dup.count + 1, sources: [...dup.sources, source].slice(-10), updatedAt: now }).where(eq(schema.guideSuggestions.id, dup.id)).run();
@@ -63,7 +69,10 @@ export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, k
   const rule = String(result.rule ?? "").trim();
   const category = String(result.category ?? "none");
   if (!rule || category === "none" || rule.length > 160) return undefined;
-  return upsertSuggestion(ctx, ownerId, rule, category, { kind, draftId, at: Date.now() });
+  // 형식·구성 규칙은 그 채널의 모양에서 나온다(X를 줄이라는 규칙이 LinkedIn에 들어가면 안 된다). 채널 표시를 붙여 그 채널에만 쓴다.
+  const channel = ["format", "structure"].includes(category) ? ctx.db.select({ channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.id, draftId), eq(schema.drafts.ownerId, ownerId))).get()?.channel : undefined;
+  const scoped = channel && channel in CHANNELS ? `${channelTag(channel as Channel)} ${rule}` : rule;
+  return upsertSuggestion(ctx, ownerId, scoped, category, { kind, draftId, at: Date.now() });
 }
 
 /** 승인: 지침 끝에 한 줄 붙인다. */
@@ -74,7 +83,7 @@ export function acceptSuggestion(ctx: AppContext, ownerId: string, id: number): 
   const guide = settings.voice.guide.trim();
   // 지침은 모든 초안 프롬프트에 들어간다. 끝없이 붙지 않게 줄 수와 길이를 묶는다(설정 화면의 한도와 같다).
   // 이미 비슷한 줄이 있으면 붙이지 않고 승인만 기록한다(한도와 무관).
-  const duplicate = guide.split("\n").some((l) => similar(normalizeText(l), r.normalized));
+  const duplicate = guide.split("\n").some((l) => sameRule({ rule: l, normalized: normalizeText(l) }, r));
   const lines = guide.split("\n").filter((l) => l.trim()).length;
   if (!duplicate && lines >= GUIDE_MAX_LINES) throw new GenerationConflictError(say(settings.ui?.locale, `지침이 ${lines}줄로 한도(${GUIDE_MAX_LINES}줄)에 닿았습니다. 문체 화면에서 겹치거나 오래된 줄을 정리한 뒤 추가해 주세요.`, `Your guide has ${lines} lines, the limit is ${GUIDE_MAX_LINES}. Remove overlapping or old lines on the Voice page, then add it.`));
   if (!duplicate && guide.length + r.rule.length + 1 > GUIDE_MAX_CHARS) throw new GenerationConflictError(say(settings.ui?.locale, `지침이 ${guide.length}자로 한도(${GUIDE_MAX_CHARS}자)를 넘게 됩니다. 긴 줄을 줄이거나 정리한 뒤 추가해 주세요.`, `Your guide has ${guide.length} characters and would pass the ${GUIDE_MAX_CHARS}-character limit. Shorten or remove lines, then add it.`));

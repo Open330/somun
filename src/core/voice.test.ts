@@ -19,3 +19,14 @@ describe("voice presets", () => {
     expect(voiceGuideFor({ preset: "friendly" }, "en")).toMatch(/conversational/);
   });
 });
+
+it("applies channel-tagged guide lines only to their channel", () => {
+  const voice = { preset: "plain", guide: "Lead with the change.\n[X] Two short sentences.\n[LinkedIn] Three paragraphs." };
+  const x = voiceGuideFor(voice, "en", "x");
+  expect(x).toContain("Lead with the change.");
+  expect(x).toContain("[X] Two short sentences.");
+  expect(x).not.toContain("Three paragraphs");
+  // 채널이 없는 글(영상)에는 채널 전용 줄을 넣지 않는다.
+  expect(voiceGuideFor(voice, "en")).not.toContain("[LinkedIn]");
+  expect(voiceGuideFor(voice, "en")).toContain("Lead with the change.");
+});

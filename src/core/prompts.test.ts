@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, instructionOf, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
@@ -89,4 +89,11 @@ describe("stored draft prompts", () => {
     expect(draftPurposeOf({ draftPurpose: "update" }, user)).toBe("update");
     expect(instructionOf(draftPrompt(candidate, "x", "en", []).user)).toBeUndefined();
   });
+});
+
+it("puts every release note in the window into the raw material and the grounding", () => {
+  const c = { title: "a/m", type: "release", evidence: { repo: "a/m", repoUrl: "u", version: "pkg-c@0.0.1", releaseNotes: "C notes", windowReleaseNotes: [{ tag: "pkg-a@1.2.0", notes: "Startup 40% faster" }, { tag: "pkg-c@0.0.1", notes: "C notes" }] } };
+  const raw = groundingText(c);
+  expect(raw).toContain("## Release notes (pkg-a@1.2.0)\nStartup 40% faster");
+  expect(raw.match(/C notes/g)).toHaveLength(1);
 });

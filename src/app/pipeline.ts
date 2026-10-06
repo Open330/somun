@@ -1,11 +1,11 @@
 import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
-import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
+import { getCandidateRow, recentOverrides, recentPublishedTitles } from "./candidates.js";
 import { emit, GenerationConflictError, type AppContext } from "./context.js";
 import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
@@ -75,6 +75,17 @@ export function windowFacts(ctx: AppContext, ownerId: string, candidateId: numbe
   };
 }
 
+/** 탐색으로 덧붙일 수 있는 일상 채널. */
+const EXPLORABLE: Channel[] = ["x", "threads", "linkedin"];
+
+/** 추천 밖 채널 중 탐색할 하나. 이 채널로 올린 글(게시 등록)이 2개 미만인 일상 채널 가운데 가장 적게 올린 것. */
+export function explorationChannel(ctx: AppContext, ownerId: string, candidates: Channel[]): Channel | undefined {
+  const pool = [...new Set(candidates)].filter((ch) => EXPLORABLE.includes(ch));
+  if (!pool.length) return undefined;
+  const posts = new Map(ctx.db.select({ channel: schema.publications.channel, n: sql<number>`count(*)` }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).groupBy(schema.publications.channel).all().map((r) => [r.channel, Number(r.n)]));
+  return pool.filter((ch) => (posts.get(ch) ?? 0) < 2).sort((a, b) => (posts.get(a) ?? 0) - (posts.get(b) ?? 0))[0];
+}
+
 /**
  * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
  * 단, 첫 소개 초안을 만든 뒤에 이 저장소를 알렸다면(복사·게시 등록) 더는 첫 소개가 아니다. 다시 쓰면 업데이트가 된다.
@@ -105,7 +116,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
   const introduction = requested ?? !hasAnnounced(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.
@@ -114,7 +125,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
-    guide: voiceGuideFor(settings.voice, lang),
+    guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
     disputed,
     introduction,
@@ -252,7 +263,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {
-      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel)) : targets;
+      // 추천은 지난 성과에 기대므로 한 번 빠진 채널은 자료가 쌓이지 않아 영영 빠진다(탐색 없는 고착).
+      // 그래서 추천 밖의 일상 채널 하나를 덧붙인다: 올린 글이 2개 미만인 채널 중 가장 적게 올린 채널.
+      // 출시용 채널(Show HN·Show GN)과 블로그 개요는 판단이 고를 때만 쓴다(작은 업데이트에 출시 글을 만들지 않게).
+      const explore = suggested.length ? explorationChannel(ctx, ownerId, targets.map((t) => t.channel).filter((ch) => !suggested.includes(ch))) : undefined;
+      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel) || t.channel === explore) : targets;
       for (const t of picked) next("draft", t.channel, t.lang);
     }
     return { kind: "judge", decision, total };

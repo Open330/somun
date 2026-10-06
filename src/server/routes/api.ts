@@ -5,7 +5,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, enabledTargets, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
-import { collectAll, profileMaterialFor } from "../../app/collect.js";
+import { backfillStarTrend, collectAll, profileMaterialFor } from "../../app/collect.js";
 import { checkLocalResult } from "../../app/draft-repair.js";
 import { editProfile, EDIT_LIMITS, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, GUIDE_MAX_CHARS, listSuggestions } from "../../app/learning.js";
@@ -177,7 +177,13 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
 
   // publications
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
-  app.post("/publications", async (c) => c.json({ id: registerPublication(ctx, c.get("ownerId"), await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.string().url() }))) }));
+  app.post("/publications", async (c) => {
+    const ownerId = c.get("ownerId");
+    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.string().url() })));
+    // 발행 전 추세의 기준점이 없으면 뒤에서 GitHub 스타 시각으로 채운다. 실패해도 등록은 그대로다.
+    void backfillStarTrend(ctx, ownerId, id).catch((err: Error) => ctx.log.warn({ publicationId: id, err: err.message }, "star trend backfill failed"));
+    return c.json({ id });
+  });
   app.patch("/publications/:id", async (c) => { updatePublicationUrl(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ url: z.string().url() }))).url); return c.body(null, 204); });
   app.delete("/publications/:id", (c) => { removePublication(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/publications/:id/stats", async (c) => { setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: z.number().optional(), comments: z.number().optional(), reposts: z.number().optional() }))); return c.body(null, 204); });

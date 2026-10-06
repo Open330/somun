@@ -19,6 +19,7 @@ export type EvidenceLike = {
   experimental?: string[];
   /** 이 글감에 묶인 릴리스 태그(오래된 것부터). 둘 이상이면 변경을 최신 태그 하나에 몰아 쓰지 않게 알린다. 프롬프트를 만들 때 채운다. */
   windowReleases?: string[];
+  windowReleaseNotes?: { tag: string; notes: string }[];
   /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
   unreleasedPrTitles?: string[];
 };
@@ -96,7 +97,9 @@ export function numbersLine(e: EvidenceLike): string {
 export function rawBlock(c: CandidateLike, hasProfile = false): string {
   const e = c.evidence;
   return [
-    e.releaseNotes ? `## Release notes\n${e.releaseNotes.slice(0, 3000)}` : "",
+    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, 3000)}` : "",
+    // 같은 창의 다른 릴리스 노트. 모노레포·연속 릴리스에서 최신 노트 하나만 보면 앞선 변경이 빠진다.
+    ...(e.windowReleaseNotes ?? []).filter((r) => r.tag !== e.version && r.notes.trim()).slice(-6).map((r) => `## Release notes (${r.tag})\n${r.notes.slice(0, 1500)}`),
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",
     e.commitSubjects?.length ? `## Commit subjects since last release\n- ${e.commitSubjects.slice(0, 60).join("\n- ")}` : "",
     e.ompSummary ? `## Agent session summary (what the author struggled with)\n${e.ompSummary}` : "",
@@ -174,7 +177,7 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean; overrides?: string[] }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
@@ -190,7 +193,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in ${ctx.locale === "en" ? "English" : "Korean"}, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", ctx.overrides?.length ? `\nThe editor overrode these past judgments (most recent first). Match the editor's bar for similar candidates:\n- ${ctx.overrides.join("\n- ")}` : "", feedbackText].join("\n"),
   };
 }
 

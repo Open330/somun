@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { backfillStarTrend, collectAll, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -138,6 +138,24 @@ describe("collection guards", () => {
     expect(missingReads(["/repos/a/b/pulls?state=closed", "/repos/a/b/traffic/views", "/repos/a/b/readme", "/repos/a/c/releases"], "a/b")).toEqual(["pull requests", "contents"]);
   });
 
+  it("backfills the pre-post star trend from GitHub star times when no early snapshot exists", async () => {
+    ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/tool"], enabled: true }).run();
+    const now = Date.now(), DAY = 86400e3;
+    const cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: "me", type: "release", title: "t", repo: "me/tool", key: "k", evidence: { repo: "me/tool", repoUrl: "u" }, status: "drafted", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const pid = Number(ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId: cid, channel: "x", url: "https://x.com/me/status/1", publishedAt: now }).run().lastInsertRowid);
+    const stars = [...Array.from({ length: 5 }, (_, i) => now - 20 * DAY + i), ...Array.from({ length: 10 }, (_, i) => now - 5 * DAY + i * 3600e3)].map((t) => ({ starred_at: new Date(t).toISOString() }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/tool")) return new Response(JSON.stringify({ full_name: "me/tool", stargazers_count: 15, forks_count: 2, private: false }), { status: 200 });
+      if (url.includes("/stargazers")) return new Response(JSON.stringify(stars), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    expect(await backfillStarTrend(ctx, "me", pid)).toBe(2);
+    const rows = ctx.db.select().from(schema.metricSnapshots).all().sort((a, b) => a.at - b.at);
+    expect(rows.map((r) => r.stars)).toEqual([5, 15]);
+    // 이미 기준점이 있으면 다시 읽지 않는다.
+    expect(await backfillStarTrend(ctx, "me", pid)).toBe(0);
+  });
+
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {
     const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/a", "me/b"], enabled: true }).run().lastInsertRowid);
     const repo = (name: string) => ({ full_name: name, html_url: `https://github.com/${name}`, description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false });
@@ -204,4 +222,17 @@ it("does not read a repository name as a missing permission and skips squash-mer
   const now = Date.now();
   const c = (sha: string, message: string) => ({ sha, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
   expect(commitBatch(["feat: a (#1)", "fix: b (#2)", "Add c (#3)", "Add d (#4)", "Add e (#5)"].map((m, i) => c(`s${i}`, m)), now - 14 * 86400e3)).toBeNull();
+});
+
+it("reads closed PRs past the first page until the collection window and drops bot PRs", async () => {
+  const now = Date.now(), since = now - 14 * 86400e3;
+  const pr = (n: number, daysAgo: number, bot = false) => ({ number: n, title: `PR ${n}`, merged_at: new Date(now - daysAgo * 86400e3).toISOString(), html_url: `u${n}`, updated_at: new Date(now - daysAgo * 86400e3).toISOString(), user: bot ? { login: "dependabot[bot]", type: "Bot" } : { login: "me", type: "User" } });
+  const page1 = Array.from({ length: 100 }, (_, i) => pr(i, 1, i % 2 === 0));
+  const page2 = [pr(200, 3), pr(201, 20)];
+  const calls: string[] = [];
+  const gh = { get: async (path: string) => { calls.push(path); return /[?&]page=1\b/.test(path) ? page1 : /[?&]page=2\b/.test(path) ? page2 : []; } } as unknown as Parameters<typeof closedPullsSince>[0];
+  const prs = await closedPullsSince(gh, "a/b", since);
+  expect(prs?.some((p) => p.number === 200)).toBe(true);
+  expect(prs?.some((p) => p.user?.type === "Bot")).toBe(false);
+  expect(calls).toHaveLength(2);
 });

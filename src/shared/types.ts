@@ -39,6 +39,8 @@ export type Evidence = {
   unverifiedHighlights?: { text: string; numbers: string[] }[];
   /** 이 창에서 넘은 임계. 글감이 아니라 사실로 쓴다. */
   milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
+  /** 이 글감에 묶인 릴리스들의 노트(최신 릴리스 포함). 요약과 수치 대조가 최신 노트 하나만 보지 않게. */
+  windowReleaseNotes?: { tag: string; notes: string }[];
 };
 
 export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: string; apiKey?: string; baseUrl?: string; agentCli?: "claude" | "codex" };
@@ -74,7 +76,7 @@ export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmCon
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 
-export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop"; overrideReason?: string; createdAt: number };
+export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop" | "defer"; overrideReason?: string; createdAt: number };
 
 /** 올리기 전 홈페이지 점검. items가 비어 있으면 점검할 홈페이지가 없거나(GitHub 페이지 포함) 열리지 않은 것. */
 export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean };

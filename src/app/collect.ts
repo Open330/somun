@@ -1,16 +1,19 @@
+import { and, eq } from "drizzle-orm";
 import { normalizeGithubTarget } from "../core/source-target.js";
+import { schema } from "../infra/db/index.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
 import { installationToken } from "../infra/github/app.js";
 import { GitHubClient, GitHubRateLimitError, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
 import { githubAppConfig, ownerOfInstallation } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
-import { refreshEvidence } from "./candidates.js";
+import { getCandidateRow, refreshEvidence } from "./candidates.js";
+import { backfillStarPoints, hasPrePostTrend } from "../core/metrics.js";
 import { ensureProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { localeOf, say } from "./i18n.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
-import { isTrusted, NotFoundError, type AppContext } from "./context.js";
+import { emit, isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
 import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
@@ -74,6 +77,22 @@ export async function pagedList<T>(gh: GitHubClient, path: string, maxPages = 10
     if (!list) return page === 1 ? null : out;
     out.push(...list);
     if (list.length < 100) break;
+  }
+  return out;
+}
+
+/**
+ * 수집 창 안에 갱신된 닫힌 PR을 끝까지 읽는다(최근 갱신순, 최대 maxPages쪽). 예전에는 30개만 읽어,
+ * 봇 PR이나 머지하지 않고 닫은 PR이 많은 저장소에서 실제로 머지된 PR이 빠졌다. 봇이 연 PR은 글감이 아니므로 뺀다.
+ */
+export async function closedPullsSince(gh: GitHubClient, repo: string, since: number, maxPages = 5): Promise<GhPull[] | null> {
+  const out: GhPull[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const list = await gh.get<GhPull[]>(`/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}`);
+    if (!list) return page === 1 ? null : out;
+    out.push(...list.filter((p) => p.user?.type !== "Bot" && !p.user?.login?.endsWith("[bot]")));
+    const oldest = list.at(-1)?.updated_at;
+    if (list.length < 100 || (oldest && Date.parse(oldest) < since)) break;
   }
   return out;
 }
@@ -159,6 +178,43 @@ export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoN
   return { repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
 }
 
+/**
+ * 발행 전 추세의 기준점(발행 2~11일 전 스냅샷)이 없으면 GitHub 스타 시각으로 되짚어 채운다.
+ * 연결 직후 올린 첫 소개 글은 소문이 찍은 스냅샷이 없어 "추세 대비 증가"를 낼 수 없었다. 최근 스타 500개까지만 읽는다.
+ */
+export async function backfillStarTrend(ctx: AppContext, ownerId: string, publicationId: number): Promise<number> {
+  const pub = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, publicationId), eq(schema.publications.ownerId, ownerId))).get();
+  if (!pub) return 0;
+  const name = getCandidateRow(ctx, ownerId, pub.candidateId).repo;
+  // 같은 저장소에 글을 연달아 등록해도 한 번만 읽고 한 번만 넣는다.
+  const lock = `${ownerId}|${name}`;
+  if (backfilling.has(lock)) return 0;
+  backfilling.add(lock);
+  try { return await backfillRepo(ctx, ownerId, name, pub.publishedAt); } finally { backfilling.delete(lock); }
+}
+const backfilling = new Set<string>();
+
+async function backfillRepo(ctx: AppContext, ownerId: string, name: string, publishedAt: number): Promise<number> {
+  const snaps = ctx.db.select({ at: schema.metricSnapshots.at, forks: schema.metricSnapshots.forks }).from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, name))).all();
+  if (hasPrePostTrend(snaps, publishedAt)) return 0;
+  const src = listEnabledSources(ctx, { ownerId, kind: "github" }).find((s) => s.targets.some((t) => t === name || t === name.split("/")[0]));
+  const { gh, publicOnly } = await githubAccess(ctx, ownerId, src?.options?.installationId ? Number(src.options.installationId) : undefined);
+  const repo = await gh.get<GhRepo>(`/repos/${name}`);
+  if (!repo || (publicOnly && repo.private !== false)) return 0;
+  const { times, complete } = await gh.recentStarTimes(name, repo.stargazers_count, publishedAt - 9 * DAY);
+  if (!complete) return 0;
+  let inserted = 0;
+  for (const p of backfillStarPoints(repo.stargazers_count, times, publishedAt)) {
+    if (snaps.some((s) => Math.abs(s.at - p.at) < 12 * 3600e3)) continue;
+    // 과거 fork 수는 알 수 없다. 가장 가까운 실제 스냅샷의 값을 쓰고, 없을 때만 지금 값을 쓴다.
+    const nearest = [...snaps].sort((a, b) => Math.abs(a.at - p.at) - Math.abs(b.at - p.at))[0];
+    ctx.db.insert(schema.metricSnapshots).values({ ownerId, repo: name, stars: p.stars, forks: nearest?.forks ?? repo.forks_count, at: p.at }).run();
+    inserted++;
+  }
+  if (inserted) emit(ctx, ownerId, { resource: "publications" });
+  return inserted;
+}
+
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
   if (!source) return {};
@@ -178,7 +234,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
         pagedList<GhRelease>(gh, `/repos/${name}/releases`),
-        gh.get<GhPull[]>(`/repos/${name}/pulls?state=closed&sort=updated&direction=desc&per_page=30`),
+        closedPullsSince(gh, name, since),
         gh.get<{ uniques: number }>(`/repos/${name}/traffic/views`),
         gh.get<{ referrer: string; uniques: number }[]>(`/repos/${name}/traffic/referrers`),
         gh.get<{ content: string }>(`/repos/${name}/contents/package.json`),

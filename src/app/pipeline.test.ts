@@ -6,6 +6,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES } from "./pipeline.js";
 import { retryGeneration } from "./jobs.js";
+import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
@@ -245,4 +246,38 @@ it("drops an introduction-era angle from update drafts and marks unreleased high
   const update = buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user;
   expect(update).not.toContain("Introduce vite to new readers");
   expect(update).toContain("Items marked (unreleased) are on the main branch");
+});
+
+it("shows the judge what the editor overrode, including deferring a draft verdict", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 1, lesson: 1, novelty: 1, audience: 2 }, reasoning: "r" } });
+  ctx.db.update(schema.candidates).set({ status: "judged" }).run();
+  setCandidateStatus(ctx, "test", id, "deferred");
+  const user = buildPrompt(ctx, "test", "judge", id).user;
+  expect(user).toContain("The editor overrode these past judgments");
+  expect(user).toContain('"Dependency maintenance": you said draft (7/10; runnable 2, numbers 1, lesson 1, novelty 1, audience 2) → editor chose defer (deferred by editor)');
+  // 보류를 풀면 번복이 아니다.
+  setCandidateStatus(ctx, "test", id, "judged");
+  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("The editor overrode");
+  expect(ctx.db.select().from(schema.feedback).all()).toHaveLength(0);
+  // 초안이 있는 글감을 미루는 것은 번복으로 남기지 않는다.
+  ctx.db.update(schema.candidates).set({ status: "drafted" }).run();
+  setCandidateStatus(ctx, "test", id, "deferred");
+  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("The editor overrode");
+});
+
+it("adds one under-posted everyday channel to the judge's picks, never launch channels", () => {
+  updateSettings(ctx, "test", { channelLangs: { x: ["en"], linkedin: ["ko"], threads: ["ko"], show_hn: ["en"], show_gn: ["ko"] } });
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  const judge = () => applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "r", suggestedChannels: ["x"] } });
+  const drafted = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft").map((j) => j.channel).sort();
+  // LinkedIn에는 이미 한 번 올렸다. Threads가 더 적게 올린 채널이라 그쪽을 탐색한다.
+  ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "linkedin", url: "https://www.linkedin.com/posts/a-1", publishedAt: 1 }).run();
+  judge();
+  expect(drafted()).toEqual(["threads", "x"]);
+  // 일상 채널 모두 두 번 이상 올렸으면 판단의 추천만 따른다.
+  ctx.db.delete(schema.llmJobs).run();
+  for (const ch of ["linkedin", "threads", "threads"]) ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: ch, url: `https://example.test/${ch}/${Math.random()}`, publishedAt: 2 }).run();
+  judge();
+  expect(drafted()).toEqual(["x"]);
 });

@@ -12,6 +12,8 @@ export const en: Record<string, string> = {
     "Review author role: {phrases}. A connected repository does not establish that the poster developed or released the project; review the source and the poster’s role.",
   "작성자 역할 확인": "Review author role",
   "주장 확인": "Review claims",
+  "방문자 수는 GitHub 트래픽 API에서 가져옵니다. 저장소 관리 권한이 있는 토큰으로 수집할 때만 표시되며, 소문 GitHub App에는 이 권한을 요청하지 않습니다.":
+    "Visitor counts come from the GitHub traffic API. They appear only when collecting with a token that has admin access to the repository; the somun GitHub App does not request that permission.",
   "영어 문장": "English sentence",
   "근거에서 찾지 못한 최상급·최초 주장: {phrases}. 원문에 있는 사실로 바꾸거나 빼 주세요.":
     'Superlative or "first" claims not found in the evidence: {phrases}. Replace them with sourced facts or remove them.',

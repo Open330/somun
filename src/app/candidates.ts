@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { inWindow } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Channel, Decision, Draft, Evidence, FeedbackReason, Judgment, Publication, SignalKind } from "../shared/types.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
@@ -9,7 +10,7 @@ import { crossLangNumberDiff } from "../core/lint.js";
 const DAY = 24 * 3600 * 1000;
 
 export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: r.evidence as Evidence, status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
-export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
+export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | "defer" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ purpose: r.purpose ?? undefined, id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toPublication = (r: typeof schema.publications.$inferSelect): Publication => ({ id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, channel: r.channel as Channel, lang: r.lang ?? undefined, url: r.url, publishedAt: r.publishedAt, manualStats: r.manualStats ?? undefined, autoStats: r.autoStats ?? undefined, autoStatsAt: r.autoStatsAt ?? undefined });
 
@@ -67,8 +68,20 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   return { candidate: toCandidate(c), unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
 }
 
+const DEFERRED_BY_EDITOR = "deferred by editor";
+
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
-  getCandidateRow(ctx, ownerId, id);
+  const c = getCandidateRow(ctx, ownerId, id);
+  // 판단이 "초안"이라 한 글감을, 초안을 보기 전에(judged) 보류하면 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
+  // 초안이 이미 있는 글감의 보류는 "나중에 올리기"일 수 있어 번복으로 보지 않는다. 보류를 풀면 번복 기록도 지운다.
+  const judgment = c.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, c.latestJudgmentId)).get() : undefined;
+  if (status === "deferred" && c.status === "judged" && judgment && judgment.decision === "draft" && !judgment.overriddenDecision) {
+    ctx.db.update(schema.judgments).set({ overriddenDecision: "defer", overrideReason: DEFERRED_BY_EDITOR }).where(eq(schema.judgments.id, judgment.id)).run();
+    ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(judgment.id), reason: "other", note: DEFERRED_BY_EDITOR, createdAt: Date.now() }).run();
+  } else if (status !== "deferred" && c.status === "deferred" && judgment?.overriddenDecision === "defer") {
+    ctx.db.update(schema.judgments).set({ overriddenDecision: null, overrideReason: null }).where(eq(schema.judgments.id, judgment.id)).run();
+    ctx.db.delete(schema.feedback).where(and(eq(schema.feedback.ownerId, ownerId), eq(schema.feedback.targetType, "judgment"), eq(schema.feedback.targetId, String(judgment.id)), eq(schema.feedback.note, DEFERRED_BY_EDITOR))).run();
+  }
   ctx.db.update(schema.candidates).set({ status, updatedAt: Date.now() }).where(eq(schema.candidates.id, id)).run();
   emit(ctx, ownerId, { resource: "candidates", id });
 }
@@ -80,6 +93,21 @@ export function overrideJudgment(ctx: AppContext, ownerId: string, id: number, d
   ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(c.latestJudgmentId ?? id), reason, note: note ?? null, createdAt: Date.now() }).run();
   ctx.db.update(schema.candidates).set({ status: decision === "drop" ? "dropped" : "judged", updatedAt: Date.now() }).where(eq(schema.candidates.id, id)).run();
   emit(ctx, ownerId, { resource: "candidates", id });
+}
+
+/**
+ * 최근의 판단 번복. 글감 제목·점수·판단·사용자의 결정을 함께 넘겨, 판단이 "어떤 글감을 왜 뒤집었는지"를 보고 기준을 맞추게 한다.
+ * (예전에는 "other: manual draft request" 한 줄만 남아 무엇을 뒤집었는지 알 수 없었다.) 가중치는 자동으로 바꾸지 않는다.
+ */
+export function recentOverrides(ctx: AppContext, ownerId: string, limit = 5): string[] {
+  const rows = ctx.db.select({ j: schema.judgments, title: schema.candidates.title }).from(schema.judgments).innerJoin(schema.candidates, eq(schema.candidates.id, schema.judgments.candidateId))
+    .where(and(eq(schema.judgments.ownerId, ownerId), isNotNull(schema.judgments.overriddenDecision))).orderBy(desc(schema.judgments.id)).limit(limit).all();
+  return rows.map(({ j, title }) => {
+    const s = j.scores as Record<string, number>;
+    const scores = ["runnable", "numbers", "lesson", "novelty", "audience"].map((k) => `${k} ${s[k] ?? 0}`).join(", ");
+    const why = j.overrideReason && j.overrideReason !== "manual draft request" ? ` (${j.overrideReason})` : "";
+    return `"${title}": you said ${j.decision} (${j.total}/10; ${scores}) → editor chose ${j.overriddenDecision}${why}`;
+  });
 }
 
 export function listByStatus(ctx: AppContext, status: CandidateStatus, ownerId?: string) {
@@ -109,7 +137,9 @@ export function refreshEvidence(ctx: AppContext, ownerId: string, repo: string, 
     const limitationsSource = keepDigest ? "digest" as const : incoming.limitationsSource ?? "readme" as const;
     // 값이 없는 필드(일시적 조회 실패)는 기존 사실을 지우지 않는다.
     const defined = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v !== undefined)) as Partial<Evidence>;
-    const merged: Evidence = { ...cur, ...defined, limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
+    // 지난 창의 글감은 자기 릴리스를 설명한다. 새 릴리스의 버전·노트로 덮어쓰지 않는다.
+    const past = !inWindow(c.createdAt, Date.now());
+    const merged: Evidence = { ...cur, ...defined, ...(past ? { version: cur.version, releaseNotes: cur.releaseNotes, commitSubjects: cur.commitSubjects } : {}), limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary, windowReleaseNotes: cur.windowReleaseNotes };
     ctx.db.update(schema.candidates).set({ evidence: merged as Record<string, unknown> }).where(eq(schema.candidates.id, c.id)).run();
     n++;
   }
