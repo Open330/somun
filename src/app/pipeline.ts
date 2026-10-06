@@ -11,7 +11,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
+import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt, performanceSummary } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -252,7 +252,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {
-      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel)) : targets;
+      // 판단이 추천하지 않은 채널도, 성과 자료가 2건 미만이면 초안을 만든다. 추천은 지난 성과에 기대므로
+      // 한 번 빠진 채널은 다시 자료가 쌓이지 않아 영영 빠진다(탐색 없는 고착). 자료가 쌓인 채널만 추천을 따른다.
+      const measured = new Map(performanceSummary(ctx, ownerId).byChannel.map((g) => [g.key, g.measured ?? 0]));
+      const unexplored = new Set(targets.map((t) => t.channel).filter((ch) => (measured.get(ch) ?? 0) < 2));
+      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel) || unexplored.has(t.channel)) : targets;
       for (const t of picked) next("draft", t.channel, t.lang);
     }
     return { kind: "judge", decision, total };

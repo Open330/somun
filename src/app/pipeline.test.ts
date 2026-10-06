@@ -256,3 +256,19 @@ it("shows the judge what the editor overrode, including deferring a draft verdic
   expect(user).toContain("The editor overrode these past judgments");
   expect(user).toContain('"Dependency maintenance": you said draft (7/10; runnable 2, numbers 1, lesson 1, novelty 1, audience 2) → editor chose defer (deferred by editor)');
 });
+
+it("still drafts channels the judge skipped until they have enough results to judge them by", () => {
+  updateSettings(ctx, "test", { channelLangs: { x: ["en"], linkedin: ["ko"] } });
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  const judge = () => applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "r", suggestedChannels: ["x"] } });
+  const drafted = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft").map((j) => j.channel).sort();
+  judge();
+  expect(drafted()).toEqual(["linkedin", "x"]);
+  // LinkedIn 글 두 개에 스타 자료가 쌓이면, 그때부터는 판단의 추천을 따른다.
+  ctx.db.delete(schema.llmJobs).run();
+  const DAY = 86400e3, at = Date.now() - 30 * DAY;
+  for (const [d, stars] of [[-5, 100], [-1, 100], [6, 101], [14, 101], [20, 102]] as const) ctx.db.insert(schema.metricSnapshots).values({ ownerId: "test", repo: "vitejs/vite", stars, forks: 0, at: at + d * DAY }).run();
+  for (const d of [0, 13]) ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "linkedin", url: `https://www.linkedin.com/posts/a-${d}`, publishedAt: at + d * DAY }).run();
+  judge();
+  expect(drafted()).toEqual(["x"]);
+});
