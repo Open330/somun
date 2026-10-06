@@ -5,7 +5,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import { GenerationConflictError, type AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
-import { acceptSuggestion, GUIDE_MAX_LINES } from "./learning.js";
+import { acceptSuggestion, applyLesson, GUIDE_MAX_LINES } from "./learning.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
 import { getSettingsView, updateSettings } from "./settings.js";
 import { editProfile, ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
@@ -308,4 +308,10 @@ it.each([
   saveDraftEdit(ctx, OWNER, id, {body:fixed,markCopied:true});
   expect(examples()).toHaveLength(1);
   expect(examples()[0].body).toBe(fixed);
+});
+
+it("tags format lessons with their channel so they only shape that channel's drafts", () => {
+  const id = draft("Long X post https://github.com/me/tool");
+  expect(applyLesson(ctx, OWNER, id, "edit", { rule: "Keep it to two sentences.", category: "format" })?.rule).toBe("[X] Keep it to two sentences.");
+  expect(applyLesson(ctx, OWNER, id, "edit", { rule: "Say what changed before why.", category: "voice" })?.rule).toBe("Say what changed before why.");
 });

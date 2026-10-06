@@ -1,3 +1,5 @@
+import { CHANNELS, type Channel } from "./channels.js";
+
 /**
  * 문체 프리셋. 초안 프롬프트에 "문체 지침"으로 들어간다.
  * 예시 문장(문체 예시)에서 문체를 유추하는 대신, 여기서 고른 지침이 문체를 정한다. 예시는 선택 사항이다.
@@ -87,10 +89,17 @@ export function voicePreset(id: string | undefined): VoicePreset {
 }
 
 /** 프리셋 지침 + 사용자 자유 지침을 언어에 맞춰 합친다. */
-export function voiceGuideFor(voice: { preset?: string; guide?: string } | undefined, lang: string): string {
+/** 한 채널에만 쓰는 지침 줄의 표시. "[X] 두 문장 안으로" 처럼 줄 앞에 둔다. */
+export const channelTag = (channel: Channel) => `[${CHANNELS[channel].label}]`;
+
+/**
+ * 프리셋 + 작성자 지침. channel을 주면 다른 채널 표시가 붙은 줄은 뺀다(표시 없는 줄은 모든 채널에 쓴다).
+ */
+export function voiceGuideFor(voice: { preset?: string; guide?: string } | undefined, lang: string, channel?: Channel): string {
   const p = voicePreset(voice?.preset);
   const base = lang === "ko" ? p.ko : p.en;
-  const extra = voice?.guide?.trim();
+  const others = channel ? Object.values(CHANNELS).filter((c) => c.id !== channel).map((c) => channelTag(c.id as Channel)) : [];
+  const extra = voice?.guide?.split("\n").filter((line) => !others.some((tag) => line.trim().startsWith(tag))).join("\n").trim();
   return extra ? `${base}\n\nAuthor's own guide (takes precedence where they conflict):\n${extra}` : base;
 }
 

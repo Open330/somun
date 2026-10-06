@@ -19,3 +19,12 @@ describe("voice presets", () => {
     expect(voiceGuideFor({ preset: "friendly" }, "en")).toMatch(/conversational/);
   });
 });
+
+it("applies channel-tagged guide lines only to their channel", () => {
+  const voice = { preset: "plain", guide: "Lead with the change.\n[X] Two short sentences.\n[LinkedIn] Three paragraphs." };
+  const x = voiceGuideFor(voice, "en", "x");
+  expect(x).toContain("Lead with the change.");
+  expect(x).toContain("[X] Two short sentences.");
+  expect(x).not.toContain("Three paragraphs");
+  expect(voiceGuideFor(voice, "en")).toContain("Three paragraphs");
+});

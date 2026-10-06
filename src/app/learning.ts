@@ -1,6 +1,8 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
+import { CHANNELS, type Channel } from "../core/channels.js";
+import { channelTag } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
 import type { GuideSuggestion } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
@@ -63,7 +65,10 @@ export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, k
   const rule = String(result.rule ?? "").trim();
   const category = String(result.category ?? "none");
   if (!rule || category === "none" || rule.length > 160) return undefined;
-  return upsertSuggestion(ctx, ownerId, rule, category, { kind, draftId, at: Date.now() });
+  // 형식·구성 규칙은 그 채널의 모양에서 나온다(X를 줄이라는 규칙이 LinkedIn에 들어가면 안 된다). 채널 표시를 붙여 그 채널에만 쓴다.
+  const channel = ["format", "structure"].includes(category) ? ctx.db.select({ channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.id, draftId), eq(schema.drafts.ownerId, ownerId))).get()?.channel : undefined;
+  const scoped = channel && channel in CHANNELS ? `${channelTag(channel as Channel)} ${rule}` : rule;
+  return upsertSuggestion(ctx, ownerId, scoped, category, { kind, draftId, at: Date.now() });
 }
 
 /** 승인: 지침 끝에 한 줄 붙인다. */

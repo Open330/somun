@@ -114,7 +114,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
-    guide: voiceGuideFor(settings.voice, lang),
+    guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
     disputed,
     introduction,
