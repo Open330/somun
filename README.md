@@ -31,7 +31,7 @@ You built a lot. Explaining it is the hard part.
 
 somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
 
-It never posts for you. It never writes from thin air. It never says "excited to announce".
+Today, publishing is manual. Drafts are grounded in supplied material and checked for selected issues, but unsupported claims and awkward wording can still slip through. Review the source before posting.
 
 <br />
 
@@ -66,7 +66,7 @@ It never posts for you. It never writes from thin air. It never says "excited to
    └─────────────────┘
 ```
 
-**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like "3x" or "twice" — is flagged, and copying asks you to confirm.
+**Facts from the system, voice from you.** The prompt asks the model to use numbers from the raw material (release notes, PR titles, commits, README, repo stats) and omit numeric claims without supporting material. The checker flags selected unsupported numbers rather than guaranteeing factual accuracy. The digest is checked too: summary lines flagged by the numeric checker are excluded from the judge and draft inputs, and stay visible on the candidate page. Draft numbers flagged by the checker — including multipliers like "3x" or "twice" — ask for your confirmation when copying.
 
 <br />
 
@@ -110,13 +110,15 @@ The interface is in English and Korean. It follows your browser language and can
 | Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
-Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.
+Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, selected author-role claims that need review, a wrong repo name, missing link, exclamation marks, vote requests, length, and Blog outline structure.
 
 **Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
 
 <br />
 
 ## Models & keys
+
+The shared Gemini pool allows **50 model executions per account per UTC day** and **20 queued/running server jobs per account** by default. Profiles, analysis, drafts, and automatic repair use execution capacity; failed executions count too. Provider retries within an execution do not use additional account slots, but provider limits still apply. Your own API key and local agent workers are outside these shared-pool limits. The work-status panel shows your usage and reset time, and excess queue requests return `429` with retry guidance. Limits are configurable through `SOMUN_SHARED_MODEL_DAILY_LIMIT` and `SOMUN_SHARED_MODEL_PENDING_LIMIT`.
 
 | Provider | Default model | Key |
 |---|---|---|

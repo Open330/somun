@@ -216,3 +216,28 @@ it('flags mixed Korean prose without rejecting English posts or technical identi
   expect(lintDraft('x', undefined, '소셜 미디어 게시글과 홍보 문구를 작성합니다. PR과 media_type 값은 그대로입니다. https://example.test').find(x=>x.rule==='mixed_korean_terms')?.ok).toBe(true);
   expect(lintDraft('x', undefined, 'Draft social media posts and marketing copy. https://example.test').find(x=>x.rule==='mixed_korean_terms')).toBeUndefined();
 });
+
+it("ignores numbered outline labels while still checking numeric claims on those lines", () => {
+  const outline = "somun 제목 후보 1: 줄바꿈 처리\nTitle candidate 2: CRLF handling\nSection 3: processes 40 files\n섹션 4: 99% faster";
+  expect(unsupportedNumbers(outline, "CRLF handling")).toEqual(["40", "99%"]);
+  expect(unsupportedNumbers("Section 3 improved 40 files", "")).toEqual(expect.arrayContaining(["3", "40"]));
+});
+
+it("flags selected author-role claims for review without treating neutral release attribution as authorship", () => {
+  const facts = { sourceText: "Vite v8.3.0 fixes CRLF positions." };
+  for (const body of ["I built Vite.", "We released Vite.", "Vite v8.3.0을 출시했습니다.", "개발했습니다."]) {
+    expect(lintDraft("threads", undefined, body, [], facts).find((r) => r.rule === "author_role_need_review")?.ok).toBe(false);
+  }
+  for (const body of ["Vite v8.3.0 변경 사항입니다.", "Vite v8.3.0이 출시되었습니다.", "Vite handles CRLF positions."]) {
+    expect(lintDraft("threads", undefined, body, [], facts).find((r) => r.rule === "author_role_need_review")?.ok).toBe(true);
+  }
+});
+
+it("flags an article or a placeholder question when the Blog channel promises an outline", () => {
+  const facts = { sourceText: "A tool that handles CRLF positions." };
+  const article = "A tool handles CRLF positions. It reads releases and writes posts. What would you write?";
+  expect(lintDraft("blog", "CRLF handling", article, [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(false);
+  const outline = "CRLF handling\nLine ending positions\nHandling line endings\n\nIntroduction: handles CRLF positions\nInput: line endings\nOperation: handles positions\nWrap-up: CRLF handling\nWhat part of CRLF handling matters to you?";
+  expect(lintDraft("blog", "CRLF handling", outline, [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(true);
+  expect(lintDraft("blog", "CRLF handling", outline.replace("What part of CRLF handling matters to you?", "what to ask the reader"), [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(false);
+});

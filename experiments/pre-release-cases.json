@@ -1,0 +1,782 @@
+[
+  {
+    "id": "introduction-x-ko",
+    "channel": "x",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-x-en",
+    "channel": "x",
+    "lang": "en",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-threads-ko",
+    "channel": "threads",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-threads-en",
+    "channel": "threads",
+    "lang": "en",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-linkedin-ko",
+    "channel": "linkedin",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-linkedin-en",
+    "channel": "linkedin",
+    "lang": "en",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-show_hn-en",
+    "channel": "show_hn",
+    "lang": "en",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-show_gn-ko",
+    "channel": "show_gn",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-blog-ko",
+    "channel": "blog",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "introduction-blog-en",
+    "channel": "blog",
+    "lang": "en",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "repo_created",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "homepage": "https://somun.jiun.dev",
+        "description": "Draft public posts from project changes for developers.",
+        "language": "TypeScript",
+        "highlights": [],
+        "limitations": [
+          "Publishing is manual. Generated drafts require source review."
+        ],
+        "readmeExcerpt": "<div align=\"center\">\n\n<br />\n\n<img src=\"docs/brand/lockup.png\" alt=\"somun\" width=\"420\" />\n\n**For developers who aren't good at PR: somun turns what you actually shipped into posts your users can understand.**\n\n<sub>*somun* (소문) is Korean for \"word of mouth\". Try it at <a href=\"https://somun.jiun.dev\">somun.jiun.dev</a>.</sub>\n\n<br />\n\n[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)\n[![Status](https://img.shields.io/badge/status-v0%20·%20building%20in%20public-f0b35a?style=flat-square)](docs/spec.md)\n[![Model](https://img.shields.io/badge/default%20model-Gemini%203.5%20Flash--Lite-7dd3a5?style=flat-square)](#models--keys)\n[![BYOK](https://img.shields.io/badge/BYOK-Anthropic%20·%20OpenAI%20·%20Claude%20Code%20·%20Codex-8b919c?style=flat-square)](#models--keys)\n\n**English** · [한국어](README.ko.md)\n\n<br />\n\n<img src=\"docs/demo.gif\" alt=\"somun: pick a candidate, review drafts per channel with lint results, copy, and check how the linked homepage previews\" width=\"860\" />\n\n<sub>Candidates → a draft per channel with lint results → copy → link preview check. Recorded on public Open330 repositories.</sub>\n\n</div>\n\n<br />\n\nYou built a lot. Explaining it is the hard part.\n\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.\n\nIt never posts for you. It never writes from thin air. It never says \"excited to announce\".\n\n<br />\n\n## How it thinks\n\n```\n GitHub · npm · blog · agent sessions\n            │\n            ▼\n   ┌─────────────────┐    commits, PR titles, release notes, what you struggled with\n   │  1. observe      │    ──────────────────────────────────────────────────────────\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    keeps only what an outside reader would care about:\n   │  2. digest       │    user-visible changes · real numbers · reversals · lessons\n   └────────┬────────┘    drops refactors, chores, CI, bumps\n            ▼\n   ┌─────────────────┐    five criteria, 0–2 each, with reasoning you can argue with:\n   │  3. judge        │    runnable · numbers · lesson · novelty · audience\n   └────────┬────────┘    ≥ 6 → draft   4–5 → defer   < 4 → just ask\n            ▼\n   ┌─────────────────┐    one draft per channel, in that channel's shape and language,\n   │  4. draft        │    facts only from the digest, voice from your preset, guide, and copied posts,\n   └────────┬────────┘    numbers checked against the raw material, slop-linted before it reaches you\n            ▼\n   ┌─────────────────┐    copy · edit-then-copy · drop (with a reason) · \"posted, here's the URL\"\n   │  5. you          │\n   └────────┬────────┘\n            ▼\n   ┌─────────────────┐    copied posts → voice examples · edits, drops → guide suggestions · drops → judge calibration\n   │  6. learn        │    URLs → star gain beyond the 7-day pre-post trend, fed back into channel picks\n   └─────────────────┘\n```\n\n**Facts from the system, voice from you.** A draft may only use numbers that exist in the raw material (release notes, PR titles, commits, README, repo stats). If a number is missing, the claim is left out, not invented. The digest is checked too: a summary line whose number is not in the source never reaches the judge or the draft, and it stays visible on the candidate page. A draft number that still cannot be found in the source — including multipliers like \"3x\" or \"twice\" — is flagged, and copying asks you to confirm.\n\n<br />\n\n## What you get\n\n<table>\n<tr>\n<td width=\"50%\" valign=\"top\">\n\n**Inbox**\nCandidates ranked by score, one line of reasoning each. \"Not worth it\" is a valid answer and you can overrule it.\n\n**Candidate**\nEvidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.\n\n</td>\n<td width=\"50%\" valign=\"top\">\n\n**Published**\nPaste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.\n\n**Settings**\nSources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.\n\nThe interface is in English and Korean. It follows your browser language and can be switched from the sidebar; the choice also sets the language of judgment reasoning, error messages, and the weekly summary.\n\n</td>\n</tr>\n</table>\n\n<br />\n\n## Channels\n\n| Channel | Shape | Language |\n|---|---|---|\n| X | three lines: problem · what it does · one number or limit + link | en, ko |\n| Threads | one or two sentences, ends with a take or a question | ko |\n| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |\n| Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |\n| Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |\n| Blog | outline only: 3 title candidates, sections, which numbers go where | ko |\n\nEvery draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, a wrong repo name, missing link, exclamation marks, vote requests, length.\n\n**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.\n\n<br />\n\n## Models & keys\n\n| Provider | Default model | Key |\n|---|---|---|\n| **Gemini** (default) | `gemini-3.5-flash-lite` | server key pool, or your own |\n| Anthropic | `claude-opus-5` | your own |\n| OpenAI-compatible | `gpt-5` | your own, optional base URL (OpenRouter, Ollama, …) |\n| **Local agent** | your Claude Code or Codex subscription | none — a worker on your machine picks up jobs |\n\nThe local agent mode queues every model call — digest, judgment, drafts, repository profiles, and voice lessons — as a job, so no source text goes to a se",
+        "commitCount": 90
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Public somun README at 51a92ed; commitCount=90 is a historical dogfood snapshot, not a current count. Check core task, manual publishing, source review, no author-role inference, no bookkeeping as maturity. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-x-ko",
+    "channel": "x",
+    "lang": "ko",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-x-en",
+    "channel": "x",
+    "lang": "en",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-threads-ko",
+    "channel": "threads",
+    "lang": "ko",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-threads-en",
+    "channel": "threads",
+    "lang": "en",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-linkedin-ko",
+    "channel": "linkedin",
+    "lang": "ko",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-linkedin-en",
+    "channel": "linkedin",
+    "lang": "en",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-show_hn-en",
+    "channel": "show_hn",
+    "lang": "en",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-show_gn-ko",
+    "channel": "show_gn",
+    "lang": "ko",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-blog-ko",
+    "channel": "blog",
+    "lang": "ko",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  },
+  {
+    "id": "update-blog-en",
+    "channel": "blog",
+    "lang": "en",
+    "introduction": false,
+    "candidate": {
+      "title": "Vite v8.3.0",
+      "type": "release",
+      "evidence": {
+        "repo": "vitejs/vite",
+        "repoUrl": "https://github.com/vitejs/vite",
+        "description": "Frontend build tooling and development server",
+        "version": "v8.3.0",
+        "releaseNotes": "### Features\n\n* **build:** avoid settling seen preload dependencies for performance ([#23446](https://github.com/vitejs/vite/issues/23446)) ([e6f6b3e](https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470))\n\n### Bug Fixes\n\n* handle CRLF line endings in code frame positions ([#23219](https://github.com/vitejs/vite/issues/23219)) ([9913672](https://github.com/vitejs/vite/commit/9913672bee9c34a2df7fff4c2538783cd4f43b4e))\n* only treat whole `node_modules` path segments as dependencies (fix [#17467](https://github.com/vitejs/vite/issues/17467)) ([#23437](https://github.com/vitejs/vite/issues/23437)) ([ef0dc17](https://github.com/vitejs/vite/commit/ef0dc17ada53d1169ae5a89cb8f6482831466755))\n\n### Performance Improvements\n\n* **proxy:** pre-compile context matchers at server creation ([#23263](https://github.com/vitejs/vite/issues/23263)) ([8abf700](https://github.com/vitejs/vite/commit/8abf700eeb2411d8402d08f8e2696effafdbe774))\n",
+        "language": "TypeScript",
+        "highlights": [
+          "The build process avoids settling seen preload dependencies for performance.",
+          "CRLF line endings are correctly handled in code frame positions.",
+          "Only whole node_modules path segments are treated as dependencies.",
+          "Proxy context matchers are pre-compiled at server creation."
+        ],
+        "limitations": []
+      }
+    },
+    "forbidden": [
+      "90 commits",
+      "90개의 커밋",
+      "developed through",
+      "제가 만들",
+      "만들었습니다",
+      "개발했습니다",
+      "출시했습니다",
+      "I built",
+      "I released",
+      "we released",
+      "99%",
+      "100x"
+    ],
+    "reviewNotes": "Frozen public Vite v8.3.0 release notes from docs/generation/quality-review.json. Check CRLF code-frame positions, whole node_modules path segments, settling seen preload dependencies, proxy context matcher pre-compilation. No measurements, user backstory, or invented limitation. Judge meaning, natural wording, channel form, links and editability separately from regex checks."
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "name": "pre-release-fallback-20261006",
+  "cases": "pre-release-cases.json",
+  "variants": [
+    {
+      "id": "fallback",
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite"
+    }
+  ]
+}

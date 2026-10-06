@@ -2,7 +2,7 @@
 export function isBetterRepair(before: { rule: string; detail?: string }[], after: { rule: string; detail?: string }[] | null): boolean {
   if (after === null || after.length >= before.length) return false;
   const previous = new Set(before.map((issue) => issue.rule));
-  const grounding = new Set(["numbers_need_review", "no_invented_limit", "repo_name", "avoid_terms", "preferred_link"]);
+  const grounding = new Set(["numbers_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "avoid_terms", "preferred_link"]);
   return after.every(
     (issue) =>
       previous.has(issue.rule) &&

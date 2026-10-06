@@ -1,0 +1,551 @@
+{
+  "date": "2026-10-06",
+  "scope": "6 channels; Korean/English for flexible channels and the fixed language for Show HN/GN; introduction and update, 20 cases. Public frozen materials, isolated database, free-key model calls only; no production writes or external posts.",
+  "datasetSha256": "8cd1362f6be582c64083f877f426ae5e56a4b54879e70f17fcc975e5ab9adbdd",
+  "sourceReferences": {
+    "somun": "README at base commit 51a92ed; historical dogfood commitCount=90, not a current count; this input deliberately preserves the old README promise for review.",
+    "viteRelease": "https://github.com/vitejs/vite/releases/tag/v8.3.0",
+    "preloadImplementation": "https://github.com/vitejs/vite/commit/e6f6b3e3119256daa837b2dc399058c8aa45b470"
+  },
+  "directModelBaseline": {
+    "production": {
+      "planned": 20,
+      "generated": 3,
+      "providerErrors": 17,
+      "automaticPass": 3
+    },
+    "fallback": {
+      "planned": 20,
+      "generated": 20,
+      "providerErrors": 0,
+      "automaticPass": 13
+    }
+  },
+  "directModelAfterPromptChanges": {
+    "fallback": {
+      "planned": 20,
+      "generated": 16,
+      "providerErrors": 4,
+      "automaticPass": 11
+    }
+  },
+  "runtime": {
+    "initialCases": 20,
+    "initialExecutions": 27,
+    "targetedFollowupCases": 6,
+    "targetedFollowupExecutions": 10,
+    "outputs": [
+      {
+        "caseId": "introduction-x-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun은 릴리스, PR, 커밋을 읽어 각 채널에 맞는 게시글 초안을 작성하는 개발자용 도구입니다.\n\n사용자가 검토하고 복사하여 직접 게시합니다.\n\n발행은 수동으로 진행하며 생성된 초안은 원본 검토가 필요합니다 https://somun.jiun.dev"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "수동 발행·검토 안내가 반복된다. 한 문장으로 합치면 짧아진다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-x-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun turns what you actually shipped into posts for developers.\n\nIt reads releases, PRs, and commits, and drafts posts for multiple channels.\n\nPublishing is manual. Generated drafts require source review. https://somun.jiun.dev"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "pass",
+          "channelForm": "pass",
+          "note": "프로젝트의 핵심 작업과 수동 발행·검토를 설명한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 21,
+          "total": 21,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-threads-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun은 개발자가 작성한 릴리스, PR, 커밋을 읽어 각 채널에 맞는 게시글 초안을 작성하는 도구입니다. 초안은 생성된 이후 개발자가 직접 검토하고 복사하여 게시합니다. 게시물 발행은 수동으로 진행하며 생성된 초안은 원문 검토가 필요합니다."
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "검토·복사·발행 안내를 반복한다. 간결하게 줄일 수 있다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 21,
+          "total": 21,
+          "failures": []
+        },
+        "runtimeWarnings": [
+          {
+            "rule": "preferred_link",
+            "ok": false,
+            "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+          }
+        ]
+      },
+      {
+        "caseId": "introduction-threads-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun turns what you actually shipped into drafts your users can understand for developers who aren't good at PR. Publishing is manual and generated drafts require source review."
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "for developers가 긴 문장 뒤에 붙어 문장이 어색하다. 핵심 작업부터 다시 쓰는 것이 좋다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 19,
+          "total": 19,
+          "failures": []
+        },
+        "runtimeWarnings": [
+          {
+            "rule": "preferred_link",
+            "ok": false,
+            "detail": "소개 글은 홈페이지로 연결해 주세요: https://somun.jiun.dev"
+          }
+        ]
+      },
+      {
+        "caseId": "introduction-linkedin-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun은 개발자가 작성한 릴리스와 커밋을 읽고 각 채널에 맞는 게시글 초안을 작성합니다.\n\n개발자는 자신이 만든 기능을 설명하기 어렵습니다. somun은 GitHub 저장소의 변경 사항을 분석하여 사용자가 이해할 수 있는 언어로 게시글 초안을 생성합니다.\n\n초안은 X, 스레드, LinkedIn, Show HN, GeekNews 채널에 맞게 작성됩니다. 시스템은 근거가 없는 수치나 과장된 표현을 사용하지 않도록 검사합니다.\n\n사용자는 생성된 초안을 검토하고 복사하여 직접 게시합니다. 자동 발행 기능은 지원하지 않으며 생성된 초안은 원본 소스를 검토해야 합니다.\n\nhttps://somun.jiun.dev\n\n#소문 #개발자 #오픈소스"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "대상 독자의 어려움을 일반화한 문장과 Threads의 번역 표기는 수정 권장.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-linkedin-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "somun turns what you shipped into posts.\n\nsomun is for developers who build a lot but find explaining it difficult. It reads your releases, PRs, and commits to decide when something is worth sharing. It then drafts a post for each channel in words your users can understand.\n\nThe tool observes your changes, digests user-visible updates and real numbers, and judges whether the update is worth sharing. It generates drafts for platforms like X, Threads, LinkedIn, Show HN, and GeekNews using facts only from your source material.\n\nPublishing is manual, and generated drafts require source review.\n\nhttps://somun.jiun.dev\n\n#DeveloperTools #BuildInPublic #OpenSource"
+        },
+        "semanticReview": {
+          "factuality": "review",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "using facts only from your source material은 사실성 보장처럼 읽힐 수 있다. 제공 자료를 활용하고 사람이 검토한다고 한정해야 한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 21,
+          "total": 21,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-show_hn-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "Show HN: somun – Draft public posts from project changes",
+          "body": "somun turns what you actually shipped into posts your users can understand. It is built for developers who aren't good at PR. The tool reads releases, PRs, and commits, decides when something is worth telling, and drafts a post for each channel including X, Threads, LinkedIn, Show HN, and GeekNews. It never posts for you and relies on facts from the source material. You can try it out at https://somun.jiun.dev.\n\nLimitations:\n- Publishing is manual. Generated drafts require source review.\n\nHow do you usually decide which updates are worth sharing with users?"
+        },
+        "semanticReview": {
+          "factuality": "review",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "historical README의 never posts를 그대로 사용했다. 현재 수동 발행 방식이라고 한정해 고친다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-show_gn-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "Show GN: somun - 개발자가 작성한 프로젝트 변경 사항으로 공개 게시글을 초안으로 작성하는 도구",
+          "body": "무엇인가\n\nsomun은 릴리즈, 풀 리퀘스트, 커밋을 읽고 사용자가 이해할 수 있는 언어로 각 채널별 게시글 초안을 작성하는 도구입니다. 개발 과정에서 작성된 변경 사항을 바탕으로 게시글을 생성하며 사용자가 직접 검토하고 복사하여 게시할 수 있도록 지원합니다. 자세한 내용은 https://somun.jiun.dev 에서 확인할 수 있습니다.\n\n동작 방식\n\nsomun은 저장소의 변경 내역을 관찰하고 독자가 관심을 가질 만한 사용자 중심의 변경 사항을 선별합니다. 후보 항목의 가치를 평가한 뒤 채널별 형식과 언어에 맞춰 초안을 작성합니다. 자동 검사 기능을 통해 지원되지 않는 숫자나 형식 문제를 확인하며 사용자가 내용을 검토하고 직접 복사하여 사용합니다.\n\n한계\n\n게시 과정은 수동으로 진행하며 생성된 초안은 원본 검토가 필요합니다."
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "초안을 작성하는 도구라는 제목이 길고 반복된다. 소개 문장을 짧게 줄일 수 있다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-blog-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "somun 프로젝트 개요와 주요 기능",
+          "body": "somun으로 프로젝트 변경 내용 게시글 작성하기\nsomun을 활용한 개발자 공개 게시글 초안 작성\nsomun 소개와 주요 기능 안내\nsomun은 릴리즈와 PR, 커밋 내용을 읽어 개발자가 게시글 초안을 작성할 수 있도록 돕는 도구입니다.\nsomun은 홍보 글쓰기에 익숙하지 않은 개발자를 위한 도구입니다.\nsomun은 소스 코드를 바탕으로 각 채널에 맞는 게시글 초안을 작성하며, 사용자가 직접 검토하고 복사할 수 있습니다.\nsomun은 발행을 수동으로 진행하며, 생성된 초안은 소스 검토가 필요합니다.\nhttps://somun.jiun.dev\n소개된 내용을 바탕으로 여러분의 프로젝트 변경 내용을 게시글로 작성할 때 어떤 점이 가장 번거로우십니까?"
+        },
+        "semanticReview": {
+          "factuality": "review",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "소스 코드를 바탕으로라는 표현은 현재 수집 범위인 릴리스·PR·커밋보다 넓다. 수집하는 자료를 직접 명시해야 한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "introduction-blog-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "somun: Draft public posts from project changes",
+          "body": "Draft public posts from project changes for developers.\nsomun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel.\nPublishing is manual. Generated drafts require source review.\nWhat kind of public posts do you usually write after shipping?"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "fail",
+          "note": "개요가 아닌 짧은 설명을 반환했다. 한 번 보정한 후에도 outline_structure 경고가 남는다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 20,
+          "total": 21,
+          "failures": [
+            {
+              "rule": "outline_structure",
+              "ok": false,
+              "detail": "개요로 작성해 주세요: 제목 후보 3줄, 사실을 배치할 절 4~6줄, 마지막에 독자에게 물을 실제 질문 1줄. 문단형 본문을 쓰지 말고 각 항목을 줄바꿈해 주세요."
+            }
+          ]
+        },
+        "runtimeWarnings": [
+          {
+            "rule": "outline_structure",
+            "ok": false,
+            "detail": "개요로 작성해 주세요: 제목 후보 3줄, 사실을 배치할 절 4~6줄, 마지막에 독자에게 물을 실제 질문 1줄. 문단형 본문을 쓰지 말고 각 항목을 줄바꿈해 주세요."
+          }
+        ]
+      },
+      {
+        "caseId": "update-x-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "vite v8.3.0 변경 사항입니다.\n\n빌드 과정에서 선행 로드 의존성을 다루는 방식을 변경했습니다.\n\nhttps://github.com/vitejs/vite"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "처리 방식을 변경했다는 표현은 안전하지만 구체적 작업이 부족하다. 원문을 읽고 정확한 동작을 선택해야 한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 24,
+          "total": 24,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-x-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "vite v8.3.0 pre-compiles proxy context matchers at server creation.\n\nThe build process avoids settling seen preload dependencies for performance.\n\nhttps://github.com/vitejs/vite"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "pass",
+          "channelForm": "pass",
+          "note": "프록시 매처 사전 컴파일과 원문 preload 표현을 유지한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 22,
+          "total": 22,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-threads-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "vite v8.3.0 버전에서 빌드 과정이 미리 로드된 의존성을 대기하는 방식을 수정하고 프록시 컨텍스트 매처를 서버 생성 시점에 미리 컴파일합니다."
+        },
+        "semanticReview": {
+          "factuality": "review",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "settling seen dependencies를 대기 방식 변경으로 바꿨다. 구현 원문 확인 전 게시하면 안 된다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 22,
+          "total": 22,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-threads-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "Vite v8.3.0 is out with pre-compiled proxy context matchers and fixes for CRLF line endings in code frames. How does this version handle your larger dependency trees?"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "larger dependency trees를 질문의 전제로 끌어왔다. 제공된 변경과 관련된 중립 질문으로 수정 권장.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 20,
+          "total": 20,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-linkedin-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "vite v8.3.0 변경 사항입니다.\n\nvite는 프론트엔드 빌드 도구이자 개발 서버입니다. 이번 v8.3.0 버전에서는 빌드 과정에서 이미 확인된 프리로드 의존성을 settling하지 않도록 수정하여 성능을 높였습니다.\n\n코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다. 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다.\n\n서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일합니다.\n\nhttps://github.com/vitejs/vite\n\n#vite #frontend #github"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "settling을 그대로 유지해 다른 동작으로 번역하지 않았다. 용어 설명과 경로 세그먼트 표현은 다듬어야 한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 24,
+          "total": 24,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-linkedin-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "",
+          "body": "Vite v8.3.0 is out.\n\nThe build process now avoids settling seen preload dependencies for performance. This update also ensures CRLF line endings are correctly handled in code frame positions.\n\nOnly whole node_modules path segments are treated as dependencies. Additionally, proxy context matchers are pre-compiled at server creation.\n\nChanges apply to version v8.3.0.\n\nhttps://github.com/vitejs/vite\n\n#vite #frontend #webdev"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "변경 4개를 유지하지만 버전 설명을 반복한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 22,
+          "total": 22,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-show_hn-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "Show HN: vite – Frontend build tooling and development server",
+          "body": "Vite v8.3.0 is out. The build process avoids settling seen preload dependencies for performance. CRLF line endings are correctly handled in code frame positions. Only whole node_modules path segments are treated as dependencies. Proxy context matchers are pre-compiled at server creation. Where have you noticed proxy matcher overhead in larger codebases?"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "설계 구조를 추정하던 문장은 제거됐다. larger codebases와 overhead를 전제한 질문은 중립화 권장.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 23,
+          "total": 23,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-show_gn-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "Show GN: vite - v8.3.0 변경 사항",
+          "body": "vite v8.3.0 변경 사항입니다.\n\n무엇이 달라졌나\n- 빌드 과정에서 이미 확인된 프리로드 의존성을 다시 처리하지 않아 성능을 개선했습니다.\n- 코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다.\n- 전체 node_modules 경로 구성 요소만 의존성으로 취급합니다.\n- 서버 생성 시 프록시 컨텍스트 매처를 미리 컴파일합니다."
+        },
+        "semanticReview": {
+          "factuality": "review",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "settling을 다시 처리하지 않음으로 요약했다. 구현의 정확한 작업을 원문과 대조해야 한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 24,
+          "total": 24,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-blog-ko",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "vite v8.3.0 변경 사항 개요",
+          "body": "vite v8.3.0 빌드 성능 개선\nvite v8.3.0 코드 프레임 수정\nvite v8.3.0 프록시 매처 컴파일\n빌드 과정에서 미리 로드된 의존성을 처리하는 방식을 개선했습니다.\n코드 프레임 위치에서 CRLF 줄바꿈을 올바르게 처리합니다.\n전체 node_modules 경로 구성 요소만 의존성으로 취급합니다.\n서버 생성 시점에 프록시 컨텍스트 매처를 미리 컴파일합니다.\nvite v8.3.0 버전을 사용하면서 겪은 빌드 성능 경험은 어떠합니까?"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "edit",
+          "channelForm": "pass",
+          "note": "개요 형식은 유지한다. preload 작업은 일반화돼 있어 원문 기준으로 구체화하면 좋다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 24,
+          "total": 24,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      },
+      {
+        "caseId": "update-blog-en",
+        "requestedModel": "gemini-3.5-flash-lite",
+        "status": "done",
+        "error": null,
+        "model": "gemini/gemini-3.5-flash-lite",
+        "draft": {
+          "title": "Vite v8.3.0 Release Notes",
+          "body": "Vite v8.3.0 performance and path fixes\nVite v8.3.0 build and proxy updates\nVite v8.3.0 dependency and line ending fixes\n\nSection 1: The build process avoids settling seen preload dependencies for performance.\nSection 2: CRLF line endings are correctly handled in code frame positions.\nSection 3: Only whole node_modules path segments are treated as dependencies.\nSection 4: Proxy context matchers are pre-compiled at server creation.\n\nWhich of these updates impacts your current development setup the most?"
+        },
+        "semanticReview": {
+          "factuality": "pass",
+          "wording": "pass",
+          "channelForm": "pass",
+          "note": "제목 후보 3개·변경 4개·독자 질문을 개별 줄로 유지한다.",
+          "reviewer": "Codex source review; not a human participant study"
+        },
+        "automaticChecks": {
+          "passed": 22,
+          "total": 22,
+          "failures": []
+        },
+        "runtimeWarnings": []
+      }
+    ]
+  },
+  "limits": [
+    "Regex checks are not a publishability or factuality score. Semantic review is by Codex, not recruited users.",
+    "Selected role claims and outlines are checked, but technical translation and broad or absolute product claims may still need manual editing.",
+    "The default 3.7 model returned 503/429 frequently in direct model tests; these errors are recorded separately from the successful fallback outputs.",
+    "Real OAuth entry redirect and GitHub App API configuration were checked; personal sign-in/installation round trip awaits interactive GitHub login.",
+    "One project introduction and one release do not establish quality on every repository, style, or provider."
+  ]
+}

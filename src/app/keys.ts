@@ -1,3 +1,4 @@
+import { sharedUsage } from "./shared-quota.js";
 import { eq } from "drizzle-orm";
 import { classifyGeminiError, nextPtMidnight, ptDayKey, RPD_SOFT_CAP } from "../core/keypool.js";
 import { schema } from "../infra/db/index.js";
@@ -10,6 +11,7 @@ export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.n
   const { llm } = getSettings(ctx, ownerId);
   const keys = freeGeminiKeys(ctx.env.geminiKeys);
   const mode: ModelAvailability["mode"] = llm.provider === "local-agent" ? "local" : llm.apiKey ? "user" : llm.provider === "gemini" && keys.length ? "shared" : "missing";
+  const usage = mode === "shared" ? sharedUsage(ctx, ownerId, now) : undefined;
   const rows = new Map(ctx.db.select().from(schema.llmKeyState).all().map((r) => [r.label, r]));
   const models = (["analysis", "draft"] as const).map((purpose): ModelAvailability["models"][number] => {
     const model = modelFor(llm, purpose === "draft" ? "draft" : "judge");
@@ -18,10 +20,10 @@ export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.n
       const row = rows.get(`${label}|${model}`);
       return Math.max(row?.cooldownUntil ?? 0, row?.dayKey === ptDayKey(now) && row.dayCount >= RPD_SOFT_CAP ? nextPtMidnight(now) : 0);
     });
-    const retryAt = Math.min(...waits);
+    const retryAt = Math.max(Math.min(...waits), usage && usage.used >= usage.limit ? usage.resetAt : 0);
     return retryAt > now ? { purpose, model, state: "waiting", retryAt } : { purpose, model, state: "ready" };
   });
-  return { mode, checkedAt: now, models };
+  return { mode, checkedAt: now, models, ...(usage ? { sharedUsage: usage } : {}) };
 }
 
 /** 서버 Gemini 무료 키 풀 상태 (AI_API.md 운영 기준). */

@@ -40,3 +40,12 @@ describe("first introduction", () => {
     expect(facts).toContain("Short videos (experimental, local)");
   });
 });
+
+it("does not feed repository bookkeeping to introduction writers while preserving update evidence", () => {
+  const input = { ...candidate, evidence: { ...candidate.evidence, commitCount: 90, releaseCount: 12, firstReleaseAt: "2020-01-02" } };
+  const introduction = draftPrompt(input, "blog", "ko", [], undefined, { introduction: true });
+  expect(introduction.user).not.toContain("commits: 90");
+  expect(introduction.user).not.toContain("releases: 12");
+  expect(introduction.user).toContain("Public project name: tool");
+  expect(draftPrompt(input, "show_hn", "en", []).user).toContain("commits: 90");
+});

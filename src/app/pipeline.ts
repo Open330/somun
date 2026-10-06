@@ -1,3 +1,4 @@
+import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
@@ -114,29 +115,34 @@ export async function judgeCandidates(ctx: AppContext, ownerId: string, ids: num
   return { started };
 }
 
-export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string; continuation?: GenerationPlan } = {}): number {
+export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string; continuation?: GenerationPlan; automatic?: boolean } = {}): number {
   return ctx.db.$client.transaction(() => {
     const c = getCandidateRow(ctx, ownerId, candidateId);
     if (c.status === "dropped" || (c.status === "published" && kind !== "draft" && !(kind === "digest" && opts.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다. 먼저 글감을 복원해 주세요.", "Archived or published candidates cannot be generated again. Restore the candidate first."));
     const evidence = c.evidence as Evidence;
     if (kind === "draft" && !requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction) && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again."));
-    return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation);
+    return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation, opts.automatic);
   }).immediate();
 }
 
-export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, lang: string | undefined, prompt: PromptSpec, continuation?: GenerationPlan): number {
-  const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
-    .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.lang ?? undefined) === lang && (j.status === "pending" || j.status === "claimed"));
-  if (open) {
-    // 초안은 프롬프트가 다르면 다른 지침으로 다시 쓰라는 요청이라 충돌이다. 다이제스트·판단은 근거 갱신이나 계정 언어 변경으로도
-    // 프롬프트가 달라지므로, 이미 대기 중인 같은 단계에 합친다(같은 결과를 두 번 만들 이유가 없다).
-    const differs = kind === "draft" && (open.system !== prompt.system || open.user !== prompt.user);
-    if (differs || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.", "A job is already running. Wait for it to finish, then request again with different instructions."));
-    return open.id;
-  }
-  const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
-  emit(ctx, ownerId, { resource: "jobs", id });
-  return id;
+export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, lang: string | undefined, prompt: PromptSpec, continuation?: GenerationPlan, recordQuotaFailure = false): number {
+  return ctx.db.$client.transaction(() => {
+    const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
+      .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.lang ?? undefined) === lang && (j.status === "pending" || j.status === "claimed"));
+    if (open) {
+      // 초안은 프롬프트가 다르면 다른 지침으로 다시 쓰라는 요청이라 충돌이다. 다이제스트·판단은 근거 갱신이나 계정 언어 변경으로도
+      // 프롬프트가 달라지므로, 이미 대기 중인 같은 단계에 합친다(같은 결과를 두 번 만들 이유가 없다).
+      const differs = kind === "draft" && (open.system !== prompt.system || open.user !== prompt.user);
+      if (differs || JSON.stringify(open.continuation ?? null) !== JSON.stringify(continuation ?? null)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "진행 중인 작업이 있습니다. 완료된 뒤 다른 지침으로 다시 요청해 주세요.", "A job is already running. Wait for it to finish, then request again with different instructions."));
+      return open.id;
+    }
+    let quotaError: SharedQuotaError | undefined;
+    try { assertSharedQueueCapacity(ctx, ownerId); }
+    catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    emit(ctx, ownerId, { resource: "jobs", id });
+    return id;
+  }).immediate();
 }
 
 /** 초안 하나의 린트. 저장할 때와 생성 직후 보정할 때 같은 기준을 쓴다. */
@@ -152,7 +158,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
   const ev = c.evidence as Evidence;
-  const next = (kind: JobKind, channel?: Channel, lang?: string) => enqueueJob(ctx, ownerId, kind, c.id, channel, lang, buildPrompt(ctx, ownerId, kind, c.id, channel, lang));
+  const next = (kind: JobKind, channel?: Channel, lang?: string) => enqueueJob(ctx, ownerId, kind, c.id, channel, lang, buildPrompt(ctx, ownerId, kind, c.id, channel, lang), undefined, true);
 
   if (args.kind === "digest") {
     const r = args.result as { highlights?: unknown; limitations?: unknown };
@@ -171,7 +177,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
-      if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction });
+      if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction, automatic: true });
     } else next("judge");
     return { kind: "digest", highlights: highlights.length };
   }

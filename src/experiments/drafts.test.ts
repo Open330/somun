@@ -126,3 +126,13 @@ it("recognizes the established Korean transliteration of preload", () => {
   const checks = evaluate(test, { title: "변경", body: "프리로드 의존성의 settling을 생략합니다. CRLF 줄바꿈과 node_modules 경로를 처리합니다. 프록시 컨텍스트 매처를 미리 컴파일합니다." });
   expect(checks.find((c) => c.rule === "required_any:preload")?.ok).toBe(true);
 });
+
+it("evaluates first introductions with the introduction prompt, and rejects empty update evidence", async () => {
+  const test = { ...cases[0], introduction: true, candidate: { ...cases[0].candidate, evidence: { ...cases[0].candidate.evidence, highlights: [] } } };
+  expect(casesSchema.parse([test])).toHaveLength(1);
+  expect(() => casesSchema.parse([{ ...test, introduction: false }])).toThrow("updates need grounded highlights");
+  const report = { ...fresh("live"), cases: [test], expectedRows: 1 };
+  await execute({ ...config, variants: [config.variants[0]] }, report, vi.fn().mockResolvedValue({ json: { title: "", body: "tool is a development tool. https://github.com/example/tool" }, provider: "gemini", model: "fixture" }), () => {});
+  expect(report.results[0].prompt.user).toContain("## First introduction");
+  expect(report.results[0].prompt.user).not.toContain("## Required change checklist");
+});

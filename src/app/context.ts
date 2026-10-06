@@ -17,6 +17,7 @@ export type AppContext = {
      * 목록 밖 소유자는 서버 GITHUB_TOKEN으로 공개 저장소만 읽고, 사설망 주소(피드·모델 baseUrl)로 요청할 수 없고, 서버 키 풀 상태를 보지 못한다.
      */
     trustedOwners?: string[];
+    sharedModelDailyLimit?: number; sharedModelPendingLimit?: number;
     /** DB에 저장하는 비밀값 암호화. 없으면 평문. */
     secrets?: SecretBox;
     /** 영상 서버. 없으면 영상 기능이 꺼진다. */

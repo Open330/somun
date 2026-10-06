@@ -199,6 +199,9 @@ export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduct
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
+  // Introductions describe capabilities, not how much repository activity produced them.
+  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
+  const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
     : "";
@@ -214,6 +217,9 @@ Hard rules:
 - Refer to the project by "how to name it" from the profile when Facts has one; otherwise by the repo name after the slash. Use the full owner/name only inside links. Never shorten, respell or invent owners or names.
 - Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with ${opts.introduction ? "what the project is and who it is for" : "what changed"}.
 - A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", "만듭니다", "만들었습니다", "개발했습니다", or "출시했습니다" without that evidence. For a first introduction, default to "<project> is/does ..." or "<프로젝트>는 ... 도구입니다"; a profile describing the project is not evidence that the current author created it.
+- Passive wording can imply authorship too: avoid "made for", "built to solve", "만들었습니다", "만들었으며", or "만들기 위해" about the author unless their role and motivation are explicitly supported. Describe the project’s task and audience directly instead.
+- Repository bookkeeping (commit counts, release counts, stars, first-release dates) is context, not a product capability or proof of maturity. Omit it unless the supplied change or Editor instruction specifically announces that milestone. Never turn "commits: 90" into "developed through 90 commits".
+- For Korean updates without an established author role, use "<project> <version> 변경 사항입니다" or describe the operation directly. Avoid "<project> <version>을 출시했습니다"; it reads as the poster announcing their own release.
 - Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.
 - When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.
 - Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).
@@ -225,10 +231,11 @@ Hard rules:
 - title must be an empty string if the channel has no title.`,
     user: [
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
+      publicName ? `Public project name: ${publicName}. Use this exact name in prose; owner/repo belongs only inside URLs.` : "",
       langInstruction(lang),
       `Rules: ${spec.rules}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
-      spec.hasTitle ? `A title is required (max ${spec.titleMaxChars} chars).` : "No title (return empty string).",
+      spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
       "",
       opts.guide ? `## Voice guide\n${opts.guide}` : "",
@@ -238,7 +245,7 @@ Hard rules:
       opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",
-      factsBlock(c, opts.profile),
+      factsBlock(publicCandidate, opts.profile),
       opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,

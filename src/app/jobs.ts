@@ -1,3 +1,4 @@
+import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { and, asc, eq, gt, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
@@ -84,6 +85,8 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
         events.push({ ownerId, resource: "jobs", id });
         return { applied: false };
       }
+      // Release this slot inside the same transaction before queuing the next stage.
+      ctx.db.update(schema.llmJobs).set({ status: "done" }).where(eq(schema.llmJobs.id, id)).run();
       let applied: ReturnType<typeof applyResult> | undefined;
       const model = executor === "server" ? input.model ?? "server" : `local:${j.runner ?? "agent"}${input.model ? `/${input.model}` : ""}`;
       if (j.kind === "profile" && !applyProfile({ ...ctx, bus }, ownerId, j.meta ?? {}, parsed, model, j.createdAt)) {
@@ -153,6 +156,7 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
       if (job.kind === "profile" && job.meta?.repo && pendingProfileJob(ctx, ownerId, job.meta.repo)) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "이 저장소의 프로필 작업이 이미 대기 중입니다.", "A profile job for this repository is already waiting."));
       const { id: _id, status: _s, runner: _r, claimToken: _t, attempts: _a, resultJson: _res, error: _e, claimedAt: _c, finishedAt: _f, ...rest } = job;
       void [_id, _s, _r, _t, _a, _res, _e, _c, _f];
+      assertSharedQueueCapacity(ctx, ownerId);
       const newId = Number(ctx.db.insert(schema.llmJobs).values({ ...rest, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", status: "pending", createdAt: Date.now() }).run().lastInsertRowid);
       emit(ctx, ownerId, { resource: "jobs", id: newId });
       return newId;
