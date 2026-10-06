@@ -229,7 +229,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
     markPolled(ctx, sourceId, (e as Error).message);
     throw e;
   }
-  void processNewCandidates(ctx, ownerId);
+  void processNewCandidates(ctx, ownerId).catch((err: Error) => ctx.log.error({ ownerId, err: err.message }, "processing new candidates after collect failed"));
   return summary;
 }
 

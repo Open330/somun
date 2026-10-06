@@ -55,6 +55,9 @@ const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
 logger.info({ usage: usage.enabled ? "on" : "off (JIUN_USAGE_KEY unset)" }, "usage reporting");
 });
 
+// 놓친 비동기 예외 하나로 서버 전체(수집·생성·API)가 내려가지 않게 기록만 한다. 원인 지점에는 각자 catch를 둔다.
+process.on("unhandledRejection", (err) => logger.error({ err: err instanceof Error ? err.message : String(err) }, "unhandled rejection"));
+
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
   process.on(sig, () => {
     cron.stop();
