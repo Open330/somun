@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 /**
  * 소문 마크. docs/brand/mark.svg 와 같은 기하 (활자 방식 ㅅ + ㅁ, 밑선 공유).
  * ink: 마크 색, paper: ㅁ 안쪽 반전 색. 기본은 디자인 토큰을 따른다.
@@ -38,13 +38,15 @@ export function Mark({
 
 /** 마크 + 소문 + somun. */
 export function Lockup({ size = 28, dim = false }: { size?: number; dim?: boolean }) {
+  // 영어 화면에서는 "소문"이 이미 somun으로 번역되므로 로마자를 한 번 더 붙이지 않는다.
+  const roman = useLocale() === "ko";
   return (
     <span className="lockup" style={{ gap: Math.round(size * 0.4) }}>
       <Mark size={size} />
       <span className="word" style={{ fontSize: Math.round(size * 0.8) }}>
         {t("소문")}
       </span>
-      {!dim && (
+      {!dim && roman && (
         <span className="roman" style={{ fontSize: Math.max(11, Math.round(size * 0.42)) }}>
           somun
         </span>

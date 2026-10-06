@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { registerPublication, removePublication, updatePublicationUrl } from "./publications.js";
+import { channelResultsForJudge, performanceSummary, registerPublication, removePublication, snapshotMetrics, updatePublicationUrl } from "./publications.js";
 import { learningStats } from "./learning-stats.js";
 import { saveDraftEdit } from "./review.js";
 
@@ -132,4 +132,29 @@ it("counts only latest live drafts without an exact publication, across channels
   expect(getCandidateDetail(ctx, "me", candidateId).unpublishedDraftCount).toBe(1);
   expect(listInbox(ctx, "other")).toEqual([]);
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
+});
+
+it("keeps the pre-post snapshot when stars arrive after a post instead of overwriting it", () => {
+  const t0 = Date.now() - 3 * 3600e3;
+  const snap = (stars: number, at: number) => snapshotMetrics(ctx, "me", { repo: "me/tool", stars, forks: 0 }, at);
+  snap(100, t0);
+  snap(101, t0 + 3600e3); // 같은 날 다시 수집: 덮어쓴다
+  expect(ctx.db.select().from(schema.metricSnapshots).all().map((r) => r.stars)).toEqual([101]);
+  registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/me/status/1" });
+  snap(130, Date.now() + 1000); // 발행 뒤 star webhook으로 다시 수집
+  snap(140, Date.now() + 2000);
+  const rows = ctx.db.select().from(schema.metricSnapshots).all().sort((a, b) => a.at - b.at);
+  expect(rows.map((r) => r.stars)).toEqual([101, 140]);
+  expect(rows[0].at).toBe(t0);
+});
+
+it("splits one repository's star gain between posts made within the same week instead of crediting each in full", () => {
+  const DAY = 86400e3, at = Date.now() - 9 * DAY;
+  for (const [d, stars] of [[-5, 100], [-1, 100], [6.9, 140]] as const) ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/tool", stars, forks: 0, at: at + d * DAY }).run();
+  ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "x", url: "https://x.com/me/status/1", publishedAt: at }).run();
+  ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "show_hn", url: "https://news.ycombinator.com/item?id=1", publishedAt: at + 2 * 3600e3 }).run();
+  const byChannel = performanceSummary(ctx, "me").byChannel;
+  expect(byChannel.map((g) => [g.key, g.avgStarDelta, g.avgExcessStars]).sort()).toEqual([["show_hn", 20, 20], ["x", 20, 20]]);
+  // 채널당 수치 있는 글이 하나뿐이면 판단에 넘기지 않는다.
+  expect(channelResultsForJudge(ctx, "me")).toEqual([]);
 });

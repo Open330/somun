@@ -2,7 +2,7 @@ import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
@@ -11,7 +11,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge, hasAnnounced } from "./publications.js";
+import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -20,32 +20,85 @@ import { voiceGuideFor } from "../core/voice.js";
  * 모든 단계는 큐(llm_jobs)를 거친다. local-agent면 사용자의 워커가, 아니면 서버 워커가 처리한다. 결과 반영은 applyResult 한 곳.
  */
 
+type Rubric = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
+
+/**
+ * 판단 합계. 가중치는 항목 사이의 상대적 중요도이고, 합계는 늘 10점 만점으로 환산한다(기본 가중치 1이면 항목 점수의 합과 같다).
+ * 가중치를 키워도 만점이 커지지 않으므로 초안·보류 기준점(6/4)의 뜻이 바뀌지 않는다.
+ */
+export function rubricTotal(scores: Rubric, weights: Rubric): number {
+  const keys = Object.keys(scores) as (keyof Rubric)[];
+  const wsum = keys.reduce((a, k) => a + Math.max(0, weights[k]), 0);
+  if (wsum <= 0) return 0;
+  const raw = keys.reduce((a, k) => a + scores[k] * Math.max(0, weights[k]), 0);
+  return Math.round((raw / (2 * wsum)) * 100) / 10;
+}
+
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
 
-/** 문체 예시. 내가 복사한 글이 2개 이상이면 그것만(최근 3개), 모자라면 참고 예시로 채운다. */
-export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number) {
+export type ExampleOrigin = "authored" | "accepted" | "seed";
+
+/**
+ * 예시의 출처. 사용자가 고쳐서 복사했거나 직접 써서 넣은 글만 작성자의 목소리다(authored).
+ * 고치지 않고 복사한 초안(accepted)은 모델 출력이므로 작성자 글로 내밀면 모델이 자기 글을 베끼게 된다.
+ */
+export function exampleOrigin(e: { source: string; draftId: number | null }): ExampleOrigin {
+  if (e.source === "seed") return "seed";
+  return e.source === "approved" && e.draftId !== null ? "accepted" : "authored";
+}
+
+/** 문체 예시. 작성자의 글이 2개 이상이면 그것만(최근 3개), 모자라면 참고 예시, 그다음 고치지 않고 승인한 초안으로 채운다. */
+export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, lang: string, limit: number): { source: ExampleOrigin; title?: string; body: string }[] {
   const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt), desc(schema.examples.id)).limit(50).all();
-  const own = rows.filter((r) => r.source !== "seed");
-  const seed = rows.filter((r) => r.source === "seed");
-  const picked = own.length >= 2 ? own.slice(0, Math.min(3, limit)) : [...own, ...seed].slice(0, limit);
-  return picked.map((e) => ({ source: e.source, title: e.title ?? undefined, body: e.body }));
+  const of = (origin: ExampleOrigin) => rows.filter((r) => exampleOrigin(r) === origin);
+  const authored = of("authored");
+  const picked = authored.length >= 2 ? authored.slice(0, Math.min(3, limit)) : [...authored, ...of("seed"), ...of("accepted")].slice(0, limit);
+  return picked.map((e) => ({ source: exampleOrigin(e), title: e.title ?? undefined, body: e.body }));
 }
 
 function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
   return ctx.db.select().from(schema.feedback).where(eq(schema.feedback.ownerId, ownerId)).orderBy(desc(schema.feedback.createdAt)).limit(limit).all().map((f) => ({ targetType: f.targetType, reason: f.reason, note: f.note ?? undefined }));
 }
 
-/** 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다. */
+/**
+ * 글감 창에 묶인 릴리스와, 최신 릴리스 뒤에 머지되어 아직 릴리스되지 않은 PR.
+ * 초안이 창의 모든 변경을 최신 태그 하나에 몰아 "v0.8.56 adds …"라고 쓰지 않게 사실로 넘긴다.
+ */
+export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
+  const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
+  const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
+  const latestAt = releases.at(-1)?.occurredAt;
+  const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt).map((s) => s.title);
+  return {
+    ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
+    ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
+  };
+}
+
+/**
+ * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
+ * 단, 첫 소개 초안을 만든 뒤에 이 저장소를 알렸다면(복사·게시 등록) 더는 첫 소개가 아니다. 다시 쓰면 업데이트가 된다.
+ */
 export function requestedIntroduction(ctx: AppContext, ownerId: string, candidateId: number, channel?: Channel, lang?: string, explicit?: boolean): boolean | undefined {
   if (explicit !== undefined) return explicit;
   if (!channel || !lang) return undefined;
   const previous = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
-  return previous?.purpose ? previous.purpose === "introduction" : undefined;
+  if (!previous?.purpose) return undefined;
+  // 다른 채널에서 알린 것은 이 채널 독자에게 소개한 것이 아니다. 같은 채널에서 알렸을 때만 업데이트로 바꾼다.
+  if (previous.purpose === "introduction" && announcedSince(ctx, ownerId, candidateId, previous.createdAt, channel)) return false;
+  return previous.purpose === "introduction";
+}
+
+/** 이 글감의 저장소를 at 이후에(같은 시각 포함) 알렸는가. channel을 주면 그 채널에서 알린 것만 본다. */
+export function announcedSince(ctx: AppContext, ownerId: string, candidateId: number, at: number, channel?: Channel): boolean {
+  const repo = getCandidateRow(ctx, ownerId, candidateId).repo;
+  const last = lastAnnouncedAt(ctx, ownerId, repo, channel);
+  return last !== undefined && last >= at;
 }
 
 export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
-  const c = { title: row.title, type: row.type, evidence: row.evidence as Evidence };
+  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId) } };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
@@ -55,7 +108,9 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
-  const angle = requested ? undefined : judgment?.angle ?? undefined;
+  // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.
+  const staleAngle = !introduction && judgment !== null && judgment !== undefined && announcedSince(ctx, ownerId, candidateId, judgment.createdAt);
+  const angle = requested || staleAngle ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
@@ -186,13 +241,12 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const r = args.result as { scores?: Record<string, unknown>; reasoning?: string; suggestedChannels?: unknown; angle?: string };
     const clamp = (n: unknown) => Math.max(0, Math.min(2, Math.round(Number(n) || 0)));
     const scores = { runnable: clamp(r.scores?.runnable), numbers: clamp(r.scores?.numbers), lesson: clamp(r.scores?.lesson), novelty: clamp(r.scores?.novelty), audience: clamp(r.scores?.audience) };
-    const w = settings.rubricWeights;
-    const total = scores.runnable * w.runnable + scores.numbers * w.numbers + scores.lesson * w.lesson + scores.novelty * w.novelty + scores.audience * w.audience;
+    const total = rubricTotal(scores, settings.rubricWeights);
     const noChanges = Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
-    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : String(r.reasoning ?? "");
+    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
     const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();

@@ -24,8 +24,16 @@ describe("cluster", () => {
     expect(k?.key).toBe("release:o/r@v1.0.0");
   });
   it("ignores PRs covered by a recent release", () => {
-    const k = clusterKeyFor({ kind: "pr_merged", repo: "o/r", ref: "1", occurredAt: 10, payload: {} }, { latestReleaseAt: 5, recentPrCount: 5 });
+    const k = clusterKeyFor({ kind: "pr_merged", repo: "o/r", ref: "1", occurredAt: 5, payload: {} }, { latestReleaseAt: 10, recentPrCount: 5 });
     expect(k).toBeNull();
+  });
+  it("turns PRs merged after the latest release into in-progress work instead of orphaning them", () => {
+    const pr = { kind: "pr_merged" as const, repo: "o/r", ref: "1", occurredAt: 10 * 86400e3, payload: {} };
+    expect(clusterKeyFor(pr, { latestReleaseAt: 86400e3, recentPrCount: 3 })?.type).toBe("in-progress");
+    expect(clusterKeyFor(pr, { latestReleaseAt: 86400e3, recentPrCount: 2 })).toBeNull();
+  });
+  it("makes a commit batch an in-progress candidate", () => {
+    expect(clusterKeyFor({ kind: "commit_batch", repo: "o/r", ref: "c", occurredAt: 10, payload: {} }, {})?.type).toBe("in-progress");
   });
   it("detects crossed thresholds", () => {
     expect(crossedThreshold(20, 60, [10, 25, 50, 100])).toBe(50);
@@ -146,8 +154,34 @@ describe("multiplier false positives", () => {
 
 it("compares numbers with attached units the same as spaced ones", () => {
   expect(unsupportedNumbers("Cold start went from 800 ms to 200 ms.", "Cold start 800ms → 200ms")).toEqual([]);
-  expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150"]);
+  expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150ms"]);
   expect(unsupportedNumbers("3x faster", "3x faster builds")).toEqual([]);
+});
+
+it("treats a changed unit, scale word, or vague magnitude as a different claim", () => {
+  // 단위가 바뀌면 다른 주장이다. 단위 없이 쓴 같은 수는 원자료와 맞는다.
+  expect(unsupportedNumbers("Startup takes 2ms", "Startup takes 2s")).toEqual(["2ms"]);
+  expect(unsupportedNumbers("Startup takes 2 seconds", "Startup takes 2s")).toEqual([]);
+  expect(unsupportedNumbers("시작 시간이 2초로 줄었다", "Startup takes 2s")).toEqual([]);
+  expect(unsupportedNumbers("Bundle is 800MB", "Bundle is 800KB")).toEqual(["800mb"]);
+  expect(unsupportedNumbers("Took 2 steps", "Took 2s")).toEqual([]);
+  // 크기 단어는 값으로 비교한다. 0·1 예외에 숨지 않는다.
+  expect(unsupportedNumbers("1k stars", "1,024 stars")).toEqual(["1000"]);
+  expect(unsupportedNumbers("used by 1 million developers", "100 stars")).toEqual(["1000000"]);
+  expect(unsupportedNumbers("1만 명이 씁니다", "10k users")).toEqual([]);
+  // 쉼표: 천 단위만 붙여 읽는다.
+  expect(unsupportedNumbers("15 s", "1,5 s")).toEqual(["15s"]);
+  expect(unsupportedNumbers("4102 stars", "4,102 stars")).toEqual([]);
+  // 대문자 배수, 말로 쓴 배수·크기.
+  expect(unsupportedNumbers("3X faster", "fixed 3 bugs")).toEqual(["3x"]);
+  expect(unsupportedNumbers("Memory use halved", "Memory use dropped")).toEqual(["0.5x"]);
+  expect(unsupportedNumbers("메모리가 절반으로 줄었다", "Memory use dropped")).toEqual(["0.5x"]);
+  expect(unsupportedNumbers("ten times faster", "faster")).toEqual(["10x"]);
+  expect(unsupportedNumbers("hundreds of developers", "developers")).toEqual(["hundreds"]);
+  expect(unsupportedNumbers("수백 개의 저장소", "저장소")).toEqual(["수백"]);
+  expect(unsupportedNumbers("수십 배 빨라졌다", "빨라졌다")).toEqual(["N배"]);
+  expect(unsupportedNumbers("１０배 빠름", "빠름")).toEqual(["10x"]);
+  expect(unsupportedNumbers("Memory use halved", "Memory use halved in v2")).toEqual([]);
 });
 
 it("asks LinkedIn posts to come in paragraphs", () => {
@@ -243,4 +277,55 @@ it("flags an article or a placeholder question when the Blog channel promises an
   const outline = "CRLF handling\nLine ending positions\nHandling line endings\n\nIntroduction: handles CRLF positions\nInput: line endings\nOperation: handles positions\nWrap-up: CRLF handling\nWhat part of CRLF handling matters to you?";
   expect(lintDraft("blog", "CRLF handling", outline, [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(true);
   expect(lintDraft("blog", "CRLF handling", outline.replace("What part of CRLF handling matters to you?", "what to ask the reader"), [], facts).find((r) => r.rule === "outline_structure")?.ok).toBe(false);
+});
+
+describe("claims and evasions", () => {
+  const facts = { repo: "open330/somun", sourceText: "somun drafts posts. The fastest path is the CLI.", limitations: [] };
+  const rule = (r: ReturnType<typeof lintDraft>, name: string) => r.find((x) => x.rule === name);
+  it("flags superlative and 'first' claims the evidence does not make", () => {
+    expect(rule(lintDraft("x", undefined, "The only tool you need. 세계 최초. https://x.y", [], facts), "claims_need_review")?.args?.phrases).toBe("the only, 세계 최초");
+    expect(rule(lintDraft("x", undefined, "The fastest path is the CLI. https://x.y", [], facts), "claims_need_review")?.ok).toBe(true);
+  });
+  it("normalizes banned phrases against spacing, invisible characters, and compatibility forms", () => {
+    expect(rule(lintDraft("x", undefined, "We are excited  to\nannounce it https://x.y"), "banned_phrases")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "excited to an​nounce https://x.y"), "banned_phrases")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "game‑changer https://x.y"), "banned_phrases")?.ok).toBe(false);
+  });
+  it("finds a wrong owner at a sentence end and inside a GitHub URL, but not similar repository names", () => {
+    expect(rule(lintDraft("x", undefined, "See evil/somun.", [], facts), "repo_name")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "https://github.com/evil/somun", [], facts), "repo_name")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "https://github.com/Open330/somun and evil/somun-cli", [], facts), "repo_name")?.ok).toBe(true);
+  });
+  it("catches fullwidth and title exclamation marks, real vote asks, and invented beta notes", () => {
+    expect(rule(lintDraft("x", undefined, "Done！ https://x.y"), "no_exclamation")?.ok).toBe(false);
+    expect(rule(lintDraft("show_hn", "Show HN: somun!", "Body?"), "no_exclamation")?.ok).toBe(false);
+    expect(rule(lintDraft("show_hn", "Show HN: somun", "We devote time to a vote counter feature. Thoughts?"), "no_vote_request")?.ok).toBe(true);
+    expect(rule(lintDraft("show_hn", "Show HN: somun", "Please give it a star. Thoughts?"), "no_vote_request")?.ok).toBe(false);
+    expect(rule(lintDraft("show_gn", "소문", "추천 눌러 주세요"), "no_vote_request")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "It is still experimental. https://x.y", [], facts), "no_invented_limit")?.ok).toBe(false);
+    expect(rule(lintDraft("x", undefined, "It is still experimental. https://x.y", [], { ...facts, sourceText: "This is still experimental." }), "no_invented_limit")?.ok).toBe(true);
+  });
+});
+
+it("reads spaced multipliers, rank claims, and word-sized quantities as claims to ground", () => {
+  expect(unsupportedNumbers("3 times faster", "fixed 3 bugs")).toEqual(["3x"]);
+  expect(unsupportedNumbers("2 배 빨라짐", "2개 수정")).toEqual(["2x"]);
+  expect(unsupportedNumbers("#1 on HN", "a tool")).toEqual(["#1"]);
+  expect(unsupportedNumbers("0 dependencies", "a tool")).toEqual(["0"]);
+  expect(unsupportedNumbers("a million downloads", "a tool")).toEqual(["a million+"]);
+  expect(unsupportedNumbers("천 명 이상이 사용", "a tool")).toEqual(["1000"]);
+});
+
+it("reads numbers at the end of a sentence", () => {
+  expect(unsupportedNumbers("We fixed 40 bugs.", "Fixed 12 bugs.")).toEqual(["40"]);
+  expect(unsupportedNumbers("1.0 버전 전까지 API가 바뀔 수 있습니다", "APIs may still change before 1.0.")).toEqual([]);
+  expect(unsupportedNumbers("Released in 2026.", "a tool")).toEqual(["2026"]);
+});
+
+it("flags an untranslated English sentence in a Korean post but not names or commands", () => {
+  const rule = (body: string) => lintDraft("x", undefined, body).find((r) => r.rule === "mixed_language");
+  expect(rule("muxa는 tmux 안의 에이전트를 지켜봅니다. APIs may still change before 1.0. https://github.com/Open330/muxa")?.ok).toBe(false);
+  expect(rule("Claude Code, Codex, Gemini CLI, Aider 세션을 봅니다. https://x.y")?.ok).toBe(true);
+  expect(rule("설치는 다음과 같습니다.\n`npm install -g muxa and run it in the terminal`")?.ok).toBe(true);
+  expect(rule("Claude Code, Codex, Gemini CLI, OpenCode, Aider\n위 도구를 지원합니다.")?.ok).toBe(true);
 });

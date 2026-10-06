@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, factsBlock, judgePrompt } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, instructionOf, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
@@ -32,7 +32,7 @@ describe("first introduction", () => {
 
   it("asks the judge about the project, not the size of the window", () => {
     expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [], introduction: true }).user).toContain("has not announced this repository through this tool yet");
-    expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [] }).user).not.toContain("First introduction");
+    expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [] }).user).not.toContain("Introducing the project");
   });
 
   it("marks README experimental features as not available", () => {
@@ -61,5 +61,32 @@ describe("digest grounding", () => {
     expect(unsupportedNumbers("Memory down 70%", grounding)).toEqual(["70%"]);
     expect(unsupportedNumbers("5x faster builds", grounding)).toEqual(["5x"]);
     expect(unsupportedNumbers("Startup 40% faster", grounding)).toEqual([]);
+  });
+});
+
+describe("voice example labels", () => {
+  it("does not present an unedited generated draft as the author's own voice", () => {
+    const user = draftPrompt(candidate, "x", "en", [{ source: "accepted", body: "model text" }, { source: "authored", body: "my text" }]).user;
+    expect(user).toContain("### Example 1 (an earlier generated draft the author copied without edits");
+    expect(user).toContain("### Example 2 (author's own)");
+  });
+});
+
+describe("judge reasoning", () => {
+  it("drops 'first release' sentences when the project already has releases", () => {
+    const text = "이 프로젝트는 첫 공개 시점이므로 새로움이 높습니다. 데모 GIF가 있어 바로 써 볼 수 있습니다.";
+    expect(withoutFalseFirstClaims(text, 69)).toBe("데모 GIF가 있어 바로 써 볼 수 있습니다.");
+    expect(withoutFalseFirstClaims("This is the first release. It runs today.", 69)).toBe("It runs today.");
+    expect(withoutFalseFirstClaims(text, 1)).toBe(text);
+  });
+});
+
+describe("stored draft prompts", () => {
+  it("recovers the editor instruction and purpose from a stored prompt", () => {
+    const user = draftPrompt(candidate, "x", "en", [], undefined, { instruction: "Make it shorter", introduction: true }).user;
+    expect(instructionOf(user)).toBe("Make it shorter");
+    expect(draftPurposeOf(null, user)).toBe("introduction");
+    expect(draftPurposeOf({ draftPurpose: "update" }, user)).toBe("update");
+    expect(instructionOf(draftPrompt(candidate, "x", "en", []).user)).toBeUndefined();
   });
 });

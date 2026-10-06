@@ -22,7 +22,7 @@ function getDraftRow(ctx: AppContext, ownerId: string, id: number) {
 /** 채널·언어별로 프롬프트 후보가 되는 내 예시 수. 오래된 것부터 물러난다. */
 export const OWN_EXAMPLE_CAP = 8;
 /** 경고된 근거·표현 오류가 문체 예시로 굳지 않게 한다. 복사 사실과 수정량은 별도로 기록한다. */
-const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms"]);
+const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms"]);
 
 /** 사용자 예시가 채널당 5개 쌓이면 시드는 비활성화. 내 예시는 최근 OWN_EXAMPLE_CAP개만 활성. */
 function retireSeeds(ctx: AppContext, ownerId: string, channel: string, lang: string) {

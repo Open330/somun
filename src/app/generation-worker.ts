@@ -11,7 +11,7 @@ import type { AppContext } from "./context.js";
 import { SIDE_JOB_KINDS } from "../shared/types.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
-import { keyPoolOps } from "./keys.js";
+import { keyPoolOps, recentUpstreamFailure } from "./keys.js";
 import { draftIssues, repairPrompt, worthRepairing } from "./draft-repair.js";
 import type { LlmResult } from "../infra/llm/providers.js";
 import type { Job } from "../shared/types.js";
@@ -76,8 +76,12 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     } catch (err) {
       // Upstream error bodies may echo credentials; persist only a bounded diagnostic.
       const lc = settings.ui?.locale;
+      // 제한 시간을 넘긴 원인이 모델의 서버 오류(503 등)였다면 그렇게 알린다. "다시 시도"만으로는 사용자가 기다릴지 모델을 바꿀지 판단할 수 없다.
+      const upstream = config.provider === "gemini" && !config.apiKey ? recentUpstreamFailure(ctx, modelFor(config, modelKind)) : undefined;
       const error = err instanceof SharedQuotaError ? err.message : err instanceof Error && ["TimeoutError", "AbortError"].includes(err.name)
-        ? say(lc, "생성 제한 시간을 넘겼거나 서버가 종료되었습니다. 다시 시도해 주세요.", "Generation timed out or the server stopped. Please try again.")
+        ? upstream
+          ? say(lc, `${modelFor(config, modelKind)} 모델이 서버 오류(HTTP ${upstream})로 응답하지 않아 생성 제한 시간을 넘겼습니다. 몇 분 뒤 다시 시도하거나 설정에서 다른 모델을 골라 주세요.`, `${modelFor(config, modelKind)} kept returning a server error (HTTP ${upstream}), so generation timed out. Try again in a few minutes or pick another model in settings.`)
+          : say(lc, "생성 제한 시간을 넘겼거나 서버가 종료되었습니다. 다시 시도해 주세요.", "Generation timed out or the server stopped. Please try again.")
         : isBlockedError(err) ? say(lc, "모델 주소(baseUrl)가 사설망·예약 주소를 가리켜 요청하지 않았습니다. 설정에서 공인 주소로 바꿔 주세요.", "The model address (baseUrl) points to a private or reserved network, so no request was sent. Use a public address in settings.")
         : err instanceof LlmError && err.status ? say(lc, `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`, `Model request failed (HTTP ${err.status}). Check the model settings and usage limits, then try again.`)
         : say(lc, "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.", "Generation failed. Check the model settings, API key, and response format, then try again.");

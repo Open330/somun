@@ -234,7 +234,9 @@ export default function Settings() {
             <div>
               <h3>{t("임계")}</h3>
               <p className="small muted">
-                {t("다섯 항목(각 0~2, 가중치 적용) 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.")}
+                {t(
+                  "다섯 항목(각 0~2, 가중치 적용)을 10점 만점으로 환산한 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.",
+                )}
               </p>
               <div className="row">
                 <label className="field">
@@ -257,6 +259,7 @@ export default function Settings() {
             </div>
             <div>
               <h3>{t("가중치")}</h3>
+              <p className="small muted">{t("항목 사이의 상대적 중요도입니다. 합계는 늘 10점 만점으로 환산해 기준과 비교합니다.")}</p>
               <div className="stack">
                 {CRITERIA.map(([k, label, hint]) => (
                   <label key={k} className="row between small">
@@ -267,6 +270,7 @@ export default function Settings() {
                       type="number"
                       step="0.5"
                       min="0"
+                      max="5"
                       className="weight-input"
                       value={settings.rubricWeights[k]}
                       onChange={(ev) => void update({ rubricWeights: { ...settings.rubricWeights, [k]: Number(ev.target.value) } })}

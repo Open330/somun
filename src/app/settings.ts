@@ -7,7 +7,8 @@ import { schema } from "../infra/db/index.js";
 import { freeGeminiKeys } from "../infra/llm/providers.js";
 import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
 import type { Settings, SettingsView } from "../shared/types.js";
-import { emit, type AppContext } from "./context.js";
+import { emit, InvalidInputError, type AppContext } from "./context.js";
+import { say } from "../shared/locale.js";
 
 export const DEFAULT_SETTINGS: Settings = {
   rubricWeights: { runnable: 1, numbers: 1, lesson: 1, novelty: 1, audience: 1 },
@@ -54,7 +55,18 @@ function openSecrets(ctx: AppContext, s: Settings): Settings {
 
 export function getSettings(ctx: AppContext, ownerId: string): Settings {
   const row = ctx.db.select().from(schema.settings).where(eq(schema.settings.ownerId, ownerId)).get();
-  return openSecrets(ctx, { ...DEFAULT_SETTINGS, ...migrateLegacy((row?.data as Partial<Settings>) ?? {}) });
+  return openSecrets(ctx, migrateRubricScale({ ...DEFAULT_SETTINGS, ...migrateLegacy((row?.data as Partial<Settings>) ?? {}) }));
+}
+
+/**
+ * 예전 기준값은 가중 원점수(Σ점수×가중치, 만점 2Σ가중치) 척도였다. 지금 합계는 10점 만점으로 환산하므로
+ * 같은 뜻이 되도록 기준값을 T × 5 / Σ가중치 로 옮긴다. 가중치가 기본(합 5)이면 값이 그대로다.
+ */
+export function migrateRubricScale(s: Settings): Settings {
+  if (s.rubricScale === 10) return s;
+  const sum = Object.values(s.rubricWeights).reduce((a, w) => a + Math.max(0, Number(w) || 0), 0);
+  const scale = (t: number) => Math.min(10, Math.max(0, Math.round((sum > 0 ? (t * 5) / sum : t) * 10) / 10));
+  return { ...s, rubricScale: 10, draftThreshold: scale(s.draftThreshold), deferThreshold: Math.min(scale(s.deferThreshold), scale(s.draftThreshold)) };
 }
 
 function saveSettings(ctx: AppContext, ownerId: string, next: Settings): void {
@@ -109,6 +121,7 @@ export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<
   // 화면 상태는 항목별로 합친다(언어를 바꿔도 온보딩 닫은 시각이 지워지지 않게).
   if (patch.ui) next.ui = { ...current.ui, ...patch.ui };
   if (patch.llm) next.llm = { ...patch.llm, apiKey: patch.llm.apiKey || (keepApiKey ? current.llm.apiKey : undefined) };
+  if ((patch.deferThreshold !== undefined || patch.draftThreshold !== undefined) && next.deferThreshold > next.draftThreshold) throw new InvalidInputError(say(current.ui?.locale ?? "ko", "보류 기준은 초안 기준보다 클 수 없습니다.", "The defer threshold can't be higher than the draft threshold."));
   saveSettings(ctx, ownerId, next);
   emit(ctx, ownerId, { resource: "settings" });
   return getSettingsView(ctx, ownerId);

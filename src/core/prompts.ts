@@ -17,6 +17,10 @@ export type EvidenceLike = {
   milestones?: { metric: string; threshold: number; at: number }[];
   /** README가 실험·로컬 전용으로 표시한 기능. 지금 쓸 수 있는 것처럼 쓰지 않는다. */
   experimental?: string[];
+  /** 이 글감에 묶인 릴리스 태그(오래된 것부터). 둘 이상이면 변경을 최신 태그 하나에 몰아 쓰지 않게 알린다. 프롬프트를 만들 때 채운다. */
+  windowReleases?: string[];
+  /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
+  unreleasedPrTitles?: string[];
 };
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
@@ -48,6 +52,8 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     `repo: ${e.repo} — ${e.repoUrl}`,
     profile ? profileBlock(profile) : e.description ? `what it is: ${e.description}` : "",
     e.version ? `latest version: ${e.version}` : "",
+    e.windowReleases && e.windowReleases.length > 1 ? `releases in this window: ${e.windowReleases.join(", ")} (the changes below span all of them; attribute a change to a version only when that version's release notes say so, otherwise do not name a version)` : "",
+    e.unreleasedPrTitles?.length ? `merged after ${e.version ?? "the latest release"}, not in any release yet (never say a version adds these; say they are on the main branch):\n- ${e.unreleasedPrTitles.join("\n- ")}` : "",
     e.firstReleaseAt ? `first release: ${e.firstReleaseAt}` : "",
     e.releaseCount !== undefined ? `releases: ${e.releaseCount}` : "",
     e.commitCount !== undefined ? `commits: ${e.commitCount}` : "",
@@ -59,7 +65,7 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     e.demoAsset ? `demo asset in README: ${e.demoAsset}` : "demo asset: none found in README",
     e.limitations?.length ? `limitations (from README):\n- ${e.limitations.join("\n- ")}` : profile?.limitations.length ? "" : "limitations: none stated in README",
     e.experimental?.length ? `not generally available (README marks these experimental or local-only; never present them as something readers can use now):\n- ${e.experimental.join("\n- ")}` : "",
-    e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}` : "\n## Digest: (none yet)",
+    e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}${e.highlights.some((h) => h.startsWith("(unreleased)")) ? "\n(Items marked (unreleased) are on the main branch but in no release yet. Say that; never present them as shipped.)" : ""}` : "\n## Digest: (none yet)",
     `\n## Numbers you may use (verbatim, nothing else)\n${numbersLine(e)}`,
   ].filter(Boolean).join("\n");
 }
@@ -140,7 +146,8 @@ Each highlight is one plain sentence with no adjectives. Never invent numbers. I
 Write highlights in the same language as most of the raw material (English if mixed).
 If a profile is given, it is the baseline: never restate what the project is as a highlight. Only what changed relative to it.
 If an "Already told" list is given, drop any highlight that says the same thing in other words.
-Drop highlights about features listed under "not generally available": readers cannot use them yet.`,
+Drop highlights about features listed under "not generally available": readers cannot use them yet.
+If Facts list PRs "merged after …, not in any release yet", start each highlight that comes only from those PRs with "(unreleased) " so later drafts do not present it as shipped.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
       ctx.alreadyTold?.length ? `\n${DIGEST_HEADINGS.alreadyTold} (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
@@ -188,7 +195,8 @@ suggestedChannels: subset of the enabled channels.`,
 }
 
 /** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
-const INTRODUCTION_JUDGE = `## First introduction
+export const INTRODUCTION_JUDGE_HEADING = "## Introducing the project to new readers";
+const INTRODUCTION_JUDGE = `${INTRODUCTION_JUDGE_HEADING}
 The editor has not announced this repository through this tool yet (no copied drafts or registered posts). This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
 - novelty: the project itself is new to readers.
@@ -202,6 +210,22 @@ export const DRAFT_SCHEMA = {
   additionalProperties: false,
 };
 
+const INSTRUCTION_HEADING = "\n## Editor instruction for this rewrite\n";
+
+/** 초안 작업의 목적. 메타가 없던 예전 작업은 프롬프트의 첫 소개 절로 판단한다. 서버·재시도·보정이 같은 규칙을 쓴다. */
+export function draftPurposeOf(meta: { draftPurpose?: import("../shared/types.js").DraftPurpose } | null | undefined, user: string): import("../shared/types.js").DraftPurpose {
+  return meta?.draftPurpose ?? (user.includes("\n## First introduction\n") ? "introduction" : "update");
+}
+
+/** 저장된 초안 프롬프트에서 편집 지시를 되찾는다(다시 만들 때 사용자의 요청을 잃지 않게). */
+export function instructionOf(user: string): string | undefined {
+  const at = user.indexOf(INSTRUCTION_HEADING);
+  if (at < 0) return undefined;
+  const rest = user.slice(at + INSTRUCTION_HEADING.length);
+  const end = rest.search(/\n(?:\n|#)/);
+  return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
+}
+
 export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
@@ -214,13 +238,28 @@ export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduct
   return ["## Required change checklist", "Preserve every distinct change below, including its component and operation. Shorten background and repetition rather than omit changes. Use compact sentences or a list within the channel character limit. Before returning, check every item against the draft. Do not add new effects or measurements.", ...highlights.map((text) => `- ${text}`)].join("\n");
 }
 
+const EXAMPLE_LABEL: Record<string, string> = {
+  seed: " (best practice)",
+  authored: " (author's own)",
+  accepted: " (an earlier generated draft the author copied without edits: follow its shape, not as the author's own voice)",
+};
+
+/** 프로젝트가 이미 여러 번 릴리스됐는데 판단 이유가 "첫 공개·첫 릴리스"라고 쓰는 문장. 지시해도 약한 모델이 되풀이해서 지운다. */
+const FALSE_FIRST = /(?:첫|최초)\s?(?:공개|출시|릴리스|배포)|first (?:public )?(?:release|launch)|newly (?:released|launched|published)|just (?:released|launched)/i;
+
+export function withoutFalseFirstClaims(reasoning: string, releaseCount: number | undefined): string {
+  if ((releaseCount ?? 0) <= 1 || !FALSE_FIRST.test(reasoning)) return reasoning;
+  const kept = reasoning.split(/(?<=[.!?。]|다\.)\s+/).filter((sentence) => !FALSE_FIRST.test(sentence));
+  return kept.join(" ").trim();
+}
+
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = CHANNELS[channel];
   // Introductions describe capabilities, not how much repository activity produced them.
   const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
-    ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${e.source === "seed" ? " (best practice)" : " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
+    ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${EXAMPLE_LABEL[e.source] ?? " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
     : "";
   return {
     schemaName: "draft",
@@ -258,7 +297,7 @@ Hard rules:
       opts.guide ? `## Voice guide\n${opts.guide}` : "",
       lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
       opts.previous ? `\n## Previous version (rewrite this; do not repeat it verbatim)\n${opts.previous.title ? `Title: ${opts.previous.title}\n` : ""}${opts.previous.body}` : "",
-      opts.instruction ? `\n## Editor instruction for this rewrite\n${opts.instruction}` : "",
+      opts.instruction ? `${INSTRUCTION_HEADING}${opts.instruction}` : "",
       opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",

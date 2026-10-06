@@ -11,6 +11,10 @@ export const en: Record<string, string> = {
   "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.":
     "Review author role: {phrases}. A connected repository does not establish that the poster developed or released the project; review the source and the poster’s role.",
   "작성자 역할 확인": "Review author role",
+  "주장 확인": "Review claims",
+  "영어 문장": "English sentence",
+  "근거에서 찾지 못한 최상급·최초 주장: {phrases}. 원문에 있는 사실로 바꾸거나 빼 주세요.":
+    'Superlative or "first" claims not found in the evidence: {phrases}. Replace them with sourced facts or remove them.',
   "오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}":
     "Shared model executions today: {used}/{limit} · Up to {pending} queued/running jobs · Resets {reset}",
   "로그인을 완료하지 못했습니다. 로그인 화면에서 다시 시작해 주세요.": "Sign-in could not be completed. Start again from the sign-in page.",
@@ -37,6 +41,10 @@ export const en: Record<string, string> = {
     "GitHub authentication is required. Connect the GitHub App or ask the administrator to configure a server token.",
   "저장소를 찾을 수 없거나 접근 권한이 없습니다. 소유자/저장소와 GitHub App의 읽기 권한을 확인해 주세요.":
     "The repository could not be found or accessed. Check the owner/repository and the GitHub App read permissions.",
+  "읽기 권한이 없어 일부를 읽지 못했습니다: {detail}. GitHub App 또는 토큰에 Pull requests·Contents 읽기 권한을 주세요.":
+    "Some data couldn't be read without permission: {detail}. Grant the GitHub App or token read access to Pull requests and Contents.",
+  "공개 저장소만 읽을 수 있어 비공개 저장소를 건너뛰었습니다: {detail}. 비공개 저장소는 GitHub App으로 연결해 주세요.":
+    "Only public repositories can be read here, so these private ones were skipped: {detail}. Connect private repositories through the GitHub App.",
   "GitHub 저장소 주소 형식을 확인해 주세요. 연결을 해제한 뒤 올바른 소유자/저장소로 다시 연결할 수 있습니다.":
     "Check the GitHub repository address. Disconnect it and reconnect with the correct owner/repository.",
   "GitHub 요청 한도에 도달했습니다. 잠시 후 다시 수집해 주세요.": "The GitHub request limit has been reached. Try collecting again later.",
@@ -51,7 +59,7 @@ export const en: Record<string, string> = {
   "프로필 수정은 다음 초안부터 반영됩니다. 기존 초안은 다시 검토하거나 다시 써 주세요.":
     "Profile changes apply to future drafts. Review or rewrite existing drafts.",
   "실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.":
-    "Only observed draft copies are counted. Link-only registrations and edits made outside Somun are not included.",
+    "Only observed draft copies are counted. Link-only registrations and edits made outside somun are not included.",
 
   "왜 만들었나": "Why it exists",
   "왜 만들었나:": "Why it exists:",
@@ -492,8 +500,8 @@ export const en: Record<string, string> = {
   "릴리스, 머지된 PR, 마지막 릴리스 이후 커밋, 스타와 다운로드 임계, README의 한계 문구.":
     "Releases, merged PRs, commits since the last release, star and download thresholds, and limitations noted in the README.",
   "세션 업로더": "Session uploader",
-  "{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 요약해 요약만 올립니다.":
-    "{cmd} summarizes Claude Code, Codex, and oh-my-prompt sessions on your machine and uploads only the summaries.",
+  "{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 집계해 통계와 세션별 첫 프롬프트 앞 120자만 올립니다.":
+    "{cmd} aggregates Claude Code, Codex, and oh-my-prompt sessions on your machine and uploads only the stats and the first 120 characters of each session's first prompt.",
   "npm · 블로그": "npm · blog",
   "월 다운로드 추이와 발행한 글. 마일스톤을 넘으면 글감 후보가 됩니다.":
     "Monthly download trends and published posts. Crossing a milestone makes it a candidate.",
@@ -582,11 +590,13 @@ export const en: Record<string, string> = {
   "최근 {days}일 안에 생긴 글감만": "Only candidates from the last {days} days",
   "일 수": "Days",
   임계: "Thresholds",
-  "다섯 항목(각 0~2, 가중치 적용) 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.":
-    "If the sum of five criteria (0–2 each, weighted) meets the draft threshold, drafts are written for each channel. Below the defer threshold, it only asks.",
+  "다섯 항목(각 0~2, 가중치 적용)을 10점 만점으로 환산한 합이 초안 임계 이상이면 채널별 초안을 씁니다. 보류 임계 미만이면 묻기만 합니다.":
+    "If the five criteria (0–2 each, weighted), scaled to 10, meet the draft threshold, drafts are written for each channel. Below the defer threshold, it only asks.",
   "초안 임계": "Draft threshold",
   "보류 임계": "Defer threshold",
   가중치: "Weights",
+  "항목 사이의 상대적 중요도입니다. 합계는 늘 10점 만점으로 환산해 기준과 비교합니다.":
+    "Relative importance between criteria. The total is always scaled to 10 before it's compared with the thresholds.",
   "초안에 이 표현이 있으면 린트에 걸립니다. 한 줄에 하나.": "Drafts containing these phrases fail lint. One per line.",
   "채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).":
     "Choose the languages to write drafts in for each channel. A channel with no languages is off. Channels with a fixed language, like Show HN and Show GN, only need to be turned on. Add languages not in the list by code (e.g. ja, zh, es).",
@@ -997,6 +1007,8 @@ export const en: Record<string, string> = {
   "분석·판단": "Analysis and evaluation",
   "요청 가능": "Requests available",
   "일시 대기": "Temporarily waiting",
+  불안정: "Unstable",
+  "응답 불안정 · 기본 모델로 대체": "Unstable · falling back to the default model",
   "제공사 한도 확인 필요": "Check provider limits",
   "로컬 워커 사용": "Uses local worker",
   "모델 연결 필요": "Connect a model",
@@ -1056,8 +1068,8 @@ export const en: Record<string, string> = {
   "무엇을 하는지 먼저. 이유와 한계는 근거가 있을 때만.": "Lead with what it does. Motivation and limitations only with evidence.",
   "첫 문장에 핵심을 두고 짧은 문단으로.": "Lead with the point, then use short paragraphs.",
   "짧은 본문. 채널에 맞는 말투와 길이.": "Brief text, with tone and length suited to the channel.",
-  "프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 만든 요약만 올립니다.":
-    "Connect project records and published posts. The session uploader sends only summaries prepared locally.",
+  "프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 집계한 통계와 세션별 첫 프롬프트 앞 120자를 올립니다.":
+    "Connect project records and published posts. The session uploader sends stats computed locally plus the first 120 characters of each session's first prompt.",
   "말만 그럴듯하면": "When the words are just polished",
   "핵심을 남기면": "When the point comes through",
   "무엇을 하는지 흐림": "Unclear what it does",
@@ -1104,7 +1116,7 @@ export const en: Record<string, string> = {
   "근거를 나란히": "Source review",
   "원자료를 보며 초안을 다듬습니다.": "Refine the draft alongside its source.",
   "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 흩어진 작업 기록을 모으고, 독자가 알아야 할 핵심부터 정리합니다.":
-    "Somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
+    "somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
   "어떻게 만드는가 ↓": "How it works ↓",
   "무엇을 하는지, 무엇이 달라졌는지 바로 읽히도록. 알릴 내용을 고르고, 근거로 쓰고, 내 말투로 다듬습니다.":
     "Make what it does and what changed easy to find. Choose what to share, write from evidence, and refine it in your voice.",

@@ -29,7 +29,7 @@
 
 You built a lot. Explaining it is the hard part.
 
-somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
+somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Drafts you edit before copying become voice examples (unedited copies only fill in as shape references), and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
 
 Today, publishing is manual. Drafts are grounded in supplied material and checked for selected issues, but unsupported claims and awkward wording can still slip through. Review the source before posting.
 
@@ -66,7 +66,7 @@ Today, publishing is manual. Drafts are grounded in supplied material and checke
    └─────────────────┘
 ```
 
-**Facts from the system, voice from you.** The prompt asks the model to use numbers from the raw material (release notes, PR titles, commits, README, repo stats) and omit numeric claims without supporting material. The checker flags selected unsupported numbers rather than guaranteeing factual accuracy. The digest is checked too: summary lines flagged by the numeric checker are excluded from the judge and draft inputs, and stay visible on the candidate page. Draft numbers flagged by the checker — including multipliers like "3x" or "twice" — ask for your confirmation when copying.
+**Facts from the system, voice from you.** The prompt asks the model to use numbers from the raw material (release notes, PR titles, commits, README, repo stats) and omit numeric claims without supporting material. The checker flags selected unsupported numbers rather than guaranteeing factual accuracy. The digest is checked too: summary lines flagged by the numeric checker are excluded from the judge and draft inputs, and stay visible on the candidate page. Draft numbers flagged by the checker — including multipliers like "3x" or "twice" — ask for your confirmation when copying. The checker compares digits with their time and size units (2s ≠ 2ms), scale words ("1k", "1 million", 1만), spelled-out multipliers ("halved", "ten times", 절반) and vague magnitudes ("hundreds of", 수백), and flags superlatives such as "the only" or "fastest" that the source doesn't use. It cannot tell when a number from the source is reused with a different meaning, and it does not verify claims without these markers.
 
 <br />
 
@@ -110,7 +110,7 @@ The interface is in English and Korean. It follows your browser language and can
 | Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
-Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, invented limitations, selected author-role claims that need review, a wrong repo name, missing link, exclamation marks, vote requests, length, and Blog outline structure.
+Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, unsupported superlatives, invented limitations, selected author-role claims that need review, a wrong repo name, missing link, exclamation marks, vote requests, length, and Blog outline structure.
 
 **Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
 
@@ -146,7 +146,7 @@ cp .env.example .env            # set GITHUB_TOKEN and GEMINI_API_KEYS; SOMUN_AL
 npm run dev                     # API on :8790, web on :5180
 
 npm run seed                    # best-practice voice examples (once)
-npm run push -- --sources omp --days 14   # optional: attach oh-my-prompt session summaries
+npm run push -- --sources omp --days 14   # optional: attach session stats (+ first 120 chars of each first prompt)
 ```
 
 Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.

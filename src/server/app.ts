@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { ForbiddenError, GenerationConflictError, InvalidInputError, NotFoundError, UnavailableError, type AppContext } from "../app/context.js";
 import { UnsafeUrlError } from "../infra/net.js";
 import { bodyLimit } from "hono/body-limit";
+import { secureHeaders } from "hono/secure-headers";
 import { authMiddleware, sessionRoutes, TicketStore } from "./auth.js";
 import type { Config } from "./config.js";
 import { apiRoutes } from "./routes/api.js";
@@ -16,6 +17,22 @@ import { seoRoutes } from "./seo.js";
 export function createApp(ctx: AppContext, config: Config) {
   const app = new Hono();
   const tickets = new TicketStore();
+  // 기본 보안 헤더. 스크립트 출처는 막지 않고(인증 서버·CDN 자산), 다른 사이트에 끼워 넣기·MIME 추측·주소 노출만 막는다.
+  // 공유 이미지(og.png)는 다른 사이트가 불러가야 하므로 교차 출처 리소스 정책을 걸지 않는다.
+  app.use("*", secureHeaders({
+    strictTransportSecurity: "max-age=31536000; includeSubDomains",
+    xFrameOptions: "DENY",
+    referrerPolicy: false,
+    contentSecurityPolicy: { frameAncestors: ["'none'"], baseUri: ["'self'"], objectSrc: ["'none'"] },
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }));
+  // 주소 노출 정책은 응답이 정하지 않았을 때만(GitHub App 콜백은 no-referrer로 code·state를 지킨다).
+  app.use("*", async (c, next) => {
+    await next();
+    if (!c.res.headers.has("Referrer-Policy")) c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  });
   app.get("/health", (c) => c.text("ok"));
   // GitHub webhook은 25MB까지 온다. 서명 검증이 있으므로 상한 앞에 둔다.
   app.post("/api/webhooks/github", githubWebhook(ctx));
@@ -41,7 +58,12 @@ export function createApp(ctx: AppContext, config: Config) {
   });
   // 정적 웹 (빌드 결과). 첫 화면과 SPA 폴백은 검색용 머리말을 붙여 내려준다.
   const page = seoRoutes(app, config);
-  const html = (c: Context) => { const body = page(c.req.path); return body === undefined ? c.notFound() : c.html(body); };
+  const html = (c: Context) => {
+    const res = page(c.req.path, c.req.header("Accept-Language"));
+    if (res === undefined) return c.notFound();
+    c.header("Vary", "Accept-Language");
+    return c.html(res.body, res.status);
+  };
   app.get("/", html);
   app.get("/index.html", (c) => c.redirect("/", 301));
   app.use("/*", serveStatic({ root: config.WEB_DIST }));

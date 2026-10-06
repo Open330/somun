@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, experimentalFrom, limitationsFrom } from "./collect.js";
+import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -79,6 +79,65 @@ describe("collection guards", () => {
     expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "star_milestone")).toHaveLength(0);
   });
 
+  it("turns direct pushes to main into one in-progress candidate and does not double-count polled PRs", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/solo"], enabled: true }).run().lastInsertRowid);
+    const iso = (hoursAgo: number) => new Date(Date.now() - hoursAgo * 3600e3).toISOString();
+    const repo = { full_name: "me/solo", html_url: "https://github.com/me/solo", description: null, homepage: null, stargazers_count: 3, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: iso(1), fork: false, archived: false, private: false };
+    const commit = (n: number, msg: string) => ({ sha: `sha${n}`, commit: { message: msg, committer: { date: iso(n) } } });
+    let commits = [commit(1, "Add dark mode"), commit(2, "docs: typo"), commit(3, "Support CSV export"), commit(4, "chore: lint")];
+    let pulls: { number: number; title: string; merged_at: string; html_url: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/solo")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.includes("/commits")) return new Response(JSON.stringify(commits), { status: 200 });
+      if (url.includes("/pulls")) return new Response(JSON.stringify(pulls), { status: 200 });
+      if (url.includes("/releases")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    // 의미 있는 커밋이 모자라면 글감이 아니다(문서·잡일 커밋은 세지 않는다).
+    await collectGithubSource(ctx, id);
+    expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(0);
+    commits = [...commits, commit(5, "Fix crash on empty file"), commit(6, "Add --watch flag"), commit(7, "Speed up parser")];
+    await collectGithubSource(ctx, id);
+    await collectGithubSource(ctx, id);
+    const cands = ctx.db.select().from(schema.candidates).all();
+    expect(cands).toHaveLength(1);
+    expect(cands[0].type).toBe("in-progress");
+    expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "commit_batch")).toHaveLength(1);
+
+    // PR 두 개를 받은 뒤 다음 수집에 같은 두 개와 새 하나가 오면 3개로 센다. 앞서 받은 PR도 같은 글감에 묶인다.
+    ctx.db.delete(schema.signals).run(); ctx.db.delete(schema.candidates).run();
+    commits = [];
+    const pr = (n: number) => ({ number: n, title: `PR ${n}`, merged_at: iso(n), html_url: `u${n}` });
+    pulls = [pr(1), pr(2)];
+    await collectGithubSource(ctx, id);
+    expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(0);
+    pulls = [pr(1), pr(2), pr(3)];
+    await collectGithubSource(ctx, id);
+    const [cand] = ctx.db.select().from(schema.candidates).all();
+    expect(cand?.type).toBe("in-progress");
+    expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "pr_merged").every((s) => s.candidateId === cand.id)).toBe(true);
+  });
+
+  it("collects an explicitly listed fork or quiet repository and reports missing read permissions", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/fork"], enabled: true }).run().lastInsertRowid);
+    const repo = { full_name: "me/fork", html_url: "https://github.com/me/fork", description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: "2020-01-01T00:00:00Z", fork: true, archived: false, private: false };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/fork")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.includes("/pulls") || url.includes("/traffic/")) return new Response("{}", { status: 403 });
+      if (url.includes("/releases") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await collectGithubSource(ctx, id);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/repos/me/fork/releases"))).toBe(true);
+    // 트래픽 403은 관리 권한 문제라 알리지 않는다. PR 403은 알린다.
+    expect(ctx.db.select().from(schema.sources).get()?.lastError).toBe("GitHub permission missing: me/fork (pull requests)");
+  });
+
+  it("names the readable kinds a repository lacked", () => {
+    expect(missingReads(["/repos/a/b/pulls?state=closed", "/repos/a/b/traffic/views", "/repos/a/b/readme", "/repos/a/c/releases"], "a/b")).toEqual(["pull requests", "contents"]);
+  });
+
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {
     const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/a", "me/b"], enabled: true }).run().lastInsertRowid);
     const repo = (name: string) => ({ full_name: name, html_url: `https://github.com/${name}`, description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false });
@@ -106,4 +165,43 @@ it("stops reading a feed body past the byte cap even without Content-Length", as
 it("finds README sections marked experimental or local-only", () => {
   const readme = "# somun\n## Run it\n## Local development\n## Preview\n### Short videos (experimental, local)\ntext\n## 짧은 영상 (실험)\n## Deploy\n";
   expect(experimentalFrom(readme)).toEqual(["Short videos (experimental, local)", "짧은 영상 (실험)"]);
+});
+
+it("counts only reader-visible commits inside the collection window", () => {
+  const now = Date.now();
+  const c = (sha: string, message: string, ago: number) => ({ sha, commit: { message, committer: { date: new Date(now - ago).toISOString() } } });
+  const since = now - 14 * 86400e3;
+  const visible = Array.from({ length: COMMIT_BATCH_MIN - 1 }, (_, i) => c(`v${i}`, `Add ${["search", "export", "themes", "sync", "alerts", "tags"][i]}`, (i + 2) * 3600e3));
+  const noise = [c("d", "docs: readme", 1000), c("t", "test(api): cover x", 1000), c("m", "Merge branch main", 1000), c("old", "Add old thing", 20 * 86400e3)];
+  expect(commitBatch([...visible, ...noise], since)).toBeNull();
+  const batch = commitBatch([c("new", "Add webhooks\n\nbody", 3600e3), ...visible, ...noise], since);
+  expect(batch?.head).toBe("new");
+  expect(batch?.subjects[0]).toBe("Add webhooks");
+  expect(batch?.subjects).toHaveLength(COMMIT_BATCH_MIN);
+});
+
+it("reads every page of a list instead of stopping at 100", async () => {
+  const pages: Record<string, number[]> = { "1": Array.from({ length: 100 }, (_, i) => i), "2": [100, 101] };
+  const gh = { get: async (path: string) => pages[/[?&]page=(\d+)/.exec(path)?.[1] ?? ""] ?? [] } as unknown as Parameters<typeof pagedList>[0];
+  expect(await pagedList<number>(gh, "/repos/a/b/releases")).toHaveLength(102);
+  const none = { get: async () => null } as unknown as Parameters<typeof pagedList>[0];
+  expect(await pagedList(none, "/repos/a/b/releases")).toBeNull();
+});
+
+it("does not treat bot, deploy, or templated cron commits as reader-visible work", () => {
+  const now = Date.now(), since = now - 14 * 86400e3;
+  const c = (sha: string, message: string, author?: { login: string; type: string }) => ({ sha, author, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
+  const cron = Array.from({ length: 14 }, (_, i) => c(`h${i}`, `🔮 horoscope 2026-10-${String(i + 1).padStart(2, "0")}`));
+  expect(commitBatch(cron, since)).toBeNull();
+  expect(commitBatch(Array.from({ length: 10 }, (_, i) => c(`d${i}`, `deploy: Swiq gallery ${i}`)), since)).toBeNull();
+  expect(commitBatch(Array.from({ length: 6 }, (_, i) => c(`b${i}`, `Add feature ${"abcdef"[i]}`, { login: "renovate[bot]", type: "Bot" })), since)).toBeNull();
+  expect(commitBatch(["Add export", "Fix crash", "Support CSV", "Add --watch", "Speed up parser"].map((m, i) => c(`v${i}`, m)), since)).not.toBeNull();
+});
+
+it("does not read a repository name as a missing permission and skips squash-merge commits", () => {
+  expect(missingReads(["/repos/acme/commits-lint/traffic/views"], "acme/commits-lint")).toEqual([]);
+  expect(missingReads(["/repos/acme/commits-lint/pulls?state=closed"], "acme/commits-lint")).toEqual(["pull requests"]);
+  const now = Date.now();
+  const c = (sha: string, message: string) => ({ sha, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
+  expect(commitBatch(["feat: a (#1)", "fix: b (#2)", "Add c (#3)", "Add d (#4)", "Add e (#5)"].map((m, i) => c(`s${i}`, m)), now - 14 * 86400e3)).toBeNull();
 });

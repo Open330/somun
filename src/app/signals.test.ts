@@ -88,3 +88,18 @@ describe("migrateLegacyCandidates", () => {
     expect(migrateLegacyCandidates(ctx)).toEqual({ merged: 0, renamed: 0 });
   });
 });
+
+it("keeps PRs that shipped in the latest release out of a later in-progress candidate", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
+  const releaseAt = now - DAY;
+  // 릴리스 직전 PR들: 릴리스 신호가 다른 창에 있어 고아로 남는다.
+  const pr = (n: number, at: number) => ({ kind: "pr_merged" as const, repo: "a/x", ref: `pr${n}`, title: `PR ${n}`, payload: {}, occurredAt: at });
+  ingestSignals(ctx, "o", 1, [pr(1, releaseAt - 3600e3), pr(2, releaseAt - 7200e3)], { latestReleaseAt: releaseAt, recentPrCount: 2 }, ev("a/x"));
+  ingestSignals(ctx, "o", 1, [{ kind: "commit_batch", repo: "a/x", ref: "c1", title: "a/x: 5 commits", payload: {}, occurredAt: now }, pr(3, now - 600e3)], { latestReleaseAt: releaseAt, recentPrCount: 1 }, ev("a/x"));
+  const cand = ctx.db.select().from(schema.candidates).get();
+  expect(cand?.type).toBe("in-progress");
+  const attached = ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "pr_merged" && s.candidateId === cand?.id).map((s) => s.ref);
+  expect(attached).toEqual(["pr3"]);
+});

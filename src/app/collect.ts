@@ -23,29 +23,84 @@ const DAY = 24 * 3600 * 1000;
  * 저장소별로: 릴리스·머지 PR·새 레포·스타/다운로드 임계 신호, 근거 갱신, 지표 스냅샷, 릴리스 후보 병합.
  */
 
-async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<GhRepo[]> {
-  const repos: GhRepo[] = [];
+/**
+ * 수집할 저장소. 조직·사용자 단위로 넓힐 때만 fork·보관·60일 넘게 멈춘 저장소를 거른다.
+ * 사용자가 직접 지정한 저장소는 거르지 않는다(조용히 빠지면 왜 글감이 없는지 알 수 없다). 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
+ */
+export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; skipped: string[] }> {
+  const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
     if (t.includes("/")) {
       const r = await gh.get<GhRepo>(`/repos/${t}`);
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
-      repos.push(r);
+      if (publicOnly && r.private !== false) skipped.push(r.full_name);
+      else explicit.push(r);
       continue;
     }
     for (let page = 1; page <= 5; page++) {
       const list = (await gh.get<GhRepo[]>(`/orgs/${t}/repos?per_page=100&page=${page}&sort=pushed`)) ?? (await gh.get<GhRepo[]>(`/users/${t}/repos?per_page=100&page=${page}&sort=pushed`));
       if (!list?.length) break;
-      repos.push(...list);
+      expanded.push(...list);
       if (list.length < 100) break;
     }
   }
   // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
-  return repos.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
+  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY);
+  const seen = new Set<string>();
+  const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
+  return { repos, skipped };
+}
+
+/** 글감 판단에 필요한데 권한 없음으로 읽지 못한 것. 트래픽은 관리 권한이 있어야 해서 늘 빠질 수 있으므로 세지 않는다. */
+export function missingReads(denied: Iterable<string>, repo: string): string[] {
+  const kinds: [RegExp, string][] = [[/\/pulls\b/, "pull requests"], [/\/releases\b/, "releases"], [/\/(?:readme|contents)\b/, "contents"], [/\/commits\b/, "commits"]];
+  const prefix = `/repos/${repo}/`;
+  // 저장소 이름에 commits·pulls 같은 낱말이 있어도 오인하지 않게 저장소 뒤 경로만 본다.
+  const paths = [...denied].filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length - 1));
+  return kinds.filter(([re]) => paths.some((p) => re.test(p))).map(([, label]) => label);
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
+/**
+ * 100개씩 끝까지(최대 maxPages쪽) 읽는다. 릴리스가 100개를 넘는 저장소에서 개수와 첫 릴리스 날짜가 틀리지 않게.
+ * 첫 쪽이 null(없음·권한 없음)이면 null을 그대로 돌려준다.
+ */
+export async function pagedList<T>(gh: GitHubClient, path: string, maxPages = 10): Promise<T[] | null> {
+  const out: T[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const list = await gh.get<T[]>(`${path}?per_page=100&page=${page}`);
+    if (!list) return page === 1 ? null : out;
+    out.push(...list);
+    if (list.length < 100) break;
+  }
+  return out;
+}
+
+/** 진행 중 글감이 되는 최소 커밋 수. 오타·설정 몇 개로 글감이 생기지 않게 한다. */
+export const COMMIT_BATCH_MIN = 5;
+/** 독자에게 보이지 않는 커밋. Conventional Commits의 문서·테스트·CI·잡일과 병합·의존성 갱신·릴리스 커밋. */
+const INVISIBLE_COMMIT = /^(?:merge\b|bump\b|release v?\d|auto-?update\b|(?:chore|ci|docs?|test|tests|style|build|refactor|deploy)(?:\([^)]*\))?!?:)/i;
+
+/** 같은 틀로 찍어 내는 자동 커밋("🔮 horoscope 2026-10-01")을 한 종류로 보기 위한 틀. 숫자·날짜·기호를 지운다. */
+const commitTemplate = (subject: string) => subject.toLowerCase().replace(/[\d\p{Extended_Pictographic}]+/gu, "").replace(/[^\p{L}]+/gu, " ").trim();
+
+/**
+ * 수집 창 안의 의미 있는 커밋 묶음. 모자라면 null. head는 가장 최근 커밋이라 새 커밋이 생길 때만 새 신호가 된다.
+ * 봇 커밋, 배포·잡일 커밋은 세지 않고, 같은 틀의 반복 커밋은 한 번으로 센다(매일 도는 자동 커밋이 글감이 되지 않게).
+ */
+export function commitBatch(commits: { sha: string; author?: { login?: string; type?: string } | null; commit: { message: string; committer?: { date?: string } | null } }[], since: number): { head: string; at: number; subjects: string[] } | null {
+  const visible = commits
+    .filter((c) => c.author?.type !== "Bot" && !c.author?.login?.endsWith("[bot]"))
+    .map((c) => ({ sha: c.sha, at: Date.parse(c.commit.committer?.date ?? ""), subject: c.commit.message.split("\n")[0].trim() }))
+    // 스쿼시 머지 커밋("feat: x (#12)")은 PR 신호가 나르는 변경이다.
+    .filter((c) => c.subject && Number.isFinite(c.at) && c.at >= since && !INVISIBLE_COMMIT.test(c.subject) && !/\(#\d+\)$/.test(c.subject))
+    .sort((a, b) => b.at - a.at);
+  if (new Set(visible.map((c) => commitTemplate(c.subject))).size < COMMIT_BATCH_MIN) return null;
+  return { head: visible[0].sha, at: visible[0].at, subjects: visible.map((c) => c.subject) };
+}
+
 export function firstDemoAsset(readme: string): string | undefined {
   const all = [...readme.matchAll(/!\[[^\]]*\]\(([^)\s]+\.(?:gif|mp4|webm|png|jpe?g))\)/gi), ...readme.matchAll(/<(?:img|source)[^>]+src="([^"]+\.(?:gif|mp4|webm|png|jpe?g))"/gi)].map((m) => m[1]);
   return all.find((u) => /\.(gif|mp4|webm)$/i.test(u)) ?? all.find((u) => !/logo|badge|shields\.io|icon/i.test(u));
@@ -115,12 +170,14 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
-    for (const repo of await expandTargets(gh, source.targets, publicOnly)) {
+    const { repos, skipped } = await expandTargets(gh, source.targets, publicOnly);
+    const missing: string[] = [];
+    for (const repo of repos) {
       const name = repo.full_name;
       try {
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
-        gh.get<GhRelease[]>(`/repos/${name}/releases?per_page=100`),
+        pagedList<GhRelease>(gh, `/repos/${name}/releases`),
         gh.get<GhPull[]>(`/repos/${name}/pulls?state=closed&sort=updated&direction=desc&per_page=30`),
         gh.get<{ uniques: number }>(`/repos/${name}/traffic/views`),
         gh.get<{ referrer: string; uniques: number }[]>(`/repos/${name}/traffic/referrers`),
@@ -169,8 +226,13 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       // 커밋 창: 이 저장소를 마지막으로 다이제스트한 시각부터. 없으면 마지막 릴리스나 14일.
       const digestedAt = lastDigestAt(ctx, ownerId, name);
       const sinceIso = new Date(digestedAt ?? (latest ? Math.min(Date.parse(latest.published_at), since) : since)).toISOString();
-      const commits = await gh.get<{ commit: { message: string } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
+      const commits = await gh.get<{ sha: string; author?: { login?: string; type?: string } | null; commit: { message: string; committer?: { date?: string } | null } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
       const commitSubjects = (commits ?? []).map((c) => c.commit.message.split("\n")[0].trim()).filter((m) => m && !/^(merge|chore\(deps|bump|release v?\d)/i.test(m)).slice(0, 80);
+      // PR 없이 main에 바로 올리는 저장소는 릴리스·PR 신호가 없다. 수집 창 안의 의미 있는 커밋이 쌓이면 진행 중 글감으로 본다.
+      // PR로 일하는 저장소는 PR 신호가 이미 같은 변경을 나른다. 커밋 묶음은 이 창에 머지된 PR이 없을 때만 만든다.
+      const mergedInWindow = (prs ?? []).some((p) => p.merged_at && Date.parse(p.merged_at) >= since);
+      const batch = mergedInWindow ? null : commitBatch(commits ?? [], since);
+      if (batch && !signals.some((s) => s.kind === "release")) signals.push({ kind: "commit_batch", repo: name, ref: `gh:commits:${name}@${batch.head}`, title: `${name}: ${batch.subjects.length} commits`, payload: { count: batch.subjects.length, head: batch.head, subjects: batch.subjects.slice(0, 20) }, occurredAt: batch.at });
 
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
@@ -192,7 +254,12 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       }
       refreshEvidence(ctx, ownerId, name, evidence);
       if (signals.length) {
-        const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: prev.latestReleaseAt ?? (latest ? Date.parse(latest.published_at) : undefined), repoCreatedAt: createdAt, recentPrCount: prev.recentPrCount + signals.filter((s) => s.kind === "pr_merged").length }, evidence);
+        // 같은 PR이 저장된 것과 이번 응답에 함께 있으므로 ref로 중복을 뺀다. 릴리스 시각은 저장된 것과 방금 받은 것 중 늦은 쪽.
+        const latestReleaseAt = Math.max(prev.latestReleaseAt ?? -Infinity, latest ? Date.parse(latest.published_at) : -Infinity);
+        // 진행 중 글감의 기준은 "최근 릴리스 뒤에 쌓인 PR"이다. 릴리스에 이미 들어간 PR은 세지 않는다.
+        const recent = [...prev.recentPrs, ...signals.filter((s) => s.kind === "pr_merged" && Date.now() - s.occurredAt < 7 * DAY).map((s) => ({ ref: s.ref, at: s.occurredAt }))];
+        const recentPrCount = new Set(recent.filter((p) => !(p.at <= latestReleaseAt)).map((p) => p.ref)).size;
+        const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: Number.isFinite(latestReleaseAt) ? latestReleaseAt : undefined, repoCreatedAt: createdAt, recentPrCount }, evidence);
         summary[name] = r.inserted;
       }
       } catch (e) {
@@ -203,12 +270,19 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         summary[name] = -1;
       }
     }
-    markPolled(ctx, sourceId, Object.values(summary).some((n) => n < 0) ? "GitHub partial collection failure" : undefined);
+    for (const repo of repos) {
+      const lacks = missingReads(gh.denied, repo.full_name);
+      if (lacks.length) missing.push(`${repo.full_name} (${lacks.join(", ")})`);
+    }
+    if (missing.length) ctx.log.warn({ sourceId, missing }, "GitHub permission missing");
+    markPolled(ctx, sourceId, Object.values(summary).some((n) => n < 0) ? "GitHub partial collection failure"
+      : missing.length ? `GitHub permission missing: ${missing.join("; ")}`
+        : skipped.length ? `GitHub repositories skipped (private): ${skipped.join(", ")}` : undefined);
   } catch (e) {
     markPolled(ctx, sourceId, (e as Error).message);
     throw e;
   }
-  void processNewCandidates(ctx, ownerId);
+  void processNewCandidates(ctx, ownerId).catch((err: Error) => ctx.log.error({ ownerId, err: err.message }, "processing new candidates after collect failed"));
   return summary;
 }
 

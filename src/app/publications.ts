@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, ne } from "drizzle-orm";
 import { publicationEffect } from "../core/metrics.js";
 import { markPublished, unmarkPublished } from "./ledger.js";
 import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
@@ -21,11 +21,17 @@ function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: st
  * 그렇지 않으면 이 사용자의 모든 글이 영원히 첫 소개가 되어 실제 변경점을 다루지 못한다.
  */
 export function hasAnnounced(ctx: AppContext, ownerId: string, repo: string): boolean {
-  const published = ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
-    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).get();
-  if (published) return true;
-  return Boolean(ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
-    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt))).get());
+  return lastAnnouncedAt(ctx, ownerId, repo) !== undefined;
+}
+
+/** 이 저장소를 마지막으로 알린 시각(게시 등록 또는 초안 복사). channel을 주면 그 채널에서 알린 것만 본다. 알린 적이 없으면 undefined. */
+export function lastAnnouncedAt(ctx: AppContext, ownerId: string, repo: string, channel?: string): number | undefined {
+  const published = ctx.db.select({ at: schema.publications.publishedAt }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo), channel ? eq(schema.publications.channel, channel) : undefined)).orderBy(desc(schema.publications.publishedAt)).get()?.at;
+  const copied = ctx.db.select({ at: schema.drafts.copiedAt }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
+    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt), channel ? eq(schema.drafts.channel, channel) : undefined)).orderBy(desc(schema.drafts.copiedAt)).get()?.at ?? undefined;
+  const times = [published, copied].filter((t): t is number => typeof t === "number");
+  return times.length ? Math.max(...times) : undefined;
 }
 
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
@@ -114,17 +120,24 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
     const after = snaps.filter((s) => s.at > p.publishedAt);
     const voice = p.draftId ? voices.get(p.draftId) ?? undefined : undefined;
     const effect = publicationEffect(snaps, p.publishedAt);
-    out.push({ ...toPublication(p), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
+    const sharedWith = pubs.filter((o) => o.id !== p.id && cands.get(o.candidateId)?.repo === c.repo && Math.abs(o.publishedAt - p.publishedAt) < 7 * 86400e3).length;
+    out.push({ ...toPublication(p), ...(sharedWith ? { sharedWith } : {}), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
   }
   return out;
 }
 
-/** 하루 한 번 스냅샷. 20시간 안이면 덮어쓴다. */
-export function snapshotMetrics(ctx: AppContext, ownerId: string, m: { repo: string; stars: number; forks: number; viewsUniques14d?: number; referrers?: { referrer: string; uniques: number }[]; npmDownloadsMonth?: number }): void {
+/**
+ * 하루 한 번 스냅샷. 20시간 안이면 덮어쓴다.
+ * 단, 마지막 스냅샷 뒤에 이 저장소의 글을 올렸다면 덮어쓰지 않고 새로 남긴다. 덮어쓰면 발행 전 기준값이
+ * 발행 뒤 값으로 바뀌어(스타 webhook마다 수집이 다시 돈다) 발행 효과가 기준선과 추세에 흡수된다.
+ */
+export function snapshotMetrics(ctx: AppContext, ownerId: string, m: { repo: string; stars: number; forks: number; viewsUniques14d?: number; referrers?: { referrer: string; uniques: number }[]; npmDownloadsMonth?: number }, now = Date.now()): void {
   const last = ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, m.repo))).orderBy(desc(schema.metricSnapshots.at)).get();
   const values = { ownerId, repo: m.repo, stars: m.stars, forks: m.forks, viewsUniques14d: m.viewsUniques14d ?? null, referrers: m.referrers ?? null, npmDownloadsMonth: m.npmDownloadsMonth ?? null };
-  if (last && Date.now() - last.at < 20 * 3600 * 1000) ctx.db.update(schema.metricSnapshots).set(values).where(eq(schema.metricSnapshots.id, last.id)).run();
-  else ctx.db.insert(schema.metricSnapshots).values({ ...values, at: Date.now() }).run();
+  const postedSince = last && Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, m.repo), gt(schema.publications.publishedAt, last.at))).get());
+  if (last && now - last.at < 20 * 3600 * 1000 && !postedSince) ctx.db.update(schema.metricSnapshots).set(values).where(eq(schema.metricSnapshots.id, last.id)).run();
+  else ctx.db.insert(schema.metricSnapshots).values({ ...values, at: now }).run();
 }
 
 export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
@@ -134,15 +147,17 @@ export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
 /** 채널·문체별 성과 요약. 발행 7일 뒤 스타 증가, 발행 전 추세를 뺀 증가, 방문자·반응 평균. */
 export function performanceSummary(ctx: AppContext, ownerId: string): PerformanceSummary {
   const pubs = listPublicationsWithMetrics(ctx, ownerId);
-  const delta = (p: PublicationWithMetrics) => p.starDelta7d;
-  const excess = (p: PublicationWithMetrics) => p.excessStars7d;
+  // 같은 저장소에 비슷한 때 여러 채널로 올리면 스타 증가는 하나다. 글마다 전부 주면 모든 채널이 같은 성과로 보인다. 나눠서 센다.
+  const share = (p: PublicationWithMetrics, v: number | undefined) => (v === undefined ? undefined : v / (1 + (p.sharedWith ?? 0)));
+  const delta = (p: PublicationWithMetrics) => share(p, p.starDelta7d);
+  const excess = (p: PublicationWithMetrics) => share(p, p.excessStars7d);
   const uniq = (p: PublicationWithMetrics) => p.series.filter((s) => s.at > p.publishedAt).at(-1)?.uniques;
   const likes = (p: PublicationWithMetrics) => p.autoStats?.likes ?? p.manualStats?.likes;
   const avg = (xs: (number | undefined)[]) => { const v = xs.filter((x): x is number => x !== undefined); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined; };
   const group = <K extends string>(key: (p: PublicationWithMetrics) => K | undefined) => {
     const m = new Map<K, PublicationWithMetrics[]>();
     for (const p of pubs) { const k = key(p); if (k) m.set(k, [...(m.get(k) ?? []), p]); }
-    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
+    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, measured: ps.filter((p) => p.starDelta7d !== undefined).length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
   };
   return {
     byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
@@ -166,8 +181,9 @@ export function channelResultsForJudge(ctx: AppContext, ownerId: string): string
 }
 
 function computeChannelResults(ctx: AppContext, ownerId: string): string[] {
-  return performanceSummary(ctx, ownerId).byChannel.filter((g) => g.count >= 2).map((g) => [
-    `${g.key}: ${g.count} posts`,
+  // 표본 기준은 스타 수치가 있는 글 수다. 글이 셋이어도 수치가 하나뿐이면 평균이 그 하나다.
+  return performanceSummary(ctx, ownerId).byChannel.filter((g) => (g.measured ?? 0) >= 2).map((g) => [
+    `${g.key}: ${g.count} posts (${g.measured} with star data; gains split across same-repo posts within 7 days)`,
     g.avgExcessStars !== undefined ? `avg ${g.avgExcessStars > 0 ? "+" : ""}${g.avgExcessStars} stars beyond the prior trend in 7 days` : g.avgStarDelta !== undefined ? `avg +${g.avgStarDelta} stars in 7 days (no prior trend)` : "",
     g.avgLikes !== undefined ? `avg ${g.avgLikes} reactions` : "",
   ].filter(Boolean).join(", "));

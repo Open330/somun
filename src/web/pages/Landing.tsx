@@ -194,7 +194,9 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
 
       <section className="section" data-reveal>
         <h2>{t("무엇을 읽는가")}</h2>
-        <p className="lede">{t("프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 만든 요약만 올립니다.")}</p>
+        <p className="lede">
+          {t("프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 집계한 통계와 세션별 첫 프롬프트 앞 120자를 올립니다.")}
+        </p>
         <div className="three">
           <div className="principle">
             <h3>GitHub</h3>
@@ -203,7 +205,9 @@ export default function Landing({ onToken }: { onToken?: () => void }) {
           <div className="principle">
             <h3>{t("세션 업로더")}</h3>
             <p>
-              {tr("{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 요약해 요약만 올립니다.", { cmd: <code>npm run push</code> })}
+              {tr("{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 집계해 통계와 세션별 첫 프롬프트 앞 120자만 올립니다.", {
+                cmd: <code>npm run push</code>,
+              })}
             </p>
           </div>
           <div className="principle">
