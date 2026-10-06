@@ -68,11 +68,17 @@ const prose = (value: string) => value.replace(/https?:\/\/[^\s)]+/g, "").replac
 /** v1.2 = 1.2 */
 const canonical = (value: string) => value.replace(/^v/, "");
 
-/** text의 수치 중 source에서 찾지 못한 것. 순수 함수라 다이제스트 검증과 초안 린트가 같이 쓴다. */
+/**
+ * text의 수치 중 source에서 찾지 못한 것. 순수 함수라 다이제스트 검증과 초안 린트가 같이 쓴다.
+ * 단위가 붙은 수치(2s)는 같은 단위로만 맞는다(2ms와 다르다). 단위 없이 쓴 수치는 원자료의 같은 수에 단위가 붙어 있어도 맞는 것으로 본다.
+ */
 export function unsupportedNumbers(text: string, source: string): string[] {
-  const supported = new Set(numberTokens(prose(source)).map(canonical));
+  const tokens = numberTokens(prose(source)).map(canonical);
+  const supported = new Set([...tokens, ...tokens.map(withoutUnit)]);
   return numberTokens(prose(text)).filter((value) => !supported.has(canonical(value)));
 }
+
+const withoutUnit = (token: string) => token.replace(/(?<=\d)(?:ms|s|min|h|kb|mb|gb|tb)$/, "");
 
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko"): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
@@ -180,27 +186,51 @@ export function lintPassed(results: LintResult[]): boolean {
  * 초안에 쓰인 숫자 토큰. 버전(v1.2.0, 0.x), 횟수(61), 퍼센트(40%), 천 단위(4,102)를 하나의 토큰으로 본다.
  * 언어 간 비교용이라 단위 단어는 뺀다.
  */
-export function numberTokens(text: string): string[] {
+export function numberTokens(input: string): string[] {
+  const text = input.normalize("NFKC");
   const out = new Set<string>();
   for (const m of text.matchAll(/(?<![\w.])v?\d+(?:[.,]\d+)*(?:\.x)?%?(?![\w.])/gi)) {
+    const rest = text.slice((m.index ?? 0) + m[0].length);
     // 배수(3x, 3×, 3배)의 숫자는 아래에서 배수 토큰으로만 센다.
-    if (MULTIPLIER_SUFFIX.test(text.slice((m.index ?? 0) + m[0].length))) continue;
-    let t = m[0].toLowerCase();
-    if (/^\d{1,2}$/.test(t) && Number(t) <= 1) continue; // 0, 1 은 문장 안 조사·순서일 때가 많다
-    t = t.replace(/,/g, "");
-    out.add(t);
+    if (MULTIPLIER_SUFFIX.test(rest)) continue;
+    const raw = m[0].toLowerCase();
+    // 천 단위 쉼표(4,102)만 붙여 읽는다. 1,5나 1,2,3은 하나의 큰 수가 아니다.
+    const parts = /^v?\d{1,3}(?:,\d{3})+(?:\.\d+)?%?$/.test(raw) ? [raw.replace(/,/g, "")] : raw.split(",");
+    const last = parts.length - 1;
+    parts.forEach((part, i) => {
+      // 크기 단어(1k, 1 million, 1만)는 값으로 바꾸고, 시간·용량 단위(2s, 800MB)는 붙여 둔다. 단위가 다르면 다른 주장이다.
+      const unit = i === last ? unitAfter(rest) : undefined;
+      if (unit?.scale && /^\d+(?:\.\d+)?$/.test(part)) { out.add(String(Math.round(Number(part) * unit.scale * 1000) / 1000)); return; }
+      if (/^\d{1,2}$/.test(part) && Number(part) <= 1) return; // 0, 1 은 문장 안 조사·순서일 때가 많다
+      out.add(unit?.suffix && /^\d+(?:\.\d+)?$/.test(part) ? `${part}${unit.suffix}` : part);
+    });
   }
   // 배수는 별도 토큰으로 본다. 원문에 없는 "3배 빨라짐"을 잡기 위해.
-  for (const m of text.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?=[x×](?![\w-])|배(?![포치열경송달너터정우려]))/g)) out.add(`${m[1]}x`);
+  for (const m of text.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?=[xX×](?![\w-])|배(?![포치열경송달너터정우려]))/g)) out.add(`${m[1]}x`);
   for (const [re, token] of MULTIPLIER_WORDS) if (re.test(text)) out.add(token);
   return [...out];
+}
+
+/** 수 바로 뒤의 단위. prose()가 "800ms"를 "800 ms"로 떼어 두므로 공백 하나를 허용한다. 한국어 단위는 조사가 붙어도 읽는다(2초로). */
+function unitAfter(rest: string): { suffix?: string; scale?: number } | undefined {
+  const en = /^\s?(milliseconds?|ms|secs?|seconds?|s|mins?|minutes?|hrs?|hours?|h|ki?b|mi?b|gi?b|tb|k|thousand|million|billion)(?![a-z])/i.exec(rest);
+  const ko = /^\s?(밀리초|초|분|시간|천|만|억)(?=$|[^가-힣]|(?:로|에|만|은|는|이|가|을|를|도|의|씩)(?![가-힣]))/.exec(rest);
+  const word = (en?.[1] ?? ko?.[1])?.toLowerCase();
+  if (!word) return undefined;
+  const scale: Record<string, number> = { k: 1e3, thousand: 1e3, 천: 1e3, 만: 1e4, million: 1e6, 억: 1e8, billion: 1e9 };
+  if (scale[word]) return { scale: scale[word] };
+  if (/^(?:ms|milliseconds?|밀리초)$/.test(word)) return { suffix: "ms" };
+  if (/^(?:s|secs?|seconds?|초)$/.test(word)) return { suffix: "s" };
+  if (/^(?:mins?|minutes?|분)$/.test(word)) return { suffix: "min" };
+  if (/^(?:h|hrs?|hours?|시간)$/.test(word)) return { suffix: "h" };
+  return { suffix: word.replace("i", "") };
 }
 
 /**
  * 숫자 바로 뒤(띄어쓰기 없이)의 배수 표시. 소문자 x·× 뒤에 영숫자나 하이픈이 오면 배수가 아니다(1920x1080, 0x1F, 3 X-ray).
  * "배" 뒤에 포·치·열처럼 다른 낱말이 이어지면 배수가 아니다(배포, 배치, 배열).
  */
-const MULTIPLIER_SUFFIX = /^(?:[x×](?![\w-])|배(?![포치열경송달너터정우려]))/;
+const MULTIPLIER_SUFFIX = /^(?:[xX×](?![\w-])|배(?![포치열경송달너터정우려]))/;
 
 /** 숫자 없이 쓰는 배수 표현. 원문에 같은 배수가 없으면 지어낸 주장이다. 합성어(twice-weekly, 스물두 배)는 배수로 보지 않는다. */
 const MULTIPLIER_WORDS: [RegExp, string][] = [
@@ -209,6 +239,15 @@ const MULTIPLIER_WORDS: [RegExp, string][] = [
   [/(?<![가-힣])두\s?배(?![포치열경송달너터정우려])/, "2x"], [/(?<![가-힣])세\s?배(?![포치열경송달너터정우려])/, "3x"],
   [/(?<![가-힣])네\s?배(?![포치열경송달너터정우려])/, "4x"], [/(?<![가-힣])다섯\s?배(?![포치열경송달너터정우려])/, "5x"],
   [/(?<![가-힣])열\s?배(?![포치열경송달너터정우려])/, "10x"],
+  [/\b(?:doubled|two times)\b(?!-)/i, "2x"], [/\bthree times\b/i, "3x"],
+  [/\b(?:quadrupled|four-?fold|four times)\b(?!-)/i, "4x"], [/\bfive times\b/i, "5x"],
+  [/\b(?:ten-?fold|ten times|an? order of magnitude)\b(?!-)/i, "10x"], [/\borders of magnitude\b/i, "100x"],
+  [/\b(?:halved|cut (?:it )?in half|by half)\b/i, "0.5x"], [/절반|반으로\s?(?:줄|단축|감소)/, "0.5x"],
+  [/(?<![가-힣])백\s?배(?![포치열경송달너터정우려])/, "100x"],
+  // 막연한 크기. 원문에 같은 말이 없으면 지어낸 규모다.
+  [/몇\s?배|수십\s?배|수백\s?배/, "N배"],
+  [/\bhundreds of\b/i, "hundreds"], [/\bthousands of\b/i, "thousands"], [/\bdozens of\b/i, "dozens"], [/\bmillions of\b/i, "millions"],
+  [/(?<![가-힣])수백(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수백"], [/(?<![가-힣])수천(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수천"], [/(?<![가-힣])수십(?=\s?[개명건곳줄번만%]|\s(?!배))/, "수십"],
 ];
 
 /**

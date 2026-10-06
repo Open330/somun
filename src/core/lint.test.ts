@@ -154,8 +154,34 @@ describe("multiplier false positives", () => {
 
 it("compares numbers with attached units the same as spaced ones", () => {
   expect(unsupportedNumbers("Cold start went from 800 ms to 200 ms.", "Cold start 800ms → 200ms")).toEqual([]);
-  expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150"]);
+  expect(unsupportedNumbers("Now 150ms", "Cold start 800ms → 200ms")).toEqual(["150ms"]);
   expect(unsupportedNumbers("3x faster", "3x faster builds")).toEqual([]);
+});
+
+it("treats a changed unit, scale word, or vague magnitude as a different claim", () => {
+  // 단위가 바뀌면 다른 주장이다. 단위 없이 쓴 같은 수는 원자료와 맞는다.
+  expect(unsupportedNumbers("Startup takes 2ms", "Startup takes 2s")).toEqual(["2ms"]);
+  expect(unsupportedNumbers("Startup takes 2 seconds", "Startup takes 2s")).toEqual([]);
+  expect(unsupportedNumbers("시작 시간이 2초로 줄었다", "Startup takes 2s")).toEqual([]);
+  expect(unsupportedNumbers("Bundle is 800MB", "Bundle is 800KB")).toEqual(["800mb"]);
+  expect(unsupportedNumbers("Took 2 steps", "Took 2s")).toEqual([]);
+  // 크기 단어는 값으로 비교한다. 0·1 예외에 숨지 않는다.
+  expect(unsupportedNumbers("1k stars", "1,024 stars")).toEqual(["1000"]);
+  expect(unsupportedNumbers("used by 1 million developers", "100 stars")).toEqual(["1000000"]);
+  expect(unsupportedNumbers("1만 명이 씁니다", "10k users")).toEqual([]);
+  // 쉼표: 천 단위만 붙여 읽는다.
+  expect(unsupportedNumbers("15 s", "1,5 s")).toEqual(["15s"]);
+  expect(unsupportedNumbers("4102 stars", "4,102 stars")).toEqual([]);
+  // 대문자 배수, 말로 쓴 배수·크기.
+  expect(unsupportedNumbers("3X faster", "fixed 3 bugs")).toEqual(["3x"]);
+  expect(unsupportedNumbers("Memory use halved", "Memory use dropped")).toEqual(["0.5x"]);
+  expect(unsupportedNumbers("메모리가 절반으로 줄었다", "Memory use dropped")).toEqual(["0.5x"]);
+  expect(unsupportedNumbers("ten times faster", "faster")).toEqual(["10x"]);
+  expect(unsupportedNumbers("hundreds of developers", "developers")).toEqual(["hundreds"]);
+  expect(unsupportedNumbers("수백 개의 저장소", "저장소")).toEqual(["수백"]);
+  expect(unsupportedNumbers("수십 배 빨라졌다", "빨라졌다")).toEqual(["N배"]);
+  expect(unsupportedNumbers("１０배 빠름", "빠름")).toEqual(["10x"]);
+  expect(unsupportedNumbers("Memory use halved", "Memory use halved in v2")).toEqual([]);
 });
 
 it("asks LinkedIn posts to come in paragraphs", () => {
