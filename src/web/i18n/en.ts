@@ -492,8 +492,8 @@ export const en: Record<string, string> = {
   "릴리스, 머지된 PR, 마지막 릴리스 이후 커밋, 스타와 다운로드 임계, README의 한계 문구.":
     "Releases, merged PRs, commits since the last release, star and download thresholds, and limitations noted in the README.",
   "세션 업로더": "Session uploader",
-  "{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 요약해 요약만 올립니다.":
-    "{cmd} summarizes Claude Code, Codex, and oh-my-prompt sessions on your machine and uploads only the summaries.",
+  "{cmd}가 Claude Code, Codex, oh-my-prompt 세션을 로컬에서 집계해 통계와 세션별 첫 프롬프트 앞 120자만 올립니다.":
+    "{cmd} aggregates Claude Code, Codex, and oh-my-prompt sessions on your machine and uploads only the stats and the first 120 characters of each session's first prompt.",
   "npm · 블로그": "npm · blog",
   "월 다운로드 추이와 발행한 글. 마일스톤을 넘으면 글감 후보가 됩니다.":
     "Monthly download trends and published posts. Crossing a milestone makes it a candidate.",
@@ -1058,8 +1058,8 @@ export const en: Record<string, string> = {
   "무엇을 하는지 먼저. 이유와 한계는 근거가 있을 때만.": "Lead with what it does. Motivation and limitations only with evidence.",
   "첫 문장에 핵심을 두고 짧은 문단으로.": "Lead with the point, then use short paragraphs.",
   "짧은 본문. 채널에 맞는 말투와 길이.": "Brief text, with tone and length suited to the channel.",
-  "프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 만든 요약만 올립니다.":
-    "Connect project records and published posts. The session uploader sends only summaries prepared locally.",
+  "프로젝트 기록과 발행한 글을 연결합니다. 세션 업로더는 로컬에서 집계한 통계와 세션별 첫 프롬프트 앞 120자를 올립니다.":
+    "Connect project records and published posts. The session uploader sends stats computed locally plus the first 120 characters of each session's first prompt.",
   "말만 그럴듯하면": "When the words are just polished",
   "핵심을 남기면": "When the point comes through",
   "무엇을 하는지 흐림": "Unclear what it does",

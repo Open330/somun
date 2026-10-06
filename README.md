@@ -29,7 +29,7 @@
 
 You built a lot. Explaining it is the hard part.
 
-somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Copied drafts become voice examples, and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
+somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Drafts you edit before copying become voice examples (unedited copies only fill in as shape references), and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
 
 Today, publishing is manual. Drafts are grounded in supplied material and checked for selected issues, but unsupported claims and awkward wording can still slip through. Review the source before posting.
 
@@ -66,7 +66,7 @@ Today, publishing is manual. Drafts are grounded in supplied material and checke
    └─────────────────┘
 ```
 
-**Facts from the system, voice from you.** The prompt asks the model to use numbers from the raw material (release notes, PR titles, commits, README, repo stats) and omit numeric claims without supporting material. The checker flags selected unsupported numbers rather than guaranteeing factual accuracy. The digest is checked too: summary lines flagged by the numeric checker are excluded from the judge and draft inputs, and stay visible on the candidate page. Draft numbers flagged by the checker — including multipliers like "3x" or "twice" — ask for your confirmation when copying.
+**Facts from the system, voice from you.** The prompt asks the model to use numbers from the raw material (release notes, PR titles, commits, README, repo stats) and omit numeric claims without supporting material. The checker flags selected unsupported numbers rather than guaranteeing factual accuracy. The digest is checked too: summary lines flagged by the numeric checker are excluded from the judge and draft inputs, and stay visible on the candidate page. Draft numbers flagged by the checker — including multipliers like "3x" or "twice" — ask for your confirmation when copying. The checker compares written digits and a short list of multiplier words; it does not catch changed units (2s vs 2ms), most spelled-out or vague quantities ("halved", "hundreds"), a real number used with a different meaning, or claims with no number at all ("fastest", "first").
 
 <br />
 
@@ -146,7 +146,7 @@ cp .env.example .env            # set GITHUB_TOKEN and GEMINI_API_KEYS; SOMUN_AL
 npm run dev                     # API on :8790, web on :5180
 
 npm run seed                    # best-practice voice examples (once)
-npm run push -- --sources omp --days 14   # optional: attach oh-my-prompt session summaries
+npm run push -- --sources omp --days 14   # optional: attach session stats (+ first 120 chars of each first prompt)
 ```
 
 Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.
