@@ -43,4 +43,4 @@ export class GitHubClient {
 
 export type GhRepo = { full_name: string; description: string | null; html_url: string; homepage: string | null; stargazers_count: number; forks_count: number; language: string | null; license: { spdx_id: string } | null; created_at: string; pushed_at: string; fork: boolean; archived: boolean; private?: boolean };
 export type GhRelease = { tag_name: string; name: string; body: string | null; published_at: string; html_url: string };
-export type GhPull = { number: number; title: string; merged_at: string | null; html_url: string };
+export type GhPull = { number: number; title: string; merged_at: string | null; html_url: string; updated_at?: string; user?: { login?: string; type?: string } | null };

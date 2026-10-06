@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { collectAll, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -204,4 +204,17 @@ it("does not read a repository name as a missing permission and skips squash-mer
   const now = Date.now();
   const c = (sha: string, message: string) => ({ sha, commit: { message, committer: { date: new Date(now - 3600e3).toISOString() } } });
   expect(commitBatch(["feat: a (#1)", "fix: b (#2)", "Add c (#3)", "Add d (#4)", "Add e (#5)"].map((m, i) => c(`s${i}`, m)), now - 14 * 86400e3)).toBeNull();
+});
+
+it("reads closed PRs past the first page until the collection window and drops bot PRs", async () => {
+  const now = Date.now(), since = now - 14 * 86400e3;
+  const pr = (n: number, daysAgo: number, bot = false) => ({ number: n, title: `PR ${n}`, merged_at: new Date(now - daysAgo * 86400e3).toISOString(), html_url: `u${n}`, updated_at: new Date(now - daysAgo * 86400e3).toISOString(), user: bot ? { login: "dependabot[bot]", type: "Bot" } : { login: "me", type: "User" } });
+  const page1 = Array.from({ length: 100 }, (_, i) => pr(i, 1, i % 2 === 0));
+  const page2 = [pr(200, 3), pr(201, 20)];
+  const calls: string[] = [];
+  const gh = { get: async (path: string) => { calls.push(path); return /[?&]page=1\b/.test(path) ? page1 : /[?&]page=2\b/.test(path) ? page2 : []; } } as unknown as Parameters<typeof closedPullsSince>[0];
+  const prs = await closedPullsSince(gh, "a/b", since);
+  expect(prs?.some((p) => p.number === 200)).toBe(true);
+  expect(prs?.some((p) => p.user?.type === "Bot")).toBe(false);
+  expect(calls).toHaveLength(2);
 });

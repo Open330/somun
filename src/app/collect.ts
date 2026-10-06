@@ -78,6 +78,22 @@ export async function pagedList<T>(gh: GitHubClient, path: string, maxPages = 10
   return out;
 }
 
+/**
+ * 수집 창 안에 갱신된 닫힌 PR을 끝까지 읽는다(최근 갱신순, 최대 maxPages쪽). 예전에는 30개만 읽어,
+ * 봇 PR이나 머지하지 않고 닫은 PR이 많은 저장소에서 실제로 머지된 PR이 빠졌다. 봇이 연 PR은 글감이 아니므로 뺀다.
+ */
+export async function closedPullsSince(gh: GitHubClient, repo: string, since: number, maxPages = 5): Promise<GhPull[] | null> {
+  const out: GhPull[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const list = await gh.get<GhPull[]>(`/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=${page}`);
+    if (!list) return page === 1 ? null : out;
+    out.push(...list.filter((p) => p.user?.type !== "Bot" && !p.user?.login?.endsWith("[bot]")));
+    const oldest = list.at(-1)?.updated_at;
+    if (list.length < 100 || (oldest && Date.parse(oldest) < since)) break;
+  }
+  return out;
+}
+
 /** 진행 중 글감이 되는 최소 커밋 수. 오타·설정 몇 개로 글감이 생기지 않게 한다. */
 export const COMMIT_BATCH_MIN = 5;
 /** 독자에게 보이지 않는 커밋. Conventional Commits의 문서·테스트·CI·잡일과 병합·의존성 갱신·릴리스 커밋. */
@@ -178,7 +194,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
         pagedList<GhRelease>(gh, `/repos/${name}/releases`),
-        gh.get<GhPull[]>(`/repos/${name}/pulls?state=closed&sort=updated&direction=desc&per_page=30`),
+        closedPullsSince(gh, name, since),
         gh.get<{ uniques: number }>(`/repos/${name}/traffic/views`),
         gh.get<{ referrer: string; uniques: number }[]>(`/repos/${name}/traffic/referrers`),
         gh.get<{ content: string }>(`/repos/${name}/contents/package.json`),
