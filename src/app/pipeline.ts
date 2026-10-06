@@ -64,19 +64,27 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
  * 글감 창에 묶인 릴리스와, 최신 릴리스 뒤에 머지되어 아직 릴리스되지 않은 PR.
  * 초안이 창의 모든 변경을 최신 태그 하나에 몰아 "v0.8.56 adds …"라고 쓰지 않게 사실로 넘긴다.
  */
-export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
+export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number, title = getCandidateRow(ctx, ownerId, candidateId).title): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
   const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
   const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
   // 기준은 글감 제목의 릴리스(같은 줄기의 최신판). 옛 줄기의 백포트가 늦게 나왔다고 그 사이 main의 PR을 출시된 것으로 보지 않는다.
-  const titleTag = getCandidateRow(ctx, ownerId, candidateId).title.split(" ").pop();
-  const latestAt = (releases.find((s) => String((s.payload as { tag?: string }).tag) === titleTag) ?? releases.at(-1))?.occurredAt;
+  const latestAt = (releases.find((s) => s.title === title) ?? releases.at(-1))?.occurredAt;
   // 릴리스 직후의 정리 PR(chore(release): 0.6.0, changelog, version bump)은 그 릴리스의 일부다.
-  const housekeeping = /^(?:chore|ci|build|docs)(?:\([^)]*\))?!?:|\brelease\b|changelog|version bump|bump version/i;
+  const housekeeping = /^(?:chore|build|ci)\(release\)|^(?:chore|build|ci)(?:\([^)]*\))?!?:\s*(?:release|prepare release|bump version|version bump|update changelog)\b|^(?:release|prepare release|bump version|version bump)\b|^v?\d+\.\d+(?:\.\d+)?$|\bupdate changelog\b/i;
   const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt && !housekeeping.test(s.title)).map((s) => s.title);
   return {
     ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
     ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
   };
+}
+
+/**
+ * 사용자가 직접 보류한 글감인가(판단 번복 기록이 "defer"). 보류 직전에 돌던 초안이 끝나도 보류를 풀지 않는다.
+ * 판단이 보류한 글감에 사용자가 초안을 요청한 경우는 해당하지 않는다(그 초안은 검수 대기로 간다).
+ */
+function editorDeferred(ctx: AppContext, judgmentId: number | null): boolean {
+  if (!judgmentId) return false;
+  return ctx.db.select({ o: schema.judgments.overriddenDecision }).from(schema.judgments).where(eq(schema.judgments.id, judgmentId)).get()?.o === "defer";
 }
 
 /** 탐색으로 덧붙일 수 있는 일상 채널. */
@@ -113,7 +121,7 @@ export function announcedSince(ctx: AppContext, ownerId: string, candidateId: nu
 
 export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
-  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId) } };
+  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId, row.title) } };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
@@ -286,7 +294,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
   const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
-  ctx.db.update(schema.candidates).set({ status: c.status === "published" || c.status === "deferred" ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+  ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });
   return { kind: "draft", draftId };

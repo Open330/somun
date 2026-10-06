@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { outranks } from "../core/releases.js";
 import { clusterKeyFor, inWindow, strongerType, windowKey, type CandidateType, type SignalLike } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Evidence, SignalKind } from "../shared/types.js";
@@ -40,12 +41,15 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           let title = existing.title;
           if (type !== existing.type) title = ck.title;
           else if (ck.type === "release" && existing.type === "release") {
-            if (outranksTitle(String(s.payload.tag ?? ""), s.occurredAt, existing.title.split(" ").pop() ?? "", Math.max(...tx.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"))).all().map((r) => r.at), -Infinity))) title = ck.title;
+            // 지금 제목의 릴리스(같은 제목의 릴리스 신호)와 비교한다. 제목을 쪼개 태그를 추측하지 않는다.
+            const current = tx.select().from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"), eq(schema.signals.title, existing.title))).get();
+            if (!current || outranks(String(s.payload.tag ?? ""), s.occurredAt, String((current.payload as { tag?: string }).tag ?? ""), current.occurredAt)) title = ck.title;
           }
           // 판단 뒤에 더 강한 신호(새 릴리스·유형 승격)가 합쳐지면 예전 판단이 지금 내용을 설명하지 못한다. 다시 판단받도록 되돌린다.
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
-          const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status);
-          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(cur.windowReleaseNotes, s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          const hasDrafts = Boolean(tx.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.candidateId, existing.id)).get());
+          const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status) && !hasDrafts;
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
@@ -81,16 +85,11 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   return { inserted, candidates: [...touched] };
 }
 
-/**
- * 새 릴리스가 지금 제목의 릴리스를 대신하는가.
- * 같은 줄기(숫자 앞 접두사가 같은 태그: v8.3.3과 v6.4.4)는 버전이 높은 쪽이다. 옛 줄기의 백포트가 늦게 나왔다고 제목이 되지 않게.
- * 다른 패키지(pkg-a@, pkg-b@)는 버전을 비교할 수 없으므로 더 최근에 게시한 쪽이다.
- */
-export function outranksTitle(tag: string, at: number, currentTag: string, currentAt: number): boolean {
-  const line = (t: string) => t.replace(/\d.*$/, "");
-  const byVersion = tag.localeCompare(currentTag, undefined, { numeric: true });
-  if (line(tag) === line(currentTag)) return byVersion > 0;
-  return at > currentAt || (at === currentAt && byVersion > 0);
+/** 시각 없이 저장된 예전 노트에 릴리스 신호의 게시 시각을 채운다(정렬해 최신을 남길 수 있게). */
+function withNoteTimes(tx: Pick<AppContext["db"], "select">, candidateId: number, notes: Evidence["windowReleaseNotes"]): Evidence["windowReleaseNotes"] {
+  if (!notes?.some((n) => n.at === undefined)) return notes;
+  const times = new Map(tx.select({ payload: schema.signals.payload, at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, candidateId), eq(schema.signals.kind, "release"))).all().map((r) => [String((r.payload as { tag?: string }).tag ?? ""), r.at]));
+  return notes.map((n) => (n.at === undefined ? { ...n, at: times.get(n.tag) } : n));
 }
 
 /** 릴리스 신호의 노트를 글감 근거에 쌓는다(같은 태그는 한 번). */

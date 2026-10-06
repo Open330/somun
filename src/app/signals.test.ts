@@ -6,7 +6,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { Evidence } from "../shared/types.js";
 import type { AppContext } from "./context.js";
 import { migrateLegacyCandidates } from "./candidates.js";
-import { ingestSignals, outranksTitle } from "./signals.js";
+import { ingestSignals } from "./signals.js";
 
 const DAY = 86400e3;
 function makeCtx(): AppContext {
@@ -132,9 +132,16 @@ it("keeps the newest release notes when a window has more than ten releases", ()
   expect(notes).not.toContain("v0.0.0");
 });
 
-it("does not let a late backport of an older line take the title", () => {
-  expect(outranksTitle("v6.4.4", 2000, "v8.3.3", 1000)).toBe(false);
-  expect(outranksTitle("v8.3.4", 3000, "v8.3.3", 1000)).toBe(true);
-  expect(outranksTitle("pkg-b@0.1.0", 3000, "pkg-a@1.2.0", 1000)).toBe(true);
-  expect(outranksTitle("pkg-b@0.1.0", 500, "pkg-a@1.2.0", 1000)).toBe(false);
+it("does not let a late backport of an older line take the title, but lets a final release replace its rc", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/v"], enabled: true }).run();
+  const rel = (tag: string, at: number) => ({ kind: "release" as const, repo: "a/v", ref: `r:${tag}`, title: `a/v ${tag}`, payload: { tag, body: tag }, occurredAt: at });
+  ingestSignals(ctx, "o", 1, [rel("v8.3.3", now - 3 * 3600e3)], {}, ev("a/v"));
+  ingestSignals(ctx, "o", 1, [rel("v6.4.4", now - 3600e3)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.3.3");
+  ingestSignals(ctx, "o", 1, [rel("v9.0.0-rc.1", now - 1800e3)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.3.3");
+  ingestSignals(ctx, "o", 1, [rel("v8.4.0", now)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.4.0");
 });

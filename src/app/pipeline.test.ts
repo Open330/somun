@@ -290,10 +290,21 @@ it("does not call release housekeeping PRs unreleased work", () => {
   sig("pr_merged", "p2", "Add grouped session views", 3000);
   ctx.db.update(schema.candidates).set({ title: "vitejs/vite v0.6.0" }).run();
   expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Add grouped session views"]);
+  // 정리 PR이 아닌 일반 PR은 이름에 release·build가 있어도 미릴리스 작업이다.
+  sig("pr_merged", "p3", "fix: release file handles on shutdown", 3100);
+  sig("pr_merged", "p4", "build: drop Node 18 support", 3200);
+  expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Add grouped session views", "fix: release file handles on shutdown", "build: drop Node 18 support"]);
 });
 
-it("keeps a candidate deferred when drafts that were already running finish", () => {
-  ctx.db.update(schema.candidates).set({ status: "deferred", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+it("keeps an editor-deferred candidate deferred when running drafts finish, but sends drafts of a judge-deferred one to review", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "r" } });
+  setCandidateStatus(ctx, "test", id, "deferred");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft" } });
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("deferred");
+  // 판단이 보류한 글감에 사용자가 초안을 요청하면 검수 대기로 간다.
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 1, lesson: 0, novelty: 1, audience: 1 }, reasoning: "r" } });
+  ctx.db.update(schema.candidates).set({ status: "deferred" }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft 2" } });
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("drafted");
 });

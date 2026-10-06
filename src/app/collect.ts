@@ -16,7 +16,8 @@ import { collectBlogSource } from "./collect-blog.js";
 import { emit, isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
-import { ingestSignals, latestForRepo, outranksTitle, type IncomingSignal } from "./signals.js";
+import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
+import { representative } from "../core/releases.js";
 import { listEnabledSources, markPolled } from "./sources.js";
 
 const DAY = 24 * 3600 * 1000;
@@ -98,13 +99,13 @@ export async function closedPullsSince(gh: GitHubClient, repo: string, since: nu
 }
 
 /**
- * 저장소의 "최신판". 글감 제목과 같은 규칙(같은 줄기는 높은 버전, 다른 패키지는 최근 게시)으로 고른다.
- * 게시일만 보면 옛 줄기의 백포트(vite v6.4.4)가 최신판이 된다. 정식판이 있으면 프리릴리스는 고르지 않는다.
+ * 근거에 적을 "최신판". 글감 제목과 같은 규칙(core/releases)으로, 같은 범위에서 고른다:
+ * 수집 창 안에 릴리스가 있으면 그중에서(제목도 창 안 릴리스 신호로 정해진다), 없으면 전체에서.
+ * 게시일만 보면 옛 줄기의 백포트(vite v6.4.4)가 최신판이 된다.
  */
-export function latestRelease(releases: GhRelease[]): GhRelease | undefined {
-  const stable = releases.filter((r) => !r.prerelease);
-  const pool = stable.length ? stable : releases;
-  return pool.reduce<GhRelease | undefined>((best, r) => (!best || outranksTitle(r.tag_name, Date.parse(r.published_at), best.tag_name, Date.parse(best.published_at)) ? r : best), undefined);
+export function latestRelease(releases: GhRelease[], since = -Infinity): GhRelease | undefined {
+  const inWindow = releases.filter((r) => Date.parse(r.published_at) >= since);
+  return representative(inWindow.length ? inWindow : releases, (r) => r.tag_name, (r) => Date.parse(r.published_at));
 }
 
 /** 진행 중 글감이 되는 최소 커밋 수. 오타·설정 몇 개로 글감이 생기지 않게 한다. */
@@ -291,7 +292,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         } catch { /* package.json 파싱 실패는 무시 */ }
       }
 
-      const latest = latestRelease(allReleases);
+      const latest = latestRelease(allReleases, since);
       // 커밋 창: 이 저장소를 마지막으로 다이제스트한 시각부터. 없으면 마지막 릴리스나 14일.
       const digestedAt = lastDigestAt(ctx, ownerId, name);
       const sinceIso = new Date(digestedAt ?? (latest ? Math.min(Date.parse(latest.published_at), since) : since)).toISOString();
