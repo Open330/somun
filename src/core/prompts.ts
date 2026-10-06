@@ -19,6 +19,7 @@ export type EvidenceLike = {
   experimental?: string[];
   /** 이 글감에 묶인 릴리스 태그(오래된 것부터). 둘 이상이면 변경을 최신 태그 하나에 몰아 쓰지 않게 알린다. 프롬프트를 만들 때 채운다. */
   windowReleases?: string[];
+  windowReleaseNotes?: { tag: string; notes: string }[];
   /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
   unreleasedPrTitles?: string[];
 };
@@ -96,7 +97,9 @@ export function numbersLine(e: EvidenceLike): string {
 export function rawBlock(c: CandidateLike, hasProfile = false): string {
   const e = c.evidence;
   return [
-    e.releaseNotes ? `## Release notes\n${e.releaseNotes.slice(0, 3000)}` : "",
+    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, 3000)}` : "",
+    // 같은 창의 다른 릴리스 노트. 모노레포·연속 릴리스에서 최신 노트 하나만 보면 앞선 변경이 빠진다.
+    ...(e.windowReleaseNotes ?? []).filter((r) => r.tag !== e.version && r.notes.trim()).slice(-6).map((r) => `## Release notes (${r.tag})\n${r.notes.slice(0, 1500)}`),
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",
     e.commitSubjects?.length ? `## Commit subjects since last release\n- ${e.commitSubjects.slice(0, 60).join("\n- ")}` : "",
     e.ompSummary ? `## Agent session summary (what the author struggled with)\n${e.ompSummary}` : "",

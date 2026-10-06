@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { listInbox } from "./candidates.js";
+import { listInbox, refreshEvidence } from "./candidates.js";
 import type { CandidateStatus } from "../shared/types.js";
 
 let ctx: AppContext;
@@ -70,4 +70,15 @@ it("returns over 200 actionable candidates with a constant number of database qu
 it("returns an empty array for an owner without candidates", () => {
   candidate("new", 1, "b");
   expect(listInbox(ctx, "a")).toEqual([]);
+});
+
+it("refreshes the current window's version but keeps a past window's own release", () => {
+  const now = Date.now();
+  const insert = (key: string, createdAt: number, version: string) => Number(ctx.db.insert(schema.candidates).values({ ownerId: "a", repo: "a/repo", type: "release", title: `a/repo ${version}`, key, evidence: { repo: "a/repo", repoUrl: "u", version, releaseNotes: `${version} notes` }, status: "judged", createdAt, updatedAt: createdAt }).run().lastInsertRowid);
+  const old = insert("old", now - 20 * 86400e3, "v1.0");
+  const cur = insert("cur", now - 86400e3, "v1.0");
+  refreshEvidence(ctx, "a", "a/repo", { repo: "a/repo", repoUrl: "u", version: "v1.1", releaseNotes: "v1.1 notes", stars: 9 });
+  const ev = (id: number) => ctx.db.select().from(schema.candidates).all().find((c) => c.id === id)?.evidence as { version?: string; releaseNotes?: string; stars?: number };
+  expect(ev(old)).toMatchObject({ version: "v1.0", releaseNotes: "v1.0 notes", stars: 9 });
+  expect(ev(cur)).toMatchObject({ version: "v1.1", releaseNotes: "v1.1 notes" });
 });

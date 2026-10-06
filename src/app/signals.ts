@@ -40,19 +40,19 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           let title = existing.title;
           if (type !== existing.type) title = ck.title;
           else if (ck.type === "release" && existing.type === "release") {
-            // 비교 기준은 지금 제목의 태그. evidence.version은 수집 시점의 값이라 이번 묶음의 다른 릴리스와 어긋날 수 있다.
-            const oldTag = existing.title.split(" ").pop() ?? cur.version ?? "";
-            const newTag = String(s.payload.tag ?? "");
-            if (newTag.localeCompare(oldTag, undefined, { numeric: true }) > 0) title = ck.title;
+            // 가장 최근에 게시한 릴리스가 제목이 된다. 태그 문자열 비교는 모노레포(pkg-b@0.1.0 > pkg-a@1.2.0)에서 틀린다.
+            const latestAt = Math.max(...tx.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"))).all().map((r) => r.at), -Infinity);
+            const newer = String(s.payload.tag ?? "").localeCompare(existing.title.split(" ").pop() ?? "", undefined, { numeric: true }) > 0;
+            if (s.occurredAt > latestAt || (s.occurredAt === latestAt && newer)) title = ck.title;
           }
           // 판단 뒤에 더 강한 신호(새 릴리스·유형 승격)가 합쳐지면 예전 판단이 지금 내용을 설명하지 못한다. 다시 판단받도록 되돌린다.
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
           const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status);
-          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(cur.windowReleaseNotes, s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
-          const ev: Evidence = { ...evidence, milestones: milestone ? [milestone] : undefined };
+          const ev: Evidence = { ...evidence, windowReleaseNotes: withReleaseNote(undefined, s), milestones: milestone ? [milestone] : undefined };
           candidateId = Number(tx.insert(schema.candidates).values({ ownerId, type: ck.type, title: ck.title, repo: s.repo, key, evidence: ev as Record<string, unknown>, status: "new", createdAt: now, updatedAt: now }).run().lastInsertRowid);
           touched.add(key);
         }
@@ -82,6 +82,14 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   });
   if (inserted) emit(ctx, ownerId, { resource: "candidates" });
   return { inserted, candidates: [...touched] };
+}
+
+/** 릴리스 신호의 노트를 글감 근거에 쌓는다(같은 태그는 한 번). */
+function withReleaseNote(notes: Evidence["windowReleaseNotes"], s: IncomingSignal): Evidence["windowReleaseNotes"] {
+  if (s.kind !== "release") return notes;
+  const tag = String(s.payload.tag ?? s.ref);
+  if (notes?.some((n) => n.tag === tag)) return notes;
+  return [...(notes ?? []), { tag, notes: String(s.payload.body ?? "").slice(0, 1500) }].slice(-10);
 }
 
 export function latestForRepo(ctx: AppContext, ownerId: string, repo: string) {

@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { inWindow } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Channel, Decision, Draft, Evidence, FeedbackReason, Judgment, Publication, SignalKind } from "../shared/types.js";
 import { emit, NotFoundError, type AppContext } from "./context.js";
@@ -109,7 +110,9 @@ export function refreshEvidence(ctx: AppContext, ownerId: string, repo: string, 
     const limitationsSource = keepDigest ? "digest" as const : incoming.limitationsSource ?? "readme" as const;
     // 값이 없는 필드(일시적 조회 실패)는 기존 사실을 지우지 않는다.
     const defined = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v !== undefined)) as Partial<Evidence>;
-    const merged: Evidence = { ...cur, ...defined, limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary };
+    // 지난 창의 글감은 자기 릴리스를 설명한다. 새 릴리스의 버전·노트로 덮어쓰지 않는다.
+    const past = !inWindow(c.createdAt, Date.now());
+    const merged: Evidence = { ...cur, ...defined, ...(past ? { version: cur.version, releaseNotes: cur.releaseNotes, commitSubjects: cur.commitSubjects } : {}), limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary, windowReleaseNotes: cur.windowReleaseNotes };
     ctx.db.update(schema.candidates).set({ evidence: merged as Record<string, unknown> }).where(eq(schema.candidates.id, c.id)).run();
     n++;
   }

@@ -103,3 +103,18 @@ it("keeps PRs that shipped in the latest release out of a later in-progress cand
   const attached = ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "pr_merged" && s.candidateId === cand?.id).map((s) => s.ref);
   expect(attached).toEqual(["pr3"]);
 });
+
+it("titles a multi-release window by the most recently published release and keeps every release note", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/mono"], enabled: true }).run();
+  const rel = (tag: string, at: number, body: string) => ({ kind: "release" as const, repo: "a/mono", ref: `r:${tag}`, title: `a/mono ${tag}`, payload: { tag, body }, occurredAt: at });
+  ingestSignals(ctx, "o", 1, [rel("pkg-a@1.2.0", now - 3600e3, "A notes")], {}, ev("a/mono"));
+  ingestSignals(ctx, "o", 1, [rel("pkg-b@0.1.0", now - 7200e3, "B notes")], {}, ev("a/mono"));
+  let cand = ctx.db.select().from(schema.candidates).get();
+  expect(cand?.title).toBe("a/mono pkg-a@1.2.0");
+  ingestSignals(ctx, "o", 1, [rel("pkg-c@0.0.1", now, "C notes")], {}, ev("a/mono"));
+  cand = ctx.db.select().from(schema.candidates).get();
+  expect(cand?.title).toBe("a/mono pkg-c@0.0.1");
+  expect((cand?.evidence as Evidence).windowReleaseNotes?.map((n) => n.tag)).toEqual(["pkg-a@1.2.0", "pkg-b@0.1.0", "pkg-c@0.0.1"]);
+});
