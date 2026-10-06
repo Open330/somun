@@ -1,4 +1,5 @@
 import { localeOf, say } from "../../app/i18n.js";
+import { recordLocalUsage } from "../../app/llm-usage.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
@@ -204,7 +205,15 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/jobs/pending", (c) => c.json(pendingJobs(ctx, c.get("ownerId"))));
   app.post("/jobs/:id/claim", async (c) => c.json(claimJob(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ runner: z.string().min(1).max(200) }))).runner)));
   app.post("/jobs/:id/check", async (c) => c.json(checkLocalResult(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().max(200_000) })))));
-  app.post("/jobs/:id/complete", async (c) => c.json(await completeJob(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional() })))));
+  const localUsage = z.object({ provider: z.enum(["anthropic", "openai"]), model: z.string().min(1).max(100), startedAt: z.number(), latencyMs: z.number().min(0), inputTokens: z.number().min(0), outputTokens: z.number().min(0), cachedInputTokens: z.number().min(0), status: z.enum(["success", "error"]) });
+  app.post("/jobs/:id/complete", async (c) => {
+    const ownerId = c.get("ownerId");
+    const { usage, ...input } = await body(c, z.object({ claimToken: z.string().uuid(), resultJson: z.string().optional(), error: z.string().optional(), model: z.string().optional(), usage: z.array(localUsage).max(5).optional() }));
+    const result = await completeJob(ctx, ownerId, id(c.req.param("id")), input);
+    // 로컬 워커(사용자 구독의 Claude Code·Codex)가 쓴 호출. 반영 여부와 상관없이 호출은 일어났으므로 기록한다.
+    if (usage?.length) recordLocalUsage(ctx, ownerId, usage);
+    return c.json(result);
+  });
   const sessionsBody = z.object({ repos: z.array(z.object({ repo: z.string(), summary: z.string(), sessions: z.array(z.object({ sessionId: z.string(), source: z.string(), startedAt: z.number(), promptCount: z.number(), retries: z.number().optional(), topic: z.string() })) })) });
   app.post("/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));
   app.post("/omp/sessions", async (c) => c.json(ingestSessions(ctx, c.get("ownerId"), (await body(c, sessionsBody)).repos)));

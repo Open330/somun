@@ -8,7 +8,10 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Job } from "../src/shared/types.js";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import type { Job, LocalUsage } from "../src/shared/types.js";
+import { claudeUsage, codexUsage } from "../src/core/agent-usage.js";
 import { call } from "./_client.js";
 
 /** 프롬프트는 stdin으로. 중첩 실행을 막는 에이전트 환경변수는 지운다. */
@@ -49,19 +52,35 @@ function extractJson(text: string): unknown {
   }
 }
 
+/** Codex는 출력에 모델 이름을 싣지 않는다. 사용자의 Codex 설정에서 읽고, 없으면 "codex". */
+function codexModel(): string {
+  try { return /^\s*model\s*=\s*"([^"]+)"/m.exec(readFileSync(join(homedir(), ".codex", "config.toml"), "utf8"))?.[1] ?? "codex"; } catch { return "codex"; }
+}
+
+/** 이 작업에서 쓴 CLI 호출(본 호출 + 보정). 완료 보고에 함께 보낸다. */
+let callUsage: LocalUsage[] = [];
+
 async function runAgent(job: Job): Promise<{ json: unknown; model: string }> {
   const prompt = `${job.system}\n\n---\n${job.user}\n\n---\nRespond with a single JSON object matching this JSON Schema and nothing else (no prose, no code fence):\n${job.schemaJson}`;
+  const startedAt = Date.now();
+  const provider = cli === "codex" ? "openai" as const : "anthropic" as const;
+  const failed = (model: string) => callUsage.push({ provider, model, startedAt, latencyMs: Date.now() - startedAt, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 });
   if (cli === "claude") {
-    const stdout = await run("claude", ["-p", "--output-format", "json", "--max-turns", "1"], prompt);
-    const outer = JSON.parse(stdout) as { result?: unknown; model?: string };
-    return { json: extractJson(typeof outer.result === "string" ? outer.result : JSON.stringify(outer.result)), model: outer.model ?? "claude-code" };
+    let stdout: string;
+    try { stdout = await run("claude", ["-p", "--output-format", "json", "--max-turns", "1"], prompt); } catch (e) { failed("claude-code"); throw e; }
+    const outer = JSON.parse(stdout) as { result?: unknown; model?: string; modelUsage?: Record<string, never> };
+    callUsage.push(...claudeUsage(outer, startedAt));
+    return { json: extractJson(typeof outer.result === "string" ? outer.result : JSON.stringify(outer.result)), model: Object.keys(outer.modelUsage ?? {})[0] ?? outer.model ?? "claude-code" };
   }
   if (cli === "codex") {
-    const stdout = await run("codex", ["exec", "--skip-git-repo-check", "--json", "-"], prompt);
+    const model = codexModel();
+    let stdout: string;
+    try { stdout = await run("codex", ["exec", "--skip-git-repo-check", "--json", "-"], prompt); } catch (e) { failed(model); throw e; }
     const lines = stdout.trim().split("\n").map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter((x): x is Record<string, unknown> => Boolean(x));
+    callUsage.push(...codexUsage(lines, model, startedAt, Date.now() - startedAt));
     const last = [...lines].reverse().find((e) => e.type === "item.completed" && (e.item as { type?: string })?.type === "agent_message");
     const text = (last?.item as { text?: string })?.text ?? stdout;
-    return { json: extractJson(text), model: "codex" };
+    return { json: extractJson(text), model };
   }
   throw new Error(`unknown cli ${cli}`);
 }
@@ -93,13 +112,14 @@ async function tick(): Promise<number> {
   for (const job of jobs) {
     const { claimed, claimToken } = await call<{ claimed: boolean; claimToken?: string }>(`/jobs/${job.id}/claim`, { runner });
     if (!claimed || !claimToken) continue;
+    callUsage = [];
     try {
       let { json, model } = await runAgent(job);
       if (job.kind === "draft") ({ json, model } = await repair(job, claimToken, { json, model }));
-      const { applied } = await call<{ applied: boolean }>(`/jobs/${job.id}/complete`, { claimToken, resultJson: JSON.stringify(json), model });
+      const { applied } = await call<{ applied: boolean }>(`/jobs/${job.id}/complete`, { claimToken, resultJson: JSON.stringify(json), model, usage: callUsage.slice(0, 5) });
       console.log(`${applied ? "done" : "not applied"} ${job.kind}${job.channel ? `/${job.channel}` : ""} #${job.id}`);
     } catch (e) {
-      await call(`/jobs/${job.id}/complete`, { claimToken, error: String((e as Error).message ?? e).slice(0, 500) });
+      await call(`/jobs/${job.id}/complete`, { claimToken, error: String((e as Error).message ?? e).slice(0, 500), usage: callUsage.slice(0, 5) });
       console.error(`failed #${job.id}: ${(e as Error).message}`);
     }
   }

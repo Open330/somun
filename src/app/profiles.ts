@@ -4,7 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import { modelFor, runLlm } from "../infra/llm/providers.js";
-import { recordLlmUsage } from "./llm-usage.js";
+import { recordFailedAttempt, recordLlmUsage } from "./llm-usage.js";
 import { guardsModelEndpoint } from "./net-policy.js";
 import type { JobMeta, RepoProfile, RepoProfileView } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
@@ -145,8 +145,8 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const startedAt = Date.now();
   let res;
   reserveSharedExecution(ctx, ownerId, Date.now(), cfg);
-  try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg) }); }
-  catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
+  try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); }
+  catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest"), error: err }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });
   return { profile: normalize(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` };
 }

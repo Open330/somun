@@ -81,10 +81,14 @@ export class UsageReporter {
       this.log.info({ sent: rows.length, accepted: j.accepted, duplicates: j.duplicates }, "usage reported");
       return { sent: rows.length, failed: 0 };
     } catch (e) {
+      let exhausted = 0;
       for (const r of rows) {
         const attempts = r.attempts + 1;
+        if (attempts >= MAX_ATTEMPTS) exhausted++;
         this.db.update(schema.usageOutbox).set({ attempts, nextAt: now + Math.min(60 * 60_000, 30_000 * 2 ** Math.min(attempts, 7)), lastError: (e as Error).message.slice(0, 300) }).where(eq(schema.usageOutbox.eventId, r.eventId)).run();
       }
+      // 재시도 한도에 닿은 행은 더 보내지 않는다. 조용히 쌓이지 않게 오류로 알린다(npm run usage:outbox로 다시 보낼 수 있다).
+      if (exhausted) this.log.error({ events: exhausted, err: (e as Error).message.slice(0, 200) }, "usage events gave up after max retries; run usage:outbox to resend");
       this.log.warn({ err: (e as Error).message, rows: rows.length }, "usage report failed; queued for retry");
       return { sent: 0, failed: rows.length };
     }
