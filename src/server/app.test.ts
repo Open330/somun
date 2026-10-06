@@ -40,6 +40,19 @@ describe("HTTP response boundaries", () => {
     expect(await page.text()).toContain("somun test");
   });
 
+  it("sends baseline security headers and 404s paths the app does not have", async () => {
+    const home = await app.request("/");
+    expect(home.headers.get("strict-transport-security")).toContain("max-age=");
+    expect(home.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(home.headers.get("x-frame-options")).toBe("DENY");
+    expect(home.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+    for (const path of ["/does-not-exist", "/.env", "/favicon.ico"]) expect((await app.request(path)).status).toBe(404);
+    for (const path of ["/c/12", "/voice", "/github/pick"]) expect((await app.request(path)).status).toBe(200);
+    // 자기 Referrer-Policy를 정한 응답은 덮어쓰지 않는다.
+    const callback = await app.request("/api/github/app/created?code=x&state=y");
+    expect(callback.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
   it("requires authentication and preserves resource-not-found responses", async () => {
     expect((await app.request("/api/me")).status).toBe(401);
     const me = await app.request("/api/me", { headers });

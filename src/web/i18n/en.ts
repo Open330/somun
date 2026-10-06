@@ -58,7 +58,7 @@ export const en: Record<string, string> = {
   "프로필 수정은 다음 초안부터 반영됩니다. 기존 초안은 다시 검토하거나 다시 써 주세요.":
     "Profile changes apply to future drafts. Review or rewrite existing drafts.",
   "실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.":
-    "Only observed draft copies are counted. Link-only registrations and edits made outside Somun are not included.",
+    "Only observed draft copies are counted. Link-only registrations and edits made outside somun are not included.",
 
   "왜 만들었나": "Why it exists",
   "왜 만들었나:": "Why it exists:",
@@ -1115,7 +1115,7 @@ export const en: Record<string, string> = {
   "근거를 나란히": "Source review",
   "원자료를 보며 초안을 다듬습니다.": "Refine the draft alongside its source.",
   "소문은 릴리스·PR·커밋에서 알릴 변화를 추려 채널별 초안을 만듭니다. 흩어진 작업 기록을 모으고, 독자가 알아야 할 핵심부터 정리합니다.":
-    "Somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
+    "somun picks changes worth sharing from releases, PRs, and commits, then drafts for each channel. It gathers scattered work records and leads with what readers need to know.",
   "어떻게 만드는가 ↓": "How it works ↓",
   "무엇을 하는지, 무엇이 달라졌는지 바로 읽히도록. 알릴 내용을 고르고, 근거로 쓰고, 내 말투로 다듬습니다.":
     "Make what it does and what changed easy to find. Choose what to share, write from evidence, and refine it in your voice.",

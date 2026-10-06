@@ -70,3 +70,28 @@ describe("search and link previews", () => {
     expect((await app.request("/settings")).status).toBe(404);
   });
 });
+
+describe("English link previews", () => {
+  it("serves an English title, description, and locale when the browser has no Korean", async () => {
+    const webDir = mkdtempSync(join(tmpdir(), "somun-web-"));
+    writeFileSync(join(webDir, "index.html"), `<html lang="ko"><head><title>소문 — 알릴 내용만</title><meta name="description" content="한국어 설명" /><meta property="og:site_name" content="소문 somun" /><meta property="og:locale" content="ko_KR" /><meta property="og:title" content="한국어 제목" /><meta property="og:description" content="한국어" /></head><body></body></html>`);
+    const ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: {} as AppContext["usage"] } as AppContext;
+    const app = createApp(ctx, loadConfig({ SOMUN_TOKEN: "t", WEB_DIST: relative(process.cwd(), webDir), SOMUN_PUBLIC_URL: "https://somun.test" }));
+    try {
+      const en = await app.request("/", { headers: { "Accept-Language": "en-US,en;q=0.9" } });
+      const body = await en.text();
+      expect(en.headers.get("vary")).toContain("Accept-Language");
+      expect(body).toContain('<html lang="en">');
+      expect(body).toContain("<title>somun — Say what matters. Make it easy to read.</title>");
+      expect(body).toContain('content="en_US"');
+      expect(body).not.toContain("한국어 설명");
+      expect(body).toContain('content="https://somun.test/og-en.png"');
+      const ko = await (await app.request("/", { headers: { "Accept-Language": "en-US,ko;q=0.8" } })).text();
+      expect(ko).toContain("<title>소문 — 알릴 내용만</title>");
+      expect(await (await app.request("/")).text()).toContain('<html lang="ko">');
+    } finally {
+      ctx.db.$client.close();
+      rmSync(webDir, { recursive: true, force: true });
+    }
+  });
+});
