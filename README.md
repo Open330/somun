@@ -86,7 +86,7 @@ Evidence on the left (version, stars, downloads, demo asset, limitations, digest
 <td width="50%" valign="top">
 
 **Published**
-Paste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added, visitors, and reactions (fetched for X and HN, typed in for the rest). Per-channel results feed back into which channels the judge suggests.
+Paste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added (rebuilt from GitHub star times when somun had no snapshot yet), visitors (only with a token that has admin access to the repo), and reactions (fetched for X and HN, typed in for the rest). Posts on the same repo within a week share the star gain. Per-channel results feed back into which channels the judge suggests; channels with fewer than two measured posts keep getting drafts.
 
 **Settings**
 Sources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.

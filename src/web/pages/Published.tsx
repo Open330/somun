@@ -92,6 +92,13 @@ export default function Published() {
               </div>
             </div>
           )}
+          {rows.length > 0 && !rows.some((p) => p.series.some((s) => s.uniques !== undefined)) && (
+            <p className="tiny muted">
+              {t(
+                "방문자 수는 GitHub 트래픽 API에서 가져옵니다. 저장소 관리 권한이 있는 토큰으로 수집할 때만 표시되며, 소문 GitHub App에는 이 권한을 요청하지 않습니다.",
+              )}
+            </p>
+          )}
           <div className="rows">
             {rows.map((p) => {
               const delta = p.latestStars !== undefined && p.baselineStars !== undefined ? p.latestStars - p.baselineStars : undefined;
