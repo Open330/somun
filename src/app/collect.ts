@@ -7,7 +7,7 @@ import { GitHubClient, GitHubRateLimitError, type GhPull, type GhRelease, type G
 import { githubAppConfig, ownerOfInstallation } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
 import { getCandidateRow, refreshEvidence } from "./candidates.js";
-import { backfillStarPoints } from "../core/metrics.js";
+import { backfillStarPoints, hasPrePostTrend } from "../core/metrics.js";
 import { ensureProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { localeOf, say } from "./i18n.js";
@@ -186,18 +186,29 @@ export async function backfillStarTrend(ctx: AppContext, ownerId: string, public
   const pub = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, publicationId), eq(schema.publications.ownerId, ownerId))).get();
   if (!pub) return 0;
   const name = getCandidateRow(ctx, ownerId, pub.candidateId).repo;
-  const snaps = ctx.db.select({ at: schema.metricSnapshots.at }).from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, name))).all();
-  if (snaps.some((s) => s.at <= pub.publishedAt - 2 * DAY && s.at >= pub.publishedAt - 11 * DAY)) return 0;
+  // 같은 저장소에 글을 연달아 등록해도 한 번만 읽고 한 번만 넣는다.
+  const lock = `${ownerId}|${name}`;
+  if (backfilling.has(lock)) return 0;
+  backfilling.add(lock);
+  try { return await backfillRepo(ctx, ownerId, name, pub.publishedAt); } finally { backfilling.delete(lock); }
+}
+const backfilling = new Set<string>();
+
+async function backfillRepo(ctx: AppContext, ownerId: string, name: string, publishedAt: number): Promise<number> {
+  const snaps = ctx.db.select({ at: schema.metricSnapshots.at, forks: schema.metricSnapshots.forks }).from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, name))).all();
+  if (hasPrePostTrend(snaps, publishedAt)) return 0;
   const src = listEnabledSources(ctx, { ownerId, kind: "github" }).find((s) => s.targets.some((t) => t === name || t === name.split("/")[0]));
   const { gh, publicOnly } = await githubAccess(ctx, ownerId, src?.options?.installationId ? Number(src.options.installationId) : undefined);
   const repo = await gh.get<GhRepo>(`/repos/${name}`);
   if (!repo || (publicOnly && repo.private !== false)) return 0;
-  const { times, complete } = await gh.recentStarTimes(name, repo.stargazers_count, pub.publishedAt - 9 * DAY);
+  const { times, complete } = await gh.recentStarTimes(name, repo.stargazers_count, publishedAt - 9 * DAY);
   if (!complete) return 0;
   let inserted = 0;
-  for (const p of backfillStarPoints(repo.stargazers_count, times, pub.publishedAt)) {
+  for (const p of backfillStarPoints(repo.stargazers_count, times, publishedAt)) {
     if (snaps.some((s) => Math.abs(s.at - p.at) < 12 * 3600e3)) continue;
-    ctx.db.insert(schema.metricSnapshots).values({ ownerId, repo: name, stars: p.stars, forks: repo.forks_count, at: p.at }).run();
+    // 과거 fork 수는 알 수 없다. 가장 가까운 실제 스냅샷의 값을 쓰고, 없을 때만 지금 값을 쓴다.
+    const nearest = [...snaps].sort((a, b) => Math.abs(a.at - p.at) - Math.abs(b.at - p.at))[0];
+    ctx.db.insert(schema.metricSnapshots).values({ ownerId, repo: name, stars: p.stars, forks: nearest?.forks ?? repo.forks_count, at: p.at }).run();
     inserted++;
   }
   if (inserted) emit(ctx, ownerId, { resource: "publications" });

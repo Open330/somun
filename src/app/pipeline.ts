@@ -1,5 +1,5 @@
 import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
@@ -11,7 +11,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt, performanceSummary } from "./publications.js";
+import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -73,6 +73,17 @@ export function windowFacts(ctx: AppContext, ownerId: string, candidateId: numbe
     ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
     ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
   };
+}
+
+/** 탐색으로 덧붙일 수 있는 일상 채널. */
+const EXPLORABLE: Channel[] = ["x", "threads", "linkedin"];
+
+/** 추천 밖 채널 중 탐색할 하나. 이 채널로 올린 글(게시 등록)이 2개 미만인 일상 채널 가운데 가장 적게 올린 것. */
+export function explorationChannel(ctx: AppContext, ownerId: string, candidates: Channel[]): Channel | undefined {
+  const pool = [...new Set(candidates)].filter((ch) => EXPLORABLE.includes(ch));
+  if (!pool.length) return undefined;
+  const posts = new Map(ctx.db.select({ channel: schema.publications.channel, n: sql<number>`count(*)` }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).groupBy(schema.publications.channel).all().map((r) => [r.channel, Number(r.n)]));
+  return pool.filter((ch) => (posts.get(ch) ?? 0) < 2).sort((a, b) => (posts.get(a) ?? 0) - (posts.get(b) ?? 0))[0];
 }
 
 /**
@@ -252,11 +263,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {
-      // 판단이 추천하지 않은 채널도, 성과 자료가 2건 미만이면 초안을 만든다. 추천은 지난 성과에 기대므로
-      // 한 번 빠진 채널은 다시 자료가 쌓이지 않아 영영 빠진다(탐색 없는 고착). 자료가 쌓인 채널만 추천을 따른다.
-      const measured = new Map(performanceSummary(ctx, ownerId).byChannel.map((g) => [g.key, g.measured ?? 0]));
-      const unexplored = new Set(targets.map((t) => t.channel).filter((ch) => (measured.get(ch) ?? 0) < 2));
-      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel) || unexplored.has(t.channel)) : targets;
+      // 추천은 지난 성과에 기대므로 한 번 빠진 채널은 자료가 쌓이지 않아 영영 빠진다(탐색 없는 고착).
+      // 그래서 추천 밖의 일상 채널 하나를 덧붙인다: 올린 글이 2개 미만인 채널 중 가장 적게 올린 채널.
+      // 출시용 채널(Show HN·Show GN)과 블로그 개요는 판단이 고를 때만 쓴다(작은 업데이트에 출시 글을 만들지 않게).
+      const explore = suggested.length ? explorationChannel(ctx, ownerId, targets.map((t) => t.channel).filter((ch) => !suggested.includes(ch))) : undefined;
+      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel) || t.channel === explore) : targets;
       for (const t of picked) next("draft", t.channel, t.lang);
     }
     return { kind: "judge", decision, total };

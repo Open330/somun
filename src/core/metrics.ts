@@ -17,6 +17,18 @@ export type PublicationEffect = {
   excess?: number;
 };
 
+/** 추세 기준점: 기준선(발행 직전 스냅샷)보다 2일 이상, 창+3일 이하 앞선 스냅샷 중 가장 이른 것. */
+function trendAnchor(before: StarPoint[], baseline: StarPoint, windowDays: number): StarPoint | undefined {
+  return before.find((p) => p.at >= baseline.at - (windowDays + 3) * DAY && baseline.at - p.at >= 2 * DAY);
+}
+
+/** 발행 전 추세를 계산할 수 있는가(기준선과 기준점이 모두 있는가). publicationEffect와 같은 규칙이다. */
+export function hasPrePostTrend(points: { at: number }[], publishedAt: number, windowDays = 7): boolean {
+  const before = [...points].sort((a, b) => a.at - b.at).filter((p) => p.at <= publishedAt).map((p) => ({ at: p.at, stars: 0 }));
+  const baseline = before.at(-1);
+  return Boolean(baseline && trendAnchor(before, baseline, windowDays));
+}
+
 export function publicationEffect(points: StarPoint[], publishedAt: number, windowDays = 7): PublicationEffect {
   const sorted = [...points].sort((a, b) => a.at - b.at);
   const before = sorted.filter((p) => p.at <= publishedAt);
@@ -24,8 +36,7 @@ export function publicationEffect(points: StarPoint[], publishedAt: number, wind
   if (!baseline) return {};
   const after = sorted.filter((p) => p.at > publishedAt && p.at <= publishedAt + windowDays * DAY).at(-1);
   const observed = after ? after.stars - baseline.stars : undefined;
-  // 추세 기준점: 기준선보다 7일(±3일) 앞선 스냅샷 중 가장 이른 것.
-  const anchor = before.find((p) => p.at >= baseline.at - (windowDays + 3) * DAY && baseline.at - p.at >= 2 * DAY);
+  const anchor = trendAnchor(before, baseline, windowDays);
   if (!after || observed === undefined || !anchor) return { baseline, observed };
   const perDay = (baseline.stars - anchor.stars) / ((baseline.at - anchor.at) / DAY);
   const expected = round1(perDay * ((after.at - baseline.at) / DAY));
@@ -51,8 +62,9 @@ export function backfillStarPoints(currentStars: number, starTimes: number[], pu
  */
 export function editRatio(before: string, after: string): number {
   const MAX_TOKENS = 600;
-  // 낱말 앞뒤의 문장부호는 떼고 비교한다. 마침표 하나를 붙였다고 그 어절을 새로 쓴 것으로 세지 않게.
-  const words = (text: string) => text.split(/\s+/).map((w) => w.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, "").toLowerCase()).filter(Boolean).slice(0, MAX_TOKENS);
+  // 낱말 앞뒤의 문장부호(마침표·쉼표·괄호·따옴표)는 떼고 비교한다. 마침표 하나를 붙였다고 그 어절을 새로 쓴 것으로 세지 않게.
+  // 기호(+, $, €, 이모지, 화살표)는 뜻을 바꾸므로 남긴다.
+  const words = (text: string) => text.split(/\s+/).map((w) => w.replace(/^\p{P}+|\p{P}+$/gu, "").toLowerCase()).filter(Boolean).slice(0, MAX_TOKENS);
   const a = words(before);
   const b = words(after);
   if (a.length === 0) return b.length === 0 ? 0 : 1;

@@ -93,12 +93,13 @@ export function voicePreset(id: string | undefined): VoicePreset {
 export const channelTag = (channel: Channel) => `[${CHANNELS[channel].label}]`;
 
 /**
- * 프리셋 + 작성자 지침. channel을 주면 다른 채널 표시가 붙은 줄은 뺀다(표시 없는 줄은 모든 채널에 쓴다).
+ * 프리셋 + 작성자 지침. 표시 없는 줄은 모든 채널에 쓴다. channel을 주면 다른 채널 표시가 붙은 줄을 빼고,
+ * 채널이 없는 글(영상 대본 등)에는 채널 표시가 붙은 줄을 모두 뺀다.
  */
 export function voiceGuideFor(voice: { preset?: string; guide?: string } | undefined, lang: string, channel?: Channel): string {
   const p = voicePreset(voice?.preset);
   const base = lang === "ko" ? p.ko : p.en;
-  const others = channel ? Object.values(CHANNELS).filter((c) => c.id !== channel).map((c) => channelTag(c.id as Channel)) : [];
+  const others = Object.values(CHANNELS).filter((c) => c.id !== channel).map((c) => channelTag(c.id as Channel));
   const extra = voice?.guide?.split("\n").filter((line) => !others.some((tag) => line.trim().startsWith(tag))).join("\n").trim();
   return extra ? `${base}\n\nAuthor's own guide (takes precedence where they conflict):\n${extra}` : base;
 }

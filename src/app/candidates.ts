@@ -68,13 +68,19 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   return { candidate: toCandidate(c), unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
 }
 
+const DEFERRED_BY_EDITOR = "deferred by editor";
+
 export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
   const c = getCandidateRow(ctx, ownerId, id);
-  // 판단이 "초안"이라 한 글감을 사용자가 보류하면 그것도 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
+  // 판단이 "초안"이라 한 글감을, 초안을 보기 전에(judged) 보류하면 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
+  // 초안이 이미 있는 글감의 보류는 "나중에 올리기"일 수 있어 번복으로 보지 않는다. 보류를 풀면 번복 기록도 지운다.
   const judgment = c.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, c.latestJudgmentId)).get() : undefined;
-  if (status === "deferred" && judgment && judgment.decision === "draft" && !judgment.overriddenDecision) {
-    ctx.db.update(schema.judgments).set({ overriddenDecision: "defer", overrideReason: "deferred by editor" }).where(eq(schema.judgments.id, judgment.id)).run();
-    ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(judgment.id), reason: "other", note: "deferred by editor", createdAt: Date.now() }).run();
+  if (status === "deferred" && c.status === "judged" && judgment && judgment.decision === "draft" && !judgment.overriddenDecision) {
+    ctx.db.update(schema.judgments).set({ overriddenDecision: "defer", overrideReason: DEFERRED_BY_EDITOR }).where(eq(schema.judgments.id, judgment.id)).run();
+    ctx.db.insert(schema.feedback).values({ ownerId, targetType: "judgment", targetId: String(judgment.id), reason: "other", note: DEFERRED_BY_EDITOR, createdAt: Date.now() }).run();
+  } else if (status !== "deferred" && c.status === "deferred" && judgment?.overriddenDecision === "defer") {
+    ctx.db.update(schema.judgments).set({ overriddenDecision: null, overrideReason: null }).where(eq(schema.judgments.id, judgment.id)).run();
+    ctx.db.delete(schema.feedback).where(and(eq(schema.feedback.ownerId, ownerId), eq(schema.feedback.targetType, "judgment"), eq(schema.feedback.targetId, String(judgment.id)), eq(schema.feedback.note, DEFERRED_BY_EDITOR))).run();
   }
   ctx.db.update(schema.candidates).set({ status, updatedAt: Date.now() }).where(eq(schema.candidates.id, id)).run();
   emit(ctx, ownerId, { resource: "candidates", id });

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { backfillStarPoints, editRatio, publicationEffect } from "./metrics.js";
+import { backfillStarPoints, editRatio, hasPrePostTrend, publicationEffect } from "./metrics.js";
 
 const DAY = 86_400_000;
 const at = (d: number) => 1_000 * DAY + d * DAY;
@@ -43,4 +43,18 @@ it("does not count punctuation-only or case-only changes as rewritten words", ()
   expect(editRatio("소문은 초안을 만듭니다 링크는 아래", "소문은 초안을 만듭니다. 링크는 아래.")).toBe(0);
   expect(editRatio("Ships today", "ships today!")).toBe(0);
   expect(editRatio("one two three four", "one two five four")).toBe(0.25);
+});
+
+it("decides whether a pre-post trend exists with the same rule as publicationEffect", () => {
+  const DAY = 86_400_000, pub = 100 * DAY;
+  // 발행 10.5일 전 하나와 발행 1시간 전 하나: 기준선(1시간 전)에서 10일을 넘어 기준점이 없다.
+  expect(hasPrePostTrend([{ at: pub - 10.5 * DAY }, { at: pub - 3600e3 }], pub)).toBe(false);
+  expect(hasPrePostTrend([{ at: pub - 8 * DAY }, { at: pub - 3600e3 }], pub)).toBe(true);
+  expect(hasPrePostTrend([], pub)).toBe(false);
+});
+
+it("still counts sign, currency, and emoji changes as edits", () => {
+  expect(editRatio("up +40% today", "up −40% today")).toBeGreaterThan(0);
+  expect(editRatio("costs $5 now", "costs €5 now")).toBeGreaterThan(0);
+  expect(editRatio("done 🚀 today", "done today")).toBeGreaterThan(0);
 });

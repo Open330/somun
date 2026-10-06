@@ -315,3 +315,14 @@ it("tags format lessons with their channel so they only shape that channel's dra
   expect(applyLesson(ctx, OWNER, id, "edit", { rule: "Keep it to two sentences.", category: "format" })?.rule).toBe("[X] Keep it to two sentences.");
   expect(applyLesson(ctx, OWNER, id, "edit", { rule: "Say what changed before why.", category: "voice" })?.rule).toBe("Say what changed before why.");
 });
+
+it("keeps the same rule for different channels as separate suggestions and guide lines", () => {
+  const x = draft("Long X post https://github.com/me/tool");
+  const li = draft("긴 링크드인 글 https://github.com/me/tool", "linkedin", "ko");
+  const a = applyLesson(ctx, OWNER, x, "edit", { rule: "Keep posts short.", category: "format" });
+  const b = applyLesson(ctx, OWNER, li, "edit", { rule: "Keep posts short.", category: "format" });
+  expect(a?.id).not.toBe(b?.id);
+  updateSettings(ctx, OWNER, { voice: { preset: "plain", guide: "Keep posts short.", useExamples: true } });
+  acceptSuggestion(ctx, OWNER, a!.id);
+  expect(getSettingsView(ctx, OWNER).voice.guide).toBe("Keep posts short.\n[X] Keep posts short.");
+});
