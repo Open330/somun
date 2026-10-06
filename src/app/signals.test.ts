@@ -116,5 +116,32 @@ it("titles a multi-release window by the most recently published release and kee
   ingestSignals(ctx, "o", 1, [rel("pkg-c@0.0.1", now, "C notes")], {}, ev("a/mono"));
   cand = ctx.db.select().from(schema.candidates).get();
   expect(cand?.title).toBe("a/mono pkg-c@0.0.1");
-  expect((cand?.evidence as Evidence).windowReleaseNotes?.map((n) => n.tag)).toEqual(["pkg-a@1.2.0", "pkg-b@0.1.0", "pkg-c@0.0.1"]);
+  expect((cand?.evidence as Evidence).windowReleaseNotes?.map((n) => n.tag)).toEqual(["pkg-b@0.1.0", "pkg-a@1.2.0", "pkg-c@0.0.1"]);
+});
+
+it("keeps the newest release notes when a window has more than ten releases", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/many"], enabled: true }).run();
+  // 수집기처럼 최신 릴리스부터 보낸다.
+  const releases = Array.from({ length: 11 }, (_, i) => ({ kind: "release" as const, repo: "a/many", ref: `r${i}`, title: `a/many v0.${i}.0`, payload: { tag: `v0.${i}.0`, body: `notes ${i}` }, occurredAt: now - (11 - i) * 3600e3 })).reverse();
+  ingestSignals(ctx, "o", 1, releases, {}, ev("a/many"));
+  const notes = (ctx.db.select().from(schema.candidates).get()?.evidence as Evidence).windowReleaseNotes?.map((n) => n.tag);
+  expect(notes).toHaveLength(10);
+  expect(notes?.at(-1)).toBe("v0.10.0");
+  expect(notes).not.toContain("v0.0.0");
+});
+
+it("does not let a late backport of an older line take the title, but lets a final release replace its rc", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/v"], enabled: true }).run();
+  const rel = (tag: string, at: number) => ({ kind: "release" as const, repo: "a/v", ref: `r:${tag}`, title: `a/v ${tag}`, payload: { tag, body: tag }, occurredAt: at });
+  ingestSignals(ctx, "o", 1, [rel("v8.3.3", now - 3 * 3600e3)], {}, ev("a/v"));
+  ingestSignals(ctx, "o", 1, [rel("v6.4.4", now - 3600e3)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.3.3");
+  ingestSignals(ctx, "o", 1, [rel("v9.0.0-rc.1", now - 1800e3)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.3.3");
+  ingestSignals(ctx, "o", 1, [rel("v8.4.0", now)], {}, ev("a/v"));
+  expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.4.0");
 });

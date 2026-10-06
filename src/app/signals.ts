@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { outranks } from "../core/releases.js";
 import { clusterKeyFor, inWindow, strongerType, windowKey, type CandidateType, type SignalLike } from "../core/cluster.js";
 import { schema } from "../infra/db/index.js";
 import type { Evidence, SignalKind } from "../shared/types.js";
@@ -40,15 +41,15 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           let title = existing.title;
           if (type !== existing.type) title = ck.title;
           else if (ck.type === "release" && existing.type === "release") {
-            // 가장 최근에 게시한 릴리스가 제목이 된다. 태그 문자열 비교는 모노레포(pkg-b@0.1.0 > pkg-a@1.2.0)에서 틀린다.
-            const latestAt = Math.max(...tx.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"))).all().map((r) => r.at), -Infinity);
-            const newer = String(s.payload.tag ?? "").localeCompare(existing.title.split(" ").pop() ?? "", undefined, { numeric: true }) > 0;
-            if (s.occurredAt > latestAt || (s.occurredAt === latestAt && newer)) title = ck.title;
+            // 지금 제목의 릴리스(같은 제목의 릴리스 신호)와 비교한다. 제목을 쪼개 태그를 추측하지 않는다.
+            const current = tx.select().from(schema.signals).where(and(eq(schema.signals.candidateId, existing.id), eq(schema.signals.kind, "release"), eq(schema.signals.title, existing.title))).get();
+            if (!current || outranks(String(s.payload.tag ?? ""), s.occurredAt, String((current.payload as { tag?: string }).tag ?? ""), current.occurredAt)) title = ck.title;
           }
           // 판단 뒤에 더 강한 신호(새 릴리스·유형 승격)가 합쳐지면 예전 판단이 지금 내용을 설명하지 못한다. 다시 판단받도록 되돌린다.
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
-          const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status);
-          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(cur.windowReleaseNotes, s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          const hasDrafts = Boolean(tx.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.candidateId, existing.id)).get());
+          const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status) && !hasDrafts;
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
@@ -84,12 +85,20 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   return { inserted, candidates: [...touched] };
 }
 
+/** 시각 없이 저장된 예전 노트에 릴리스 신호의 게시 시각을 채운다(정렬해 최신을 남길 수 있게). */
+function withNoteTimes(tx: Pick<AppContext["db"], "select">, candidateId: number, notes: Evidence["windowReleaseNotes"]): Evidence["windowReleaseNotes"] {
+  if (!notes?.some((n) => n.at === undefined)) return notes;
+  const times = new Map(tx.select({ payload: schema.signals.payload, at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.candidateId, candidateId), eq(schema.signals.kind, "release"))).all().map((r) => [String((r.payload as { tag?: string }).tag ?? ""), r.at]));
+  return notes.map((n) => (n.at === undefined ? { ...n, at: times.get(n.tag) } : n));
+}
+
 /** 릴리스 신호의 노트를 글감 근거에 쌓는다(같은 태그는 한 번). */
 function withReleaseNote(notes: Evidence["windowReleaseNotes"], s: IncomingSignal): Evidence["windowReleaseNotes"] {
   if (s.kind !== "release") return notes;
   const tag = String(s.payload.tag ?? s.ref);
   if (notes?.some((n) => n.tag === tag)) return notes;
-  return [...(notes ?? []), { tag, notes: String(s.payload.body ?? "").slice(0, 1500) }].slice(-10);
+  // 수집기는 최신 릴리스부터 보낸다. 게시 시각으로 정렬한 뒤 최신 10개를 남긴다(오래된 것부터, 끝이 최신).
+  return [...(notes ?? []), { tag, notes: String(s.payload.body ?? "").slice(0, 1500), at: s.occurredAt }].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)).slice(-10);
 }
 
 export function latestForRepo(ctx: AppContext, ownerId: string, repo: string) {

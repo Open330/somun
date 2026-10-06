@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { backfillStarTrend, collectAll, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { backfillStarTrend, collectAll, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -235,4 +235,14 @@ it("reads closed PRs past the first page until the collection window and drops b
   expect(prs?.some((p) => p.number === 200)).toBe(true);
   expect(prs?.some((p) => p.user?.type === "Bot")).toBe(false);
   expect(calls).toHaveLength(2);
+});
+
+it("picks the newest version of the main line as the latest release, not a late backport or a prerelease", () => {
+  const r = (tag: string, at: string, prerelease = false) => ({ tag_name: tag, name: tag, body: null, published_at: at, html_url: "u", prerelease });
+  const releases = [r("v6.4.4", "2026-10-06T05:45:15Z"), r("v7.3.7", "2026-10-06T05:07:26Z"), r("v8.3.3", "2026-10-06T04:07:00Z"), r("v9.0.0-beta.1", "2026-10-06T06:00:00Z", true)];
+  expect(latestRelease(releases)?.tag_name).toBe("v8.3.3");
+  // 창 안에 백포트만 있으면 창 안에서 고른다(제목도 창 안 릴리스로 정해지므로 둘이 같은 릴리스를 가리킨다).
+  // 정식판이 있으면 프리릴리스(v9.0.0-beta.1)는 고르지 않는다.
+  expect(latestRelease(releases, Date.parse("2026-10-06T05:30:00Z"))?.tag_name).toBe("v6.4.4");
+  expect(latestRelease([r("pkg-a@1.2.0", "2026-10-01T00:00:00Z"), r("pkg-b@0.1.0", "2026-10-02T00:00:00Z")])?.tag_name).toBe("pkg-b@0.1.0");
 });
