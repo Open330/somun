@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubRateLimitError } from "../infra/github/client.js";
-import { collectAll, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { backfillStarTrend, collectAll, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -136,6 +136,24 @@ describe("collection guards", () => {
 
   it("names the readable kinds a repository lacked", () => {
     expect(missingReads(["/repos/a/b/pulls?state=closed", "/repos/a/b/traffic/views", "/repos/a/b/readme", "/repos/a/c/releases"], "a/b")).toEqual(["pull requests", "contents"]);
+  });
+
+  it("backfills the pre-post star trend from GitHub star times when no early snapshot exists", async () => {
+    ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/tool"], enabled: true }).run();
+    const now = Date.now(), DAY = 86400e3;
+    const cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: "me", type: "release", title: "t", repo: "me/tool", key: "k", evidence: { repo: "me/tool", repoUrl: "u" }, status: "drafted", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const pid = Number(ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId: cid, channel: "x", url: "https://x.com/me/status/1", publishedAt: now }).run().lastInsertRowid);
+    const stars = [...Array.from({ length: 5 }, (_, i) => now - 20 * DAY + i), ...Array.from({ length: 10 }, (_, i) => now - 5 * DAY + i * 3600e3)].map((t) => ({ starred_at: new Date(t).toISOString() }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/tool")) return new Response(JSON.stringify({ full_name: "me/tool", stargazers_count: 15, forks_count: 2, private: false }), { status: 200 });
+      if (url.includes("/stargazers")) return new Response(JSON.stringify(stars), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    expect(await backfillStarTrend(ctx, "me", pid)).toBe(2);
+    const rows = ctx.db.select().from(schema.metricSnapshots).all().sort((a, b) => a.at - b.at);
+    expect(rows.map((r) => r.stars)).toEqual([5, 15]);
+    // 이미 기준점이 있으면 다시 읽지 않는다.
+    expect(await backfillStarTrend(ctx, "me", pid)).toBe(0);
   });
 
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {

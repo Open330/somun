@@ -35,6 +35,17 @@ export function publicationEffect(points: StarPoint[], publishedAt: number, wind
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
+ * 지금 스타 수와 최근 스타 시각들로 과거 시점의 스타 수를 되짚는다(스타 취소는 모른다).
+ * 소문이 스냅샷을 찍기 전에 올린 첫 글도 발행 전 추세를 계산할 수 있게, 발행 8일 전과 1일 전을 만든다.
+ */
+export function backfillStarPoints(currentStars: number, starTimes: number[], publishedAt: number): StarPoint[] {
+  return [8, 1].map((days) => {
+    const at = publishedAt - days * DAY;
+    return { at, stars: Math.max(0, currentStars - starTimes.filter((t) => t > at).length) };
+  });
+}
+
+/**
  * 초안에서 최종본까지 고친 양. 단어 단위 편집 거리 / 원래 단어 수, 0(그대로)~1(전부 새로). 학습 효과의 기준 지표.
  * 공백으로 나누므로 한국어는 어절 단위다. 긴 글은 앞부분 MAX_TOKENS개까지만 비교한다.
  */

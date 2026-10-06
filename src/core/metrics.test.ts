@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { editRatio, publicationEffect } from "./metrics.js";
+import { backfillStarPoints, editRatio, publicationEffect } from "./metrics.js";
 
 const DAY = 86_400_000;
 const at = (d: number) => 1_000 * DAY + d * DAY;
@@ -30,4 +30,11 @@ it("measures how much of a draft was rewritten, word by word", () => {
   expect(editRatio("초안을 그대로 썼습니다", "초안을 조금 고쳐 썼습니다")).toBeCloseTo(0.67, 2);
   expect(editRatio("a b", "c d e f g h")).toBe(1);
   expect(editRatio("", "")).toBe(0);
+});
+
+it("rebuilds pre-post star counts from recent star times", () => {
+  const DAY = 86_400_000, pub = 100 * DAY;
+  // 지금 120개. 발행 8일 전 이후 30개, 1일 전 이후 22개가 늘었다.
+  const times = [...Array.from({ length: 8 }, (_, i) => pub - 7 * DAY + i * 3600e3), ...Array.from({ length: 22 }, (_, i) => pub - 0.5 * DAY + i * 3600e3)];
+  expect(backfillStarPoints(120, times, pub)).toEqual([{ at: pub - 8 * DAY, stars: 90 }, { at: pub - DAY, stars: 98 }]);
 });

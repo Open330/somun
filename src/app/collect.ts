@@ -1,16 +1,19 @@
+import { and, eq } from "drizzle-orm";
 import { normalizeGithubTarget } from "../core/source-target.js";
+import { schema } from "../infra/db/index.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
 import { installationToken } from "../infra/github/app.js";
 import { GitHubClient, GitHubRateLimitError, type GhPull, type GhRelease, type GhRepo } from "../infra/github/client.js";
 import { githubAppConfig, ownerOfInstallation } from "./connectors.js";
 import type { Evidence } from "../shared/types.js";
-import { refreshEvidence } from "./candidates.js";
+import { getCandidateRow, refreshEvidence } from "./candidates.js";
+import { backfillStarPoints } from "../core/metrics.js";
 import { ensureProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { localeOf, say } from "./i18n.js";
 import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
-import { isTrusted, NotFoundError, type AppContext } from "./context.js";
+import { emit, isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { lastSnapshot, snapshotMetrics } from "./publications.js";
 import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
@@ -173,6 +176,32 @@ export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoN
   const [readmeRaw, releases] = await Promise.all([gh.get<{ content: string }>(`/repos/${repoName}/readme`), gh.get<GhRelease[]>(`/repos/${repoName}/releases?per_page=3`)]);
   const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
   return { repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
+}
+
+/**
+ * 발행 전 추세의 기준점(발행 2~11일 전 스냅샷)이 없으면 GitHub 스타 시각으로 되짚어 채운다.
+ * 연결 직후 올린 첫 소개 글은 소문이 찍은 스냅샷이 없어 "추세 대비 증가"를 낼 수 없었다. 최근 스타 500개까지만 읽는다.
+ */
+export async function backfillStarTrend(ctx: AppContext, ownerId: string, publicationId: number): Promise<number> {
+  const pub = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, publicationId), eq(schema.publications.ownerId, ownerId))).get();
+  if (!pub) return 0;
+  const name = getCandidateRow(ctx, ownerId, pub.candidateId).repo;
+  const snaps = ctx.db.select({ at: schema.metricSnapshots.at }).from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, name))).all();
+  if (snaps.some((s) => s.at <= pub.publishedAt - 2 * DAY && s.at >= pub.publishedAt - 11 * DAY)) return 0;
+  const src = listEnabledSources(ctx, { ownerId, kind: "github" }).find((s) => s.targets.some((t) => t === name || t === name.split("/")[0]));
+  const { gh, publicOnly } = await githubAccess(ctx, ownerId, src?.options?.installationId ? Number(src.options.installationId) : undefined);
+  const repo = await gh.get<GhRepo>(`/repos/${name}`);
+  if (!repo || (publicOnly && repo.private !== false)) return 0;
+  const { times, complete } = await gh.recentStarTimes(name, repo.stargazers_count, pub.publishedAt - 9 * DAY);
+  if (!complete) return 0;
+  let inserted = 0;
+  for (const p of backfillStarPoints(repo.stargazers_count, times, pub.publishedAt)) {
+    if (snaps.some((s) => Math.abs(s.at - p.at) < 12 * 3600e3)) continue;
+    ctx.db.insert(schema.metricSnapshots).values({ ownerId, repo: name, stars: p.stars, forks: repo.forks_count, at: p.at }).run();
+    inserted++;
+  }
+  if (inserted) emit(ctx, ownerId, { resource: "publications" });
+  return inserted;
 }
 
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
