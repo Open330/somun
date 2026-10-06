@@ -114,7 +114,8 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
     const after = snaps.filter((s) => s.at > p.publishedAt);
     const voice = p.draftId ? voices.get(p.draftId) ?? undefined : undefined;
     const effect = publicationEffect(snaps, p.publishedAt);
-    out.push({ ...toPublication(p), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
+    const sharedWith = pubs.filter((o) => o.id !== p.id && cands.get(o.candidateId)?.repo === c.repo && Math.abs(o.publishedAt - p.publishedAt) < 7 * 86400e3).length;
+    out.push({ ...toPublication(p), ...(sharedWith ? { sharedWith } : {}), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
   }
   return out;
 }
@@ -140,15 +141,17 @@ export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
 /** 채널·문체별 성과 요약. 발행 7일 뒤 스타 증가, 발행 전 추세를 뺀 증가, 방문자·반응 평균. */
 export function performanceSummary(ctx: AppContext, ownerId: string): PerformanceSummary {
   const pubs = listPublicationsWithMetrics(ctx, ownerId);
-  const delta = (p: PublicationWithMetrics) => p.starDelta7d;
-  const excess = (p: PublicationWithMetrics) => p.excessStars7d;
+  // 같은 저장소에 비슷한 때 여러 채널로 올리면 스타 증가는 하나다. 글마다 전부 주면 모든 채널이 같은 성과로 보인다. 나눠서 센다.
+  const share = (p: PublicationWithMetrics, v: number | undefined) => (v === undefined ? undefined : v / (1 + (p.sharedWith ?? 0)));
+  const delta = (p: PublicationWithMetrics) => share(p, p.starDelta7d);
+  const excess = (p: PublicationWithMetrics) => share(p, p.excessStars7d);
   const uniq = (p: PublicationWithMetrics) => p.series.filter((s) => s.at > p.publishedAt).at(-1)?.uniques;
   const likes = (p: PublicationWithMetrics) => p.autoStats?.likes ?? p.manualStats?.likes;
   const avg = (xs: (number | undefined)[]) => { const v = xs.filter((x): x is number => x !== undefined); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined; };
   const group = <K extends string>(key: (p: PublicationWithMetrics) => K | undefined) => {
     const m = new Map<K, PublicationWithMetrics[]>();
     for (const p of pubs) { const k = key(p); if (k) m.set(k, [...(m.get(k) ?? []), p]); }
-    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
+    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, measured: ps.filter((p) => p.starDelta7d !== undefined).length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
   };
   return {
     byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
@@ -172,8 +175,9 @@ export function channelResultsForJudge(ctx: AppContext, ownerId: string): string
 }
 
 function computeChannelResults(ctx: AppContext, ownerId: string): string[] {
-  return performanceSummary(ctx, ownerId).byChannel.filter((g) => g.count >= 2).map((g) => [
-    `${g.key}: ${g.count} posts`,
+  // 표본 기준은 스타 수치가 있는 글 수다. 글이 셋이어도 수치가 하나뿐이면 평균이 그 하나다.
+  return performanceSummary(ctx, ownerId).byChannel.filter((g) => (g.measured ?? 0) >= 2).map((g) => [
+    `${g.key}: ${g.count} posts (${g.measured} with star data; gains split across same-repo posts within 7 days)`,
     g.avgExcessStars !== undefined ? `avg ${g.avgExcessStars > 0 ? "+" : ""}${g.avgExcessStars} stars beyond the prior trend in 7 days` : g.avgStarDelta !== undefined ? `avg +${g.avgStarDelta} stars in 7 days (no prior trend)` : "",
     g.avgLikes !== undefined ? `avg ${g.avgLikes} reactions` : "",
   ].filter(Boolean).join(", "));

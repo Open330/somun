@@ -86,7 +86,7 @@ export type GuideSuggestion = { id: number; rule: string; category: "voice" | "s
 
 /** 발행 성과 요약. 채널·문체별 평균. */
 /** avgStarDelta: 발행 후 7일 스타 증가 평균. avgExcessStars: 그중 발행 전 추세를 뺀 증가(발행 효과) 평균. */
-export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; /** 스타 수치가 있는 글 수. */ measured?: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
@@ -100,6 +100,8 @@ export type PublicationWithMetrics = Publication & {
   candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string;
   /** 발행 후 7일 스타 증가, 발행 전 추세로 기대한 증가, 그 차이(발행 효과). 자료가 모자라면 없음. */
   starDelta7d?: number; expectedStarDelta7d?: number; excessStars7d?: number;
+  /** 같은 저장소에 앞뒤 7일 안에 올린 다른 글 수. 스타 변화는 저장소 단위라 이 글들과 나눠 가진다. */
+  sharedWith?: number;
 };
 
 export type Example = { id: number; channel: Channel; lang: string; title?: string; body: string; source: "seed" | "approved" | "edited"; note?: string; active: boolean; createdAt: number };
