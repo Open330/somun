@@ -43,6 +43,9 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[])
     "## Fix these problems",
     "Rewrite the previous draft so these checks pass. Keep every fact and link from Facts, and change only what is needed.",
     ...issues.map((l) => `- ${l.rule}${l.detail ? `: ${l.detail}` : ""}`),
+    ...(issues.some((l) => l.rule === "numbers_need_review")
+      ? ["For numbers_need_review: use the exact figure from Facts, or delete the claim. Never swap the number for vague size words (dramatically, significantly, halved, much faster, 대폭, 크게, 절반)."]
+      : []),
   ].join("\n");
 }
 

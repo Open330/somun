@@ -1,7 +1,7 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
-import { digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentPublishedTitles } from "./candidates.js";
@@ -10,7 +10,7 @@ import { getSettings, styleKeyOf } from "./settings.js";
 import { getProfile, pendingProfileJob } from "./profiles.js";
 import { alreadyPublished, alreadyTold, recordHighlights } from "./ledger.js";
 import { disputedFor, repoDropCount } from "./learning.js";
-import { channelResultsForJudge, hasPublication } from "./publications.js";
+import { channelResultsForJudge, hasAnnounced } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
 
@@ -49,7 +49,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
-  const introduction = requested ?? !hasPublication(ctx, ownerId, row.repo);
+  const introduction = requested ?? !hasAnnounced(ctx, ownerId, row.repo);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
   if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
@@ -159,7 +159,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
     // 요약도 원자료와 맞춰 본다. 원자료에 없는 수치를 담은 요약은 판단·초안에 넘기지 않는다.
     // 기준은 지금의 근거 + 이 다이제스트가 실제로 본 프롬프트. 작업이 대기하는 사이 수집이 근거를 바꿔도 모델이 본 원자료로 맞춰 본다.
-    const grounding = [groundingText({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile), args.promptText ?? ""].join("\n\n");
+    const grounding = [groundingText({ title: c.title, type: c.type, evidence: ev }, getProfile(ctx, ownerId, c.repo)?.profile), digestGroundingFromPrompt(args.promptText ?? "")].join("\n\n");
     // 먼저 거르고 나서 8개로 자른다. 앞쪽이 걸러져도 뒤쪽의 근거 있는 요약을 살린다.
     const checked = strs(r.highlights, 20).map((text) => ({ text, numbers: unsupportedNumbers(text, grounding) }));
     const highlights = checked.filter((h) => h.numbers.length === 0).map((h) => h.text).slice(0, 8);

@@ -111,6 +111,23 @@ export const DIGEST_SCHEMA = {
 
 export type DigestContext = { profile?: ProfileLike; alreadyTold?: string[]; disputed?: string[] };
 
+const DIGEST_HEADINGS = { alreadyTold: "## Already told", disputed: "## Flagged as wrong by the author" } as const;
+
+/**
+ * 다이제스트 프롬프트에서 근거로 쓸 수 있는 부분만 남긴다.
+ * "이미 알린 것"과 "작성자가 틀렸다고 표시한 것"은 원자료가 아니므로, 그 안의 수치가 요약의 근거로 인정되면 안 된다.
+ */
+export function digestGroundingFromPrompt(user: string): string {
+  const skip = Object.values(DIGEST_HEADINGS);
+  const out: string[] = [];
+  let dropping = false;
+  for (const line of user.split("\n")) {
+    if (line.startsWith("#")) dropping = skip.some((h) => line.startsWith(h));
+    if (!dropping) out.push(line);
+  }
+  return out.join("\n");
+}
+
 export function digestPrompt(c: CandidateLike, ctx: DigestContext = {}): PromptSpec {
   return {
     schemaName: "digest",
@@ -126,8 +143,8 @@ If an "Already told" list is given, drop any highlight that says the same thing 
 Drop highlights about features listed under "not generally available": readers cannot use them yet.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
-      ctx.alreadyTold?.length ? `\n## Already told (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
-      ctx.disputed?.length ? `\n## Flagged as wrong by the author (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
+      ctx.alreadyTold?.length ? `\n${DIGEST_HEADINGS.alreadyTold} (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
+      ctx.disputed?.length ? `\n${DIGEST_HEADINGS.disputed} (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
       `\n# Raw material\n${rawBlock(c, Boolean(ctx.profile)) || "(no raw material)"}`,
     ].filter(Boolean).join("\n"),
   };
@@ -172,7 +189,7 @@ suggestedChannels: subset of the enabled channels.`,
 
 /** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
 const INTRODUCTION_JUDGE = `## First introduction
-Nothing from this repository has been announced yet (no registered posts). Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
+The editor has not announced this repository through this tool yet (no copied drafts or registered posts). This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
 - novelty: the project itself is new to readers.
 - audience: who it is for, from the profile.
