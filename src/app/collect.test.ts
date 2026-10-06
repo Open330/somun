@@ -54,6 +54,31 @@ describe("collection guards", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("takes the latest release by publish date, not by the API's list order", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/tool"], enabled: true }).run().lastInsertRowid);
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86400e3).toISOString();
+    const repo = { full_name: "me/tool", html_url: "https://github.com/me/tool", description: null, homepage: null, stargazers_count: 5496, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: daysAgo(1), fork: false, archived: false, private: false };
+    // GitHub이 실제로 돌려준 순서처럼 오래된 릴리스가 맨 앞에 온다.
+    const releases = [
+      { tag_name: "v2026.01.18", name: null, body: "old", html_url: "u0", published_at: daysAgo(260) },
+      { tag_name: "v2026.10.01.4", name: null, body: "newest", html_url: "u2", published_at: daysAgo(2) },
+      { tag_name: "v2026.10.01.3", name: null, body: "mid", html_url: "u1", published_at: daysAgo(3) },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/tool")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.includes("/releases")) return new Response(JSON.stringify(releases), { status: 200 });
+      if (url.includes("/pulls") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    await collectGithubSource(ctx, id);
+    const cand = ctx.db.select().from(schema.candidates).get();
+    expect(cand?.title).toBe("me/tool v2026.10.01.4");
+    expect((cand?.evidence as { version?: string; releaseNotes?: string }).version).toBe("v2026.10.01.4");
+    expect((cand?.evidence as { releaseNotes?: string }).releaseNotes).toBe("newest");
+    // 처음 연결한 저장소는 이미 넘은 스타 임계값을 마일스톤으로 만들지 않는다.
+    expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "star_milestone")).toHaveLength(0);
+  });
+
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {
     const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/a", "me/b"], enabled: true }).run().lastInsertRowid);
     const repo = (name: string) => ({ full_name: name, html_url: `https://github.com/${name}`, description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false });

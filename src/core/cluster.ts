@@ -75,12 +75,16 @@ export function weekKey(ts: number): string {
   return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
-/** 마일스톤 임계값. 넘어선 가장 큰 값을 돌려준다 (이미 기록된 값보다 클 때만). */
+/**
+ * 마일스톤 임계값. 넘어선 가장 큰 값을 돌려준다 (이미 기록된 값보다 클 때만).
+ * 이전 값이 없으면(처음 연결한 저장소) 기준선만 잡고 마일스톤으로 보지 않는다. 5,496 스타인 저장소를 연결했다고 "5000 stars" 글감이 생기면 안 된다.
+ */
 export const STAR_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 export const DOWNLOAD_THRESHOLDS = [100, 500, 1000, 5000, 10000, 50000];
 
 export function crossedThreshold(prev: number | undefined, now: number, thresholds: number[]): number | null {
-  const p = prev ?? 0;
+  if (prev === undefined) return null;
+  const p = prev;
   let crossed: number | null = null;
   for (const t of thresholds) if (p < t && now >= t) crossed = t;
   return crossed;

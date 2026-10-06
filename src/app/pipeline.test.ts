@@ -157,6 +157,21 @@ it("drafts a first introduction until something from the repository is published
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
 });
 
+it("treats a copied draft as announced even without a registered post URL", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## First introduction");
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft body" } });
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
+  ctx.db.update(schema.drafts).set({ copiedAt: 2 }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+});
+
+it("tells the introduction judge not to call an established project a first release", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("never call it a first release");
+});
+
 
 it("honors an explicit introduction despite publication history and an old change angle", () => {
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Update", angle: "Only discuss the latest patch" } });

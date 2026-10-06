@@ -30,6 +30,9 @@ describe("cluster", () => {
   it("detects crossed thresholds", () => {
     expect(crossedThreshold(20, 60, [10, 25, 50, 100])).toBe(50);
     expect(crossedThreshold(60, 70, [10, 25, 50, 100])).toBeNull();
+    // 처음 연결한 저장소는 기준선만 잡는다.
+    expect(crossedThreshold(undefined, 5496, [10, 25, 50, 100, 5000])).toBeNull();
+    expect(crossedThreshold(0, 12, [10, 25])).toBe(10);
   });
 });
 

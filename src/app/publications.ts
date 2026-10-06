@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { publicationEffect } from "../core/metrics.js";
 import { markPublished, unmarkPublished } from "./ledger.js";
 import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
@@ -15,10 +15,17 @@ function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: st
   if (actual && actual !== channel) throw new InvalidInputError(say(localeOf(ctx, ownerId), `이 링크는 ${CHANNELS[actual].label} 주소입니다. ${CHANNELS[channel].label} 게시글 링크를 입력하거나 해당 채널에서 등록해 주세요.`, `This is a ${CHANNELS[actual].label} URL. Enter a ${CHANNELS[channel].label} post URL or register it under the matching channel.`));
 }
 
-/** 이 저장소의 글을 한 번이라도 올렸는가. 없으면 다음 글은 첫 소개다. */
-export function hasPublication(ctx: AppContext, ownerId: string, repo: string): boolean {
-  return Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
-    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).get());
+/**
+ * 이 저장소를 한 번이라도 알렸는가. 없으면 다음 글은 첫 소개다.
+ * 게시 URL을 등록하지 않고 복사해서 직접 올리는 사용자가 많다. 초안을 복사한 적이 있으면 알린 것으로 본다.
+ * 그렇지 않으면 이 사용자의 모든 글이 영원히 첫 소개가 되어 실제 변경점을 다루지 못한다.
+ */
+export function hasAnnounced(ctx: AppContext, ownerId: string, repo: string): boolean {
+  const published = ctx.db.select({ id: schema.publications.id }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo))).get();
+  if (published) return true;
+  return Boolean(ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
+    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt))).get());
 }
 
 export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
