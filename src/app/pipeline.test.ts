@@ -7,6 +7,7 @@ import { applyResult, buildPrompt, processNewCandidates, queueStep, SWEEP_BACKOF
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
+import { reserveSharedExecution } from "./shared-quota.js";
 
 let ctx: AppContext;
 let id: number;
@@ -107,6 +108,21 @@ describe("hourly sweep", () => {
   it("does not queue twice while a job is in flight", async () => {
     job("digest", "pending");
     expect(await processNewCandidates(ctx)).toBe(0);
+  });
+
+  it.each(["daily", "pending"])("continues with other owners when one owner's %s capacity is exhausted", async (limit) => {
+    ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+    ctx.env.sharedModelDailyLimit = 1;
+    ctx.env.sharedModelPendingLimit = 1;
+    if (limit === "daily") reserveSharedExecution(ctx, "test");
+    else job("lesson", "pending");
+    updateSettings(ctx, "other", { watch: { mode: "auto", recentDays: 30 } });
+    const source = ctx.db.select().from(schema.candidates).get()!;
+    ctx.db.insert(schema.candidates).values({ ...source, id: undefined, ownerId: "other", key: "other" }).run();
+    expect(await processNewCandidates(ctx)).toBe(1);
+    const digests = ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "digest");
+    expect(digests.map((j) => j.ownerId)).toEqual(["other"]);
+    expect(await processNewCandidates(ctx, "test")).toBe(0);
   });
 });
 

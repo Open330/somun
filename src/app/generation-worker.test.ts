@@ -383,3 +383,18 @@ it("releases the completed stage's queue slot before admitting its follow-up", a
   expect(row(id).status).toBe("done");
   expect(ctx.db.select().from(schema.llmJobs).all().find((job) => job.kind === "judge")!.status).toBe("pending");
 });
+
+it("charges repair against the actual shared model config even if settings change during generation", async () => {
+  ctx.env.geminiKeys = JSON.stringify({ "free-1": "fixture" });
+  ctx.env.sharedModelDailyLimit = 1;
+  const long = { title: "", body: `${"Fixes CRLF positions. ".repeat(25)}https://github.com/a/b` };
+  await request(`/api/candidates/${cid}/redraft`, params);
+  vi.mocked(runLlm).mockReset().mockImplementation(async () => {
+    updateSettings(ctx, "local", { llm: { provider: "local-agent" } });
+    return output(long);
+  });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(1);
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(long.body);
+  expect(ctx.usage.record).toHaveBeenCalledTimes(1);
+});

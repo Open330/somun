@@ -98,7 +98,7 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     const failed = jobs.filter((j) => j.status === "failed");
     if (failed.length >= SWEEP_MAX_FAILURES || failed.some((j) => (j.finishedAt ?? 0) > now - SWEEP_BACKOFF_MS)) continue;
     try { queueStep(ctx, c.ownerId, kind, c.id); n++; }
-    catch (err) { if (!(err instanceof GenerationConflictError)) throw err; }
+    catch (err) { if (!(err instanceof GenerationConflictError) && !(err instanceof SharedQuotaError)) throw err; }
   }
   return n;
 }

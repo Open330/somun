@@ -144,7 +144,7 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   const cfg = getSettings(ctx, ownerId).llm;
   const startedAt = Date.now();
   let res;
-  reserveSharedExecution(ctx, ownerId);
+  reserveSharedExecution(ctx, ownerId, Date.now(), cfg);
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg) }); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest") }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
-import { freeGeminiKeys } from "../infra/llm/providers.js";
+import { freeGeminiKeys, type LlmConfig } from "../infra/llm/providers.js";
 import { emit, type AppContext } from "./context.js";
 import { localeOf, say } from "./i18n.js";
 import { getSettings } from "./settings.js";
@@ -15,8 +15,7 @@ const dayOf = (now: number) => new Date(now).toISOString().slice(0, 10);
 const nextDay = (now: number) => Date.parse(`${dayOf(now)}T00:00:00Z`) + 86_400_000;
 const quotaKey = (ownerId: string) => `shared_quota:${createHash("sha256").update(ownerId).digest("hex")}`;
 
-export function usesSharedModel(ctx: AppContext, ownerId: string): boolean {
-  const { llm } = getSettings(ctx, ownerId);
+export function usesSharedModel(ctx: AppContext, ownerId: string, llm = getSettings(ctx, ownerId).llm): boolean {
   return llm.provider === "gemini" && !llm.apiKey && freeGeminiKeys(ctx.env.geminiKeys).length > 0;
 }
 
@@ -44,8 +43,8 @@ export function assertSharedQueueCapacity(ctx: AppContext, ownerId: string, now 
 }
 
 /** Reserve before network I/O; failures still use capacity. Persisted and atomic across processes/restarts. */
-export function reserveSharedExecution(ctx: AppContext, ownerId: string, now = Date.now()): void {
-  if (!usesSharedModel(ctx, ownerId)) return;
+export function reserveSharedExecution(ctx: AppContext, ownerId: string, now = Date.now(), config?: LlmConfig): void {
+  if (!usesSharedModel(ctx, ownerId, config)) return;
   ctx.db.$client.transaction(() => {
     const usage = assertDaily(ctx, ownerId, now);
     ctx.db.insert(schema.appState).values({ key: quotaKey(ownerId), value: JSON.stringify({ ...usage, count: usage.count + 1 }), updatedAt: now }).onConflictDoUpdate({ target: schema.appState.key, set: { value: JSON.stringify({ ...usage, count: usage.count + 1 }), updatedAt: now } }).run();

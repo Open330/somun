@@ -62,7 +62,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     // profile 작업은 로컬 워커만 처리하므로(profiles.queueProfile) 여기에는 생성 단계와 lesson만 온다.
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     try {
-      const call = (user: string) => { reserveSharedExecution(ctx, ownerId); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config) }); };
+      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config) }); };
       let res = await call(job.user);
       if (job.kind === "draft" && job.channel && job.lang) {
         res = await repairDraft(ctx, ownerId, job, res, async (user) => {
