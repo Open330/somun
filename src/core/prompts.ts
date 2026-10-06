@@ -65,7 +65,7 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
     e.demoAsset ? `demo asset in README: ${e.demoAsset}` : "demo asset: none found in README",
     e.limitations?.length ? `limitations (from README):\n- ${e.limitations.join("\n- ")}` : profile?.limitations.length ? "" : "limitations: none stated in README",
     e.experimental?.length ? `not generally available (README marks these experimental or local-only; never present them as something readers can use now):\n- ${e.experimental.join("\n- ")}` : "",
-    e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}` : "\n## Digest: (none yet)",
+    e.highlights?.length ? `\n## What changed, PR-worthy only (digest)\n- ${e.highlights.join("\n- ")}${e.highlights.some((h) => h.startsWith("(unreleased)")) ? "\n(Items marked (unreleased) are on the main branch but in no release yet. Say that; never present them as shipped.)" : ""}` : "\n## Digest: (none yet)",
     `\n## Numbers you may use (verbatim, nothing else)\n${numbersLine(e)}`,
   ].filter(Boolean).join("\n");
 }
@@ -146,7 +146,8 @@ Each highlight is one plain sentence with no adjectives. Never invent numbers. I
 Write highlights in the same language as most of the raw material (English if mixed).
 If a profile is given, it is the baseline: never restate what the project is as a highlight. Only what changed relative to it.
 If an "Already told" list is given, drop any highlight that says the same thing in other words.
-Drop highlights about features listed under "not generally available": readers cannot use them yet.`,
+Drop highlights about features listed under "not generally available": readers cannot use them yet.
+If Facts list PRs "merged after …, not in any release yet", start each highlight that comes only from those PRs with "(unreleased) " so later drafts do not present it as shipped.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
       ctx.alreadyTold?.length ? `\n${DIGEST_HEADINGS.alreadyTold} (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",

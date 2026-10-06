@@ -229,3 +229,14 @@ it("tells drafts which releases a window spans and which PRs are not released ye
   expect(user).toContain("- Native app tab dragging");
   expect(user).not.toContain("- Add dashboard rail");
 });
+
+it("drops an introduction-era angle from update drafts and marks unreleased highlights", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag.", "(unreleased) Mac app tab dragging."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "r", angle: "Introduce vite to new readers" } });
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("Introduce vite to new readers");
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
+  ctx.db.update(schema.drafts).set({ copiedAt: Date.now() + 1000 }).run();
+  const update = buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user;
+  expect(update).not.toContain("Introduce vite to new readers");
+  expect(update).toContain("Items marked (unreleased) are on the main branch");
+});
