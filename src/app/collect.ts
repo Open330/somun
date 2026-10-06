@@ -46,6 +46,21 @@ async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = f
 }
 
 /** README의 첫 데모 자산. gif/mp4/webm 우선, 없으면 로고가 아닌 이미지. */
+/** 진행 중 글감이 되는 최소 커밋 수. 오타·설정 몇 개로 글감이 생기지 않게 한다. */
+export const COMMIT_BATCH_MIN = 5;
+/** 독자에게 보이지 않는 커밋. Conventional Commits의 문서·테스트·CI·잡일과 병합·의존성 갱신·릴리스 커밋. */
+const INVISIBLE_COMMIT = /^(?:merge\b|bump\b|release v?\d|(?:chore|ci|docs?|test|tests|style|build|refactor)(?:\([^)]*\))?!?:)/i;
+
+/** 수집 창 안의 의미 있는 커밋 묶음. 모자라면 null. head는 가장 최근 커밋이라 새 커밋이 생길 때만 새 신호가 된다. */
+export function commitBatch(commits: { sha: string; commit: { message: string; committer?: { date?: string } | null } }[], since: number): { head: string; at: number; subjects: string[] } | null {
+  const visible = commits
+    .map((c) => ({ sha: c.sha, at: Date.parse(c.commit.committer?.date ?? ""), subject: c.commit.message.split("\n")[0].trim() }))
+    .filter((c) => c.subject && Number.isFinite(c.at) && c.at >= since && !INVISIBLE_COMMIT.test(c.subject))
+    .sort((a, b) => b.at - a.at);
+  if (visible.length < COMMIT_BATCH_MIN) return null;
+  return { head: visible[0].sha, at: visible[0].at, subjects: visible.map((c) => c.subject) };
+}
+
 export function firstDemoAsset(readme: string): string | undefined {
   const all = [...readme.matchAll(/!\[[^\]]*\]\(([^)\s]+\.(?:gif|mp4|webm|png|jpe?g))\)/gi), ...readme.matchAll(/<(?:img|source)[^>]+src="([^"]+\.(?:gif|mp4|webm|png|jpe?g))"/gi)].map((m) => m[1]);
   return all.find((u) => /\.(gif|mp4|webm)$/i.test(u)) ?? all.find((u) => !/logo|badge|shields\.io|icon/i.test(u));
@@ -169,8 +184,11 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       // 커밋 창: 이 저장소를 마지막으로 다이제스트한 시각부터. 없으면 마지막 릴리스나 14일.
       const digestedAt = lastDigestAt(ctx, ownerId, name);
       const sinceIso = new Date(digestedAt ?? (latest ? Math.min(Date.parse(latest.published_at), since) : since)).toISOString();
-      const commits = await gh.get<{ commit: { message: string } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
+      const commits = await gh.get<{ sha: string; commit: { message: string; committer?: { date?: string } | null } }[]>(`/repos/${name}/commits?since=${encodeURIComponent(sinceIso)}&per_page=100`);
       const commitSubjects = (commits ?? []).map((c) => c.commit.message.split("\n")[0].trim()).filter((m) => m && !/^(merge|chore\(deps|bump|release v?\d)/i.test(m)).slice(0, 80);
+      // PR 없이 main에 바로 올리는 저장소는 릴리스·PR 신호가 없다. 수집 창 안의 의미 있는 커밋이 쌓이면 진행 중 글감으로 본다.
+      const batch = commitBatch(commits ?? [], since);
+      if (batch && !signals.some((s) => s.kind === "release")) signals.push({ kind: "commit_batch", repo: name, ref: `gh:commits:${name}@${batch.head}`, title: `${name}: ${batch.subjects.length} commits`, payload: { count: batch.subjects.length, head: batch.head, subjects: batch.subjects.slice(0, 20) }, occurredAt: batch.at });
 
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
@@ -192,7 +210,10 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       }
       refreshEvidence(ctx, ownerId, name, evidence);
       if (signals.length) {
-        const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: prev.latestReleaseAt ?? (latest ? Date.parse(latest.published_at) : undefined), repoCreatedAt: createdAt, recentPrCount: prev.recentPrCount + signals.filter((s) => s.kind === "pr_merged").length }, evidence);
+        // 같은 PR이 저장된 것과 이번 응답에 함께 있으므로 ref로 중복을 뺀다. 릴리스 시각은 저장된 것과 방금 받은 것 중 늦은 쪽.
+        const recentPrCount = new Set([...prev.recentPrRefs, ...signals.filter((s) => s.kind === "pr_merged" && Date.now() - s.occurredAt < 7 * DAY).map((s) => s.ref)]).size;
+        const latestReleaseAt = Math.max(prev.latestReleaseAt ?? -Infinity, latest ? Date.parse(latest.published_at) : -Infinity);
+        const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: Number.isFinite(latestReleaseAt) ? latestReleaseAt : undefined, repoCreatedAt: createdAt, recentPrCount }, evidence);
         summary[name] = r.inserted;
       }
       } catch (e) {

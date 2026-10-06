@@ -24,8 +24,16 @@ describe("cluster", () => {
     expect(k?.key).toBe("release:o/r@v1.0.0");
   });
   it("ignores PRs covered by a recent release", () => {
-    const k = clusterKeyFor({ kind: "pr_merged", repo: "o/r", ref: "1", occurredAt: 10, payload: {} }, { latestReleaseAt: 5, recentPrCount: 5 });
+    const k = clusterKeyFor({ kind: "pr_merged", repo: "o/r", ref: "1", occurredAt: 5, payload: {} }, { latestReleaseAt: 10, recentPrCount: 5 });
     expect(k).toBeNull();
+  });
+  it("turns PRs merged after the latest release into in-progress work instead of orphaning them", () => {
+    const pr = { kind: "pr_merged" as const, repo: "o/r", ref: "1", occurredAt: 10 * 86400e3, payload: {} };
+    expect(clusterKeyFor(pr, { latestReleaseAt: 86400e3, recentPrCount: 3 })?.type).toBe("in-progress");
+    expect(clusterKeyFor(pr, { latestReleaseAt: 86400e3, recentPrCount: 2 })).toBeNull();
+  });
+  it("makes a commit batch an in-progress candidate", () => {
+    expect(clusterKeyFor({ kind: "commit_batch", repo: "o/r", ref: "c", occurredAt: 10, payload: {} }, {})?.type).toBe("in-progress");
   });
   it("detects crossed thresholds", () => {
     expect(crossedThreshold(20, 60, [10, 25, 50, 100])).toBe(50);

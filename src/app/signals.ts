@@ -60,14 +60,15 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       tx.insert(schema.signals).values({ ownerId, sourceId, kind: s.kind, repo: s.repo, ref: s.ref, title: s.title, payload: s.payload, occurredAt: s.occurredAt, candidateId }).run();
       inserted++;
     }
-    // 릴리스 후보에 직전 30일의 고아 PR을 붙인다.
     for (const key of touched) {
       const cand = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, key))).get();
-      if (!cand || cand.type !== "release") continue;
+      // 릴리스는 직전 30일, 진행 중 글감은 그것을 만든 최근 7일의 PR을 함께 묶는다(앞서 수집돼 고아로 남은 PR 포함).
+      const span = cand?.type === "release" ? 30 * DAY : cand?.type === "in-progress" ? 7 * DAY : 0;
+      if (!cand || !span) continue;
       const orphans = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, cand.repo), eq(schema.signals.kind, "pr_merged"), isNull(schema.signals.candidateId))).all();
       const titles: string[] = [];
       for (const o of orphans) {
-        if (cand.updatedAt - o.occurredAt > 30 * DAY) continue;
+        if (cand.updatedAt - o.occurredAt > span) continue;
         tx.update(schema.signals).set({ candidateId: cand.id }).where(eq(schema.signals.id, o.id)).run();
         titles.push(o.title);
       }
@@ -88,6 +89,8 @@ export function latestForRepo(ctx: AppContext, ownerId: string, repo: string) {
   return {
     latestReleaseAt: latestRelease?.occurredAt,
     recentPrCount: rows.filter((r) => r.kind === "pr_merged" && Date.now() - r.occurredAt < 7 * DAY).length,
+    /** 최근 7일에 이미 저장한 PR. 수집할 때마다 같은 PR을 다시 받아 오므로 개수는 ref로 중복을 빼고 센다. */
+    recentPrRefs: rows.filter((r) => r.kind === "pr_merged" && Date.now() - r.occurredAt < 7 * DAY).map((r) => r.ref),
     lastStarThreshold: num(rows.find((r) => r.kind === "star_milestone")),
     lastDownloadThreshold: num(rows.find((r) => r.kind === "download_milestone")),
   };

@@ -12,7 +12,8 @@ export type SignalLike = {
     | "star_milestone"
     | "download_milestone"
     | "blog_post"
-    | "omp_session";
+    | "omp_session"
+    | "commit_batch";
   repo: string;
   ref: string;
   occurredAt: number;
@@ -31,7 +32,8 @@ const DAY = 24 * 60 * 60 * 1000;
  * - repo_created / readme_changed(신규 30일 내) → new-repo:{repo}
  * - star_milestone / download_milestone → milestone:{repo}#{metric}-{threshold}
  * - blog_post → blog:{ref}
- * - pr_merged가 릴리스 없이 3일 이상 같은 주제로 이어지면 → in-progress:{repo}:{weekKey}
+ * - pr_merged가 최근 릴리스 뒤에 3개 이상 쌓이면 → in-progress:{repo}:{weekKey}. 릴리스 직전 30일의 PR은 그 릴리스에 붙는다.
+ * - commit_batch(PR 없이 main에 바로 올린 의미 있는 커밋 묶음) → in-progress:{repo}:{weekKey}
  * - omp_session은 단독 후보가 되지 않고, 같은 repo·기간의 후보에 근거로만 붙는다.
  */
 export function clusterKeyFor(signal: SignalLike, context: { latestReleaseAt?: number; repoCreatedAt?: number; recentPrCount?: number }): ClusterKey | null {
@@ -56,9 +58,14 @@ export function clusterKeyFor(signal: SignalLike, context: { latestReleaseAt?: n
     case "blog_post":
       return { type: "blog", key: `blog:${signal.ref}`, title: String(payload.title ?? signal.ref) };
     case "pr_merged": {
-      // 릴리스가 최근 30일 내에 있으면 그 릴리스에 붙고, 없으면 진행형 후보로.
-      if (context.latestReleaseAt !== undefined && signal.occurredAt - context.latestReleaseAt < 30 * DAY) return null;
+      // 최근 릴리스 직전 30일 안에 머지된 PR은 그 릴리스의 내용이다. 릴리스 뒤에 머지된 PR은 다음 글감이 된다.
+      const inRelease = context.latestReleaseAt !== undefined && signal.occurredAt <= context.latestReleaseAt && context.latestReleaseAt - signal.occurredAt < 30 * DAY;
+      if (inRelease) return null;
       if ((context.recentPrCount ?? 0) < 3) return null;
+      const week = weekKey(signal.occurredAt);
+      return { type: "in-progress", key: `in-progress:${repo}:${week}`, title: `${repo} (${week})` };
+    }
+    case "commit_batch": {
       const week = weekKey(signal.occurredAt);
       return { type: "in-progress", key: `in-progress:${repo}:${week}`, title: `${repo} (${week})` };
     }

@@ -4,7 +4,7 @@ import type { CheckItem } from "../core/launch-check.js";
 export type { Channel, ChannelLangs } from "../core/channels.js";
 
 export type SourceKind = "github" | "npm" | "blog" | "sessions" | "omp";
-export type SignalKind = "release" | "pr_merged" | "repo_created" | "readme_changed" | "star_milestone" | "download_milestone" | "blog_post" | "omp_session";
+export type SignalKind = "release" | "pr_merged" | "repo_created" | "readme_changed" | "star_milestone" | "download_milestone" | "blog_post" | "omp_session" | "commit_batch";
 export type CandidateType = "release" | "new-repo" | "milestone" | "blog" | "in-progress";
 export type CandidateStatus = "new" | "judged" | "drafted" | "published" | "dropped" | "deferred";
 export type Decision = "draft" | "defer" | "ask";
