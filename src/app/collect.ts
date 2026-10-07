@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { SharedQuotaError, sharedUsage, usesSharedModel } from "./shared-quota.js";
 import { normalizeGithubTarget } from "../core/source-target.js";
 import { schema } from "../infra/db/index.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
@@ -35,14 +36,17 @@ const DAY = 24 * 3600 * 1000;
  *   수집마다 수천 번 호출하고, 활동 없는 저장소의 프로필 생성으로 공유 모델 쿼터를 다 썼다.
  * - 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
  */
-export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; quiet: Set<string>; skipped: string[] }> {
+export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false, installation = false): Promise<{ repos: GhRepo[]; quiet: Set<string>; skipped: string[] }> {
   const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
   const quiet = new Set<string>();
+  // GitHub App 설치로 저장소를 여럿 고른 소스는 설치 저장소 목록을 한 번(100개씩) 받아 쓴다. 저장소마다 GET /repos를 부르면
+  // 200개를 고른 계정은 수집마다 200번 호출한다. 목록에 없는 저장소만 따로 조회한다.
+  const listed = installation && targets.filter((t) => t.includes("/")).length > 10 ? await installationRepos(gh) : new Map<string, GhRepo>();
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
     if (t.includes("/")) {
-      const r = await gh.get<GhRepo>(`/repos/${t}`);
+      const r = listed.get(t.toLowerCase()) ?? (await gh.get<GhRepo>(`/repos/${t}`));
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
       if (publicOnly && r.private !== false) skipped.push(r.full_name);
       else {
@@ -68,6 +72,18 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
 /** 이 저장소에 아직 버리거나 발행하지 않은 글감이 있는가. */
 function hasOpenCandidate(ctx: AppContext, ownerId: string, repo: string): boolean {
   return ctx.db.select({ status: schema.candidates.status }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repo))).all().some((c) => !["dropped", "published"].includes(c.status));
+}
+
+/** GitHub App 설치에 들어 있는 저장소(최대 1000개). 이름은 소문자로 찾는다. */
+async function installationRepos(gh: GitHubClient): Promise<Map<string, GhRepo>> {
+  const out = new Map<string, GhRepo>();
+  for (let page = 1; page <= 10; page++) {
+    const res = await gh.get<{ repositories: GhRepo[] }>(`/installation/repositories?per_page=100&page=${page}`);
+    const list = res?.repositories ?? [];
+    for (const r of list) out.set(r.full_name.toLowerCase(), r);
+    if (list.length < 100) break;
+  }
+  return out;
 }
 
 /** 최근 60일 안에 push가 있었는가. push 기록이 없는 새 저장소는 활동 중으로 본다. */
@@ -176,6 +192,10 @@ export function experimentalFrom(readme: string): string[] {
 
 /** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
 export const PROFILE_BUDGET = 25;
+/** 공유 모델 하루 한도 중 사용자가 직접 요청할 작업을 위해 프로필 생성이 남겨 두는 횟수. */
+export const PROFILE_RESERVE = 20;
+/** 최신 릴리스 노트를 근거에 담는 길이. 3000자에서 잘리면 긴 노트(barshelf v0.6.0, 6159자)의 뒤쪽 변경이 빠졌다. */
+export const RELEASE_NOTES_MAX = 6000;
 /** local-agent 모드의 상한. 워커가 CLI를 하나씩 돌리므로 작게 둔다. */
 export const PROFILE_BUDGET_LOCAL = 5;
 
@@ -253,10 +273,16 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   const summary: Record<string, number> = {};
   const local = getSettings(ctx, ownerId).llm.provider === "local-agent";
   let profileBudget = local ? PROFILE_BUDGET_LOCAL : PROFILE_BUDGET;
+  // 공유 모델을 쓰는 계정은 프로필(뒤에서 도는 작업)이 하루 한도의 마지막 PROFILE_RESERVE회를 쓰지 않는다.
+  // 사용자가 직접 요청한 분석·초안이 한도에 막히지 않게 남겨 둔다.
+  if (usesSharedModel(ctx, ownerId)) {
+    const usage = sharedUsage(ctx, ownerId);
+    profileBudget = Math.min(profileBudget, Math.max(0, usage.limit - PROFILE_RESERVE - usage.used));
+  }
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
-    const { repos, quiet, skipped } = await expandTargets(gh, source.targets, publicOnly);
+    const { repos, quiet, skipped } = await expandTargets(gh, source.targets, publicOnly, Boolean(source.options?.installationId));
     const missing: string[] = [];
     for (const repo of repos) {
       const name = repo.full_name;
@@ -334,7 +360,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const plainReadme = readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
-        version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, 3000) ?? undefined,
+        version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, RELEASE_NOTES_MAX) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
@@ -358,7 +384,11 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         try {
           const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
-        } catch (e) { ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed"); }
+        } catch (e) {
+          // 한도에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다(저장소마다 같은 실패 로그가 쌓이지 않게).
+          if (e instanceof SharedQuotaError) { profileBudget = 0; ctx.log.info({ repo: name }, "profile skipped: shared model limit reached"); }
+          else ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed");
+        }
       }
       } catch (e) {
         // 레이트 리밋이면 멈춘다. 계속 요청하면 남은 저장소도 전부 실패하고 GitHub의 제한만 길어진다.

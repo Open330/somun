@@ -99,7 +99,7 @@ export function numbersLine(e: EvidenceLike): string {
 export function rawBlock(c: CandidateLike, hasProfile = false): string {
   const e = c.evidence;
   return [
-    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, 3000)}` : "",
+    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, 6000)}` : "",
     // 같은 창의 다른 릴리스 노트. 모노레포·연속 릴리스에서 최신 노트 하나만 보면 앞선 변경이 빠진다.
     ...[...(e.windowReleaseNotes ?? [])].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)).filter((r) => r.tag !== e.version && r.notes.trim()).slice(-6).map((r) => `## Release notes (${r.tag})\n${r.notes.slice(0, 1500)}`),
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",
@@ -152,6 +152,7 @@ Write highlights in the same language as most of the raw material (English if mi
 If a profile is given, it is the baseline: never restate what the project is as a highlight. Only what changed relative to it.
 If an "Already told" list is given, drop any highlight that says the same thing in other words.
 Drop highlights about features listed under "not generally available": readers cannot use them yet.
+A published GitHub release is released, even if its notes still carry an "Unreleased" heading or banner left over from a changelog; never mark its changes as unreleased for that reason.
 If Facts list PRs "merged after …, not in any release yet", start each highlight that comes only from those PRs with "(unreleased) " so later drafts do not present it as shipped.`,
     user: [
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
