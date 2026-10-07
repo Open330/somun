@@ -132,8 +132,9 @@ describe("collection guards", () => {
     vi.stubGlobal("fetch", fetchMock);
     await collectGithubSource(ctx, id);
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes("/repos/me/fork/releases"))).toBe(true);
-    // 60일 넘게 push가 없는 저장소는 세부 조회(릴리스·PR·커밋…)를 하지 않는다.
+    // 60일 넘게 push가 없는 저장소는 세부 조회(릴리스·PR·커밋…)를 하지 않지만, 스타 스냅샷은 남긴다(발행 성과 추적).
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes("/repos/me/old/"))).toHaveLength(0);
+    expect(ctx.db.select().from(schema.metricSnapshots).all().map((s) => s.repo).sort()).toEqual(["me/fork", "me/old"]);
     // 트래픽 403은 관리 권한 문제라 알리지 않는다. PR 403은 알린다.
     expect(ctx.db.select().from(schema.sources).get()?.lastError).toBe("GitHub permission missing: me/fork (pull requests)");
   });
@@ -158,6 +159,16 @@ describe("collection guards", () => {
     expect(rows.map((r) => r.stars)).toEqual([5, 15]);
     // 이미 기준점이 있으면 다시 읽지 않는다.
     expect(await backfillStarTrend(ctx, "me", pid)).toBe(0);
+  });
+
+  it("still raises a star milestone for a dormant explicit repo", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/lib"], enabled: true }).run().lastInsertRowid);
+    ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/lib", stars: 980, forks: 0, at: Date.now() - 2 * 86400e3 }).run();
+    const lib = { full_name: "me/lib", html_url: "https://github.com/me/lib", description: null, homepage: null, stargazers_count: 1003, forks_count: 1, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: "2025-01-01T00:00:00Z", fork: false, archived: false, private: false };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.endsWith("/repos/me/lib") ? new Response(JSON.stringify(lib), { status: 200 }) : new Response("{}", { status: 404 }))));
+    await collectGithubSource(ctx, id);
+    expect(ctx.db.select().from(schema.signals).all().map((s) => s.kind)).toEqual(["star_milestone"]);
+    expect(ctx.db.select().from(schema.candidates).get()?.type).toBe("milestone");
   });
 
   it("generates repository profiles only for repos with new activity", async () => {
