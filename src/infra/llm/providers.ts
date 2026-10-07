@@ -160,7 +160,8 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok", signal);
   if (opts.gateway) {
     // 게이트웨이는 gemini-* 모델만 다룬다. 설정의 모델 칸은 자유 입력이라, 다른 이름은 보내기 전에 막고 이유를 알린다.
-    if (!/^gemini-/i.test(model)) throw new LlmError(`공유 모델은 Gemini(gemini-*)만 쓸 수 있습니다: ${model}. 설정에서 모델 이름을 비우거나 gemini- 모델을 고르세요. 다른 제공사는 개인 키로 연결할 수 있습니다.`, 400);
+    // 요청을 보내지 않았으므로 사용량으로 세지 않는다(reported).
+    if (!/^gemini-/i.test(model)) throw Object.assign(new LlmError(`공유 모델은 Gemini(gemini-*)만 쓸 수 있습니다: ${model}. 설정에서 모델 이름을 비우거나 gemini- 모델을 고르세요. 다른 제공사는 개인 키로 연결할 수 있습니다.`, 400), { reported: true });
     // 게이트웨이 경로의 사용량은 게이트웨이가 기록한다. 응답 해석·네트워크 오류도 somun이 따로 세지 않게 reported로 표시한다.
     try { return await gatewayCall(opts.gateway, gatewayModel(model), req, signal, opts.gatewayUser, opts.onGateway); }
     catch (e) { if (e instanceof LlmError) e.reported = true; else if (e instanceof Error) throw Object.assign(new LlmError(e.message), { reported: true, name: e.name }); throw e; }

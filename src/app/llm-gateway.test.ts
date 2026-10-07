@@ -7,7 +7,7 @@ import type { AppContext } from "./context.js";
 import { processServerJob } from "./generation-worker.js";
 import { modelAvailability } from "./keys.js";
 import { queueStep } from "./pipeline.js";
-import { getSettingsView } from "./settings.js";
+import { getSettingsView, updateSettings } from "./settings.js";
 
 const OWNER = "https://api.jiun.dev|665f00000000000000000001";
 const GATEWAY = { url: "http://jiun-api.test:3100/v1", key: "gw-key" };
@@ -74,6 +74,12 @@ it("refuses a non-Gemini model name on the house path before calling the gateway
   vi.stubGlobal("fetch", fetchMock);
   await expect(runLlm({ provider: "gemini", model: "gpt-5" }, prompt, "judge", undefined, undefined, new AbortController().signal, { gateway: GATEWAY })).rejects.toThrow("gemini-");
   expect(fetchMock).not.toHaveBeenCalled();
+  // 작업으로 돌려도 요청이 없었으므로 사용량 이벤트를 남기지 않는다.
+  updateSettings(ctx, OWNER, { llm: { provider: "gemini", model: "gpt-5", draftModel: "gpt-5" } });
+  queueStep(ctx, OWNER, "draft", cid, "x", "en");
+  await processServerJob(ctx);
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(record).not.toHaveBeenCalled();
 });
 
 it("reads an HTTP-date Retry-After, defaults a bare 429 to a minute, and never self-reports gateway failures", async () => {
