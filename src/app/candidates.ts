@@ -9,7 +9,9 @@ import { crossLangNumberDiff } from "../core/lint.js";
 
 const DAY = 24 * 3600 * 1000;
 
-export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: r.evidence as Evidence, status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
+/** 화면에 보내는 글감. 대조 전용 README 본문(최대 8000자)은 서버에서만 쓰므로 빼서 목록 응답을 가볍게 둔다. */
+const forClient = (e: Evidence): Evidence => { const { readmeForChecks: _checks, ...rest } = e; void _checks; return rest; };
+export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: forClient(r.evidence as Evidence), status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | "defer" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ purpose: r.purpose ?? undefined, id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toPublication = (r: typeof schema.publications.$inferSelect): Publication => ({ id: r.id, candidateId: r.candidateId, draftId: r.draftId ?? undefined, channel: r.channel as Channel, lang: r.lang ?? undefined, url: r.url, publishedAt: r.publishedAt, manualStats: r.manualStats ?? undefined, autoStats: r.autoStats ?? undefined, autoStatsAt: r.autoStatsAt ?? undefined });
@@ -70,11 +72,8 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
 
 const DEFERRED_BY_EDITOR = "deferred by editor";
 
-export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, requested: CandidateStatus): void {
+export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
   const c = getCandidateRow(ctx, ownerId, id);
-  // 보류·보관을 풀 때 게시 기록이 있는 글감은 "발행됨"으로 돌아간다(화면은 초안 유무로 new·judged·drafted를 고른다).
-  const published = ["new", "judged", "drafted"].includes(requested) && Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).where(and(eq(schema.publications.ownerId, ownerId), eq(schema.publications.candidateId, id))).get());
-  const status: CandidateStatus = published ? "published" : requested;
   // 판단이 "초안"이라 한 글감을, 초안을 보기 전에(judged) 보류하면 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
   // 초안이 이미 있는 글감의 보류는 "나중에 올리기"일 수 있어 번복으로 보지 않는다. 보류를 풀면 번복 기록도 지운다.
   const judgment = c.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, c.latestJudgmentId)).get() : undefined;

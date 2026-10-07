@@ -164,13 +164,15 @@ function watch(path: string, onChange: () => void): () => void {
 
 /**
  * 로그인·로그아웃 때 부른다. 다른 계정의 데이터가 화면에 남지 않게 한다.
- * 지금 화면이 구독 중인 경로는 비운 뒤 바로 다시 받는다. AuthProvider의 effect는 자식보다 늦게 돌아서,
+ * refetch면 지금 화면이 구독 중인 경로를 비운 뒤 바로 다시 받는다. AuthProvider의 effect는 자식보다 늦게 돌아서,
  * 화면이 막 보낸 첫 요청을 끊기만 하고 다시 보내지 않으면 작업 패널·사이드바가 "불러오는 중…"에 머물렀다.
  */
-export function clearResourceCache(): void {
+export function clearResourceCache({ refetch = false }: { refetch?: boolean } = {}): void {
   for (const c of inflight.values()) c.abort();
   inflight.clear();
   entries.clear();
+  // 로그아웃·로그인 진행 중에는 다시 받지 않는다(자격 없는 요청이 401 오류를 화면에 띄운다). 로그인된 상태에서만.
+  if (!refetch) return;
   for (const [path, set] of watchers) {
     if (!set.size) continue;
     for (const w of set) w();

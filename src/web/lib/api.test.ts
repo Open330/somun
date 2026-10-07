@@ -154,11 +154,21 @@ it("refetches what the screen is subscribed to after the cache is cleared mid-re
   const { result } = renderHook(() => useResource<{ n: number }>("/jobs/status", []));
   await waitFor(() => expect(pending).toHaveLength(1));
   // AuthProvider가 자식의 첫 요청 뒤에 캐시를 비운다.
-  act(() => clearResourceCache());
+  act(() => clearResourceCache({ refetch: true }));
   expect(pending[0].signal.aborted).toBe(true);
   await waitFor(() => expect(pending).toHaveLength(2));
   await act(async () => {
     pending[1].resolve(new Response('{"n":1}'));
   });
   await waitFor(() => expect(result.current.data).toEqual({ n: 1 }));
+});
+
+it("does not refetch on sign-out", async () => {
+  const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+  vi.stubGlobal("fetch", fetchMock);
+  renderHook(() => useResource("/candidates", []));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  act(() => clearResourceCache());
+  await new Promise((r) => setTimeout(r, 20));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
 });

@@ -96,7 +96,8 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     const ownerId = c.get("ownerId");
     const run = collectAll(ctx, ownerId, { fresh: true });
     run.catch((err: Error) => ctx.log.error({ ownerId, err: err.message }, "collect failed"));
-    const waited = await Promise.race([run, new Promise<null>((done) => setTimeout(() => done(null), config.COLLECT_WAIT_MS))]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waited = await Promise.race([run, new Promise<null>((done) => (timer = setTimeout(() => done(null), config.COLLECT_WAIT_MS)))]).finally(() => clearTimeout(timer));
     return waited ? c.json(waited) : c.json({ pending: true }, 202);
   });
 

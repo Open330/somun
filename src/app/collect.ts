@@ -331,13 +331,14 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const batch = mergedInWindow ? null : commitBatch(commits ?? [], since);
       if (batch && !signals.some((s) => s.kind === "release")) signals.push({ kind: "commit_batch", repo: name, ref: `gh:commits:${name}@${batch.head}`, title: `${name}: ${batch.subjects.length} commits`, payload: { count: batch.subjects.length, head: batch.head, subjects: batch.subjects.slice(0, 20) }, occurredAt: batch.at });
 
+      const plainReadme = readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
         version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, 3000) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
-        readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), readmeForChecks: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 8000), commitSubjects,
+        readmeExcerpt: plainReadme.slice(0, 1500), readmeForChecks: plainReadme.slice(0, 8000), commitSubjects,
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
@@ -386,6 +387,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 /** 소유자별 진행 중인 수집. "지금 확인"을 연달아 눌러도, 크론·웹훅과 겹쳐도 소유자마다 한 번만 돈다. */
 const inFlight = new WeakMap<AppContext["db"], Map<string, Promise<CollectResult>>>();
 type CollectResult = Record<number, Record<string, number> | { error: string }>;
+/** 진행 중인 수집 뒤에 예약한 "다시 돌기". 수집 하나당 하나. */
+const reruns = new WeakMap<Promise<CollectResult>, Promise<CollectResult>>();
 
 /**
  * 소유자를 주면 그 소유자만, 없으면 모든 소유자를 차례로. 어느 쪽이든 같은 소유자별 잠금을 쓴다.
@@ -395,8 +398,13 @@ type CollectResult = Record<number, Record<string, number> | { error: string }>;
 export async function collectAll(ctx: AppContext, ownerId?: string, opts: { fresh?: boolean } = {}): Promise<CollectResult> {
   if (ownerId !== undefined) {
     const existing = inFlight.get(ctx.db)?.get(ownerId);
-    if (existing && opts.fresh) return existing.then(() => collectOwner(ctx, ownerId), () => collectOwner(ctx, ownerId));
-    return collectOwner(ctx, ownerId);
+    if (!existing || !opts.fresh) return collectOwner(ctx, ownerId);
+    // 다시 돌기는 진행 중인 수집마다 한 번만 예약한다(연달아 눌러도 전체 수집이 줄줄이 이어지지 않게).
+    const queued = reruns.get(existing);
+    if (queued) return queued;
+    const again = existing.then(() => collectOwner(ctx, ownerId), () => collectOwner(ctx, ownerId));
+    reruns.set(existing, again);
+    return again;
   }
   const owners = [...new Set(listEnabledSources(ctx).map((s) => s.ownerId))];
   const out: CollectResult = {};

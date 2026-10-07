@@ -1,5 +1,5 @@
 import { enabledTargets } from "@core/channels";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
@@ -27,8 +27,19 @@ const category = (c: CandidateListItem, running: Set<number>): Exclude<Filter, "
 export default function Inbox() {
   const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
-  const { data: availability } = useResource<ModelAvailability>("/model-availability", ["keys", "settings", "jobs"]);
-  const quotaFull = Boolean(availability?.sharedUsage && availability.sharedUsage.used >= availability.sharedUsage.limit);
+  const { data: availability, reload: reloadAvailability } = useResource<ModelAvailability>("/model-availability", [
+    "keys",
+    "settings",
+    "jobs",
+  ]);
+  const usage = availability?.sharedUsage;
+  const quotaFull = Boolean(usage && usage.used >= usage.limit && Date.now() < usage.resetAt);
+  // 한도가 초기화되는 시각에 다시 받아 "초안 준비"를 켠다(그 사이 다른 이벤트가 없어도).
+  useEffect(() => {
+    if (!quotaFull || !usage) return;
+    const timer = window.setTimeout(reloadAvailability, Math.max(0, usage.resetAt - Date.now()) + 1000);
+    return () => window.clearTimeout(timer);
+  }, [quotaFull, usage, reloadAvailability]);
   const { data: settings, error: settingsError, reload: reloadSettings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: jobs } = useResource<JobProgress[]>("/jobs/status", ["jobs"]);
   const running = useMemo(

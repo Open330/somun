@@ -5,6 +5,7 @@ import { startGenerationWorker } from "../app/generation-worker.js";
 import { startScheduler } from "../app/scheduler.js";
 import { openDb } from "../infra/db/index.js";
 import { migrateLegacyCandidates } from "../app/candidates.js";
+import { tagLegacySuggestions } from "../app/learning.js";
 import { backfillLedger } from "../app/ledger.js";
 import { assertSecretsReadable, resealSecrets } from "../app/settings.js";
 import { resealGithubApp } from "../app/connectors.js";
@@ -31,6 +32,8 @@ const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOK
   if (r.merged || r.renamed) logger.info(r, "legacy candidates migrated to repo windows");
   const n = backfillLedger(ctx);
   if (n) logger.info({ n }, "change ledger backfilled from existing highlights");
+  const tagged = tagLegacySuggestions(ctx);
+  if (tagged) logger.info({ tagged }, "legacy guide suggestions split by channel");
   // 비밀값 암호화: 키가 맞는지 먼저 확인(틀리면 여기서 종료). 키가 있으면 남은 평문을 봉인한다. 키가 없으면 평문으로 저장된다고 알린다.
   assertSecretsReadable(ctx);
   if (ctx.env.secrets?.enabled) {

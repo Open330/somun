@@ -23,23 +23,38 @@ import { say } from "./i18n.js";
 const toSuggestion = (r: typeof schema.guideSuggestions.$inferSelect): GuideSuggestion => ({ id: r.id, rule: r.rule, category: r.category as GuideSuggestion["category"], count: r.count, sources: r.sources, status: r.status as GuideSuggestion["status"], createdAt: r.createdAt, updatedAt: r.updatedAt });
 
 export function listSuggestions(ctx: AppContext, ownerId: string, status: GuideSuggestion["status"] = "pending"): GuideSuggestion[] {
-  return ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.ownerId, ownerId), eq(schema.guideSuggestions.status, status))).orderBy(desc(schema.guideSuggestions.count), desc(schema.guideSuggestions.updatedAt)).all().map((r) => toSuggestion(withChannelTag(ctx, ownerId, r)));
+  return ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.ownerId, ownerId), eq(schema.guideSuggestions.status, status))).orderBy(desc(schema.guideSuggestions.count), desc(schema.guideSuggestions.updatedAt)).all().map(toSuggestion);
 }
 
 /**
- * 채널 표시가 생기기 전(10/6 이전)에 저장된 형식·구성 제안에 표시를 채운다. 근거 초안이 모두 한 채널이면 그 채널로.
- * 승인하면 모든 채널에 적용되는 일을 막는다. 한 번 고쳐 저장하므로 다시 계산하지 않는다.
+ * 채널 표시가 생기기 전(10/6 이전)에 저장된 형식·구성 제안을 채널별로 나눈다(서버 시작 때 한 번).
+ * 근거 초안의 채널마다 "[채널] 규칙" 제안을 만들고, 같은 표시의 같은 규칙이 이미 있으면 그쪽에 합친 뒤 원래 행을 지운다.
+ * 근거 초안이 지워져 채널을 알 수 없는 제안은 그대로 둔다. 반환: 나눈 제안 수.
  */
-function withChannelTag(ctx: AppContext, ownerId: string, r: typeof schema.guideSuggestions.$inferSelect): typeof schema.guideSuggestions.$inferSelect {
-  if (r.status !== "pending" || !["format", "structure"].includes(r.category) || tagOf(r.rule)) return r;
-  const ids = r.sources.map((s) => s.draftId);
-  const channels = new Set(ids.length ? ctx.db.select({ channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), inArray(schema.drafts.id, ids))).all().map((d) => d.channel) : []);
-  if (channels.size !== 1) return r;
-  const channel = [...channels][0];
-  if (!(channel in CHANNELS)) return r;
-  const rule = `${channelTag(channel as Channel)} ${r.rule}`;
-  ctx.db.update(schema.guideSuggestions).set({ rule, normalized: normalizeText(rule) }).where(eq(schema.guideSuggestions.id, r.id)).run();
-  return { ...r, rule, normalized: normalizeText(rule) };
+export function tagLegacySuggestions(ctx: AppContext): number {
+  const legacy = ctx.db.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.status, "pending")).all()
+    .filter((r) => ["format", "structure"].includes(r.category) && !tagOf(r.rule));
+  let n = 0;
+  for (const r of legacy) {
+    const ids = r.sources.map((src) => src.draftId);
+    const drafts = ids.length ? ctx.db.select({ id: schema.drafts.id, channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, r.ownerId), inArray(schema.drafts.id, ids))).all() : [];
+    const channels = [...new Set(drafts.map((d) => d.channel))].filter((ch) => ch in CHANNELS) as Channel[];
+    if (!channels.length) continue;
+    ctx.db.transaction((tx) => {
+      for (const channel of channels) {
+        const rule = `${channelTag(channel)} ${r.rule}`;
+        const norm = normalizeText(rule);
+        const sources = r.sources.filter((src) => drafts.some((d) => d.id === src.draftId && d.channel === channel));
+        const same = tx.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.ownerId, r.ownerId)).all().find((o) => o.id !== r.id && o.status !== "dismissed" && sameRule(o, { rule, normalized: norm }));
+        if (same) tx.update(schema.guideSuggestions).set({ count: same.count + sources.length, sources: [...same.sources, ...sources].slice(-10), updatedAt: Date.now() }).where(eq(schema.guideSuggestions.id, same.id)).run();
+        else tx.insert(schema.guideSuggestions).values({ ownerId: r.ownerId, rule, normalized: norm, category: r.category, count: sources.length || 1, sources, status: "pending", createdAt: r.createdAt, updatedAt: Date.now() }).run();
+      }
+      tx.delete(schema.guideSuggestions).where(eq(schema.guideSuggestions.id, r.id)).run();
+    });
+    emit(ctx, r.ownerId, { resource: "settings" });
+    n++;
+  }
+  return n;
 }
 
 /** 지침 줄의 채널 표시("[X] …"). 없으면 모든 채널. 같은 표시끼리만 같은 규칙으로 본다. */
@@ -93,9 +108,8 @@ export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, k
 
 /** 승인: 지침 끝에 한 줄 붙인다. */
 export function acceptSuggestion(ctx: AppContext, ownerId: string, id: number): void {
-  const row = ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.id, id), eq(schema.guideSuggestions.ownerId, ownerId))).get();
-  if (!row) throw new NotFoundError("suggestion");
-  const r = withChannelTag(ctx, ownerId, row);
+  const r = ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.id, id), eq(schema.guideSuggestions.ownerId, ownerId))).get();
+  if (!r) throw new NotFoundError("suggestion");
   const settings = getSettings(ctx, ownerId);
   const guide = settings.voice.guide.trim();
   // 지침은 모든 초안 프롬프트에 들어간다. 끝없이 붙지 않게 줄 수와 길이를 묶는다(설정 화면의 한도와 같다).

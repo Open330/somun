@@ -199,7 +199,14 @@ export default function Candidate() {
                   setBusy("restore");
                   try {
                     await post(`/candidates/${cid}/status`, {
-                      status: data.drafts.some((draft) => draft.status !== "dropped") ? "drafted" : j ? "judged" : "new",
+                      // 게시 기록이 있으면 발행됨으로 되돌린다(보류·보관 전 상태). 없으면 초안 유무로 고른다.
+                      status: data.publications.length
+                        ? "published"
+                        : data.drafts.some((draft) => draft.status !== "dropped")
+                          ? "drafted"
+                          : j
+                            ? "judged"
+                            : "new",
                     });
                     reload();
                     showToast(t("글감 목록으로 되돌렸습니다."));
