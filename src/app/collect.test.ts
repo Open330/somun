@@ -2,8 +2,9 @@ import { EventEmitter } from "node:events";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
-import { GitHubRateLimitError } from "../infra/github/client.js";
-import { backfillStarTrend, collectAll, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { GitHubClient, GitHubRateLimitError } from "../infra/github/client.js";
+import { reserveSharedExecution } from "./shared-quota.js";
+import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -198,6 +199,34 @@ describe("collection guards", () => {
     const llmCalls = fetchMock.mock.calls.filter(([u]) => String(u).includes("generativelanguage"));
     // 새 릴리스가 있는 저장소만 프로필을 만든다. 활동 없는 저장소는 모델을 부르지 않는다.
     expect(llmCalls.length).toBe(1);
+  });
+
+  it("lists an App installation's repositories once instead of fetching each explicit target", async () => {
+    const names = Array.from({ length: 12 }, (_, i) => `me/r${i}`);
+    const repo = (name: string) => ({ full_name: name, html_url: `https://github.com/${name}`, description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: "2020-01-01T00:00:00Z", fork: false, archived: false, private: false });
+    const fetchMock = vi.fn(async (url: string) => (url.includes("/installation/repositories") ? new Response(JSON.stringify({ repositories: names.slice(0, 11).map(repo) }), { status: 200 }) : url.endsWith("/repos/me/r11") ? new Response(JSON.stringify(repo("me/r11")), { status: 200 }) : new Response("{}", { status: 404 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { repos, quiet } = await expandTargets(new GitHubClient("t"), names, false, true);
+    expect(repos).toHaveLength(12);
+    expect(quiet.size).toBe(12);
+    // 목록에 없는 r11만 따로 조회한다.
+    expect(fetchMock.mock.calls.filter(([u]) => /\/repos\/me\/r\d+$/.test(String(u))).map(([u]) => String(u).split("/").pop())).toEqual(["r11"]);
+  });
+
+  it("leaves the last part of the shared daily limit to user-started work instead of background profiles", async () => {
+    ctx.env.geminiKeys = JSON.stringify({ "free-1": "test" });
+    for (let i = 0; i < 31; i++) reserveSharedExecution(ctx, "me");
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/busy"], enabled: true }).run().lastInsertRowid);
+    const repo = { full_name: "me/busy", html_url: "https://github.com/me/busy", description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/busy")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.includes("/releases")) return new Response(JSON.stringify([{ tag_name: "v1", name: "v1", body: "x", html_url: "u", published_at: new Date().toISOString() }]), { status: 200 });
+      if (url.includes("/pulls") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await collectGithubSource(ctx, id);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("generativelanguage"))).toBe(false);
   });
 
   it("stops at a GitHub rate limit instead of failing every remaining repository", async () => {

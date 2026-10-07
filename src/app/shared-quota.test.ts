@@ -10,7 +10,7 @@ import { createApp } from "../server/app.js";
 import { loadConfig } from "../server/config.js";
 import { enqueueJob } from "./pipeline.js";
 import { updateSettings } from "./settings.js";
-import { assertSharedQueueCapacity, reserveSharedExecution, SharedQuotaError } from "./shared-quota.js";
+import { assertSharedQueueCapacity, backgroundReserve, reserveSharedExecution, SharedQuotaError } from "./shared-quota.js";
 
 let ctx: AppContext;
 const now = Date.parse("2026-10-06T12:00:00Z");
@@ -80,4 +80,15 @@ describe("shared model capacity", () => {
       } finally { first.$client.close(); second.$client.close(); }
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+});
+
+it("keeps the last part of the daily limit for user-started work, scaled to the limit", () => {
+  expect(backgroundReserve(50)).toBe(20);
+  expect(backgroundReserve(10)).toBe(4);
+  expect(backgroundReserve(2)).toBe(0);
+  ctx.env.sharedModelDailyLimit = 10;
+  for (let i = 0; i < 6; i++) reserveSharedExecution(ctx, "local", now, undefined, { background: true });
+  // 7번째 자동 작업은 남겨 둔 4회를 쓰지 않는다. 사용자가 시작한 작업은 그대로 쓸 수 있다.
+  expect(() => reserveSharedExecution(ctx, "local", now, undefined, { background: true })).toThrow(SharedQuotaError);
+  expect(() => reserveSharedExecution(ctx, "local", now)).not.toThrow();
 });

@@ -105,7 +105,7 @@ export async function ensureProfile(ctx: AppContext, ownerId: string, material: 
   const row = ctx.db.select().from(schema.repoProfiles).where(and(eq(schema.repoProfiles.ownerId, ownerId), eq(schema.repoProfiles.repo, material.repo))).get();
   if (row && row.readmeHash === hash) return "kept";
   if (isLocal(ctx, ownerId)) return queueProfile(ctx, ownerId, material, hash) === "queued" ? "queued" : "kept";
-  const profile = await generate(ctx, ownerId, material);
+  const profile = await generate(ctx, ownerId, material, true);
   saveProfile(ctx, ownerId, material.repo, hash, profile.profile, profile.model);
   return row ? "refreshed" : "created";
 }
@@ -140,11 +140,11 @@ export function editProfile(ctx: AppContext, ownerId: string, repo: string, edit
 }
 
 /** 서버 모델로 바로 만든다(local-agent가 아닐 때만). 분석 모델(다이제스트와 같은 등급)을 쓴다. */
-async function generate(ctx: AppContext, ownerId: string, material: ProfileMaterial): Promise<{ profile: RepoProfile; model: string }> {
+async function generate(ctx: AppContext, ownerId: string, material: ProfileMaterial, background = false): Promise<{ profile: RepoProfile; model: string }> {
   const cfg = getSettings(ctx, ownerId).llm;
   const startedAt = Date.now();
   let res;
-  reserveSharedExecution(ctx, ownerId, Date.now(), cfg);
+  reserveSharedExecution(ctx, ownerId, Date.now(), cfg, { background });
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest"), error: err }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });

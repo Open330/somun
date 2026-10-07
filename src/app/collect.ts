@@ -1,4 +1,6 @@
 import { and, eq } from "drizzle-orm";
+import { RELEASE_NOTES_MAX } from "../core/prompts.js";
+import { SharedQuotaError } from "./shared-quota.js";
 import { normalizeGithubTarget } from "../core/source-target.js";
 import { schema } from "../infra/db/index.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
@@ -35,14 +37,18 @@ const DAY = 24 * 3600 * 1000;
  *   수집마다 수천 번 호출하고, 활동 없는 저장소의 프로필 생성으로 공유 모델 쿼터를 다 썼다.
  * - 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
  */
-export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; quiet: Set<string>; skipped: string[] }> {
+export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false, installation = false): Promise<{ repos: GhRepo[]; quiet: Set<string>; skipped: string[] }> {
   const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
   const quiet = new Set<string>();
+  // GitHub App 설치로 저장소를 여럿 고른 소스는 설치 저장소 목록을 한 번(100개씩) 받아 쓴다. 저장소마다 GET /repos를 부르면
+  // 200개를 고른 계정은 수집마다 200번 호출한다. 목록에 없는 저장소만 따로 조회한다.
+  const wanted = new Set(targets.map((t) => normalizeGithubTarget(t)).filter((t): t is string => Boolean(t?.includes("/"))).map((t) => t.toLowerCase()));
+  const listed = installation && wanted.size > 10 ? await installationRepos(gh, wanted) : new Map<string, GhRepo>();
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
     if (t.includes("/")) {
-      const r = await gh.get<GhRepo>(`/repos/${t}`);
+      const r = listed.get(t.toLowerCase()) ?? (await gh.get<GhRepo>(`/repos/${t}`));
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
       if (publicOnly && r.private !== false) skipped.push(r.full_name);
       else {
@@ -68,6 +74,21 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
 /** 이 저장소에 아직 버리거나 발행하지 않은 글감이 있는가. */
 function hasOpenCandidate(ctx: AppContext, ownerId: string, repo: string): boolean {
   return ctx.db.select({ status: schema.candidates.status }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repo))).all().some((c) => !["dropped", "published"].includes(c.status));
+}
+
+/**
+ * GitHub App 설치에 들어 있는 저장소 중 찾는 것들(최대 10쪽, 1000개). 이름은 소문자로 찾는다.
+ * 찾는 저장소를 모두 찾으면 그만 넘긴다(저장소가 많은 설치에서 쪽 수가 개별 조회보다 많아지지 않게).
+ */
+async function installationRepos(gh: GitHubClient, wanted: Set<string>): Promise<Map<string, GhRepo>> {
+  const out = new Map<string, GhRepo>();
+  for (let page = 1; page <= 10 && out.size < wanted.size; page++) {
+    const res = await gh.get<{ repositories: GhRepo[] }>(`/installation/repositories?per_page=100&page=${page}`);
+    const list = res?.repositories ?? [];
+    for (const r of list) if (wanted.has(r.full_name.toLowerCase())) out.set(r.full_name.toLowerCase(), r);
+    if (list.length < 100) break;
+  }
+  return out;
 }
 
 /** 최근 60일 안에 push가 있었는가. push 기록이 없는 새 저장소는 활동 중으로 본다. */
@@ -256,7 +277,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
-    const { repos, quiet, skipped } = await expandTargets(gh, source.targets, publicOnly);
+    const { repos, quiet, skipped } = await expandTargets(gh, source.targets, publicOnly, Boolean(source.options?.installationId));
     const missing: string[] = [];
     for (const repo of repos) {
       const name = repo.full_name;
@@ -291,7 +312,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 
       for (const r of allReleases) {
         const at = Date.parse(r.published_at);
-        if (at >= since) signals.push({ kind: "release", repo: name, ref: `gh:release:${name}@${r.tag_name}`, title: `${name} ${r.tag_name}`, payload: { tag: r.tag_name, name: r.name, body: r.body?.slice(0, 4000), url: r.html_url }, occurredAt: at });
+        if (at >= since) signals.push({ kind: "release", repo: name, ref: `gh:release:${name}@${r.tag_name}`, title: `${name} ${r.tag_name}`, payload: { tag: r.tag_name, name: r.name, body: r.body?.slice(0, RELEASE_NOTES_MAX), url: r.html_url }, occurredAt: at });
       }
       for (const p of prs ?? []) {
         if (!p.merged_at) continue;
@@ -334,7 +355,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const plainReadme = readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
-        version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, 3000) ?? undefined,
+        version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, RELEASE_NOTES_MAX) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
@@ -358,7 +379,12 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         try {
           const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
-        } catch (e) { ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed"); }
+        } catch (e) {
+          // 한도에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다(저장소마다 같은 실패 로그가 쌓이지 않게).
+          // 한도나 자동 작업 몫(shared-quota backgroundReserve)에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다.
+          if (e instanceof SharedQuotaError) { profileBudget = 0; ctx.log.info({ repo: name }, "profile skipped: shared model limit or reserve reached"); }
+          else ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed");
+        }
       }
       } catch (e) {
         // 레이트 리밋이면 멈춘다. 계속 요청하면 남은 저장소도 전부 실패하고 GitHub의 제한만 길어진다.
