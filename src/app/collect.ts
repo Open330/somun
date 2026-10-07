@@ -28,8 +28,10 @@ const DAY = 24 * 3600 * 1000;
  */
 
 /**
- * 수집할 저장소. 조직·사용자 단위로 넓힐 때만 fork·보관·60일 넘게 멈춘 저장소를 거른다.
- * 사용자가 직접 지정한 저장소는 거르지 않는다(조용히 빠지면 왜 글감이 없는지 알 수 없다). 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
+ * 수집할 저장소. 60일 넘게 push가 없는 저장소는 거른다(활동이 없으니 글감도 없는데, 저장소마다 API 호출과
+ * 프로필 생성이 든다. GitHub App으로 저장소 200개를 고르면 수집마다 수천 번 호출하고 공유 모델 쿼터를 다 썼다).
+ * 조직·사용자 단위로 넓힐 때는 fork·보관 저장소도 거르고, 직접 지정한 fork는 사용자가 고른 것이라 남긴다.
+ * 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
  */
 export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; skipped: string[] }> {
   const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
@@ -40,7 +42,7 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
       const r = await gh.get<GhRepo>(`/repos/${t}`);
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
       if (publicOnly && r.private !== false) skipped.push(r.full_name);
-      else explicit.push(r);
+      else if (!r.archived && recentlyPushed(r)) explicit.push(r);
       continue;
     }
     for (let page = 1; page <= 5; page++) {
@@ -51,11 +53,13 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
     }
   }
   // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
-  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY);
+  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && recentlyPushed(r));
   const seen = new Set<string>();
   const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
   return { repos, skipped };
 }
+
+const recentlyPushed = (r: GhRepo) => Date.now() - Date.parse(r.pushed_at) < 60 * DAY;
 
 /** 글감 판단에 필요한데 권한 없음으로 읽지 못한 것. 트래픽은 관리 권한이 있어야 해서 늘 빠질 수 있으므로 세지 않는다. */
 export function missingReads(denied: Iterable<string>, repo: string): string[] {
@@ -314,9 +318,9 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
-      // 프로필: 없거나 README가 바뀐 저장소만, 수집 한 번에 최대 PROFILE_BUDGET개. 나머지는 다음 수집에.
-      // local-agent는 사용자의 워커가 하나씩 처리하므로 이번에 새 활동이 있는 저장소만, 더 적게 넣는다(초안 작업이 밀리지 않게).
-      if (profileBudget > 0 && (!local || signals.length > 0)) {
+      // 프로필: 이번에 새 활동이 있는 저장소만(글감이 될 수 있는 곳), 없거나 README가 바뀐 경우에, 수집 한 번에 최대 PROFILE_BUDGET개.
+      // 활동 없는 저장소까지 만들면 webhook마다 공유 모델 쿼터를 프로필에 다 쓴다. local-agent는 더 적게 넣는다(초안 작업이 밀리지 않게).
+      if (profileBudget > 0 && signals.length > 0) {
         try {
           const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
