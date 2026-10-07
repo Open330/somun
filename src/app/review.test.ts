@@ -5,7 +5,7 @@ import { openDb, schema } from "../infra/db/index.js";
 import { GenerationConflictError, type AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
-import { acceptSuggestion, applyLesson, GUIDE_MAX_LINES } from "./learning.js";
+import { acceptSuggestion, applyLesson, GUIDE_MAX_LINES, listSuggestions } from "./learning.js";
 import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
 import { getSettingsView, updateSettings } from "./settings.js";
 import { editProfile, ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
@@ -325,4 +325,13 @@ it("keeps the same rule for different channels as separate suggestions and guide
   updateSettings(ctx, OWNER, { voice: { preset: "plain", guide: "Keep posts short.", useExamples: true } });
   acceptSuggestion(ctx, OWNER, a!.id);
   expect(getSettingsView(ctx, OWNER).voice.guide).toBe("Keep posts short.\n[X] Keep posts short.");
+});
+
+it("tags legacy untagged format suggestions with the channel of their source drafts", () => {
+  const x = draft("Long X post https://github.com/me/tool");
+  const now = Date.now();
+  const id = Number(ctx.db.insert(schema.guideSuggestions).values({ ownerId: OWNER, rule: "Use bullet headings.", normalized: "use bullet headings", category: "format", count: 1, sources: [{ kind: "edit", draftId: x, at: now }], status: "pending", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  expect(listSuggestions(ctx, OWNER).find((s) => s.id === id)?.rule).toBe("[X] Use bullet headings.");
+  acceptSuggestion(ctx, OWNER, id);
+  expect(getSettingsView(ctx, OWNER).voice.guide).toContain("[X] Use bullet headings.");
 });

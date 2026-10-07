@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppContext } from "../app/context.js";
-import { openDb } from "../infra/db/index.js";
+import { openDb, schema } from "../infra/db/index.js";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 
@@ -51,6 +51,18 @@ describe("HTTP response boundaries", () => {
     // 자기 Referrer-Policy를 정한 응답은 덮어쓰지 않는다.
     const callback = await app.request("/api/github/app/created?code=x&state=y");
     expect(callback.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("answers check-now with 202 when collection takes longer than the wait limit, and keeps collecting", async () => {
+    const slow = createApp(ctx, loadConfig({ SOMUN_TOKEN: "test-token", WEB_DIST: relative(process.cwd(), webDir), COLLECT_WAIT_MS: "20" }));
+    ctx.db.insert(schema.sources).values({ ownerId: "local", kind: "blog", targets: ["https://blog.test/feed.xml"], enabled: true }).run();
+    let finish: (r: Response) => void = () => {};
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>((done) => (finish = done)));
+    const res = await slow.request("/api/collect", { method: "POST", headers });
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ pending: true });
+    finish(new Response("<rss><channel></channel></rss>", { status: 200 }));
+    await vi.waitFor(() => expect(ctx.db.select().from(schema.sources).get()?.lastPolledAt).toBeTruthy());
   });
 
   it("requires authentication and preserves resource-not-found responses", async () => {

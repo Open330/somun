@@ -117,6 +117,13 @@ describe("first useful outcome", () => {
     expect(post).toHaveBeenCalledWith("/collect");
     expect(screen.getByRole("link", { name: "연결 확인" })).toBeTruthy();
   });
+  it("tells the user a long check continues in the background instead of failing", async () => {
+    set("/sources", [{ id: 1, kind: "github", targets: ["a/b"], enabled: true }]);
+    post.mockResolvedValue({ pending: true });
+    render(wrap(createElement(Inbox)));
+    fireEvent.click(screen.getByRole("button", { name: /첫 글감 가져오기/ }));
+    await waitFor(() => expect(screen.getByText(/확인을 시작했습니다/)).toBeTruthy());
+  });
   it("offers recovery when loading fails instead of an endless skeleton", () => {
     resources.set("/candidates", { error: "offline", reload: vi.fn() });
     render(wrap(createElement(Inbox)));

@@ -144,3 +144,21 @@ describe("shared resource cache", () => {
     expect(next.result.current.data).toBeUndefined();
   });
 });
+
+it("refetches what the screen is subscribed to after the cache is cleared mid-request", async () => {
+  const pending: { resolve: (res: Response) => void; signal: AbortSignal }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_url, init) => new Promise<Response>((resolve) => pending.push({ resolve, signal: init.signal }))),
+  );
+  const { result } = renderHook(() => useResource<{ n: number }>("/jobs/status", []));
+  await waitFor(() => expect(pending).toHaveLength(1));
+  // AuthProvider가 자식의 첫 요청 뒤에 캐시를 비운다.
+  act(() => clearResourceCache());
+  expect(pending[0].signal.aborted).toBe(true);
+  await waitFor(() => expect(pending).toHaveLength(2));
+  await act(async () => {
+    pending[1].resolve(new Response('{"n":1}'));
+  });
+  await waitFor(() => expect(result.current.data).toEqual({ n: 1 }));
+});

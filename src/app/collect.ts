@@ -337,7 +337,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
-        readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), commitSubjects,
+        readmeExcerpt: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), readmeForChecks: readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 8000), commitSubjects,
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
@@ -387,9 +387,17 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 const inFlight = new WeakMap<AppContext["db"], Map<string, Promise<CollectResult>>>();
 type CollectResult = Record<number, Record<string, number> | { error: string }>;
 
-/** 소유자를 주면 그 소유자만, 없으면 모든 소유자를 차례로. 어느 쪽이든 같은 소유자별 잠금을 쓴다. */
-export async function collectAll(ctx: AppContext, ownerId?: string): Promise<CollectResult> {
-  if (ownerId !== undefined) return collectOwner(ctx, ownerId);
+/**
+ * 소유자를 주면 그 소유자만, 없으면 모든 소유자를 차례로. 어느 쪽이든 같은 소유자별 잠금을 쓴다.
+ * fresh: 사용자가 누른 "지금 확인". 이미 도는 수집은 시작할 때의 소스 목록을 쓰므로, 방금 연결한 소스가 빠지지 않게
+ * 그 수집이 끝난 뒤 한 번 더 돈다(크론·웹훅은 합류만 한다).
+ */
+export async function collectAll(ctx: AppContext, ownerId?: string, opts: { fresh?: boolean } = {}): Promise<CollectResult> {
+  if (ownerId !== undefined) {
+    const existing = inFlight.get(ctx.db)?.get(ownerId);
+    if (existing && opts.fresh) return existing.then(() => collectOwner(ctx, ownerId), () => collectOwner(ctx, ownerId));
+    return collectOwner(ctx, ownerId);
+  }
   const owners = [...new Set(listEnabledSources(ctx).map((s) => s.ownerId))];
   const out: CollectResult = {};
   for (const owner of owners) Object.assign(out, await collectOwner(ctx, owner));

@@ -70,8 +70,11 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
 
 const DEFERRED_BY_EDITOR = "deferred by editor";
 
-export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, status: CandidateStatus): void {
+export function setCandidateStatus(ctx: AppContext, ownerId: string, id: number, requested: CandidateStatus): void {
   const c = getCandidateRow(ctx, ownerId, id);
+  // 보류·보관을 풀 때 게시 기록이 있는 글감은 "발행됨"으로 돌아간다(화면은 초안 유무로 new·judged·drafted를 고른다).
+  const published = ["new", "judged", "drafted"].includes(requested) && Boolean(ctx.db.select({ id: schema.publications.id }).from(schema.publications).where(and(eq(schema.publications.ownerId, ownerId), eq(schema.publications.candidateId, id))).get());
+  const status: CandidateStatus = published ? "published" : requested;
   // 판단이 "초안"이라 한 글감을, 초안을 보기 전에(judged) 보류하면 판단 번복이다. 다음 판단이 사용자의 기준을 알도록 남긴다.
   // 초안이 이미 있는 글감의 보류는 "나중에 올리기"일 수 있어 번복으로 보지 않는다. 보류를 풀면 번복 기록도 지운다.
   const judgment = c.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, c.latestJudgmentId)).get() : undefined;

@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { listInbox, refreshEvidence } from "./candidates.js";
+import { listInbox, refreshEvidence, setCandidateStatus } from "./candidates.js";
 import type { CandidateStatus } from "../shared/types.js";
 
 let ctx: AppContext;
@@ -81,4 +81,13 @@ it("refreshes the current window's version but keeps a past window's own release
   const ev = (id: number) => ctx.db.select().from(schema.candidates).all().find((c) => c.id === id)?.evidence as { version?: string; releaseNotes?: string; stars?: number };
   expect(ev(old)).toMatchObject({ version: "v1.0", releaseNotes: "v1.0 notes", stars: 9 });
   expect(ev(cur)).toMatchObject({ version: "v1.1", releaseNotes: "v1.1 notes" });
+});
+
+it("restores a published candidate to published after deferring it", () => {
+  const id = candidate("published", 1);
+  ctx.db.insert(schema.publications).values({ ownerId: "a", candidateId: id, channel: "linkedin", url: "https://www.linkedin.com/posts/x", publishedAt: 1 }).run();
+  setCandidateStatus(ctx, "a", id, "deferred");
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("deferred");
+  setCandidateStatus(ctx, "a", id, "drafted");
+  expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("published");
 });

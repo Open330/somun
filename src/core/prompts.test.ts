@@ -97,3 +97,9 @@ it("puts every release note in the window into the raw material and the groundin
   expect(raw).toContain("## Release notes (pkg-a@1.2.0)\nStartup 40% faster");
   expect(raw.match(/C notes/g)).toHaveLength(1);
 });
+
+it("grounds checks on the longer README text, not only the 1500-character prompt excerpt", () => {
+  const long = `${"intro ".repeat(400)}APIs may still change before 1.0.`;
+  const c = { title: "a/m", type: "release", evidence: { repo: "a/m", repoUrl: "u", readmeExcerpt: long.slice(0, 1500), readmeForChecks: long } };
+  expect(groundingText(c)).toContain("before 1.0.");
+});

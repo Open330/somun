@@ -41,6 +41,8 @@ export type Evidence = {
   milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
   /** 이 글감에 묶인 릴리스들의 노트(최신 릴리스 포함). 요약과 수치 대조가 최신 노트 하나만 보지 않게. */
   windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
+  /** 수치·주장 대조에만 쓰는 README 본문(최대 8000자). 프롬프트에는 넣지 않는다(발췌 1500자만). */
+  readmeForChecks?: string;
 };
 
 /** 로컬 워커가 CLI 출력에서 읽은 호출 사용량. 서버가 계정에 귀속해 jiun-api로 보고한다. */
