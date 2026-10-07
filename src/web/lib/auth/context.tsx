@@ -27,7 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const snap = useAuthSnapshot();
   // 계정이 바뀌면 이벤트 연결과 받아 둔 데이터를 모두 새로 시작한다.
   useEffect(() => {
-    clearResourceCache();
+    // 로그인된(또는 인증을 쓰지 않는) 상태면 화면이 구독 중인 자료를 바로 다시 받는다.
+    clearResourceCache({ refetch: !isAuthEnabled() || snap.status === "signedIn" });
     resetEvents();
   }, [snap.status, snap.user?.id]);
   useEffect(() => {

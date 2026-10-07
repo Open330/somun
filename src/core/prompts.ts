@@ -20,6 +20,7 @@ export type EvidenceLike = {
   /** 이 글감에 묶인 릴리스 태그(오래된 것부터). 둘 이상이면 변경을 최신 태그 하나에 몰아 쓰지 않게 알린다. 프롬프트를 만들 때 채운다. */
   windowReleases?: string[];
   windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
+  readmeForChecks?: string;
   /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
   unreleasedPrTitles?: string[];
 };
@@ -76,7 +77,8 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
  * 요약이 지어낸 숫자가 "근거 있음"으로 통과하지 않게, 요약과 초안 모두 이것과 맞춰 본다.
  */
 export function groundingText(c: CandidateLike, profile?: ProfileLike): string {
-  return [factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, profile), rawBlock(c, false)].join("\n\n");
+  // 프롬프트의 README 발췌는 1500자라, 그 뒤에 있는 원문 수치("1.0 이전에는…")가 근거 없는 수치로 걸렸다. 대조에는 더 긴 본문을 쓴다.
+  return [factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, profile), rawBlock(c, false), c.evidence.readmeForChecks ? `## README (for checks)\n${c.evidence.readmeForChecks}` : ""].filter(Boolean).join("\n\n");
 }
 
 /** 초안이 쓸 수 있는 숫자를 한 줄로 못 박는다. 모델이 placeholder를 남발하지 않게. */

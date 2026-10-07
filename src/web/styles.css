@@ -345,7 +345,8 @@ button.primary:active, .btn.primary:active { transform: translateY(1px); }
 :root[data-theme="light"] .gh-btn { background: #24292f; color: #fff; }
 
 /* ── 글감 상세 레이아웃 ─────────────────────────────────── */
-.cand-head { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+/* .main > * 의 fadein(fill both)이 헤더와 본문을 따로 쌓아, 뒤에 오는 sticky 사이드가 헤더의 "⋯" 메뉴를 덮었다. 헤더를 위 층에 둔다. */
+.cand-head { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); position: relative; z-index: 2; }
 .cand-head-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .cand-head h1 { font-size: 24px; letter-spacing: -0.015em; }
 .cand-judge { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 10px; }

@@ -199,7 +199,14 @@ export default function Candidate() {
                   setBusy("restore");
                   try {
                     await post(`/candidates/${cid}/status`, {
-                      status: data.drafts.some((draft) => draft.status !== "dropped") ? "drafted" : j ? "judged" : "new",
+                      // 게시 기록이 있으면 발행됨으로 되돌린다(보류·보관 전 상태). 없으면 초안 유무로 고른다.
+                      status: data.publications.length
+                        ? "published"
+                        : data.drafts.some((draft) => draft.status !== "dropped")
+                          ? "drafted"
+                          : j
+                            ? "judged"
+                            : "new",
                     });
                     reload();
                     showToast(t("글감 목록으로 되돌렸습니다."));
@@ -566,7 +573,9 @@ export default function Candidate() {
               ))
             ) : (
               <div className="callout muted-box">
-                {t("수집한 자료에 명시된 한계가 없습니다. 게시 전에 알려진 제약이 있는지 직접 확인하세요.")}
+                {t(
+                  "README에 명시된 한계가 없습니다. 릴리스 노트의 요구 사항(OS·런타임 버전 등)과 알려진 제약을 게시 전에 직접 확인하세요.",
+                )}
               </div>
             )}
           </section>

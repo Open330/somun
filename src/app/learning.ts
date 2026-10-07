@@ -1,5 +1,5 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
 import { CHANNELS, type Channel } from "../core/channels.js";
 import { channelTag } from "../core/voice.js";
@@ -24,6 +24,37 @@ const toSuggestion = (r: typeof schema.guideSuggestions.$inferSelect): GuideSugg
 
 export function listSuggestions(ctx: AppContext, ownerId: string, status: GuideSuggestion["status"] = "pending"): GuideSuggestion[] {
   return ctx.db.select().from(schema.guideSuggestions).where(and(eq(schema.guideSuggestions.ownerId, ownerId), eq(schema.guideSuggestions.status, status))).orderBy(desc(schema.guideSuggestions.count), desc(schema.guideSuggestions.updatedAt)).all().map(toSuggestion);
+}
+
+/**
+ * 채널 표시가 생기기 전(10/6 이전)에 저장된 형식·구성 제안을 채널별로 나눈다(서버 시작 때 한 번).
+ * 근거 초안의 채널마다 "[채널] 규칙" 제안을 만들고, 같은 표시의 같은 규칙이 이미 있으면 그쪽에 합친 뒤 원래 행을 지운다.
+ * 근거 초안이 지워져 채널을 알 수 없는 제안은 그대로 둔다. 반환: 나눈 제안 수.
+ */
+export function tagLegacySuggestions(ctx: AppContext): number {
+  const legacy = ctx.db.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.status, "pending")).all()
+    .filter((r) => ["format", "structure"].includes(r.category) && !tagOf(r.rule));
+  let n = 0;
+  for (const r of legacy) {
+    const ids = r.sources.map((src) => src.draftId);
+    const drafts = ids.length ? ctx.db.select({ id: schema.drafts.id, channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, r.ownerId), inArray(schema.drafts.id, ids))).all() : [];
+    const channels = [...new Set(drafts.map((d) => d.channel))].filter((ch) => ch in CHANNELS) as Channel[];
+    if (!channels.length) continue;
+    ctx.db.transaction((tx) => {
+      for (const channel of channels) {
+        const rule = `${channelTag(channel)} ${r.rule}`;
+        const norm = normalizeText(rule);
+        const sources = r.sources.filter((src) => drafts.some((d) => d.id === src.draftId && d.channel === channel));
+        const same = tx.select().from(schema.guideSuggestions).where(eq(schema.guideSuggestions.ownerId, r.ownerId)).all().find((o) => o.id !== r.id && o.status !== "dismissed" && sameRule(o, { rule, normalized: norm }));
+        if (same) tx.update(schema.guideSuggestions).set({ count: same.count + sources.length, sources: [...same.sources, ...sources].slice(-10), updatedAt: Date.now() }).where(eq(schema.guideSuggestions.id, same.id)).run();
+        else tx.insert(schema.guideSuggestions).values({ ownerId: r.ownerId, rule, normalized: norm, category: r.category, count: sources.length || 1, sources, status: "pending", createdAt: r.createdAt, updatedAt: Date.now() }).run();
+      }
+      tx.delete(schema.guideSuggestions).where(eq(schema.guideSuggestions.id, r.id)).run();
+    });
+    emit(ctx, r.ownerId, { resource: "settings" });
+    n++;
+  }
+  return n;
 }
 
 /** 지침 줄의 채널 표시("[X] …"). 없으면 모든 채널. 같은 표시끼리만 같은 규칙으로 본다. */

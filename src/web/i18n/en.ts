@@ -12,6 +12,12 @@ export const en: Record<string, string> = {
     "Review author role: {phrases}. A connected repository does not establish that the poster developed or released the project; review the source and the poster’s role.",
   "작성자 역할 확인": "Review author role",
   "주장 확인": "Review claims",
+  "오늘 공유 모델 실행 한도에 도달했습니다. 모델 설정에서 개인 키나 로컬 워커를 쓸 수 있습니다.":
+    "Today's shared model limit has been reached. You can use your own key or the local worker in model settings.",
+  "발행 직전부터 지금까지 늘어난 스타": "Stars gained since just before the post",
+  "변화 {n}": "change {n}",
+  "확인을 시작했습니다. 저장소가 많아 몇 분 걸릴 수 있습니다. 끝나면 새 글감이 목록에 자동으로 나타납니다.":
+    "Checking has started. With many repositories it can take a few minutes; new candidates appear here automatically when it's done.",
   "방문자 수는 GitHub 트래픽 API에서 가져옵니다. 저장소 관리 권한이 있는 토큰으로 수집할 때만 표시되며, 소문 GitHub App에는 이 권한을 요청하지 않습니다.":
     "Visitor counts come from the GitHub traffic API. They appear only when collecting with a token that has admin access to the repository; the somun GitHub App does not request that permission.",
   "영어 문장": "English sentence",
@@ -338,8 +344,8 @@ export const en: Record<string, string> = {
   데모: "Demo",
   "없음 (올리기 전 GIF나 스크린샷을 준비하세요)": "None (prepare a GIF or screenshot before posting)",
   한계: "Limitations",
-  "수집한 자료에 명시된 한계가 없습니다. 게시 전에 알려진 제약이 있는지 직접 확인하세요.":
-    "The collected material states no limitations. Check for known constraints yourself before posting.",
+  "README에 명시된 한계가 없습니다. 릴리스 노트의 요구 사항(OS·런타임 버전 등)과 알려진 제약을 게시 전에 직접 확인하세요.":
+    "The README states no limitations. Check release-note requirements (OS or runtime versions) and known constraints before posting.",
   "판단 이유": "Reasoning",
   "원자료 · 릴리스 노트, 머지된 PR, 커밋 제목": "Raw material · Release notes, merged PRs, commit titles",
   "릴리스 노트": "Release notes",

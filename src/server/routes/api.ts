@@ -90,7 +90,16 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     return c.json(upsertSource(ctx, c.get("ownerId"), input));
   });
   app.delete("/sources/:id", (c) => { removeSource(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
-  app.post("/collect", async (c) => c.json(await collectAll(ctx, c.get("ownerId"))));
+  // 저장소가 많으면 수집이 몇 분 걸린다. 응답은 잠깐만 기다리고(프록시 시간 제한 524를 피한다), 그 뒤에는 202로 돌려준 채 뒤에서 끝낸다.
+  // 끝나면 글감·소스 변경 이벤트로 화면이 갱신된다.
+  app.post("/collect", async (c) => {
+    const ownerId = c.get("ownerId");
+    const run = collectAll(ctx, ownerId, { fresh: true });
+    run.catch((err: Error) => ctx.log.error({ ownerId, err: err.message }, "collect failed"));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waited = await Promise.race([run, new Promise<null>((done) => (timer = setTimeout(() => done(null), config.COLLECT_WAIT_MS)))]).finally(() => clearTimeout(timer));
+    return waited ? c.json(waited) : c.json({ pending: true }, 202);
+  });
 
   // candidates
   app.get("/candidates", (c) => c.json(listInbox(ctx, c.get("ownerId"))));

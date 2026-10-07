@@ -29,7 +29,7 @@ export function sharedUsage(ctx: AppContext, ownerId: string, now = Date.now()) 
 function assertDaily(ctx: AppContext, ownerId: string, now: number): { day: string; count: number } {
   const usage = sharedUsage(ctx, ownerId, now);
   const limit = usage.limit;
-  if (usage.used >= limit) throw new SharedQuotaError(say(localeOf(ctx, ownerId), `오늘 공유 모델 실행 한도(${limit}회)에 도달했습니다. UTC 자정 이후 다시 시도하거나 개인 API 키·로컬 워커를 사용해 주세요.`, `Today's shared model execution limit (${limit}) has been reached. Try after midnight UTC or use your own API key or local worker.`), usage.resetAt);
+  if (usage.used >= limit) throw new SharedQuotaError(say(localeOf(ctx, ownerId), `오늘 공유 모델 실행 한도(${limit}회)에 도달했습니다. 한도는 매일 00:00 UTC(한국 시간 09:00)에 초기화됩니다. 그 뒤 다시 시도하거나 개인 API 키·로컬 워커를 사용해 주세요.`, `Today's shared model execution limit (${limit}) has been reached. It resets daily at 00:00 UTC (09:00 KST). Try again after that, or use your own API key or local worker.`), usage.resetAt);
   return { day: dayOf(now), count: usage.used };
 }
 

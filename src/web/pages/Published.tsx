@@ -120,7 +120,11 @@ export default function Published() {
                     <div className="small muted pub-stars">
                       <div>
                         {t("스타")} {p.baselineStars ?? "?"} → {p.latestStars ?? "?"}{" "}
-                        {delta !== undefined && <span className={`delta ${delta > 0 ? "up" : ""}`}>{delta > 0 ? `+${delta}` : delta}</span>}
+                        {delta !== undefined && (
+                          <span className={`delta ${delta > 0 ? "up" : ""}`} title={t("발행 직전부터 지금까지 늘어난 스타")}>
+                            ({t("변화 {n}", { n: delta > 0 ? `+${delta}` : String(delta) })})
+                          </span>
+                        )}
                       </div>
                       {p.excessStars7d !== undefined && (
                         <div

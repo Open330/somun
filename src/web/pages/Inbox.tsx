@@ -1,9 +1,9 @@
 import { enabledTargets } from "@core/channels";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { CandidateListItem, JobProgress, SettingsView, Source } from "@shared/types";
+import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
-import { post, useResource } from "../lib/api";
+import { ApiError, post, useResource } from "../lib/api";
 import { GenerationStatus } from "../components/GenerationStatus";
 import { Onboarding } from "../components/Onboarding";
 import { t } from "../i18n";
@@ -27,6 +27,19 @@ const category = (c: CandidateListItem, running: Set<number>): Exclude<Filter, "
 export default function Inbox() {
   const { data: rows, error, reload } = useResource<CandidateListItem[]>("/candidates", ["candidates", "drafts", "publications"]);
   const { data: sources, error: sourceError, reload: reloadSources } = useResource<Source[]>("/sources", ["sources"]);
+  const { data: availability, reload: reloadAvailability } = useResource<ModelAvailability>("/model-availability", [
+    "keys",
+    "settings",
+    "jobs",
+  ]);
+  const usage = availability?.sharedUsage;
+  const quotaFull = Boolean(usage && usage.used >= usage.limit && Date.now() < usage.resetAt);
+  // 한도가 초기화되는 시각에 다시 받아 "초안 준비"를 켠다(그 사이 다른 이벤트가 없어도).
+  useEffect(() => {
+    if (!quotaFull || !usage) return;
+    const timer = window.setTimeout(reloadAvailability, Math.max(0, usage.resetAt - Date.now()) + 1000);
+    return () => window.clearTimeout(timer);
+  }, [quotaFull, usage, reloadAvailability]);
   const { data: settings, error: settingsError, reload: reloadSettings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: jobs } = useResource<JobProgress[]>("/jobs/status", ["jobs"]);
   const running = useMemo(
@@ -65,7 +78,15 @@ export default function Inbox() {
     setBusy(true);
     setMessage(null);
     try {
-      const result = await post<Record<string, Record<string, number> | { error: string }>>("/collect");
+      const result = await post<Record<string, Record<string, number> | { error: string }> | { pending: true }>("/collect");
+      if ("pending" in result) {
+        // 저장소가 많아 뒤에서 계속 확인한다. 끝나면 글감 목록과 소스 상태가 자동으로 바뀐다.
+        setMessage({
+          text: t("확인을 시작했습니다. 저장소가 많아 몇 분 걸릴 수 있습니다. 끝나면 새 글감이 목록에 자동으로 나타납니다."),
+          error: false,
+        });
+        return;
+      }
       const values = Object.values(result).flatMap((r) => Object.values(r));
       const failed = values.some((v) => typeof v === "string" || v < 0);
       const count = values.reduce<number>((n, value) => n + (typeof value === "number" && value > 0 ? value : 0), 0);
@@ -111,7 +132,12 @@ export default function Inbox() {
       });
       reload();
     } catch (err) {
-      setMessage({ text: `${t("요청하지 못했습니다.")} ${(err as Error).message}`, error: true });
+      // 공유 모델 한도(429)는 연결 문제가 아니다. 모델 설정(개인 키·로컬 워커)으로 안내한다.
+      setMessage({
+        text: `${t("요청하지 못했습니다.")} ${(err as Error).message}`,
+        error: true,
+        model: err instanceof ApiError && err.status === 429,
+      });
     } finally {
       setRequested((ids) => ids.filter((value) => value !== id));
     }
@@ -277,7 +303,16 @@ export default function Inbox() {
                           )}
                           <div className="toolbar">
                             {stageOf(c).key === "fresh" && (
-                              <button className="sm" disabled={requested.includes(c.id)} onClick={() => void judge(c.id)}>
+                              <button
+                                className="sm"
+                                disabled={requested.includes(c.id) || quotaFull}
+                                title={
+                                  quotaFull
+                                    ? t("오늘 공유 모델 실행 한도에 도달했습니다. 모델 설정에서 개인 키나 로컬 워커를 쓸 수 있습니다.")
+                                    : undefined
+                                }
+                                onClick={() => void judge(c.id)}
+                              >
                                 {requested.includes(c.id) ? t("요청 중…") : t("초안 준비")}
                               </button>
                             )}

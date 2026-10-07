@@ -46,6 +46,15 @@ describe("collection guards", () => {
     expect(ctx.db.select().from(schema.sources).get()?.lastError).toContain("repository unavailable");
   });
 
+  it("re-runs at most once after a running collection, however often check-now is pressed", async () => {
+    ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "blog", targets: ["https://blog.example/feed.xml"], enabled: true }).run();
+    const fetchMock = vi.fn(async () => { await new Promise((r) => setTimeout(r, 20)); return new Response("<rss><channel></channel></rss>", { status: 200 }); });
+    vi.stubGlobal("fetch", fetchMock);
+    const first = collectAll(ctx, "me");
+    await Promise.all([first, collectAll(ctx, "me", { fresh: true }), collectAll(ctx, "me", { fresh: true }), collectAll(ctx, "me", { fresh: true })]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("runs one collection per owner even when the cron and a manual check overlap", async () => {
     ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "blog", targets: ["https://blog.example/feed.xml"], enabled: true }).run();
     const fetchMock = vi.fn(async () => { await new Promise((r) => setTimeout(r, 20)); return new Response("<rss><channel></channel></rss>", { status: 200 }); });

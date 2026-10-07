@@ -82,3 +82,4 @@ it("refreshes the current window's version but keeps a past window's own release
   expect(ev(old)).toMatchObject({ version: "v1.0", releaseNotes: "v1.0 notes", stars: 9 });
   expect(ev(cur)).toMatchObject({ version: "v1.1", releaseNotes: "v1.1 notes" });
 });
+

@@ -50,4 +50,7 @@ export function removeSource(ctx: AppContext, ownerId: string, id: number): void
 
 export function markPolled(ctx: AppContext, id: number, error?: string): void {
   ctx.db.update(schema.sources).set({ lastPolledAt: Date.now(), lastError: error ?? null }).where(eq(schema.sources.id, id)).run();
+  // 뒤에서 끝난 수집도 화면의 소스 상태(마지막 확인·오류)가 바로 바뀌게 알린다.
+  const owner = ctx.db.select({ ownerId: schema.sources.ownerId }).from(schema.sources).where(eq(schema.sources.id, id)).get()?.ownerId;
+  if (owner) emit(ctx, owner, { resource: "sources" });
 }

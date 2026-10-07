@@ -27,6 +27,8 @@ const schema = z.object({
   /** UTC cron. 기본 00:00 UTC = 09:00 KST */
   CRON: z.string().default("0 0 * * *"),
   WEB_DIST: z.string().default("./dist/web"),
+  /** "지금 확인"이 수집 결과를 기다리는 최대 시간. 넘으면 202로 답하고 뒤에서 끝낸다. */
+  COLLECT_WAIT_MS: z.coerce.number().int().min(0).default(20_000),
   /** jiun-api 사용량 보고. 키가 없으면 보고하지 않는다 (로컬 개발). */
   JIUN_API_URL: z.string().url().default("https://api.jiun.dev"),
   JIUN_USAGE_SERVICE_ID: z.string().default("somun"),
