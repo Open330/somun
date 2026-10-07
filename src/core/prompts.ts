@@ -9,6 +9,9 @@ import { CHANNELS, langInstruction, langName, type Channel } from "./channels.js
 import { KO_FLUENCY_RULES } from "./voice.js";
 import type { Locale } from "../shared/locale.js";
 
+/** 최신 릴리스 노트를 근거·요약에 담는 길이. 3000자에서 잘리면 긴 노트(barshelf v0.6.0, 6159자)의 뒤쪽 변경이 빠졌다. */
+export const RELEASE_NOTES_MAX = 6000;
+
 export type EvidenceLike = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
@@ -99,7 +102,7 @@ export function numbersLine(e: EvidenceLike): string {
 export function rawBlock(c: CandidateLike, hasProfile = false): string {
   const e = c.evidence;
   return [
-    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, 6000)}` : "",
+    e.releaseNotes ? `## Release notes${e.version ? ` (${e.version})` : ""}\n${e.releaseNotes.slice(0, RELEASE_NOTES_MAX)}` : "",
     // 같은 창의 다른 릴리스 노트. 모노레포·연속 릴리스에서 최신 노트 하나만 보면 앞선 변경이 빠진다.
     ...[...(e.windowReleaseNotes ?? [])].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)).filter((r) => r.tag !== e.version && r.notes.trim()).slice(-6).map((r) => `## Release notes (${r.tag})\n${r.notes.slice(0, 1500)}`),
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",

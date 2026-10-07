@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import { SharedQuotaError, sharedUsage, usesSharedModel } from "./shared-quota.js";
+import { RELEASE_NOTES_MAX } from "../core/prompts.js";
+import { SharedQuotaError } from "./shared-quota.js";
 import { normalizeGithubTarget } from "../core/source-target.js";
 import { schema } from "../infra/db/index.js";
 import { crossedThreshold, DOWNLOAD_THRESHOLDS, STAR_THRESHOLDS } from "../core/cluster.js";
@@ -41,7 +42,8 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
   const quiet = new Set<string>();
   // GitHub App 설치로 저장소를 여럿 고른 소스는 설치 저장소 목록을 한 번(100개씩) 받아 쓴다. 저장소마다 GET /repos를 부르면
   // 200개를 고른 계정은 수집마다 200번 호출한다. 목록에 없는 저장소만 따로 조회한다.
-  const listed = installation && targets.filter((t) => t.includes("/")).length > 10 ? await installationRepos(gh) : new Map<string, GhRepo>();
+  const wanted = new Set(targets.map((t) => normalizeGithubTarget(t)).filter((t): t is string => Boolean(t?.includes("/"))).map((t) => t.toLowerCase()));
+  const listed = installation && wanted.size > 10 ? await installationRepos(gh, wanted) : new Map<string, GhRepo>();
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
@@ -74,13 +76,16 @@ function hasOpenCandidate(ctx: AppContext, ownerId: string, repo: string): boole
   return ctx.db.select({ status: schema.candidates.status }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repo))).all().some((c) => !["dropped", "published"].includes(c.status));
 }
 
-/** GitHub App 설치에 들어 있는 저장소(최대 1000개). 이름은 소문자로 찾는다. */
-async function installationRepos(gh: GitHubClient): Promise<Map<string, GhRepo>> {
+/**
+ * GitHub App 설치에 들어 있는 저장소 중 찾는 것들(최대 10쪽, 1000개). 이름은 소문자로 찾는다.
+ * 찾는 저장소를 모두 찾으면 그만 넘긴다(저장소가 많은 설치에서 쪽 수가 개별 조회보다 많아지지 않게).
+ */
+async function installationRepos(gh: GitHubClient, wanted: Set<string>): Promise<Map<string, GhRepo>> {
   const out = new Map<string, GhRepo>();
-  for (let page = 1; page <= 10; page++) {
+  for (let page = 1; page <= 10 && out.size < wanted.size; page++) {
     const res = await gh.get<{ repositories: GhRepo[] }>(`/installation/repositories?per_page=100&page=${page}`);
     const list = res?.repositories ?? [];
-    for (const r of list) out.set(r.full_name.toLowerCase(), r);
+    for (const r of list) if (wanted.has(r.full_name.toLowerCase())) out.set(r.full_name.toLowerCase(), r);
     if (list.length < 100) break;
   }
   return out;
@@ -192,10 +197,6 @@ export function experimentalFrom(readme: string): string[] {
 
 /** 수집 한 번에 만드는 프로필 수 상한. 분석 모델 호출 1회/저장소. */
 export const PROFILE_BUDGET = 25;
-/** 공유 모델 하루 한도 중 사용자가 직접 요청할 작업을 위해 프로필 생성이 남겨 두는 횟수. */
-export const PROFILE_RESERVE = 20;
-/** 최신 릴리스 노트를 근거에 담는 길이. 3000자에서 잘리면 긴 노트(barshelf v0.6.0, 6159자)의 뒤쪽 변경이 빠졌다. */
-export const RELEASE_NOTES_MAX = 6000;
 /** local-agent 모드의 상한. 워커가 CLI를 하나씩 돌리므로 작게 둔다. */
 export const PROFILE_BUDGET_LOCAL = 5;
 
@@ -273,12 +274,6 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   const summary: Record<string, number> = {};
   const local = getSettings(ctx, ownerId).llm.provider === "local-agent";
   let profileBudget = local ? PROFILE_BUDGET_LOCAL : PROFILE_BUDGET;
-  // 공유 모델을 쓰는 계정은 프로필(뒤에서 도는 작업)이 하루 한도의 마지막 PROFILE_RESERVE회를 쓰지 않는다.
-  // 사용자가 직접 요청한 분석·초안이 한도에 막히지 않게 남겨 둔다.
-  if (usesSharedModel(ctx, ownerId)) {
-    const usage = sharedUsage(ctx, ownerId);
-    profileBudget = Math.min(profileBudget, Math.max(0, usage.limit - PROFILE_RESERVE - usage.used));
-  }
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
@@ -317,7 +312,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
 
       for (const r of allReleases) {
         const at = Date.parse(r.published_at);
-        if (at >= since) signals.push({ kind: "release", repo: name, ref: `gh:release:${name}@${r.tag_name}`, title: `${name} ${r.tag_name}`, payload: { tag: r.tag_name, name: r.name, body: r.body?.slice(0, 4000), url: r.html_url }, occurredAt: at });
+        if (at >= since) signals.push({ kind: "release", repo: name, ref: `gh:release:${name}@${r.tag_name}`, title: `${name} ${r.tag_name}`, payload: { tag: r.tag_name, name: r.name, body: r.body?.slice(0, RELEASE_NOTES_MAX), url: r.html_url }, occurredAt: at });
       }
       for (const p of prs ?? []) {
         if (!p.merged_at) continue;
@@ -386,7 +381,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
         } catch (e) {
           // 한도에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다(저장소마다 같은 실패 로그가 쌓이지 않게).
-          if (e instanceof SharedQuotaError) { profileBudget = 0; ctx.log.info({ repo: name }, "profile skipped: shared model limit reached"); }
+          // 한도나 자동 작업 몫(shared-quota backgroundReserve)에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다.
+          if (e instanceof SharedQuotaError) { profileBudget = 0; ctx.log.info({ repo: name }, "profile skipped: shared model limit or reserve reached"); }
           else ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed");
         }
       }

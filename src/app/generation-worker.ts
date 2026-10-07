@@ -63,7 +63,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     let mainRecorded = false;
     try {
-      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); };
+      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config, { background: Boolean(job.background) }); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); };
       // 본 호출은 끝나는 즉시 기록한다. 뒤의 보정·반영이 실패해도 이미 쓴 호출이 오류로 잘못 남지 않게.
       let res = await call(job.user);
       mainRecorded = true;

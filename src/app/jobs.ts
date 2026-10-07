@@ -17,7 +17,7 @@ import { localeOf, say } from "./i18n.js";
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
 export const MAX_JOB_ATTEMPTS = 3;
-const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ continuation: r.continuation ?? undefined, id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
+const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ continuation: r.continuation ?? undefined, ...(r.meta?.background ? { background: true } : {}), id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
 
 const score = z.number().int().min(0).max(2);
 const results = {

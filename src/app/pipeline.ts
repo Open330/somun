@@ -1,4 +1,4 @@
-import { assertSharedQueueCapacity, SharedQuotaError } from "./shared-quota.js";
+import { assertSharedQueueCapacity, backgroundReserve, SharedQuotaError, sharedUsage, usesSharedModel } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
@@ -165,6 +165,11 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
     settingsByOwner.set(c.ownerId, s);
     if (s.watch.mode !== "auto" || !enabledTargets(s.channelLangs).length) continue;
+    // 자동 작업 몫이 다 찼으면 넣지 않는다(넣어도 실패로 쌓이고, 실패 횟수 때문에 다음 날에도 다시 시도하지 않게 된다).
+    if (usesSharedModel(ctx, c.ownerId, s.llm)) {
+      const usage = sharedUsage(ctx, c.ownerId, now);
+      if (usage.used >= usage.limit - backgroundReserve(usage.limit)) continue;
+    }
     // 로컬 워커가 이 저장소의 프로필을 만드는 중이면 기다린다. 프로필이 반영되면 jobs.completeJob이 다시 부른다.
     if (s.llm.provider === "local-agent" && pendingProfileJob(ctx, c.ownerId, c.repo)) continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
@@ -175,7 +180,7 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     if (jobs.some((j) => j.status === "pending" || j.status === "claimed")) continue;
     const failed = jobs.filter((j) => j.status === "failed");
     if (failed.length >= SWEEP_MAX_FAILURES || failed.some((j) => (j.finishedAt ?? 0) > now - SWEEP_BACKOFF_MS)) continue;
-    try { queueStep(ctx, c.ownerId, kind, c.id); n++; }
+    try { queueStep(ctx, c.ownerId, kind, c.id, undefined, undefined, { background: true }); n++; }
     catch (err) { if (!(err instanceof GenerationConflictError) && !(err instanceof SharedQuotaError)) throw err; }
   }
   return n;
@@ -193,17 +198,17 @@ export async function judgeCandidates(ctx: AppContext, ownerId: string, ids: num
   return { started };
 }
 
-export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string; continuation?: GenerationPlan; automatic?: boolean } = {}): number {
+export function queueStep(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string; continuation?: GenerationPlan; automatic?: boolean; background?: boolean } = {}): number {
   return ctx.db.$client.transaction(() => {
     const c = getCandidateRow(ctx, ownerId, candidateId);
     if (c.status === "dropped" || (c.status === "published" && kind !== "draft" && !(kind === "digest" && opts.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다. 먼저 글감을 복원해 주세요.", "Archived or published candidates cannot be generated again. Restore the candidate first."));
     const evidence = c.evidence as Evidence;
     if (kind === "draft" && !requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction) && evidence.highlightsAt && !evidence.highlights?.some((text) => text.trim())) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again."));
-    return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation, opts.automatic);
+    return enqueueJob(ctx, ownerId, kind, candidateId, channel, lang, buildPrompt(ctx, ownerId, kind, candidateId, channel, lang, opts), opts.continuation, opts.automatic, opts.background);
   }).immediate();
 }
 
-export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, lang: string | undefined, prompt: PromptSpec, continuation?: GenerationPlan, recordQuotaFailure = false): number {
+export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel: Channel | undefined, lang: string | undefined, prompt: PromptSpec, continuation?: GenerationPlan, recordQuotaFailure = false, background = false): number {
   return ctx.db.$client.transaction(() => {
     const open = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, candidateId)).all()
       .find((j) => j.kind === kind && (j.channel ?? undefined) === channel && (j.lang ?? undefined) === lang && (j.status === "pending" || j.status === "claimed"));
@@ -217,7 +222,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
     let quotaError: SharedQuotaError | undefined;
     try { assertSharedQueueCapacity(ctx, ownerId); }
     catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
-    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.draftPurpose || background ? { ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
     emit(ctx, ownerId, { resource: "jobs", id });
     return id;
   }).immediate();

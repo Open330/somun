@@ -308,3 +308,11 @@ it("keeps an editor-deferred candidate deferred when running drafts finish, but 
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft 2" } });
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("drafted");
 });
+
+it("marks jobs queued by the automatic sweep as background work", async () => {
+  updateSettings(ctx, "test", { watch: { mode: "auto", recentDays: 30 } });
+  ctx.db.update(schema.candidates).set({ status: "new", updatedAt: Date.now() }).run();
+  await processNewCandidates(ctx, "test");
+  const job = ctx.db.select().from(schema.llmJobs).get();
+  expect(job?.meta?.background).toBe(true);
+});
