@@ -22,6 +22,9 @@ const schema = z.object({
   AUTH_AUDIENCE: z.string().default("somun"),
   GITHUB_TOKEN: z.string().optional(),
   GEMINI_API_KEYS: z.string().optional(),
+  /** jiun-api LLM 게이트웨이(클러스터 내부 주소)와 서비스 키. 둘 다 있으면 서버 키 Gemini 호출이 게이트웨이로 간다. 비우면 지금처럼 직접 호출. */
+  JIUN_LLM_GATEWAY_URL: z.string().url().optional(),
+  JIUN_LLM_GATEWAY_KEY: z.string().min(1).optional(),
   SOMUN_SHARED_MODEL_DAILY_LIMIT: z.coerce.number().int().min(1).max(10000).default(50),
   SOMUN_SHARED_MODEL_PENDING_LIMIT: z.coerce.number().int().min(1).max(1000).default(20),
   /** UTC cron. 기본 00:00 UTC = 09:00 KST */

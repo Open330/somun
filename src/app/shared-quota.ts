@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
-import { freeGeminiKeys, type LlmConfig } from "../infra/llm/providers.js";
+import type { LlmConfig } from "../infra/llm/providers.js";
+import { houseGeminiAvailable } from "./llm-gateway.js";
 import { emit, type AppContext } from "./context.js";
 import { localeOf, say } from "./i18n.js";
 import { getSettings } from "./settings.js";
@@ -16,7 +17,7 @@ const nextDay = (now: number) => Date.parse(`${dayOf(now)}T00:00:00Z`) + 86_400_
 const quotaKey = (ownerId: string) => `shared_quota:${createHash("sha256").update(ownerId).digest("hex")}`;
 
 export function usesSharedModel(ctx: AppContext, ownerId: string, llm = getSettings(ctx, ownerId).llm): boolean {
-  return llm.provider === "gemini" && !llm.apiKey && freeGeminiKeys(ctx.env.geminiKeys).length > 0;
+  return llm.provider === "gemini" && !llm.apiKey && houseGeminiAvailable(ctx);
 }
 
 export function sharedUsage(ctx: AppContext, ownerId: string, now = Date.now()) {

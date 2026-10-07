@@ -4,7 +4,7 @@ import { DEFAULT_CHANNEL_LANGS, type Channel } from "../core/channels.js";
 import { DEFAULT_BANNED_PHRASES } from "../core/lint.js";
 import { DEFAULT_VOICE_PRESET } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
-import { freeGeminiKeys } from "../infra/llm/providers.js";
+import { houseGeminiAvailable } from "./llm-gateway.js";
 import { PLAIN_BOX, SecretBox } from "../infra/secrets.js";
 import type { Settings, SettingsView } from "../shared/types.js";
 import { emit, InvalidInputError, type AppContext } from "./context.js";
@@ -110,7 +110,7 @@ export function getSettingsView(ctx: AppContext, ownerId: string): SettingsView 
   const s = getSettings(ctx, ownerId);
   const { apiKey, ...llm } = s.llm;
   const notify = s.notify ? { weekly: s.notify.weekly, lastSentAt: s.notify.lastSentAt, discordWebhookSet: Boolean(s.notify.discordWebhookUrl) } : undefined;
-  return { ...s, notify, llm: { ...llm, apiKeySet: Boolean(apiKey), credentialsConfigured: llm.provider === "local-agent" || Boolean(apiKey) || (llm.provider === "gemini" && freeGeminiKeys(ctx.env.geminiKeys).length > 0), apiKeyHint: apiKey ? apiKey.slice(-4) : undefined } };
+  return { ...s, notify, llm: { ...llm, apiKeySet: Boolean(apiKey), credentialsConfigured: llm.provider === "local-agent" || Boolean(apiKey) || (llm.provider === "gemini" && houseGeminiAvailable(ctx)), apiKeyHint: apiKey ? apiKey.slice(-4) : undefined } };
 }
 
 export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<Settings>, keepApiKey = true): SettingsView {
