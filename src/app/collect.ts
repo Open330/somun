@@ -28,11 +28,16 @@ const DAY = 24 * 3600 * 1000;
  */
 
 /**
- * 수집할 저장소. 조직·사용자 단위로 넓힐 때만 fork·보관·60일 넘게 멈춘 저장소를 거른다.
- * 사용자가 직접 지정한 저장소는 거르지 않는다(조용히 빠지면 왜 글감이 없는지 알 수 없다). 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
+ * 수집할 저장소.
+ * - 조직·사용자 단위로 넓힌 목록은 fork·보관·60일 넘게 push가 없는 저장소를 거른다.
+ * - 사용자가 직접 지정한 저장소는 거르지 않는다. 다만 보관됐거나 60일 넘게 push가 없으면 quiet로 표시해, 수집이
+ *   스타·fork 스냅샷과 스타 마일스톤만 처리하게 한다(세부 조회·프로필 생성 없이). GitHub App으로 저장소 200개를 고르면
+ *   수집마다 수천 번 호출하고, 활동 없는 저장소의 프로필 생성으로 공유 모델 쿼터를 다 썼다.
+ * - 공개 저장소만 읽을 수 있는데 비공개면 skipped로 알린다.
  */
-export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; skipped: string[] }> {
+export async function expandTargets(gh: GitHubClient, targets: string[], publicOnly = false): Promise<{ repos: GhRepo[]; quiet: Set<string>; skipped: string[] }> {
   const explicit: GhRepo[] = [], expanded: GhRepo[] = [], skipped: string[] = [];
+  const quiet = new Set<string>();
   for (const raw of targets) {
     const t = normalizeGithubTarget(raw);
     if (!t) throw new Error("Invalid GitHub target");
@@ -40,7 +45,10 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
       const r = await gh.get<GhRepo>(`/repos/${t}`);
       if (!r) throw new Error(`GitHub repository unavailable: ${t}`);
       if (publicOnly && r.private !== false) skipped.push(r.full_name);
-      else explicit.push(r);
+      else {
+        explicit.push(r);
+        if (r.archived || !recentlyPushed(r)) quiet.add(r.full_name);
+      }
       continue;
     }
     for (let page = 1; page <= 5; page++) {
@@ -51,11 +59,19 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
     }
   }
   // 최근에 움직인 저장소부터. 프로필 생성 예산(수집당 25개)이 활발한 저장소에 먼저 쓰인다.
-  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && Date.now() - Date.parse(r.pushed_at) < 60 * DAY);
+  const active = expanded.filter((r) => !r.fork && !r.archived && !(publicOnly && r.private !== false) && recentlyPushed(r));
   const seen = new Set<string>();
-  const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => Date.parse(b.pushed_at) - Date.parse(a.pushed_at));
-  return { repos, skipped };
+  const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => (Date.parse(b.pushed_at ?? "") || 0) - (Date.parse(a.pushed_at ?? "") || 0));
+  return { repos, quiet, skipped };
 }
+
+/** 이 저장소에 아직 버리거나 발행하지 않은 글감이 있는가. */
+function hasOpenCandidate(ctx: AppContext, ownerId: string, repo: string): boolean {
+  return ctx.db.select({ status: schema.candidates.status }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repo))).all().some((c) => !["dropped", "published"].includes(c.status));
+}
+
+/** 최근 60일 안에 push가 있었는가. push 기록이 없는 새 저장소는 활동 중으로 본다. */
+const recentlyPushed = (r: GhRepo) => { const at = Date.parse(r.pushed_at ?? ""); return !Number.isFinite(at) || Date.now() - at < 60 * DAY; };
 
 /** 글감 판단에 필요한데 권한 없음으로 읽지 못한 것. 트래픽은 관리 권한이 있어야 해서 늘 빠질 수 있으므로 세지 않는다. */
 export function missingReads(denied: Iterable<string>, repo: string): string[] {
@@ -240,11 +256,22 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
   try {
     // App 설치에서 온 소스는 설치 토큰으로, 아니면 서버 토큰으로 읽는다.
     const { gh, publicOnly } = await githubAccess(ctx, ownerId, source.options?.installationId ? Number(source.options.installationId) : undefined);
-    const { repos, skipped } = await expandTargets(gh, source.targets, publicOnly);
+    const { repos, quiet, skipped } = await expandTargets(gh, source.targets, publicOnly);
     const missing: string[] = [];
     for (const repo of repos) {
       const name = repo.full_name;
       try {
+      if (quiet.has(name)) {
+        // 활동 없는 저장소: 이미 받은 저장소 정보로 스냅샷(발행 성과 추적)과 스타 마일스톤만. 세부 조회·프로필 생성은 하지 않는다.
+        const prevQuiet = latestForRepo(ctx, ownerId, name);
+        const starT = crossedThreshold(prevQuiet.lastStarThreshold ?? lastSnapshot(ctx, ownerId, name)?.stars, repo.stargazers_count, STAR_THRESHOLDS);
+        snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count });
+        if (starT) {
+          const milestone: IncomingSignal = { kind: "star_milestone", repo: name, ref: `gh:stars:${name}#${starT}`, title: `${name} ${starT} stars`, payload: { threshold: starT, stars: repo.stargazers_count }, occurredAt: Date.now() };
+          summary[name] = ingestSignals(ctx, ownerId, sourceId, [milestone], {}, { repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined, stars: repo.stargazers_count, forks: repo.forks_count }).inserted;
+        }
+        continue;
+      }
       const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
         gh.get<{ content: string }>(`/repos/${name}/readme`),
         pagedList<GhRelease>(gh, `/repos/${name}/releases`),
@@ -314,14 +341,6 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });
-      // 프로필: 없거나 README가 바뀐 저장소만, 수집 한 번에 최대 PROFILE_BUDGET개. 나머지는 다음 수집에.
-      // local-agent는 사용자의 워커가 하나씩 처리하므로 이번에 새 활동이 있는 저장소만, 더 적게 넣는다(초안 작업이 밀리지 않게).
-      if (profileBudget > 0 && (!local || signals.length > 0)) {
-        try {
-          const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
-          if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
-        } catch (e) { ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed"); }
-      }
       refreshEvidence(ctx, ownerId, name, evidence);
       if (signals.length) {
         // 같은 PR이 저장된 것과 이번 응답에 함께 있으므로 ref로 중복을 뺀다. 릴리스 시각은 저장된 것과 방금 받은 것 중 늦은 쪽.
@@ -331,6 +350,14 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         const recentPrCount = new Set(recent.filter((p) => !(p.at <= latestReleaseAt)).map((p) => p.ref)).size;
         const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: Number.isFinite(latestReleaseAt) ? latestReleaseAt : undefined, repoCreatedAt: createdAt, recentPrCount }, evidence);
         summary[name] = r.inserted;
+      }
+      // 프로필: 이번 수집에서 새 신호가 저장됐거나 열린 글감이 있는 저장소만(초안의 근거가 되는 곳). ensureProfile은 없거나 README가
+      // 바뀐 경우에만 모델을 부른다. 활동 없는 저장소까지 만들면 webhook마다 공유 모델 쿼터를 프로필에 다 쓴다. 수집 한 번에 최대 PROFILE_BUDGET개.
+      if (profileBudget > 0 && ((summary[name] ?? 0) > 0 || hasOpenCandidate(ctx, ownerId, name))) {
+        try {
+          const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
+          if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
+        } catch (e) { ctx.log.warn({ repo: name, err: (e as Error).message }, "profile failed"); }
       }
       } catch (e) {
         // 레이트 리밋이면 멈춘다. 계속 요청하면 남은 저장소도 전부 실패하고 GitHub의 제한만 길어진다.
