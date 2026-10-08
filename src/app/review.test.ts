@@ -130,7 +130,7 @@ it("measures copied drafts: unchanged rate and how much was rewritten", () => {
   saveDraftEdit(ctx, OWNER, edited, { body: "one two six four https://x.y", markCopied: true });
   draft("never copied");
   const stats = learningStats(ctx, OWNER);
-  expect(stats).toMatchObject({ copied: 2, unchangedRate: 0.5, avgEditRatio: 0.1 });
+  expect(stats).toMatchObject({ copied: 2, unchangedRate: 0.5, avgEditRatio: 0.2 });
   expect(stats.byChannel).toMatchObject([{ channel: "x", copied: 2 }]);
   expect(stats.byWeek.reduce((n, w) => n + w.copied, 0)).toBe(2);
 });
@@ -308,6 +308,17 @@ it.each([
   saveDraftEdit(ctx, OWNER, id, {body:fixed,markCopied:true});
   expect(examples()).toHaveLength(1);
   expect(examples()[0].body).toBe(fixed);
+});
+
+it('copyIfClean saves an edit but only marks it copied when no number or claim needs review', () => {
+  const id = draft('Plain text https://github.com/me/tool');
+  const held = saveDraftEdit(ctx, OWNER, id, { body: 'Now 40% faster. https://github.com/me/tool', markCopied: true, copyIfClean: true });
+  expect(held.status).toBe('edited');
+  expect(held.body).toBe('Now 40% faster. https://github.com/me/tool');
+  expect(learningStats(ctx, OWNER).copied).toBe(0);
+  const clean = saveDraftEdit(ctx, OWNER, id, { body: 'Now handles line endings. https://github.com/me/tool', markCopied: true, copyIfClean: true });
+  expect(clean.status).toBe('copied');
+  expect(learningStats(ctx, OWNER).copied).toBe(1);
 });
 
 it("tags format lessons with their channel so they only shape that channel's drafts", () => {
