@@ -327,3 +327,13 @@ it("marks PRs after the repo's latest release as unreleased even when that relea
   ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
   expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Add grouped session views"]);
 });
+
+it("does not let a late backport on an older line become the unreleased cutoff", () => {
+  const sig = (kind: string, ref: string, title: string, at: number, cand: number | null, payload: Record<string, unknown> = {}) =>
+    ctx.db.insert(schema.signals).values({ ownerId: "test", sourceId: 1, kind, repo: "vitejs/vite", ref, title, payload, occurredAt: at, candidateId: cand }).run();
+  sig("release", "r8", "vitejs/vite v8.4.0", 1000, null, { tag: "v8.4.0" });
+  sig("release", "r7", "vitejs/vite v7.3.5", 3000, null, { tag: "v7.3.5" });
+  sig("pr_merged", "p1", "Main work", 2000, id);
+  ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
+  expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Main work"]);
+});
