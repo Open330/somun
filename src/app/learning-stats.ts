@@ -15,12 +15,14 @@ function weekOf(at: number): string {
   return new Date(monday).toISOString().slice(0, 10);
 }
 
+/** 그대로 쓴 비율은 전체 복사본 기준, 평균 수정량은 고친 복사본만 기준이다(그대로 쓴 0%가 섞이면 두 지표가 겹친다). */
 function bucket(ratios: number[]): LearningBucket {
   const n = ratios.length;
+  const edited = ratios.filter((r) => r > 0);
   return {
     copied: n,
-    unchangedRate: n ? Math.round((ratios.filter((r) => r === 0).length / n) * 100) / 100 : 0,
-    avgEditRatio: n ? Math.round((ratios.reduce((a, b) => a + b, 0) / n) * 100) / 100 : 0,
+    unchangedRate: n ? Math.round(((n - edited.length) / n) * 100) / 100 : 0,
+    avgEditRatio: edited.length ? Math.round((edited.reduce((a, b) => a + b, 0) / edited.length) * 100) / 100 : 0,
   };
 }
 

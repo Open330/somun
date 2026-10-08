@@ -130,7 +130,7 @@ it("measures copied drafts: unchanged rate and how much was rewritten", () => {
   saveDraftEdit(ctx, OWNER, edited, { body: "one two six four https://x.y", markCopied: true });
   draft("never copied");
   const stats = learningStats(ctx, OWNER);
-  expect(stats).toMatchObject({ copied: 2, unchangedRate: 0.5, avgEditRatio: 0.1 });
+  expect(stats).toMatchObject({ copied: 2, unchangedRate: 0.5, avgEditRatio: 0.2 });
   expect(stats.byChannel).toMatchObject([{ channel: "x", copied: 2 }]);
   expect(stats.byWeek.reduce((n, w) => n + w.copied, 0)).toBe(2);
 });

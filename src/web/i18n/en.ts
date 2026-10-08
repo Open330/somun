@@ -41,6 +41,11 @@ export const en: Record<string, string> = {
   "단축키 e": "Shortcut: e",
   "단축키 r": "Shortcut: r",
   "채널에 직접 게시한 뒤 링크를 저장하세요.": "Publish on the channel, then save the link here.",
+  "링크는 복사한 v{version}에 연결합니다.": "The link is attached to the copied v{version}.",
+  "저장했습니다.": "Saved.",
+  "확인했다면 다시 복사를 눌러 주세요.": "If you have checked it, press Copy again.",
+  "저장했지만 복사하지 못했습니다. 복사를 한 번 더 눌러 주세요.": "Saved, but could not copy. Press Copy once more.",
+  "설정된 모델은 {time} 이후 다시 쓸 수 있습니다.": "The configured model is available again after {time}.",
   "핵심 주장": "Key claims",
   "쓰지 않음": "Avoid",
   단계: "Stage",
@@ -694,8 +699,8 @@ export const en: Record<string, string> = {
   "예시 문장": "Example sentences",
   "프롬프트에 참고로 들어감": "Included in the prompt as reference",
   "지금은 프롬프트에 들어가지 않음": "Not included in the prompt right now",
-  "내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현이 있는 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.":
-    "{own} of my examples · {seed} reference examples. Drafts you copy become your examples (except posts with banned phrases). When a channel has 2 or more of your examples, only those are used, keeping up to the latest 8.",
+  "내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현·이모지 글머리·빈칸 표시·원자료에 없는 수치나 주장·저장소 이름·용어 섞임 같은 점검 경고가 남은 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.":
+    "{own} of my examples · {seed} reference examples. Drafts you copy become your examples, unless a check warning remains (banned phrases, emoji bullets, placeholders, numbers or claims not in the source, repo name, mixed terms). When a channel has 2 or more of your examples, only those are used, keeping up to the latest 8.",
   닫기: "Close",
   "예시 직접 추가": "Add example manually",
   제목: "Title",
@@ -709,11 +714,11 @@ export const en: Record<string, string> = {
   비활성: "Inactive",
   끄기: "Turn off",
   켜기: "Turn on",
-  "그대로 {unchanged} · 고친 양 {edited} · {n}건": "Unchanged {unchanged} · rewrite share {edited} · {n} drafts",
+  "그대로 {unchanged} · 고친 글 평균 수정량 {edited} · {n}건": "Unchanged {unchanged} · avg. rewrite of edited {edited} · {n} drafts",
   "학습 효과": "Learning effect",
   "복사한 초안 {n}건 기준": "Based on {n} copied drafts",
-  '초안을 고치지 않고 그대로 쓴 비율과, 고친 경우 원문 대비 바꾼 단어 비율입니다. 지침·예시가 쌓일수록 "고친 양"이 줄어야 합니다.':
-    'The share of drafts used unchanged, and for edited drafts, the share of words changed from the original. As guides and examples build up, "rewrite share" should go down.',
+  "초안을 고치지 않고 그대로 쓴 비율과, 고친 글만 놓고 원문 대비 바꾼 단어 비율의 평균입니다. 지침·예시가 쌓일수록 그대로 쓴 비율은 늘고 수정량은 줄어야 합니다.":
+    "The share of drafts used unchanged, and the average share of words changed across edited drafts only. As guides and examples build up, the unchanged share should rise and the rewrite should shrink.",
   주별: "Weekly",
   "문체 설정 버전별 (처음 쓴 순서)": "By voice settings version (in order of first use)",
   "기록 전": "Not recorded",

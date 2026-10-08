@@ -196,7 +196,7 @@ export default function Voice() {
           </h2>
           <p className="lede small">
             {t(
-              "내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현이 있는 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.",
+              "내 예시 {own}개 · 참고 예시 {seed}개. 복사한 초안이 내 예시가 됩니다(금지 표현·이모지 글머리·빈칸 표시·원자료에 없는 수치나 주장·저장소 이름·용어 섞임 같은 점검 경고가 남은 글은 제외). 채널마다 내 예시가 2개 이상이면 그것만 쓰고, 최근 8개까지 남깁니다.",
               { own, seed },
             )}
           </p>
@@ -321,7 +321,11 @@ export default function Voice() {
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const BucketLine = ({ b }: { b: LearningBucket }) => (
   <span className="mono">
-    {t("그대로 {unchanged} · 고친 양 {edited} · {n}건", { unchanged: pct(b.unchangedRate), edited: pct(b.avgEditRatio), n: b.copied })}
+    {t("그대로 {unchanged} · 고친 글 평균 수정량 {edited} · {n}건", {
+      unchanged: pct(b.unchangedRate),
+      edited: pct(b.avgEditRatio),
+      n: b.copied,
+    })}
   </span>
 );
 
@@ -342,7 +346,7 @@ function LearningPanel() {
         <p className="small muted learning-intro">
           {t("실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.")}{" "}
           {t(
-            '초안을 고치지 않고 그대로 쓴 비율과, 고친 경우 원문 대비 바꾼 단어 비율입니다. 지침·예시가 쌓일수록 "고친 양"이 줄어야 합니다.',
+            "초안을 고치지 않고 그대로 쓴 비율과, 고친 글만 놓고 원문 대비 바꾼 단어 비율의 평균입니다. 지침·예시가 쌓일수록 그대로 쓴 비율은 늘고 수정량은 줄어야 합니다.",
           )}
         </p>
       </div>

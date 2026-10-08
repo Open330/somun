@@ -146,43 +146,77 @@ export default function DraftPanel({
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
   // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
   const outgoing = track ? trackLinks(full, { channel, homepage }) : full;
-  const unsupported = (lint?: Draft["lint"]) => lint?.find((item) => item.rule === "numbers_need_review" && !item.ok);
+  // 복사 전에 확인할 경고: 원자료에서 찾지 못한 수치·주장. 게시하면 되돌리기 어렵다.
+  const unsupported = (lint?: Draft["lint"]) =>
+    lint?.find((item) => (item.rule === "numbers_need_review" || item.rule === "claims_need_review") && !item.ok);
+  const warningText = (item: NonNullable<ReturnType<typeof unsupported>>) => lintDetail(item) ?? t("원자료에서 찾지 못한 수치가 있습니다.");
   const save = async (copyAfter: boolean, overwrite = false) => {
     if (!latest || action || !body.trim()) return;
-    // 원자료에서 찾지 못한 수치가 있으면 복사 전에 한 번 확인한다. 게시하면 되돌리기 어렵다.
     const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
     const check = !bodyChanged ? unsupported(latest.lint) : undefined;
-    if (
-      copyAfter &&
-      check &&
-      !window.confirm(`${lintDetail(check) ?? t("원자료에서 찾지 못한 수치가 있습니다.")}\n\n${t("확인했다면 그대로 복사할까요?")}`)
-    )
-      return;
+    if (copyAfter && check && !window.confirm(`${warningText(check)}\n\n${t("확인했다면 그대로 복사할까요?")}`)) return;
     setAction(copyAfter ? "copy" : "save");
     setActionError(null);
     setConflict(null);
     let copied = false;
+    let saved: Draft | undefined;
+    const keep = (d: Draft) => {
+      if (!d?.id) return;
+      setSavedDraft(d);
+      if (newest && d.id !== newest.id) pinAfterSave.current = d.id;
+    };
     try {
-      if (copyAfter) {
-        await navigator.clipboard.writeText(outgoing);
+      if (copyAfter && bodyChanged) {
+        // 고친 글은 먼저 저장해 점검 결과를 본 뒤에 복사한다. 경고가 있으면 복사하지 않고 확인을 받는다.
+        saved = await post<Draft>(`/drafts/${latest.id}/edit`, {
+          title: spec.hasTitle ? title : undefined,
+          body,
+          markCopied: false,
+          base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body },
+        });
+        keep(saved);
+        setEditing(false);
+        const after = unsupported(saved?.lint);
+        if (after) {
+          setActionError(`${t("저장했습니다.")} ${warningText(after)} ${t("확인했다면 다시 복사를 눌러 주세요.")}`);
+          showToast(t("수정한 내용을 저장했습니다."));
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(outgoing);
+        } catch {
+          setActionError(t("저장했지만 복사하지 못했습니다. 복사를 한 번 더 눌러 주세요."));
+          return;
+        }
         copied = true;
+        keep(
+          await post<Draft>(`/drafts/${saved.id}/edit`, {
+            title: saved.title,
+            body: saved.body,
+            markCopied: true,
+            base: { title: saved.title, body: saved.body },
+          }),
+        );
+      } else {
+        if (copyAfter) {
+          await navigator.clipboard.writeText(outgoing);
+          copied = true;
+        }
+        saved = await post<Draft>(`/drafts/${latest.id}/edit`, {
+          title: spec.hasTitle ? title : undefined,
+          body,
+          markCopied: copyAfter,
+          base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body },
+        });
+        keep(saved);
+        setEditing(false);
+        const after = bodyChanged ? unsupported(saved?.lint) : undefined;
+        if (after) setActionError(warningText(after));
       }
-      const saved = await post<Draft>(`/drafts/${latest.id}/edit`, {
-        title: spec.hasTitle ? title : undefined,
-        body,
-        markCopied: copyAfter,
-        base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body },
-      });
-      if (saved?.id) {
-        setSavedDraft(saved);
-        if (newest && saved.id !== newest.id) pinAfterSave.current = saved.id;
+      if (copyAfter) {
+        setCopiedId(latest.id);
+        setStep("post");
       }
-      if (copyAfter) setCopiedId(latest.id);
-      setEditing(false);
-      if (copyAfter) setStep("post");
-      const after = bodyChanged ? unsupported(saved?.lint) : undefined;
-      if (after)
-        setActionError(`${copyAfter ? `${t("복사했습니다.")} ` : ""}${lintDetail(after) ?? t("원자료에서 찾지 못한 수치가 있습니다.")}`);
       showToast(copyAfter ? t("복사했습니다. 채널에 게시한 뒤 아래에 링크를 남겨주세요.") : t("수정한 내용을 저장했습니다."));
     } catch (err) {
       if ((err as { status?: number }).status === 409) {
@@ -195,7 +229,7 @@ export default function DraftPanel({
       setActionError(
         copied
           ? t("복사는 완료했지만 저장하지 못했습니다. 내용을 유지한 채 다시 저장해 주세요.")
-          : copyAfter
+          : copyAfter && !saved
             ? t("복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하거나 수정 화면에서 직접 복사해 주세요.")
             : `${t("저장하지 못했습니다.")} ${(err as Error).message}`,
       );
@@ -267,7 +301,15 @@ export default function DraftPanel({
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
-  const postDraft = isOld ? (shown.id === copiedId ? shown : null) : latest;
+  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 최신 판이 아니라 그 복사본이다.
+  const lastCopied = versions.find((d) => d.status === "copied" && !records.some((p) => p.draftId === d.id));
+  const postDraft = isOld
+    ? shown.id === copiedId || shown.status === "copied"
+      ? shown
+      : null
+    : latest.status !== "copied" && lastCopied
+      ? lastCopied
+      : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
   const displayed = editing ? latest : (shown ?? latest);
   const count = [...(editing ? body : displayed.body)].length;
@@ -307,12 +349,16 @@ export default function DraftPanel({
           {expectedModel && !displayed.model.includes(expectedModel) && displayed.model.startsWith("gemini/") && (
             <span
               className="badge warn"
-              title={t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", {
+              title={`${t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", {
                 model: expectedModel,
-              })}
+              })}${
+                draftModelResetAt
+                  ? ` ${t("설정된 모델은 {time} 이후 다시 쓸 수 있습니다.", { time: new Date(draftModelResetAt).toLocaleString(dateLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) })}`
+                  : ""
+              }`}
             >
               {t("대체 모델")}
-              {draftModelResetAt
+              {draftModelResetAt && draftModelResetAt - Date.now() <= 60 * 60_000
                 ? ` · ${t("{time} 이후 다시 쓰기 권장", { time: new Date(draftModelResetAt).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) })}`
                 : ""}
             </span>
@@ -580,7 +626,10 @@ export default function DraftPanel({
               </a>
             )}
           </div>
-          <p className="small muted post-caption">{t("채널에 직접 게시한 뒤 링크를 저장하세요.")}</p>
+          <p className="small muted post-caption">
+            {t("채널에 직접 게시한 뒤 링크를 저장하세요.")}
+            {latest && postDraft.id !== latest.id && ` ${t("링크는 복사한 v{version}에 연결합니다.", { version: postDraft.version })}`}
+          </p>
           <details className="raw post-help">
             <summary>{t("게시 전 확인할 점")}</summary>
             <p className="small muted">
