@@ -2,7 +2,8 @@ import { sharedUsage } from "./shared-quota.js";
 import { desc, eq, like } from "drizzle-orm";
 import { classifyGeminiError, nextPtMidnight, ptDayKey, RPD_SOFT_CAP } from "../core/keypool.js";
 import { schema } from "../infra/db/index.js";
-import { freeGeminiKeys, modelFor, type KeyPoolOps } from "../infra/llm/providers.js";
+import { freeGeminiKeys, gatewayModel, modelFor, type KeyPoolOps } from "../infra/llm/providers.js";
+import { gatewayState, houseGeminiAvailable } from "./llm-gateway.js";
 import type { KeyStatus, ModelAvailability } from "../shared/types.js";
 import { emit, type AppContext } from "./context.js";
 import { getSettings } from "./settings.js";
@@ -15,6 +16,11 @@ export const UPSTREAM_FAILURE_WINDOW_MS = 10 * 60_000;
  * 쿨다운만 보면 "요청 가능"으로 보인다. 마지막 호출이 성공했으면 회복된 것으로 본다.
  */
 export function recentUpstreamFailure(ctx: AppContext, model: string, now = Date.now()): number | undefined {
+  // 게이트웨이 경로: 키 상태 표는 쓰지 않는다. 게이트웨이가 최근 5xx로 답했는지를 본다(대체까지 끝낸 뒤의 결과).
+  if (ctx.env.llmGateway) {
+    const s = gatewayState(ctx, gatewayModel(model), now);
+    return s?.status !== undefined && s.status >= 500 ? s.status : undefined;
+  }
   // 생성 요청과 상태 조회마다 불리므로 표 전체를 읽지 않고 이 모델의 가장 최근 호출 한 행만 본다.
   const last = ctx.db.select().from(schema.llmKeyState).where(like(schema.llmKeyState.label, `%|${model}`)).orderBy(desc(schema.llmKeyState.lastUsedAt)).limit(1).get();
   if (!last?.lastErrorAt || last.lastErrorAt !== last.lastUsedAt || now - last.lastErrorAt > UPSTREAM_FAILURE_WINDOW_MS) return undefined;
@@ -25,12 +31,19 @@ export function recentUpstreamFailure(ctx: AppContext, model: string, now = Date
 export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.now()): ModelAvailability {
   const { llm } = getSettings(ctx, ownerId);
   const keys = freeGeminiKeys(ctx.env.geminiKeys);
-  const mode: ModelAvailability["mode"] = llm.provider === "local-agent" ? "local" : llm.apiKey ? "user" : llm.provider === "gemini" && keys.length ? "shared" : "missing";
+  const mode: ModelAvailability["mode"] = llm.provider === "local-agent" ? "local" : llm.apiKey ? "user" : llm.provider === "gemini" && houseGeminiAvailable(ctx) ? "shared" : "missing";
   const usage = mode === "shared" ? sharedUsage(ctx, ownerId, now) : undefined;
   const rows = new Map(ctx.db.select().from(schema.llmKeyState).all().map((r) => [r.label, r]));
   const models = (["analysis", "draft"] as const).map((purpose): ModelAvailability["models"][number] => {
     const model = modelFor(llm, purpose === "draft" ? "draft" : "judge");
     if (mode !== "shared") return { purpose, model, state: mode === "user" ? "unknown" : mode };
+    if (ctx.env.llmGateway) {
+      // 게이트웨이 경로: 키별 상태는 게이트웨이가 가진다. 최근 게이트웨이 응답(429의 Retry-After, 5xx)과 계정 한도만 본다.
+      const s = gatewayState(ctx, gatewayModel(model), now);
+      const retryAt = Math.max(s?.retryAt ?? 0, usage && usage.used >= usage.limit ? usage.resetAt : 0);
+      if (retryAt > now) return { purpose, model, state: "waiting", retryAt };
+      return s?.status !== undefined && s.status >= 500 ? { purpose, model, state: "degraded", lastStatus: s.status } : { purpose, model, state: "ready" };
+    }
     const waits = keys.map(({ label }) => {
       const row = rows.get(`${label}|${model}`);
       return Math.max(row?.cooldownUntil ?? 0, row?.dayKey === ptDayKey(now) && row.dayCount >= RPD_SOFT_CAP ? nextPtMidnight(now) : 0);

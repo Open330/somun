@@ -17,6 +17,8 @@ export function recordLlmUsage(ctx: AppContext, ownerId: string, config: Pick<Ll
     return;
   }
   const { res } = outcome;
+  // 게이트웨이가 처리한 호출은 게이트웨이가 시도마다 직접 기록한다. 여기서 또 보내면 두 번 센다.
+  if (res.viaGateway) return;
   ctx.usage.record({
     ...base, latencyMs: res.latencyMs, provider: usageProviderOf(res.provider, config.baseUrl), model: res.model, apiKeyLabel: res.keyLabel === "byok" ? undefined : res.keyLabel, status: "success",
     inputTokens: res.usage?.inputTokens ?? 0, outputTokens: res.usage?.outputTokens ?? 0, cachedInputTokens: res.usage?.cachedInputTokens ?? 0, totalTokens: res.usage?.totalTokens ?? 0,

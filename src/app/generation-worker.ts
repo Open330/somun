@@ -3,7 +3,8 @@ import { isBetterRepair } from "../core/draft-repair.js";
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
-import { recordFailedAttempt, recordLlmUsage } from "./llm-usage.js";
+import { recordLlmUsage } from "./llm-usage.js";
+import { llmCallOptions } from "./llm-gateway.js";
 import { guardsModelEndpoint } from "./net-policy.js";
 import { isBlockedError } from "../infra/net.js";
 import { localeOf, say } from "./i18n.js";
@@ -63,7 +64,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     let mainRecorded = false;
     try {
-      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config, { background: Boolean(job.background) }); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), onAttemptFailed: (a) => recordFailedAttempt(ctx, ownerId, a) }); };
+      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config, { background: Boolean(job.background) }); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), ...llmCallOptions(ctx, ownerId) }); };
       // 본 호출은 끝나는 즉시 기록한다. 뒤의 보정·반영이 실패해도 이미 쓴 호출이 오류로 잘못 남지 않게.
       let res = await call(job.user);
       mainRecorded = true;
@@ -86,6 +87,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
           ? say(lc, `${modelFor(config, modelKind)} 모델이 서버 오류(HTTP ${upstream})로 응답하지 않아 생성 제한 시간을 넘겼습니다. 몇 분 뒤 다시 시도하거나 설정에서 다른 모델을 골라 주세요.`, `${modelFor(config, modelKind)} kept returning a server error (HTTP ${upstream}), so generation timed out. Try again in a few minutes or pick another model in settings.`)
           : say(lc, "생성 제한 시간을 넘겼거나 서버가 종료되었습니다. 다시 시도해 주세요.", "Generation timed out or the server stopped. Please try again.")
         : isBlockedError(err) ? say(lc, "모델 주소(baseUrl)가 사설망·예약 주소를 가리켜 요청하지 않았습니다. 설정에서 공인 주소로 바꿔 주세요.", "The model address (baseUrl) points to a private or reserved network, so no request was sent. Use a public address in settings.")
+        : err instanceof LlmError && err.retryAt ? (() => { const when = new Date(err.retryAt).toISOString().slice(11, 16); return say(lc, `공유 모델 요청이 몰려 있습니다(${err.code ?? `HTTP ${err.status}`}). ${when} UTC 이후 다시 시도해 주세요.`, `Shared model requests are busy (${err.code ?? `HTTP ${err.status}`}). Try again after ${when} UTC.`); })()
         : err instanceof LlmError && err.status ? say(lc, `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`, `Model request failed (HTTP ${err.status}). Check the model settings and usage limits, then try again.`)
         : say(lc, "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.", "Generation failed. Check the model settings, API key, and response format, then try again.");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error }, "server");

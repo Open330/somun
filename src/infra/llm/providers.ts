@@ -2,6 +2,8 @@
  * LLM 프로바이더 층. 판단·다이제스트·초안은 전부 "system + user → JSON(schema)" 한 가지 호출이다.
  *
  * - gemini: OpenAI 호환 엔드포인트. 서버 키 풀(GEMINI_API_KEYS, free-N 라운드로빈, paid-1 제외) 또는 BYOK.
+ *   jiun-api LLM 게이트웨이(JIUN_LLM_GATEWAY_URL·KEY)가 설정되면 서버 키 호출은 게이트웨이로 간다. 키 풀·쿨다운·재시도·
+ *   모델 대체·사용량 기록은 게이트웨이가 한다(somun은 다시 하지 않는다). BYOK는 게이트웨이를 거치지 않는다.
  * - openai: BYOK. baseUrl을 주면 OpenAI 호환 서버(OpenRouter, Ollama 등)도 된다.
  * - anthropic: BYOK. Messages API 구조화 출력.
  * - local-agent: 여기서 호출하지 않는다. jobs 큐에 넣고 워커가 claude/codex CLI로 처리한다.
@@ -15,7 +17,12 @@ export type LlmConfig = { provider: LlmProvider; model?: string; draftModel?: st
 
 export type LlmRequest = { system: string; user: string; schema: Record<string, unknown>; schemaName: string; maxTokens?: number };
 export type LlmUsage = { inputTokens: number; outputTokens: number; cachedInputTokens: number; totalTokens: number };
-export type LlmResult = { json: unknown; provider: LlmProvider; model: string; keyLabel?: string; usage?: LlmUsage; latencyMs: number };
+export type LlmResult = { json: unknown; provider: LlmProvider; model: string; keyLabel?: string; usage?: LlmUsage; latencyMs: number; /** jiun-api 게이트웨이가 처리했다(사용량은 게이트웨이가 기록한다). */ viaGateway?: boolean };
+
+/** jiun-api LLM 게이트웨이. OpenAI 호환 /chat/completions, Bearer 키 하나. */
+export type LlmGateway = { url: string; key: string };
+/** 게이트웨이 호출 결과(모델 상태 표시용). ok면 그 모델이 답했고, 아니면 HTTP 상태와 다시 시도할 수 있는 시각. */
+export type GatewayOutcome = { model: string; ok: true; answeredBy: string } | { model: string; ok: false; status?: number; code?: string; retryAt?: number };
 
 /** 서버 키 풀 상태 접근. 앱 층이 DB 기반으로 만들어 넘긴다. 없으면 무상태 순환. */
 export type KeyPoolOps = {
@@ -42,8 +49,12 @@ const GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/ope
 const OPENAI_BASE = "https://api.openai.com/v1";
 
 export class LlmError extends Error {
-  /** 이 실패가 이미 시도별 사용량(onAttemptFailed)으로 보고되었는가. 호출한 쪽이 같은 실패를 한 번 더 세지 않게. */
+  /** 이 실패가 이미 시도별 사용량(onAttemptFailed)이나 게이트웨이가 보고했는가. 호출한 쪽이 같은 실패를 한 번 더 세지 않게. */
   reported = false;
+  /** 게이트웨이 오류 코드(pool_exhausted, service_rate_limited, gateway_busy, upstream_unavailable…). */
+  code?: string;
+  /** Retry-After로 받은, 다시 시도해도 되는 시각. */
+  retryAt?: number;
   constructor(message: string, public readonly status?: number, public readonly retryable = false, public readonly body?: string) {
     super(message);
   }
@@ -131,7 +142,7 @@ async function anthropicCall(apiKey: string, model: string, req: LlmRequest, sig
  * 설정에 따라 호출. gemini 서버 키 풀은 429/5xx 때 다음 키로 넘어간다.
  * local-agent는 여기 오면 안 된다 (호출자가 큐로 보낸다).
  */
-export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000), opts: { guardBaseUrl?: boolean; onAttemptFailed?: (attempt: FailedAttempt) => void } = {}): Promise<LlmResult> {
+export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" | "judge" | "draft" = "judge", pool?: KeyPoolOps, serverGeminiKeys?: string, signal: AbortSignal = AbortSignal.timeout(180_000), opts: { guardBaseUrl?: boolean; onAttemptFailed?: (attempt: FailedAttempt) => void; gateway?: LlmGateway; gatewayUser?: string; onGateway?: (outcome: GatewayOutcome) => void } = {}): Promise<LlmResult> {
   signal.throwIfAborted();
   const provider = config.provider;
   if (provider === "local-agent") throw new LlmError("local-agent는 워커가 처리합니다");
@@ -147,6 +158,14 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   }
   // gemini
   if (config.apiKey) return await openaiCompatible(GEMINI_OPENAI_BASE, config.apiKey, model, req, "byok", signal);
+  if (opts.gateway) {
+    // 게이트웨이는 gemini-* 모델만 다룬다. 설정의 모델 칸은 자유 입력이라, 다른 이름은 보내기 전에 막고 이유를 알린다.
+    // 요청을 보내지 않았으므로 사용량으로 세지 않는다(reported).
+    if (!/^gemini-/i.test(model)) throw Object.assign(new LlmError(`공유 모델은 Gemini(gemini-*)만 쓸 수 있습니다: ${model}. 설정에서 모델 이름을 비우거나 gemini- 모델을 고르세요. 다른 제공사는 개인 키로 연결할 수 있습니다.`, 400), { reported: true });
+    // 게이트웨이 경로의 사용량은 게이트웨이가 기록한다. 응답 해석·네트워크 오류도 somun이 따로 세지 않게 reported로 표시한다.
+    try { return await gatewayCall(opts.gateway, gatewayModel(model), req, signal, opts.gatewayUser, opts.onGateway); }
+    catch (e) { if (e instanceof LlmError) e.reported = true; else if (e instanceof Error) throw Object.assign(new LlmError(e.message), { reported: true, name: e.name }); throw e; }
+  }
   const all = freeGeminiKeys(serverGeminiKeys);
   if (all.length === 0) throw new LlmError("GEMINI_API_KEYS가 서버에 없고 사용자 키도 없습니다");
   const byLabel = new Map(all.map((k) => [k.label, k.key]));
@@ -202,6 +221,56 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
     return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal, opts);
   }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
+}
+
+/** 기본 모델은 게이트웨이 별칭으로 보낸다. 초안 모델은 quality(게이트웨이 정책이 fast로 대체), 기본 모델은 fast. 그 밖의 모델은 이름 그대로. */
+export function gatewayModel(model: string): string {
+  if (model === DEFAULT_DRAFT_MODEL.gemini) return "quality";
+  if (model === DEFAULT_MODEL.gemini) return "fast";
+  return model;
+}
+
+/**
+ * 게이트웨이 한 번 호출. 다시 시도하지 않는다(게이트웨이가 키 순환·대기·대체를 한다. 위에서 또 하면 시도가 곱으로 는다).
+ * 실패도 게이트웨이가 시도별로 기록하므로 reported로 표시한다. 답한 실제 모델은 X-Jiun-Model, 키 라벨은 X-Jiun-Key-Label.
+ */
+async function gatewayCall(gw: LlmGateway, model: string, req: LlmRequest, signal: AbortSignal, user: string | undefined, onGateway?: (o: GatewayOutcome) => void): Promise<LlmResult> {
+  const t0 = Date.now();
+  const res = await fetch(`${gw.url.replace(/\/+$/, "")}/chat/completions`, {
+    method: "POST", signal,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${gw.key}`, ...(user ? { "X-Jiun-User": user } : {}) },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }],
+      response_format: { type: "json_schema", json_schema: { name: req.schemaName, schema: req.schema } },
+      max_tokens: req.maxTokens ?? 4000,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let code: string | undefined;
+    try { code = (JSON.parse(text) as { error?: { code?: string } }).error?.code; } catch { /* 제공자 오류 본문 */ }
+    // Retry-After는 초 또는 HTTP 날짜. 429인데 없으면 1분 뒤로 본다(곧바로 다시 보내 같은 실패를 거듭하지 않게).
+    const header = res.headers.get("retry-after");
+    const seconds = Number(header);
+    const retryAt = header && Number.isFinite(seconds) && seconds > 0 ? Date.now() + seconds * 1000 : header && Number.isFinite(Date.parse(header)) ? Date.parse(header) : res.status === 429 ? Date.now() + 60_000 : undefined;
+    const err = new LlmError(`gateway ${model} → ${res.status}${code ? ` ${code}` : ""}: ${text.slice(0, 300)}`, res.status, res.status === 429 || res.status >= 500, text.slice(0, 2000));
+    err.code = code;
+    err.retryAt = retryAt;
+    err.reported = true;
+    onGateway?.({ model, ok: false, status: res.status, code, retryAt });
+    throw err;
+  }
+  const data = (await res.json()) as { model?: string; choices?: { message?: { content?: string | null } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw Object.assign(new LlmError("빈 응답"), { reported: true });
+  const u = data.usage;
+  const answeredBy = res.headers.get("x-jiun-model") || data.model || model;
+  onGateway?.({ model, ok: true, answeredBy });
+  return {
+    json: extractJson(content), provider: "gemini", model: answeredBy, keyLabel: res.headers.get("x-jiun-key-label") || undefined, viaGateway: true, latencyMs: Date.now() - t0,
+    usage: u ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0, cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? 0, totalTokens: u.total_tokens ?? (u.prompt_tokens ?? 0) + (u.completion_tokens ?? 0) } : undefined,
+  };
 }
 
 /** 바퀴 사이 대기. 첫 바퀴는 바로. */

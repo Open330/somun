@@ -25,7 +25,7 @@ const trustedOwners = config.AUTH_JWKS_URL
   // 익명(인증 없음) 요청의 "local"은 운영자가 아니다. 공유 토큰을 가진 쪽만 운영자로 본다.
   ? [config.SOMUN_ADMIN_OWNER_ID, config.SOMUN_TOKEN ? config.SOMUN_TOKEN_OWNER_ID || "local" : undefined].filter((x): x is string => Boolean(x))
   : undefined;
-const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, publicUrl: config.SOMUN_PUBLIC_URL, sharedModelDailyLimit: config.SOMUN_SHARED_MODEL_DAILY_LIMIT, sharedModelPendingLimit: config.SOMUN_SHARED_MODEL_PENDING_LIMIT, trustedOwners, secrets: new SecretBox(config.SOMUN_SECRET_KEY), video: config.SOMUN_VIDEO_URL && config.SOMUN_VIDEO_TOKEN ? new VideoClient(config.SOMUN_VIDEO_URL, config.SOMUN_VIDEO_TOKEN, config.SOMUN_VIDEO_PUBLIC_URL ?? config.SOMUN_VIDEO_URL) : undefined }, bus: new EventEmitter(), usage };
+const ctx: AppContext = { db, log: logger, env: { githubToken: config.GITHUB_TOKEN, geminiKeys: config.GEMINI_API_KEYS, llmGateway: config.JIUN_LLM_GATEWAY_URL && config.JIUN_LLM_GATEWAY_KEY ? { url: config.JIUN_LLM_GATEWAY_URL, key: config.JIUN_LLM_GATEWAY_KEY } : undefined, publicUrl: config.SOMUN_PUBLIC_URL, sharedModelDailyLimit: config.SOMUN_SHARED_MODEL_DAILY_LIMIT, sharedModelPendingLimit: config.SOMUN_SHARED_MODEL_PENDING_LIMIT, trustedOwners, secrets: new SecretBox(config.SOMUN_SECRET_KEY), video: config.SOMUN_VIDEO_URL && config.SOMUN_VIDEO_TOKEN ? new VideoClient(config.SOMUN_VIDEO_URL, config.SOMUN_VIDEO_TOKEN, config.SOMUN_VIDEO_PUBLIC_URL ?? config.SOMUN_VIDEO_URL) : undefined }, bus: new EventEmitter(), usage };
 // 글감 단위 변경(신호별 → 저장소 × 10일 창). 한 번만 실제로 일한다.
 {
   const r = migrateLegacyCandidates(ctx);

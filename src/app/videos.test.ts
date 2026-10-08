@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import pino from "pino";
+import { eq } from "drizzle-orm";
 import { openDb, schema } from "../infra/db/index.js";
 import { VideoServerError, type VideoClient } from "../infra/video.js";
 import type { Draft } from "../shared/types.js";
@@ -125,7 +126,9 @@ describe("videos", () => {
     expect((await listVideos(ctx, "a", cid))[0]).toMatchObject({ id: v.id, status: "done", phase: "Rendered" });
     video.views.set("r1", { id: "r1", status: "done", phase: "Done", note: "none", createdAt: 1, updatedAt: 3 });
     expect((await listVideos(ctx, "a", cid))[0]).toMatchObject({ id: v.id, status: "done", note: "none" });
-    await requestVideo(ctx, "a", cid, { durationSec: 15, aspect: "16:9" });
+    const newer = await requestVideo(ctx, "a", cid, { durationSec: 15, aspect: "16:9" });
+    // Creation can share a millisecond in the fake client; this test requires distinct ages.
+    ctx.db.update(schema.videos).set({ createdAt: v.createdAt + 1 }).where(eq(schema.videos.id, newer.id)).run();
     video.down = true;
     expect((await listVideos(ctx, "a", cid)).map((x) => x.status)).toEqual(["queued", "done"]);
     video.down = false;

@@ -12,6 +12,8 @@ export type AppContext = {
   log: Logger;
   env: {
     githubToken?: string; geminiKeys?: string; publicUrl?: string;
+    /** jiun-api LLM 게이트웨이. 있으면 서버 키 Gemini 호출이 게이트웨이로 간다(GEMINI_API_KEYS 대신). */
+    llmGateway?: import("../infra/llm/providers.js").LlmGateway;
     /**
      * 서버의 특권 자원을 쓸 수 있는 소유자(운영자). 비우면 제한 없음(단일 사용자 배포).
      * 목록 밖 소유자는 서버 GITHUB_TOKEN으로 공개 저장소만 읽고, 사설망 주소(피드·모델 baseUrl)로 요청할 수 없고, 서버 키 풀 상태를 보지 못한다.
