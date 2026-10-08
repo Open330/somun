@@ -1,5 +1,6 @@
 import { assertSharedQueueCapacity, backgroundReserve, SharedQuotaError, sharedUsage, usesSharedModel } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { representative } from "../core/releases.js";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
@@ -64,11 +65,13 @@ function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {
  * 글감 창에 묶인 릴리스와, 최신 릴리스 뒤에 머지되어 아직 릴리스되지 않은 PR.
  * 초안이 창의 모든 변경을 최신 태그 하나에 몰아 "v0.8.56 adds …"라고 쓰지 않게 사실로 넘긴다.
  */
-export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number, title = getCandidateRow(ctx, ownerId, candidateId).title): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
+export function windowFacts(ctx: AppContext, ownerId: string, candidateId: number, row: { title: string; repo: string } = getCandidateRow(ctx, ownerId, candidateId)): { windowReleases?: string[]; unreleasedPrTitles?: string[] } {
+  const { title, repo } = row;
   const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
   const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
   // 기준은 글감 제목의 릴리스(같은 줄기의 최신판). 옛 줄기의 백포트가 늦게 나왔다고 그 사이 main의 PR을 출시된 것으로 보지 않는다.
-  const latestAt = (releases.find((s) => s.title === title) ?? releases.at(-1))?.occurredAt;
+  // 릴리스 없이 PR·커밋만 묶인 진행 중 글감은 저장소의 가장 최근 릴리스(다른 글감에 붙었어도)를 기준으로 삼는다.
+  const latestAt = (releases.find((s) => s.title === title) ?? releases.at(-1))?.occurredAt ?? repoLatestReleaseAt(ctx, ownerId, repo);
   // 릴리스 직후의 정리 PR(chore(release): 0.6.0, changelog, version bump)은 그 릴리스의 일부다.
   const housekeeping = /^(?:chore|build|ci)\(release\)|^(?:chore|build|ci)(?:\([^)]*\))?!?:\s*(?:release|prepare release|bump version|version bump|update changelog)\b|^(?:release|prepare release|bump version|version bump)\b|^v?\d+\.\d+(?:\.\d+)?$|\bupdate changelog\b/i;
   const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt && !housekeeping.test(s.title)).map((s) => s.title);
@@ -76,6 +79,15 @@ export function windowFacts(ctx: AppContext, ownerId: string, candidateId: numbe
     ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
     ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
   };
+}
+
+/**
+ * 저장소의 대표 릴리스 시각(글감과 상관없이). 가장 늦게 나온 것이 아니라 제목과 같은 규칙(core/releases)으로 고른다:
+ * 옛 줄기의 늦은 백포트(v7.3.5)가 기준이 되면 main의 PR이 모두 출시된 것으로 보인다.
+ */
+function repoLatestReleaseAt(ctx: AppContext, ownerId: string, repo: string): number | undefined {
+  const rows = ctx.db.select({ at: schema.signals.occurredAt, payload: schema.signals.payload, title: schema.signals.title }).from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, repo), eq(schema.signals.kind, "release"))).all();
+  return representative(rows, (r) => String((r.payload as { tag?: string }).tag ?? r.title), (r) => r.at)?.at;
 }
 
 /**
@@ -121,7 +133,7 @@ export function announcedSince(ctx: AppContext, ownerId: string, candidateId: nu
 
 export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, candidateId: number, channel?: Channel, lang?: string, opts: { introduction?: boolean; instruction?: string } = {}): PromptSpec {
   const row = getCandidateRow(ctx, ownerId, candidateId);
-  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId, row.title) } };
+  const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId, row) } };
   const settings = getSettings(ctx, ownerId);
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);

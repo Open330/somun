@@ -49,11 +49,11 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
           const hasDrafts = Boolean(tx.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.candidateId, existing.id)).get());
           const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status) && !hasDrafts;
-          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), mergedPrTitles: type === "in-progress" ? withPrTitle(cur.mergedPrTitles, s) : cur.mergedPrTitles, milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
-          const ev: Evidence = { ...evidence, windowReleaseNotes: withReleaseNote(undefined, s), milestones: milestone ? [milestone] : undefined };
+          const ev: Evidence = { ...evidence, windowReleaseNotes: withReleaseNote(undefined, s), mergedPrTitles: ck.type === "in-progress" ? withPrTitle(undefined, s) : undefined, milestones: milestone ? [milestone] : undefined };
           candidateId = Number(tx.insert(schema.candidates).values({ ownerId, type: ck.type, title: ck.title, repo: s.repo, key, evidence: ev as Record<string, unknown>, status: "new", createdAt: now, updatedAt: now }).run().lastInsertRowid);
           touched.add(key);
         }
@@ -67,22 +67,36 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       const span = cand?.type === "release" ? 30 * DAY : cand?.type === "in-progress" ? 7 * DAY : 0;
       if (!cand || !span) continue;
       const orphans = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, cand.repo), eq(schema.signals.kind, "pr_merged"), isNull(schema.signals.candidateId))).all();
-      const titles: string[] = [];
+      let titles = (cand.evidence as Evidence).mergedPrTitles;
+      let attached = 0;
       for (const o of orphans) {
         if (cand.updatedAt - o.occurredAt > span) continue;
         // 최근 릴리스에 이미 들어간 PR(릴리스 시점 이전)은 진행 중 작업이 아니다.
         if (cand.type === "in-progress" && cluster.latestReleaseAt !== undefined && o.occurredAt <= cluster.latestReleaseAt) continue;
         tx.update(schema.signals).set({ candidateId: cand.id }).where(eq(schema.signals.id, o.id)).run();
-        titles.push(o.title);
+        titles = withPrTitle(titles, { kind: "pr_merged", title: o.title, payload: o.payload as Record<string, unknown> });
+        attached++;
       }
-      if (titles.length) {
+      if (attached) {
         const ev = cand.evidence as Evidence;
-        tx.update(schema.candidates).set({ evidence: { ...ev, mergedPrTitles: [...(ev.mergedPrTitles ?? []), ...titles].slice(-20) } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
+        tx.update(schema.candidates).set({ evidence: { ...ev, mergedPrTitles: titles } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
       }
     }
   });
   if (inserted) emit(ctx, ownerId, { resource: "candidates" });
   return { inserted, candidates: [...touched] };
+}
+
+/**
+ * 글감에 붙는 PR 제목을 근거에 쌓는다(고아 PR을 붙일 때와 진행 중 글감이 직접 받을 때 같은 규칙).
+ * 같은 제목의 다른 PR이 하나로 합쳐지지 않게 번호를 붙여 "제목 (#N)"으로 둔다. 최근 20개.
+ */
+function withPrTitle(titles: string[] | undefined, s: Pick<IncomingSignal, "kind" | "title" | "payload">): string[] | undefined {
+  if (s.kind !== "pr_merged") return titles;
+  const n = (s.payload as { number?: number }).number;
+  const label = n ? `${s.title} (#${n})` : s.title;
+  if (titles?.includes(label)) return titles;
+  return [...(titles ?? []), label].slice(-20);
 }
 
 /** 시각 없이 저장된 예전 노트에 릴리스 신호의 게시 시각을 채운다(정렬해 최신을 남길 수 있게). */
