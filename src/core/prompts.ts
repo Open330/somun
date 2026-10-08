@@ -106,7 +106,7 @@ export function rawBlock(c: CandidateLike, hasProfile = false): string {
     // 같은 창의 다른 릴리스 노트. 모노레포·연속 릴리스에서 최신 노트 하나만 보면 앞선 변경이 빠진다.
     ...[...(e.windowReleaseNotes ?? [])].sort((a, b) => (a.at ?? 0) - (b.at ?? 0)).filter((r) => r.tag !== e.version && r.notes.trim()).slice(-6).map((r) => `## Release notes (${r.tag})\n${r.notes.slice(0, 1500)}`),
     e.mergedPrTitles?.length ? `## Merged PR titles\n- ${e.mergedPrTitles.join("\n- ")}` : "",
-    e.commitSubjects?.length ? `## Commit subjects since last release\n- ${e.commitSubjects.slice(0, 60).join("\n- ")}` : "",
+    e.commitSubjects?.length ? `## Recent commit subjects (may include work already in the latest release)\n- ${e.commitSubjects.slice(0, 60).join("\n- ")}` : "",
     e.ompSummary ? `## Agent session summary (what the author struggled with)\n${e.ompSummary}` : "",
     e.readmeExcerpt && !hasProfile ? `## README excerpt\n${e.readmeExcerpt.slice(0, 1500)}` : "",
   ].filter(Boolean).join("\n\n");

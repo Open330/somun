@@ -316,3 +316,24 @@ it("marks jobs queued by the automatic sweep as background work", async () => {
   const job = ctx.db.select().from(schema.llmJobs).get();
   expect(job?.meta?.background).toBe(true);
 });
+
+it("marks PRs after the repo's latest release as unreleased even when that release sits on another candidate", () => {
+  const sig = (kind: string, ref: string, title: string, at: number, cand: number | null, payload: Record<string, unknown> = {}) =>
+    ctx.db.insert(schema.signals).values({ ownerId: "test", sourceId: 1, kind, repo: "vitejs/vite", ref, title, payload, occurredAt: at, candidateId: cand }).run();
+  const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "vitejs/vite v0.6.0", type: "release", key: "old", evidence: { repo: "vitejs/vite", repoUrl: "u" }, status: "dropped", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+  sig("release", "r", "vitejs/vite v0.6.0", 1000, other, { tag: "v0.6.0" });
+  sig("pr_merged", "p1", "Add grouped session views", 2000, id);
+  sig("pr_merged", "p0", "Old fix", 500, id);
+  ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
+  expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Add grouped session views"]);
+});
+
+it("does not let a late backport on an older line become the unreleased cutoff", () => {
+  const sig = (kind: string, ref: string, title: string, at: number, cand: number | null, payload: Record<string, unknown> = {}) =>
+    ctx.db.insert(schema.signals).values({ ownerId: "test", sourceId: 1, kind, repo: "vitejs/vite", ref, title, payload, occurredAt: at, candidateId: cand }).run();
+  sig("release", "r8", "vitejs/vite v8.4.0", 1000, null, { tag: "v8.4.0" });
+  sig("release", "r7", "vitejs/vite v7.3.5", 3000, null, { tag: "v7.3.5" });
+  sig("pr_merged", "p1", "Main work", 2000, id);
+  ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
+  expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Main work"]);
+});

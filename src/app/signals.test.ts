@@ -145,3 +145,25 @@ it("does not let a late backport of an older line take the title, but lets a fin
   ingestSignals(ctx, "o", 1, [rel("v8.4.0", now)], {}, ev("a/v"));
   expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.4.0");
 });
+
+it("keeps the titles of PRs that join an in-progress candidate directly", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
+  const pr = (n: number) => ({ kind: "pr_merged" as const, repo: "a/x", ref: `pr${n}`, title: `PR ${n}`, payload: {}, occurredAt: now - n * 1000 });
+  ingestSignals(ctx, "o", 1, [pr(1), pr(2), pr(3)], { recentPrCount: 3 }, ev("a/x"));
+  expect((ctx.db.select().from(schema.candidates).get()?.evidence as Evidence).mergedPrTitles?.sort()).toEqual(["PR 1", "PR 2", "PR 3"]);
+});
+
+it("keeps same-titled PRs apart and leaves release candidates' PR list to the orphan rule", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x", "a/y"], enabled: true }).run();
+  const pr = (repo: string, n: number, title = "Update docs") => ({ kind: "pr_merged" as const, repo, ref: `${repo}#${n}`, title, payload: { number: n }, occurredAt: now - n * 1000 });
+  ingestSignals(ctx, "o", 1, [pr("a/x", 1), pr("a/x", 2), pr("a/x", 3)], { recentPrCount: 3 }, ev("a/x"));
+  expect((ctx.db.select().from(schema.candidates).where(eq(schema.candidates.repo, "a/x")).get()?.evidence as Evidence).mergedPrTitles?.sort()).toEqual(["Update docs (#1)", "Update docs (#2)", "Update docs (#3)"]);
+  // 릴리스 글감에 릴리스 뒤 PR이 직접 붙어도 PR 목록에 이름 없이 섞지 않는다.
+  ingestSignals(ctx, "o", 1, [{ kind: "release", repo: "a/y", ref: "r", title: "a/y v1", payload: { tag: "v1" }, occurredAt: now - 10_000 }], {}, ev("a/y"));
+  ingestSignals(ctx, "o", 1, [pr("a/y", 5, "After release"), pr("a/y", 6, "After release 2"), pr("a/y", 7, "After release 3")], { recentPrCount: 3, latestReleaseAt: now - 10_000 }, ev("a/y"));
+  expect((ctx.db.select().from(schema.candidates).where(eq(schema.candidates.repo, "a/y")).get()?.evidence as Evidence).mergedPrTitles ?? []).toEqual([]);
+});
