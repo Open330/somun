@@ -49,11 +49,11 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           // 초안이 있는 후보는 사용자의 검토 중 작업을 건드리지 않도록 그대로 둔다.
           const hasDrafts = Boolean(tx.select({ id: schema.drafts.id }).from(schema.drafts).where(eq(schema.drafts.candidateId, existing.id)).get());
           const reopened = (type !== existing.type || title !== existing.title) && ["judged", "deferred"].includes(existing.status) && !hasDrafts;
-          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
+          tx.update(schema.candidates).set({ ...(reopened ? { status: "new" as const } : {}), type, title, evidence: { ...cur, ...Object.fromEntries(Object.entries(evidence).filter(([, v]) => v !== undefined)), windowReleaseNotes: withReleaseNote(withNoteTimes(tx, existing.id, cur.windowReleaseNotes), s), mergedPrTitles: withPrTitle(cur.mergedPrTitles, s), milestones: ms, highlights: cur.highlights, highlightsAt: cur.highlightsAt, limitations: cur.limitationsSource === "digest" && !evidence.limitations?.length ? cur.limitations : evidence.limitations, limitationsSource: cur.limitationsSource === "digest" && !evidence.limitations?.length ? "digest" : evidence.limitationsSource } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, existing.id)).run();
           touched.add(existing.key);
         } else {
           const key = ck.type === "blog" ? ck.key : uniqueKey(tx, ownerId, windowKey(s.repo, now));
-          const ev: Evidence = { ...evidence, windowReleaseNotes: withReleaseNote(undefined, s), milestones: milestone ? [milestone] : undefined };
+          const ev: Evidence = { ...evidence, windowReleaseNotes: withReleaseNote(undefined, s), mergedPrTitles: withPrTitle(undefined, s), milestones: milestone ? [milestone] : undefined };
           candidateId = Number(tx.insert(schema.candidates).values({ ownerId, type: ck.type, title: ck.title, repo: s.repo, key, evidence: ev as Record<string, unknown>, status: "new", createdAt: now, updatedAt: now }).run().lastInsertRowid);
           touched.add(key);
         }
@@ -83,6 +83,15 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   });
   if (inserted) emit(ctx, ownerId, { resource: "candidates" });
   return { inserted, candidates: [...touched] };
+}
+
+/**
+ * 글감에 붙는 PR 제목을 근거에 쌓는다. 예전에는 고아 PR을 나중에 붙일 때만 채워, 진행 중 글감이 직접 받은 PR은 요약 재료에서 빠졌다.
+ */
+function withPrTitle(titles: string[] | undefined, s: IncomingSignal): string[] | undefined {
+  if (s.kind !== "pr_merged") return titles;
+  if (titles?.includes(s.title)) return titles;
+  return [...(titles ?? []), s.title].slice(-20);
 }
 
 /** 시각 없이 저장된 예전 노트에 릴리스 신호의 게시 시각을 채운다(정렬해 최신을 남길 수 있게). */

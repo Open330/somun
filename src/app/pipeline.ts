@@ -68,7 +68,8 @@ export function windowFacts(ctx: AppContext, ownerId: string, candidateId: numbe
   const signals = ctx.db.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, candidateId))).all();
   const releases = signals.filter((s) => s.kind === "release").sort((a, b) => a.occurredAt - b.occurredAt);
   // 기준은 글감 제목의 릴리스(같은 줄기의 최신판). 옛 줄기의 백포트가 늦게 나왔다고 그 사이 main의 PR을 출시된 것으로 보지 않는다.
-  const latestAt = (releases.find((s) => s.title === title) ?? releases.at(-1))?.occurredAt;
+  // 릴리스 없이 PR·커밋만 묶인 진행 중 글감은 저장소의 가장 최근 릴리스(다른 글감에 붙었어도)를 기준으로 삼는다.
+  const latestAt = (releases.find((s) => s.title === title) ?? releases.at(-1))?.occurredAt ?? repoLatestReleaseAt(ctx, ownerId, candidateId);
   // 릴리스 직후의 정리 PR(chore(release): 0.6.0, changelog, version bump)은 그 릴리스의 일부다.
   const housekeeping = /^(?:chore|build|ci)\(release\)|^(?:chore|build|ci)(?:\([^)]*\))?!?:\s*(?:release|prepare release|bump version|version bump|update changelog)\b|^(?:release|prepare release|bump version|version bump)\b|^v?\d+\.\d+(?:\.\d+)?$|\bupdate changelog\b/i;
   const unreleased = latestAt === undefined ? [] : signals.filter((s) => s.kind === "pr_merged" && s.occurredAt > latestAt && !housekeeping.test(s.title)).map((s) => s.title);
@@ -76,6 +77,12 @@ export function windowFacts(ctx: AppContext, ownerId: string, candidateId: numbe
     ...(releases.length > 1 ? { windowReleases: releases.map((s) => String((s.payload as { tag?: string }).tag ?? s.title)) } : {}),
     ...(unreleased.length ? { unreleasedPrTitles: unreleased.slice(0, 15) } : {}),
   };
+}
+
+/** 저장소에서 가장 최근에 받은 릴리스 신호의 시각(글감과 상관없이). */
+function repoLatestReleaseAt(ctx: AppContext, ownerId: string, candidateId: number): number | undefined {
+  const repo = getCandidateRow(ctx, ownerId, candidateId).repo;
+  return ctx.db.select({ at: schema.signals.occurredAt }).from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, repo), eq(schema.signals.kind, "release"))).orderBy(desc(schema.signals.occurredAt)).limit(1).get()?.at;
 }
 
 /**

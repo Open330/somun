@@ -145,3 +145,12 @@ it("does not let a late backport of an older line take the title, but lets a fin
   ingestSignals(ctx, "o", 1, [rel("v8.4.0", now)], {}, ev("a/v"));
   expect(ctx.db.select().from(schema.candidates).get()?.title).toBe("a/v v8.4.0");
 });
+
+it("keeps the titles of PRs that join an in-progress candidate directly", () => {
+  const ctx = makeCtx();
+  const now = Date.now();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
+  const pr = (n: number) => ({ kind: "pr_merged" as const, repo: "a/x", ref: `pr${n}`, title: `PR ${n}`, payload: {}, occurredAt: now - n * 1000 });
+  ingestSignals(ctx, "o", 1, [pr(1), pr(2), pr(3)], { recentPrCount: 3 }, ev("a/x"));
+  expect((ctx.db.select().from(schema.candidates).get()?.evidence as Evidence).mergedPrTitles?.sort()).toEqual(["PR 1", "PR 2", "PR 3"]);
+});
