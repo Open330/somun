@@ -84,6 +84,10 @@ export default function DraftPanel({
   const pinAfterSave = useRef<number | null>(null);
   // 방금 복사한 판. 이전 판이어도 그 판에 게시 링크를 남길 수 있어야 한다.
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  // 복사한 판 뒤에 새 판이 있을 때, 게시 링크를 최신 판에 달기로 고른 경우.
+  const [linkLatest, setLinkLatest] = useState(false);
+  // 저장하며 수치·주장 경고를 보여준 판(id와 본문).
+  const warned = useRef<string | null>(null);
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
@@ -146,20 +150,33 @@ export default function DraftPanel({
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
   // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
   const outgoing = track ? trackLinks(full, { channel, homepage }) : full;
-  // 복사 전에 확인할 경고: 원자료에서 찾지 못한 수치·주장. 게시하면 되돌리기 어렵다.
+  // 복사 전에 확인할 경고: 원자료에서 찾지 못한 수치·주장(서버의 COPY_CONFIRM_RULES). 게시하면 되돌리기 어렵다.
   const unsupported = (lint?: Draft["lint"]) =>
     lint?.find((item) => (item.rule === "numbers_need_review" || item.rule === "claims_need_review") && !item.ok);
-  const warningText = (item: NonNullable<ReturnType<typeof unsupported>>) => lintDetail(item) ?? t("원자료에서 찾지 못한 수치가 있습니다.");
+  const warningText = (item: NonNullable<ReturnType<typeof unsupported>>) =>
+    lintDetail(item) ??
+    (item.rule === "claims_need_review" ? t("원자료에서 찾지 못한 주장이 있습니다.") : t("원자료에서 찾지 못한 수치가 있습니다."));
+  const postEdit = (id: number, base: Draft, markCopied: boolean, overwrite: boolean, copyIfClean?: boolean) =>
+    post<Draft>(`/drafts/${id}/edit`, {
+      title: spec.hasTitle ? title : undefined,
+      body,
+      markCopied,
+      copyIfClean,
+      base: overwrite ? undefined : { title: base.title ?? undefined, body: base.body },
+    });
   const save = async (copyAfter: boolean, overwrite = false) => {
     if (!latest || action || !body.trim()) return;
     const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
     const check = !bodyChanged ? unsupported(latest.lint) : undefined;
-    if (copyAfter && check && !window.confirm(`${warningText(check)}\n\n${t("확인했다면 그대로 복사할까요?")}`)) return;
+    // 고친 글을 저장하며 경고를 보여줬다면, 이어서 누른 복사는 같은 경고로 다시 묻지 않는다.
+    const acknowledged = warned.current === `${latest.id}\n${latest.body}`;
+    warned.current = null;
+    if (copyAfter && check && !acknowledged && !window.confirm(`${warningText(check)}\n\n${t("확인했다면 그대로 복사할까요?")}`)) return;
     setAction(copyAfter ? "copy" : "save");
     setActionError(null);
     setConflict(null);
     let copied = false;
-    let saved: Draft | undefined;
+    let failedAt: "copy" | "save" = "save";
     const keep = (d: Draft) => {
       if (!d?.id) return;
       setSavedDraft(d);
@@ -167,47 +184,48 @@ export default function DraftPanel({
     };
     try {
       if (copyAfter && bodyChanged) {
-        // 고친 글은 먼저 저장해 점검 결과를 본 뒤에 복사한다. 경고가 있으면 복사하지 않고 확인을 받는다.
-        saved = await post<Draft>(`/drafts/${latest.id}/edit`, {
-          title: spec.hasTitle ? title : undefined,
-          body,
-          markCopied: false,
-          base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body },
-        });
+        // 고친 글: 한 번의 요청으로 저장하고, 수치·주장 경고가 없을 때만 복사로 기록한다.
+        // 클립보드에는 클릭한 순간 응답을 기다리는 ClipboardItem을 넘긴다(응답 뒤에 쓰면 브라우저가 사용자 동작이 아니라며 막는다).
+        const text = outgoing;
+        const request = postEdit(latest.id, latest, true, overwrite, true);
+        const clip =
+          typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
+            ? navigator.clipboard.write([
+                new ClipboardItem({
+                  "text/plain": request.then((d) =>
+                    d.status === "copied" ? new Blob([text], { type: "text/plain" }) : Promise.reject(new Error("held")),
+                  ),
+                }),
+              ])
+            : null;
+        clip?.catch(() => undefined);
+        const saved = await request;
         keep(saved);
         setEditing(false);
-        const after = unsupported(saved?.lint);
-        if (after) {
-          setActionError(`${t("저장했습니다.")} ${warningText(after)} ${t("확인했다면 다시 복사를 눌러 주세요.")}`);
+        if (saved.status !== "copied") {
+          const warning = unsupported(saved.lint);
+          warned.current = `${saved.id}\n${saved.body}`;
+          setActionError(
+            [t("저장했습니다."), warning ? warningText(warning) : "", t("확인했다면 다시 복사를 눌러 주세요.")].filter(Boolean).join(" "),
+          );
           showToast(t("수정한 내용을 저장했습니다."));
           return;
         }
         try {
-          await navigator.clipboard.writeText(outgoing);
+          await (clip ?? navigator.clipboard.writeText(text));
+          copied = true;
         } catch {
           setActionError(t("저장했지만 복사하지 못했습니다. 복사를 한 번 더 눌러 주세요."));
           return;
         }
-        copied = true;
-        keep(
-          await post<Draft>(`/drafts/${saved.id}/edit`, {
-            title: saved.title,
-            body: saved.body,
-            markCopied: true,
-            base: { title: saved.title, body: saved.body },
-          }),
-        );
       } else {
         if (copyAfter) {
+          failedAt = "copy";
           await navigator.clipboard.writeText(outgoing);
           copied = true;
+          failedAt = "save";
         }
-        saved = await post<Draft>(`/drafts/${latest.id}/edit`, {
-          title: spec.hasTitle ? title : undefined,
-          body,
-          markCopied: copyAfter,
-          base: overwrite ? undefined : { title: latest.title ?? undefined, body: latest.body },
-        });
+        const saved = await postEdit(latest.id, latest, copyAfter, overwrite);
         keep(saved);
         setEditing(false);
         const after = bodyChanged ? unsupported(saved?.lint) : undefined;
@@ -229,7 +247,7 @@ export default function DraftPanel({
       setActionError(
         copied
           ? t("복사는 완료했지만 저장하지 못했습니다. 내용을 유지한 채 다시 저장해 주세요.")
-          : copyAfter && !saved
+          : failedAt === "copy"
             ? t("복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하거나 수정 화면에서 직접 복사해 주세요.")
             : `${t("저장하지 못했습니다.")} ${(err as Error).message}`,
       );
@@ -302,18 +320,30 @@ export default function DraftPanel({
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
   // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 최신 판이 아니라 그 복사본이다.
-  const lastCopied = versions.find((d) => d.status === "copied" && !records.some((p) => p.draftId === d.id));
+  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 그 복사본이 기본이고, 최신 판으로 바꿀 수 있다.
+  const copiedEarlier =
+    !isOld && latest.status !== "copied"
+      ? versions.find(
+          (d) =>
+            d.id !== latest.id &&
+            d.status === "copied" &&
+            (d.purpose ?? null) === (latest.purpose ?? null) &&
+            !records.some((p) => p.draftId === d.id),
+        )
+      : undefined;
   const postDraft = isOld
     ? shown.id === copiedId || shown.status === "copied"
       ? shown
       : null
-    : latest.status !== "copied" && lastCopied
-      ? lastCopied
+    : copiedEarlier && !linkLatest
+      ? copiedEarlier
       : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
   const displayed = editing ? latest : (shown ?? latest);
   const count = [...(editing ? body : displayed.body)].length;
   const checks = displayed.lint.filter((item) => !item.ok && item.detail);
+  // 설정된 모델을 다시 쓸 수 있을 때까지 남은 시간. 한 시간 안일 때만 배지에 시각을 보이고, 더 멀면 툴팁에만 둔다.
+  const resetIn = draftModelResetAt ? draftModelResetAt - Date.now() : 0;
 
   return (
     <div className="card draft-card">
@@ -352,13 +382,13 @@ export default function DraftPanel({
               title={`${t("설정된 초안 모델({model}) 대신 다른 모델로 생성했습니다. 생성 모델을 확인하고 내용을 검토하세요.", {
                 model: expectedModel,
               })}${
-                draftModelResetAt
+                draftModelResetAt && resetIn > 0
                   ? ` ${t("설정된 모델은 {time} 이후 다시 쓸 수 있습니다.", { time: new Date(draftModelResetAt).toLocaleString(dateLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) })}`
                   : ""
               }`}
             >
               {t("대체 모델")}
-              {draftModelResetAt && draftModelResetAt - Date.now() <= 60 * 60_000
+              {draftModelResetAt && resetIn > 0 && resetIn <= 60 * 60_000
                 ? ` · ${t("{time} 이후 다시 쓰기 권장", { time: new Date(draftModelResetAt).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) })}`
                 : ""}
             </span>
@@ -626,10 +656,25 @@ export default function DraftPanel({
               </a>
             )}
           </div>
-          <p className="small muted post-caption">
-            {t("채널에 직접 게시한 뒤 링크를 저장하세요.")}
-            {latest && postDraft.id !== latest.id && ` ${t("링크는 복사한 v{version}에 연결합니다.", { version: postDraft.version })}`}
-          </p>
+          <p className="small muted post-caption">{t("채널에 직접 게시한 뒤 링크를 저장하세요.")}</p>
+          {copiedEarlier && latest && (
+            <div className="row gap-8 small">
+              <span className="muted">{t("링크를 연결할 판")}</span>
+              <div className="seg" role="group" aria-label={t("링크를 연결할 판")}>
+                <button
+                  aria-pressed={!linkLatest}
+                  className={!linkLatest ? "active" : ""}
+                  onClick={() => setLinkLatest(false)}
+                  type="button"
+                >
+                  {t("복사한 v{version}", { version: copiedEarlier.version })}
+                </button>
+                <button aria-pressed={linkLatest} className={linkLatest ? "active" : ""} onClick={() => setLinkLatest(true)} type="button">
+                  {t("최신 v{version}", { version: latest.version })}
+                </button>
+              </div>
+            </div>
+          )}
           <details className="raw post-help">
             <summary>{t("게시 전 확인할 점")}</summary>
             <p className="small muted">

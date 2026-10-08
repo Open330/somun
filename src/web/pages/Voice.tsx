@@ -323,7 +323,7 @@ const BucketLine = ({ b }: { b: LearningBucket }) => (
   <span className="mono">
     {t("그대로 {unchanged} · 고친 글 평균 수정량 {edited} · {n}건", {
       unchanged: pct(b.unchangedRate),
-      edited: pct(b.avgEditRatio),
+      edited: b.avgEditRatio === undefined ? "—" : pct(b.avgEditRatio),
       n: b.copied,
     })}
   </span>

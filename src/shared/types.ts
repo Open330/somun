@@ -153,9 +153,11 @@ export type ConnectorsView = {
   sessions: { lastUploadAt?: number; sessionCount14d: number; sources: string[] };
 };
 
-/** 학습 효과. 복사한 초안 기준: 고치지 않고 쓴 비율과 평균 수정량(0~1). 낮아질수록 초안이 내 문체에 가까워진 것. */
-/** avgEditRatio: 고친 복사본만의 평균 수정량(그대로 쓴 글은 unchangedRate에만 들어간다). */
-export type LearningBucket = { copied: number; unchangedRate: number; avgEditRatio: number };
+/**
+ * 학습 효과. 복사한 초안 기준: 고치지 않고 쓴 비율과 평균 수정량(0~1). 수정량이 낮아질수록 초안이 내 문체에 가까워진 것.
+ * avgEditRatio는 고친 복사본만의 평균이다(그대로 쓴 글은 unchangedRate에만 들어간다). 고친 글이 없으면 없음.
+ */
+export type LearningBucket = { copied: number; unchangedRate: number; avgEditRatio?: number };
 export type LearningStats = LearningBucket & {
   byWeek: (LearningBucket & { week: string })[];
   /** 문체 설정 버전별. 처음 쓰인 순서. 설정을 바꾼 뒤 수정량이 줄었는지 본다. */

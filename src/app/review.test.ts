@@ -310,6 +310,17 @@ it.each([
   expect(examples()[0].body).toBe(fixed);
 });
 
+it('copyIfClean saves an edit but only marks it copied when no number or claim needs review', () => {
+  const id = draft('Plain text https://github.com/me/tool');
+  const held = saveDraftEdit(ctx, OWNER, id, { body: 'Now 40% faster. https://github.com/me/tool', markCopied: true, copyIfClean: true });
+  expect(held.status).toBe('edited');
+  expect(held.body).toBe('Now 40% faster. https://github.com/me/tool');
+  expect(learningStats(ctx, OWNER).copied).toBe(0);
+  const clean = saveDraftEdit(ctx, OWNER, id, { body: 'Now handles line endings. https://github.com/me/tool', markCopied: true, copyIfClean: true });
+  expect(clean.status).toBe('copied');
+  expect(learningStats(ctx, OWNER).copied).toBe(1);
+});
+
 it("tags format lessons with their channel so they only shape that channel's drafts", () => {
   const id = draft("Long X post https://github.com/me/tool");
   expect(applyLesson(ctx, OWNER, id, "edit", { rule: "Keep it to two sentences.", category: "format" })?.rule).toBe("[X] Keep it to two sentences.");

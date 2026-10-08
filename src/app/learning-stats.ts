@@ -22,7 +22,7 @@ function bucket(ratios: number[]): LearningBucket {
   return {
     copied: n,
     unchangedRate: n ? Math.round(((n - edited.length) / n) * 100) / 100 : 0,
-    avgEditRatio: edited.length ? Math.round((edited.reduce((a, b) => a + b, 0) / edited.length) * 100) / 100 : 0,
+    avgEditRatio: edited.length ? Math.round((edited.reduce((a, b) => a + b, 0) / edited.length) * 100) / 100 : undefined,
   };
 }
 
