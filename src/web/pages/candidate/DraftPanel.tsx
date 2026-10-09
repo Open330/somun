@@ -7,6 +7,7 @@ import { channelLabel, LintBadges, Menu, REASONS, lintDetail, targetLabel } from
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
 import { useAuth } from "../../lib/auth/context";
+import { linkTargets } from "../../lib/link-target";
 import { setUnsaved } from "../../lib/unsaved";
 import { dateLocale, t } from "../../i18n";
 
@@ -84,8 +85,8 @@ export default function DraftPanel({
   const pinAfterSave = useRef<number | null>(null);
   // 방금 복사한 판. 이전 판이어도 그 판에 게시 링크를 남길 수 있어야 한다.
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  // 복사한 판 뒤에 새 판이 있을 때 게시 링크를 달 판. null이면 기본값(같은 목적이면 복사본, 목적이 다르면 최신 판).
-  const [linkTarget, setLinkTarget] = useState<"copied" | "latest" | null>(null);
+  // 복사한 판 뒤에 새 판이 있을 때 사용자가 고른 링크 대상. 고를 수 있는 판이 바뀌어 목록에 없으면 기본값으로 돌아간다.
+  const [linkTo, setLinkTo] = useState<number | null>(null);
   // 저장하며 수치·주장 경고를 보여준 판(id와 본문).
   const warned = useRef<string | null>(null);
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
@@ -146,9 +147,6 @@ export default function DraftPanel({
     setRewriteOpen(false);
     setStep(latest?.status === "copied" ? "post" : "draft");
   }, [latest?.id, latest?.title, latest?.body, latest?.status, editing, initialDraftId]);
-
-  // 새 판이 오면 링크를 달 판은 다시 기본값으로.
-  useEffect(() => setLinkTarget(null), [latest?.id]);
 
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
   // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
@@ -322,22 +320,16 @@ export default function DraftPanel({
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
-  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 어느 판에 달지 고를 수 있다.
-  // 같은 목적(소개·변경사항)으로 다시 쓴 판이면 복사본이 기본, 목적이 다른 새 판이면 최신 판이 기본이다.
-  const copiedEarlier =
-    !isOld && latest.status !== "copied"
-      ? versions.find((d) => d.id !== latest.id && d.status === "copied" && !records.some((p) => p.draftId === d.id))
-      : undefined;
-  const samePurpose = (copiedEarlier?.purpose ?? null) === (latest.purpose ?? null);
-  const linkCopied = linkTarget ? linkTarget === "copied" : samePurpose;
-  const purposeOf = (d: Draft) =>
-    samePurpose ? "" : d.purpose === "introduction" ? ` · ${t("서비스 소개")}` : d.purpose === "update" ? ` · ${t("변경사항 소개")}` : "";
+  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 어느 판에 달지 고를 수 있고, 기본은 복사본이다.
+  const targets = isOld ? null : linkTargets(latest, versions, new Set(records.flatMap((p) => (p.draftId ? [p.draftId] : []))));
+  const target = targets && (targets.options.find((o) => o.id === linkTo) ?? targets.options.find((o) => o.id === targets.defaultId));
+  const mixedPurposes = targets ? new Set(targets.options.map((o) => o.purpose ?? "update")).size > 1 : false;
   const postDraft = isOld
     ? shown.id === copiedId || shown.status === "copied"
       ? shown
       : null
-    : copiedEarlier && linkCopied
-      ? copiedEarlier
+    : target
+      ? (versions.find((d) => d.id === target.id) ?? latest)
       : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
   const displayed = editing ? latest : (shown ?? latest);
@@ -514,7 +506,7 @@ export default function DraftPanel({
             </>
           )}
           <div className="draft-meta tiny muted">
-            {shown?.purpose && <span>{shown.purpose === "introduction" ? t("서비스 소개") : t("변경사항 소개")}</span>}
+            {shown?.purpose && <span>{purposeLabel(shown.purpose)}</span>}
             <span className={spec.maxChars && count > spec.maxChars ? "over" : ""}>
               {t("{n}자", { n: `${count}${spec.maxChars ? ` / ${spec.maxChars}` : ""}` })}
             </span>
@@ -650,7 +642,11 @@ export default function DraftPanel({
       {!editing && postDraft && !postDone && (
         <div className="step-post">
           <div className="row between">
-            <b>{step === "post" || postDraft.id === copiedId ? t("복사 완료 · 이제 게시해 보세요") : t("게시하고 링크 남기기")}</b>
+            <b>
+              {step === "post" || postDraft.id === copiedId || postDraft.status === "copied"
+                ? t("복사 완료 · 이제 게시해 보세요")
+                : t("게시하고 링크 남기기")}
+            </b>
             {spec.composeUrl && (
               <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">
                 {t("{channel} 작성 화면 열기", { channel: channelLabel(channel) })} ↗
@@ -658,28 +654,22 @@ export default function DraftPanel({
             )}
           </div>
           <p className="small muted post-caption">{t("채널에 직접 게시한 뒤 링크를 저장하세요.")}</p>
-          {copiedEarlier && latest && (
+          {targets && (
             <div className="row gap-8 small">
               <span className="muted">{t("링크를 연결할 판")}</span>
               <div className="seg" role="group" aria-label={t("링크를 연결할 판")}>
-                <button
-                  aria-pressed={linkCopied}
-                  className={linkCopied ? "active" : ""}
-                  onClick={() => setLinkTarget("copied")}
-                  type="button"
-                >
-                  {t("복사한 v{version}", { version: copiedEarlier.version })}
-                  {purposeOf(copiedEarlier)}
-                </button>
-                <button
-                  aria-pressed={!linkCopied}
-                  className={!linkCopied ? "active" : ""}
-                  onClick={() => setLinkTarget("latest")}
-                  type="button"
-                >
-                  {t("최신 v{version}", { version: latest.version })}
-                  {purposeOf(latest)}
-                </button>
+                {targets.options.map((o) => (
+                  <button
+                    key={o.id}
+                    aria-pressed={o.id === postDraft.id}
+                    className={o.id === postDraft.id ? "active" : ""}
+                    onClick={() => setLinkTo(o.id)}
+                    type="button"
+                  >
+                    {o.id === latest.id ? t("최신 v{version}", { version: o.version }) : t("복사한 v{version}", { version: o.version })}
+                    {mixedPurposes && ` · ${purposeLabel(o.purpose)}`}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -851,3 +841,5 @@ function PublishedCard({
     </div>
   );
 }
+
+const purposeLabel = (purpose?: Draft["purpose"]) => (purpose === "introduction" ? t("서비스 소개") : t("변경사항 소개"));
