@@ -84,8 +84,8 @@ export default function DraftPanel({
   const pinAfterSave = useRef<number | null>(null);
   // 방금 복사한 판. 이전 판이어도 그 판에 게시 링크를 남길 수 있어야 한다.
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  // 복사한 판 뒤에 새 판이 있을 때, 게시 링크를 최신 판에 달기로 고른 경우.
-  const [linkLatest, setLinkLatest] = useState(false);
+  // 복사한 판 뒤에 새 판이 있을 때 게시 링크를 달 판. null이면 기본값(같은 목적이면 복사본, 목적이 다르면 최신 판).
+  const [linkTarget, setLinkTarget] = useState<"copied" | "latest" | null>(null);
   // 저장하며 수치·주장 경고를 보여준 판(id와 본문).
   const warned = useRef<string | null>(null);
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
@@ -146,6 +146,9 @@ export default function DraftPanel({
     setRewriteOpen(false);
     setStep(latest?.status === "copied" ? "post" : "draft");
   }, [latest?.id, latest?.title, latest?.body, latest?.status, editing, initialDraftId]);
+
+  // 새 판이 오면 링크를 달 판은 다시 기본값으로.
+  useEffect(() => setLinkTarget(null), [latest?.id]);
 
   const full = spec.hasTitle ? `${title}\n\n${body}` : body;
   // 클립보드로 가는 글. 저장된 초안은 그대로 두고 링크에만 채널 표시를 붙인다.
@@ -319,23 +322,21 @@ export default function DraftPanel({
   }
   const changed = latest.body !== body || (latest.title ?? "") !== (title || "");
   const isOld = shown && shown.id !== latest.id;
-  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 최신 판이 아니라 그 복사본이다.
-  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 그 복사본이 기본이고, 최신 판으로 바꿀 수 있다.
+  // 게시 링크는 실제로 복사한 판에 단다. 복사한 뒤 다시 썼다면 어느 판에 달지 고를 수 있다.
+  // 같은 목적(소개·변경사항)으로 다시 쓴 판이면 복사본이 기본, 목적이 다른 새 판이면 최신 판이 기본이다.
   const copiedEarlier =
     !isOld && latest.status !== "copied"
-      ? versions.find(
-          (d) =>
-            d.id !== latest.id &&
-            d.status === "copied" &&
-            (d.purpose ?? null) === (latest.purpose ?? null) &&
-            !records.some((p) => p.draftId === d.id),
-        )
+      ? versions.find((d) => d.id !== latest.id && d.status === "copied" && !records.some((p) => p.draftId === d.id))
       : undefined;
+  const samePurpose = (copiedEarlier?.purpose ?? null) === (latest.purpose ?? null);
+  const linkCopied = linkTarget ? linkTarget === "copied" : samePurpose;
+  const purposeOf = (d: Draft) =>
+    samePurpose ? "" : d.purpose === "introduction" ? ` · ${t("서비스 소개")}` : d.purpose === "update" ? ` · ${t("변경사항 소개")}` : "";
   const postDraft = isOld
     ? shown.id === copiedId || shown.status === "copied"
       ? shown
       : null
-    : copiedEarlier && !linkLatest
+    : copiedEarlier && linkCopied
       ? copiedEarlier
       : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
@@ -662,15 +663,22 @@ export default function DraftPanel({
               <span className="muted">{t("링크를 연결할 판")}</span>
               <div className="seg" role="group" aria-label={t("링크를 연결할 판")}>
                 <button
-                  aria-pressed={!linkLatest}
-                  className={!linkLatest ? "active" : ""}
-                  onClick={() => setLinkLatest(false)}
+                  aria-pressed={linkCopied}
+                  className={linkCopied ? "active" : ""}
+                  onClick={() => setLinkTarget("copied")}
                   type="button"
                 >
                   {t("복사한 v{version}", { version: copiedEarlier.version })}
+                  {purposeOf(copiedEarlier)}
                 </button>
-                <button aria-pressed={linkLatest} className={linkLatest ? "active" : ""} onClick={() => setLinkLatest(true)} type="button">
+                <button
+                  aria-pressed={!linkCopied}
+                  className={!linkCopied ? "active" : ""}
+                  onClick={() => setLinkTarget("latest")}
+                  type="button"
+                >
                   {t("최신 v{version}", { version: latest.version })}
+                  {purposeOf(latest)}
                 </button>
               </div>
             </div>
