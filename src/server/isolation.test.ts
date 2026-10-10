@@ -48,6 +48,7 @@ describe("per-account isolation", () => {
       ["GET", `/candidates/${ids.candidate}`],
       ["GET", `/candidates/${ids.candidate}/launch-check`],
       ["POST", `/candidates/${ids.candidate}/status`, { status: "dropped" }],
+      ["PATCH", `/drafts/${ids.draft}/review`, { sessionId: "00000000-0000-4000-8000-000000000001", activeSeconds: 0 }],
       ["POST", `/candidates/${ids.candidate}/override`, { decision: "drop", reason: "other" }],
       ["POST", `/candidates/${ids.candidate}/rejudge`],
       ["POST", `/candidates/${ids.candidate}/redraft`, { targets: [{ channel: "x", lang: "en" }] }],

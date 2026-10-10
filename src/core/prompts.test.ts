@@ -7,7 +7,7 @@ const candidate = { title: "A release", type: "release", evidence: { repo: "test
 describe("draft coverage contract", () => {
   it.each(["show_hn", "show_gn", "linkedin", "blog"] as const)("keeps each supplied change visible to the %s generator", (channel) => {
     const prompt = draftPrompt(candidate, channel, "en", []);
-    const checklist = prompt.user.split("## Required change checklist")[1];
+    const checklist = prompt.user.split("## Available changes")[1];
     for (const fact of candidate.evidence.highlights) expect(checklist).toContain(fact);
     expect(checklist).toContain("within the channel character limit");
   });
@@ -27,11 +27,11 @@ describe("first introduction", () => {
   it("replaces the change checklist with an introduction brief", () => {
     const prompt = draftPrompt(candidate, "show_gn", "ko", [], undefined, { introduction: true });
     expect(prompt.user).toContain("## First introduction");
-    expect(prompt.user).not.toContain("## Required change checklist");
+    expect(prompt.user).not.toContain("## Available changes");
   });
 
   it("asks the judge about the project, not the size of the window", () => {
-    expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [], introduction: true }).user).toContain("has not announced this repository through this tool yet");
+    expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [], introduction: true }).user).toContain("has not confirmed a publication for this repository");
     expect(judgePrompt(candidate, { recentPublished: [], enabledChannels: ["x"], feedback: [] }).user).not.toContain("Introducing the project");
   });
 

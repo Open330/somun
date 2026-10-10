@@ -9,7 +9,7 @@ import { removeBridgeTokens } from "./bridges.js";
  * 서버 전역 표(llm_key_state, app_state, usage_outbox)는 계정 데이터가 아니라 건드리지 않는다.
  */
 const OWNED = [
-  schema.sources, schema.signals, schema.candidates, schema.judgments, schema.drafts, schema.draftEdits, schema.examples,
+  schema.sources, schema.signals, schema.candidates, schema.judgments, schema.drafts, schema.draftEdits, schema.draftReviews, schema.examples,
   schema.publications, schema.metricSnapshots, schema.feedback, schema.settings, schema.llmJobs, schema.githubInstallations,
   schema.repoProfiles, schema.changeLedger, schema.guideSuggestions, schema.videos, schema.bridgeTokens,
 ] as const;

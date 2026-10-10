@@ -15,12 +15,16 @@ describe("account export/delete", () => {
     ctx.db.insert(schema.settings).values({ ownerId: "a", data: { llm: { provider: "gemini", apiKey: "sk-secret" }, notify: { weekly: true, discordWebhookUrl: "https://discord.com/api/webhooks/x" } }, updatedAt: now }).run();
     ctx.db.insert(schema.candidates).values({ ownerId: "a", type: "release", title: "t", repo: "a/x", key: "repo:a/x:2026-09-21", evidence: {}, status: "new", createdAt: now, updatedAt: now }).run();
     ctx.db.insert(schema.candidates).values({ ownerId: "b", type: "release", title: "t", repo: "b/y", key: "repo:b/y:2026-09-21", evidence: {}, status: "new", createdAt: now, updatedAt: now }).run();
+    ctx.db.insert(schema.draftReviews).values({ id: "a-review", ownerId: "a", draftId: 1, startedAt: now, updatedAt: now }).run();
+    ctx.db.insert(schema.draftReviews).values({ id: "b-review", ownerId: "b", draftId: 2, startedAt: now, updatedAt: now }).run();
     const ex = exportAccount(ctx, "a") as { settings: { data: { llm: { apiKey?: string }; notify: { discordWebhookUrl?: string } } }[]; candidates: unknown[] };
     expect(ex.candidates).toHaveLength(1);
     expect(ex.settings[0].data.llm.apiKey).toBeUndefined();
     expect(ex.settings[0].data.notify.discordWebhookUrl).toBeUndefined();
     const counts = deleteAccount(ctx, "a");
     expect(counts.candidates).toBe(1);
+    expect(counts.draft_reviews).toBe(1);
+    expect(ctx.db.select().from(schema.draftReviews).all()).toMatchObject([{ ownerId: "b" }]);
     expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(1);
   });
 });

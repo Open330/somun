@@ -2,12 +2,12 @@ import { useState } from "react";
 import { ALL_CHANNELS, CHANNELS, LANGS, type Channel } from "@core/channels";
 import { SAMPLE_WORK, VOICE_PRESETS } from "@core/voice";
 import type { Example, GuideSuggestion, LearningBucket, LearningStats, SettingsView } from "@shared/types";
-import { channelLabel, ErrorState, Skeleton, Toast, relTime, useToast, langLabel } from "../components/ui";
+import { channelLabel, ErrorState, Skeleton, Toast, relTime, useToast, langLabel, REASONS } from "../components/ui";
 import { del, patch, post, useResource } from "../lib/api";
 import { getLocale, t } from "../i18n";
 
 /**
- * 문체. 위: 프리셋과 내 지침(초안 프롬프트에 들어가는 것). 가운데: 학습 효과. 아래: 예시 문장(복사한 초안에서 생기고, 켜 두면 프롬프트에 붙는다).
+ * 문체. 위: 프리셋과 내 지침. 가운데: 검토 결과. 아래: 복사한 초안에서 생긴 예시 문장.
  * 문체를 예시에서 유추하게 두면 어느 문장 때문에 그렇게 나왔는지 알 수 없다. 지침이 먼저고 예시는 보조다.
  */
 const CAT_LABEL: Record<string, string> = { voice: "말투", structure: "구성", facts: "사실", format: "형식" };
@@ -330,26 +330,66 @@ const BucketLine = ({ b }: { b: LearningBucket }) => (
 );
 
 /**
- * 학습 효과. 복사한 초안을 얼마나 고쳤는지. 문체 설정을 바꾸거나 제안을 승인한 뒤 "고친 양"이 줄어야 학습이 된 것이다.
- * 표본이 적으면 흔들리므로 건수를 같이 보여준다.
+ * 검토·복사·게시 확인과 수정량을 함께 보여준다. 수정량 감소만으로 학습 효과를 판단하지 않는다.
  */
 function LearningPanel() {
-  const { data } = useResource<LearningStats>("/learning/stats", ["drafts", "settings", "examples"]);
-  if (!data || data.copied === 0) return null;
+  const { data } = useResource<LearningStats>("/learning/stats", ["drafts", "settings", "examples", "publications", "reviews"]);
+  if (!data || (data.copied === 0 && !data.outcomes?.reviewed)) return null;
   const weeks = data.byWeek.slice(-8);
   return (
     <div className="card stack gap-10 mb-20">
       <div>
         <h3 className="m-0">
-          {t("학습 효과")} <span className="tiny muted">{t("복사한 초안 {n}건 기준", { n: data.copied })}</span>
+          {t("검토 결과")} <span className="tiny muted">{t("복사한 초안 {n}건 기준", { n: data.copied })}</span>
         </h3>
         <p className="small muted learning-intro">
-          {t("실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.")}{" "}
-          {t(
-            "초안을 고치지 않고 그대로 쓴 비율과, 고친 글만 놓고 원문 대비 바꾼 단어 비율의 평균입니다. 지침·예시가 쌓일수록 그대로 쓴 비율은 늘고 수정량은 줄어야 합니다.",
-          )}
+          {t("수정량은 실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.")}{" "}
+          {t("수정량은 문체 참고 지표입니다. 수정이 적다고 사실이 정확하거나 시간이 절약됐다는 뜻은 아닙니다.")}
         </p>
       </div>
+      {data.outcomes && (
+        <div className="stack gap-6">
+          <div className="perf-row">
+            <b>{t("검토 시작")}</b>
+            <span>
+              {data.outcomes.reviewed} / {data.outcomes.generated}
+            </span>
+          </div>
+          <div className="perf-row">
+            <b>{t("검토한 초안 · 복사 · 게시 확인")}</b>
+            <span>
+              {data.outcomes.reviewed} · {data.outcomes.prepared} · {data.outcomes.published}
+            </span>
+          </div>
+          <div className="perf-row">
+            <b>{t("미완료 · 버림 · 재작성")}</b>
+            <span>
+              {data.outcomes.unfinished} · {data.outcomes.dropped} · {data.outcomes.regenerations}
+            </span>
+          </div>
+          {data.outcomes.medianReviewSeconds !== undefined && (
+            <div className="perf-row">
+              <b>{t("복사까지 활성 검토 시간 · 중앙값")}</b>
+              <span>{t("{n}초", { n: data.outcomes.medianReviewSeconds })}</span>
+            </div>
+          )}
+          <div className="perf-row">
+            <b>{t("사실 오류로 보고한 초안")}</b>
+            <span>{data.outcomes.factReports}</span>
+          </div>
+          {data.outcomes.dropReasons.map((r) => (
+            <div className="perf-row small" key={r.reason}>
+              <span>{t(REASONS.find(([reason]) => reason === r.reason)?.[1] ?? r.reason)}</span>
+              <span>{r.count}</span>
+            </div>
+          ))}
+          <p className="tiny muted">
+            {t(
+              "검토 기록은 이 기능 적용 이후부터 수집합니다. 시간이 0초인 표본은 시간 중앙값에서 제외합니다. 창이 비활성화된 시간과 외부 편집·게시 시간은 포함하지 않습니다. 직접 작성한 시간과 비교해야 절약 효과를 판단할 수 있습니다.",
+            )}
+          </p>
+        </div>
+      )}
       <div className="perf-row">
         <b>{t("전체")}</b>
         <BucketLine b={data} />

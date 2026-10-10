@@ -29,7 +29,7 @@
 
 You built a lot. Explaining it is the hard part.
 
-somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Drafts you edit before copying become voice examples (unedited copies only fill in as shape references), and edits produce guide suggestions for you to review. Registered post URLs let you track available performance signals.
+somun reads your releases, PRs, and commits, decides when something is actually worth telling, and drafts a post for each channel — X, Threads, LinkedIn, Show HN, GeekNews — in words your users understand. Drafts are instructed to use your work as evidence. Automated checks flag unsupported numbers and selected formatting problems; they do not verify every claim or translation. You review, copy, and post it yourself. Drafts you edit before copying become voice examples (unedited copies only fill in as shape references), and edits produce guide suggestions for you to review. Confirm actual publication and its time to track available performance signals; add the URL later if needed. Copying alone is not treated as publishing.
 
 Today, publishing is manual. Drafts are grounded in supplied material and checked for selected issues, but unsupported claims and awkward wording can still slip through. Review the source before posting.
 
@@ -77,7 +77,7 @@ Today, publishing is manual. Drafts are grounded in supplied material and checke
 <td width="50%" valign="top">
 
 **Inbox**
-Candidates ranked by score, one line of reasoning each. "Not worth it" is a valid answer and you can overrule it.
+Ready drafts first, then candidates ranked by score, with reasoning and a suggested next review. "Not worth it" is a valid answer and you can overrule it.
 
 **Candidate**
 Evidence on the left (version, stars, downloads, demo asset, limitations, digest). Drafts on the right, one tab per channel, with lint results and a copy button.
@@ -86,7 +86,7 @@ Evidence on the left (version, stars, downloads, demo asset, limitations, digest
 <td width="50%" valign="top">
 
 **Published**
-Paste the URL after you post (you can fix or remove it later). From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added (rebuilt from GitHub star times when somun had no snapshot yet), visitors (only with a token that has admin access to the repo), and reactions (fetched for X and HN, typed in for the rest). Posts on the same repo within a week share the star gain. Per-channel results feed back into which channels the judge suggests; one everyday channel (X, Threads, LinkedIn) with fewer than two posts is added to the judge's picks so it can still collect results.
+Confirm the actual posting time after you publish. The URL is optional and can be added or corrected later. From then on: stars gained in 7 days minus what the pre-post 7-day trend would have added (rebuilt from GitHub star times when somun had no snapshot yet), visitors (only with a token that has admin access to the repo), and reactions (fetched for X and HN, typed in for the rest). Only completed 7-day observations with sufficient snapshots contribute to channel star averages and recommendations. Overlapping posts on the same repository have unattributed star gains and are excluded from those averages. Observed star changes do not establish a causal effect of publicity. You can also record post-specific visits, installs, and signups verified in external analytics; blank fields remain unmeasured. Per-channel results feed back into which channels the judge suggests; one everyday channel (X, Threads, LinkedIn) with fewer than two posts is added to the judge's picks so it can still collect results.
 
 **Settings**
 Sources, channels, rubric weights, banned phrases, voice examples, and which model runs the whole thing.
@@ -105,14 +105,14 @@ The interface is in English and Korean. It follows your browser language and can
 |---|---|---|
 | X | three lines: problem · what it does · one number or limit + link | en, ko |
 | Threads | one or two sentences, ends with a take or a question | ko |
-| LinkedIn | hook above the fold, 3–5 paragraphs, ≤ 3 hashtags | ko |
+| LinkedIn | hook above the fold, 2–5 short paragraphs, ≤ 3 hashtags | ko |
 | Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |
 | Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |
 | Blog | outline only: 3 title candidates, sections, which numbers go where | ko |
 
 Every draft runs through a **slop lint** before you see it (warnings remain visible even when automatic repair cannot resolve them): banned phrases, emoji bullets, numbers not found in the source, unsupported superlatives, invented limitations, selected author-role claims that need review, a wrong repo name, missing link, exclamation marks, vote requests, length, and Blog outline structure.
 
-**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
+**Is it learning?** The Voice page shows, for drafts you copied, how often you used them unchanged and how much you rewrote — by week and by voice-setting version. Review outcomes also show reviews started, copied drafts, confirmed publications, unfinished or discarded reviews, discard reasons, and regenerations. Median active review time for copied drafts counts time when the review screen is visible and focused; samples with zero measured seconds are excluded. Tracking starts with this feature and excludes external editing and publishing. Rewrite share describes observed editing before copying; it does not establish that learning caused an improvement or include edits made later on another platform. `npm run experiment -- export-holdout` turns your copied drafts into a private held-out set (`experiments/holdout/`, git-ignored) with your final text as the baseline.
 
 <br />
 
@@ -148,6 +148,8 @@ npm run dev                     # API on :8790, web on :5180
 npm run seed                    # best-practice voice examples (once)
 npm run push -- --sources omp --days 14   # optional: attach session stats (+ first 120 chars of each first prompt)
 ```
+
+Start with one Korean X draft. Choose the first channel and language in Inbox, then add other channels in Settings after finishing a first draft. Existing saved channel settings are preserved.
 
 Add a GitHub source in Settings (`Open330`, `you/repo`), press **Check now** in the Inbox, and read what it found.
 

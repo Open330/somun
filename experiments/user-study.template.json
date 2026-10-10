@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "participants": [
+    {
+      "id": "P01",
+      "channel": "x",
+      "language": "ko",
+      "order": "manual-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    },
+    {
+      "id": "P02",
+      "channel": "x",
+      "language": "ko",
+      "order": "somun-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    },
+    {
+      "id": "P03",
+      "channel": "x",
+      "language": "ko",
+      "order": "manual-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    },
+    {
+      "id": "P04",
+      "channel": "x",
+      "language": "ko",
+      "order": "somun-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    },
+    {
+      "id": "P05",
+      "channel": "x",
+      "language": "ko",
+      "order": "manual-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    },
+    {
+      "id": "P06",
+      "channel": "x",
+      "language": "ko",
+      "order": "somun-first",
+      "comparableSources": null,
+      "manual": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "somun": {
+        "status": "not-started",
+        "seconds": null,
+        "source": "",
+        "finalText": "",
+        "importantFactCorrections": null,
+        "publishable": null,
+        "published": null,
+        "reason": ""
+      },
+      "returnUse": {
+        "opportunity": null,
+        "used": null,
+        "reason": ""
+      }
+    }
+  ]
+}

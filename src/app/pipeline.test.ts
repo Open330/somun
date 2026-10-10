@@ -10,6 +10,7 @@ import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
 import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
+import { registerPublication } from "./publications.js";
 import { reserveSharedExecution } from "./shared-quota.js";
 
 let ctx: AppContext;
@@ -154,31 +155,58 @@ it("joins a pending judge instead of failing when only the account language chan
   expect(queueStep(ctx, "test", "judge", id)).toBe(first);
 });
 
-it("drafts a first introduction until something from the repository is published", () => {
+it("keeps a first introduction until the repository is published on that channel", () => {
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
   ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "x", url: "https://x.com/a/status/1", publishedAt: 1 }).run();
-  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "ko").draftPurpose).toBe("update");
 });
 
-it("treats a copied draft as announced even without a registered post URL", () => {
+it("keeps copies separate from confirmed publications", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## Introducing the project to new readers");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Draft body" } });
   expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
   ctx.db.update(schema.drafts).set({ copiedAt: 2 }).run();
-  expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## Introducing the project to new readers");
-  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).not.toContain("## First introduction");
+  expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## Introducing the project to new readers");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user).toContain("## First introduction");
+  registerPublication(ctx, "test", { candidateId: id, channel: "x" });
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "ko").draftPurpose).toBe("update");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").draftPurpose).toBe("introduction");
 });
 
-it("redrafts the same channel as an update once its introduction was copied, and retries stale introductions as updates", () => {
+it("uses confirmed posting even when the corrected posting time predates the linked introduction", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, angle: "Introduce vite for the first time", reasoning: "Intro" } });
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "ko", draftPurpose: "introduction", model: "t", result: { body: "Intro" } });
+  const draftId = ctx.db.select().from(schema.drafts).get()!.id;
+  registerPublication(ctx, "test", { candidateId: id, draftId, channel: "x", publishedAt: Date.now() - 86400e3 });
+  const prompt = buildPrompt(ctx, "test", "draft", id, "x", "ko");
+  expect(prompt.draftPurpose).toBe("update");
+  expect(prompt.user).not.toContain("Introduce vite for the first time");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").draftPurpose).toBe("introduction");
+});
+
+it("does not use the new-channel introduction angle for an already announced channel's update", () => {
+  updateSettings(ctx, "test", { channelLangs: { x: ["ko"], linkedin: ["ko"] } });
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
+  registerPublication(ctx, "test", { candidateId: id, channel: "x", publishedAt: Date.now() - 86400e3 });
+  applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Introduce", angle: "Introduce vite to a new audience" } });
+  const update = buildPrompt(ctx, "test", "draft", id, "x", "ko");
+  expect(update.draftPurpose).toBe("update");
+  expect(update.user).not.toContain("Introduce vite to a new audience");
+  expect(buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").draftPurpose).toBe("introduction");
+});
+
+it("redrafts the same channel as an update once publication is confirmed, and retries stale introductions as updates", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
   expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(true);
-  // 같은 채널(X)의 첫 소개 다시 쓰기 요청이 실패해 남아 있는 상태에서, X 초안을 복사한다.
+  // 같은 채널의 다시 쓰기가 실패한 뒤 실제 게시를 확인한다.
   const failed = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true, instruction: "Make it shorter" });
   const linkedin = queueStep(ctx, "test", "draft", id, "linkedin", "ko", { introduction: true });
   ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: Date.now(), createdAt: Date.now() - 1000 }).run();
-  ctx.db.update(schema.drafts).set({ copiedAt: Date.now() }).run();
+  registerPublication(ctx, "test", { candidateId: id, channel: "x" });
   expect(requestedIntroduction(ctx, "test", id, "x", "en")).toBe(false);
   expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).not.toContain("## First introduction");
   const retried = retryGeneration(ctx, "test", failed);
@@ -242,8 +270,8 @@ it("drops an introduction-era angle from update drafts and marks unreleased high
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "r", angle: "Introduce vite to new readers" } });
   expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("Introduce vite to new readers");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
-  ctx.db.update(schema.drafts).set({ copiedAt: Date.now() + 1000 }).run();
-  const update = buildPrompt(ctx, "test", "draft", id, "linkedin", "ko").user;
+  registerPublication(ctx, "test", { candidateId: id, channel: "x" });
+  const update = buildPrompt(ctx, "test", "draft", id, "x", "en").user;
   expect(update).not.toContain("Introduce vite to new readers");
   expect(update).toContain("Items marked (unreleased) are on the main branch");
 });

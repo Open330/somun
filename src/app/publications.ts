@@ -1,9 +1,9 @@
-import { and, desc, eq, gt, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import { publicationEffect } from "../core/metrics.js";
-import { markPublished, unmarkPublished } from "./ledger.js";
+import { unmarkPublished } from "./ledger.js";
 import { refreshPublicationReactions, refreshReactions } from "./reactions.js";
 import { schema } from "../infra/db/index.js";
-import type { PerformanceSummary, Channel, PublicationWithMetrics } from "../shared/types.js";
+import type { PerformanceSummary, Channel, PublicationStats, PublicationWithMetrics } from "../shared/types.js";
 import { getCandidateRow, toPublication } from "./candidates.js";
 import { emit, InvalidInputError, NotFoundError, type AppContext } from "./context.js";
 import { publicationChannel } from "../core/publication-url.js";
@@ -17,36 +17,49 @@ function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: st
 
 /**
  * 이 저장소를 한 번이라도 알렸는가. 없으면 다음 글은 첫 소개다.
- * 게시 URL을 등록하지 않고 복사해서 직접 올리는 사용자가 많다. 초안을 복사한 적이 있으면 알린 것으로 본다.
- * 그렇지 않으면 이 사용자의 모든 글이 영원히 첫 소개가 되어 실제 변경점을 다루지 못한다.
+ * URL 유무와 관계없이 사용자가 확인한 게시만 센다. 복사는 게시의 증거가 아니다.
  */
-export function hasAnnounced(ctx: AppContext, ownerId: string, repo: string): boolean {
-  return lastAnnouncedAt(ctx, ownerId, repo) !== undefined;
+export function hasAnnounced(ctx: AppContext, ownerId: string, repo: string, channel?: string): boolean {
+  return lastAnnouncedAt(ctx, ownerId, repo, channel) !== undefined;
 }
 
-/** 이 저장소를 마지막으로 알린 시각(게시 등록 또는 초안 복사). channel을 주면 그 채널에서 알린 것만 본다. 알린 적이 없으면 undefined. */
+/** 이 저장소를 마지막으로 게시했다고 확인한 시각. channel을 주면 그 채널의 이력만 본다. */
 export function lastAnnouncedAt(ctx: AppContext, ownerId: string, repo: string, channel?: string): number | undefined {
   const published = ctx.db.select({ at: schema.publications.publishedAt }).from(schema.publications).innerJoin(schema.candidates, eq(schema.candidates.id, schema.publications.candidateId))
     .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.candidates.repo, repo), channel ? eq(schema.publications.channel, channel) : undefined)).orderBy(desc(schema.publications.publishedAt)).get()?.at;
-  const copied = ctx.db.select({ at: schema.drafts.copiedAt }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
-    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), isNotNull(schema.drafts.copiedAt), channel ? eq(schema.drafts.channel, channel) : undefined)).orderBy(desc(schema.drafts.copiedAt)).get()?.at ?? undefined;
-  const times = [published, copied].filter((t): t is number => typeof t === "number");
-  return times.length ? Math.max(...times) : undefined;
+  return published;
 }
 
-export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string }): number {
+/** 등록 순서가 아닌 실제 게시 시각으로 변경 원장의 마지막 발행을 맞춘다. 소개는 변경 발행이 아니다. */
+function syncPublishedChanges(ctx: AppContext, ownerId: string, candidateId: number): void {
+  const changePost = ctx.db.select({ channel: schema.publications.channel, publishedAt: schema.publications.publishedAt, purpose: schema.drafts.purpose }).from(schema.publications)
+    .leftJoin(schema.drafts, and(eq(schema.drafts.id, schema.publications.draftId), eq(schema.drafts.ownerId, ownerId)))
+    .where(and(eq(schema.publications.ownerId, ownerId), eq(schema.publications.candidateId, candidateId)))
+    .orderBy(desc(schema.publications.publishedAt)).all().find((p) => p.purpose !== "introduction");
+  unmarkPublished(ctx, ownerId, candidateId, changePost);
+}
+
+function validatePublishedAt(ctx: AppContext, ownerId: string, at: number): void {
+  if (!Number.isSafeInteger(at) || at <= 0 || at > Date.now()) throw new InvalidInputError(say(localeOf(ctx, ownerId), "실제 게시 시각을 입력해 주세요. 미래 시각은 사용할 수 없습니다.", "Enter the actual publication time. Future times are not allowed."));
+}
+
+export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url?: string; publishedAt?: number }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
-  validateUrl(ctx, ownerId, input.channel, input.url);
-  let introduction = false;
+  const url = input.url?.trim() ?? "";
+  validateUrl(ctx, ownerId, input.channel, url);
+  const now = Date.now(), publishedAt = input.publishedAt ?? now;
+  validatePublishedAt(ctx, ownerId, publishedAt);
   if (input.draftId !== undefined) {
-    const d = ctx.db.select({ id: schema.drafts.id, purpose: schema.drafts.purpose }).from(schema.drafts).where(and(eq(schema.drafts.id, input.draftId), eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, input.candidateId))).get();
+    const d = ctx.db.select({ id: schema.drafts.id, channel: schema.drafts.channel, lang: schema.drafts.lang }).from(schema.drafts).where(and(eq(schema.drafts.id, input.draftId), eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, input.candidateId))).get();
     if (!d) throw new NotFoundError("draft");
-    introduction = d.purpose === "introduction";
+    if (d.channel !== input.channel || (input.lang && d.lang !== input.lang)) throw new InvalidInputError(say(localeOf(ctx, ownerId), "초안과 게시 채널·언어가 다릅니다.", "The publication channel or language does not match the draft."));
   }
-  const now = Date.now();
-  const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url: input.url, publishedAt: now }).run().lastInsertRowid);
-  ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
-  if (!introduction) markPublished(ctx, ownerId, input.candidateId, input.channel, now);
+  const id = ctx.db.$client.transaction(() => {
+    const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url, publishedAt }).run().lastInsertRowid);
+    ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
+    syncPublishedChanges(ctx, ownerId, input.candidateId);
+    return id;
+  })();
   channelResultsCache.get(ctx.db)?.delete(ownerId);
   // 등록 직후 한 번 반응을 받아 둔다 (기준선). 실패해도 등록은 된다.
   void refreshReactions(ctx, ownerId, true).catch(() => undefined);
@@ -57,12 +70,23 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
 
 /** 잘못 적은 발행 URL 고치기. 자동 반응은 새 URL로 다시 받는다. */
 export function updatePublicationUrl(ctx: AppContext, ownerId: string, id: number, url: string): void {
+  updatePublication(ctx, ownerId, id, { url });
+}
+
+/** URL과 실제 게시 시각을 함께 수정한다. 시각 수정은 지표와 변경 원장에도 반영한다. */
+export function updatePublication(ctx: AppContext, ownerId: string, id: number, input: { url?: string; publishedAt?: number }): void {
   const publication = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
   if (!publication) throw new NotFoundError("publication");
+  const url = input.url?.trim() ?? publication.url;
   validateUrl(ctx, ownerId, publication.channel as Channel, url);
-  const r = ctx.db.update(schema.publications).set({ url, autoStats: null, autoStatsAt: null }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
-  if (r.changes === 0) throw new NotFoundError("publication");
+  if (input.publishedAt !== undefined) validatePublishedAt(ctx, ownerId, input.publishedAt);
+  ctx.db.$client.transaction(() => {
+    const r = ctx.db.update(schema.publications).set({ url, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
+    if (r.changes === 0) throw new NotFoundError("publication");
+    if (input.publishedAt !== undefined) syncPublishedChanges(ctx, ownerId, publication.candidateId);
+  })();
   void refreshPublicationReactions(ctx, ownerId, id).catch(() => undefined);
+  channelResultsCache.get(ctx.db)?.delete(ownerId);
   emit(ctx, ownerId, { resource: "publications", id });
 }
 
@@ -74,11 +98,7 @@ export function removePublication(ctx: AppContext, ownerId: string, id: number):
     ctx.db.delete(schema.publications).where(eq(schema.publications.id, id)).run();
     const rest = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId))).orderBy(desc(schema.publications.publishedAt)).get();
     // 원장의 "이미 알림" 표시도 되돌린다. 그대로 두면 판단이 이 변경들을 발행된 것으로 보고 새로움 점수를 깎는다.
-    const changePost = ctx.db.select({ channel: schema.publications.channel, publishedAt: schema.publications.publishedAt, purpose: schema.drafts.purpose }).from(schema.publications)
-      .leftJoin(schema.drafts, and(eq(schema.drafts.id, schema.publications.draftId), eq(schema.drafts.ownerId, ownerId)))
-      .where(and(eq(schema.publications.candidateId, p.candidateId), eq(schema.publications.ownerId, ownerId)))
-      .orderBy(desc(schema.publications.publishedAt)).all().find((post) => post.purpose !== "introduction");
-    unmarkPublished(ctx, ownerId, p.candidateId, changePost);
+    syncPublishedChanges(ctx, ownerId, p.candidateId);
     const c = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, p.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
     if (!rest && c?.status === "published") {
       const hasDraft = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), ne(schema.drafts.status, "dropped"))).get();
@@ -91,7 +111,7 @@ export function removePublication(ctx: AppContext, ownerId: string, id: number):
   emit(ctx, ownerId, { resource: "candidates", id: candidateId });
 }
 
-export function setManualStats(ctx: AppContext, ownerId: string, id: number, stats: { likes?: number; comments?: number; reposts?: number }): void {
+export function setManualStats(ctx: AppContext, ownerId: string, id: number, stats: PublicationStats): void {
   const r = ctx.db.update(schema.publications).set({ manualStats: stats }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
   if (r.changes === 0) throw new NotFoundError("publication");
   emit(ctx, ownerId, { resource: "publications", id });
@@ -106,10 +126,15 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
   if (!pubs.length) return [];
   const cands = new Map(ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), inArray(schema.candidates.id, [...new Set(pubs.map((p) => p.candidateId))]))).all().map((c) => [c.id, c]));
   const draftIds = pubs.map((p) => p.draftId).filter((x): x is number => x !== null);
+  // 목록의 100건 제한 밖에 있는 같은 저장소 게시도 기여 구분에 포함한다.
+  const related = ctx.db.select({ id: schema.publications.id, at: schema.publications.publishedAt, repo: schema.candidates.repo }).from(schema.publications)
+    .innerJoin(schema.candidates, and(eq(schema.candidates.id, schema.publications.candidateId), eq(schema.candidates.ownerId, ownerId)))
+    .where(eq(schema.publications.ownerId, ownerId)).all();
   const voices = new Map(draftIds.length ? ctx.db.select({ id: schema.drafts.id, v: schema.drafts.voice }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), inArray(schema.drafts.id, draftIds))).all().map((d) => [d.id, d.v]) : []);
   const snapsByRepo = new Map<string, (typeof schema.metricSnapshots.$inferSelect)[]>();
   for (const repo of new Set([...cands.values()].map((c) => c.repo))) {
-    snapsByRepo.set(repo, ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, repo))).orderBy(desc(schema.metricSnapshots.at)).limit(60).all());
+    // 최근 60일만 읽으면 오래된 완료 관측이 자료 부족으로 바뀌어 추천에서 사라진다.
+    snapsByRepo.set(repo, ctx.db.select().from(schema.metricSnapshots).where(and(eq(schema.metricSnapshots.ownerId, ownerId), eq(schema.metricSnapshots.repo, repo))).orderBy(desc(schema.metricSnapshots.at)).all());
   }
   const out: PublicationWithMetrics[] = [];
   for (const p of pubs) {
@@ -120,8 +145,12 @@ export function listPublicationsWithMetrics(ctx: AppContext, ownerId: string): P
     const after = snaps.filter((s) => s.at > p.publishedAt);
     const voice = p.draftId ? voices.get(p.draftId) ?? undefined : undefined;
     const effect = publicationEffect(snaps, p.publishedAt);
-    const sharedWith = pubs.filter((o) => o.id !== p.id && cands.get(o.candidateId)?.repo === c.repo && Math.abs(o.publishedAt - p.publishedAt) < 7 * 86400e3).length;
-    out.push({ ...toPublication(p), ...(sharedWith ? { sharedWith } : {}), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess, series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
+    const day = 86400e3;
+    const end = p.publishedAt + 7 * day;
+    const final = snaps.find((s) => s.at <= end && s.at >= end - day);
+    const observationStatus = Date.now() < end ? "pending" as const : effect.baseline && p.publishedAt - effect.baseline.at <= 2 * day && final ? "complete" as const : "insufficient" as const;
+    const sharedWith = related.filter((o) => o.id !== p.id && o.repo === c.repo && Math.abs(o.at - p.publishedAt) < 7 * 86400e3).length;
+    out.push({ ...toPublication(p), observationStatus, ...(sharedWith ? { sharedWith } : {}), candidateTitle: c.title, repo: c.repo, voice, baselineStars: before[0]?.stars, latestStars: after[0]?.stars ?? snaps[0]?.stars, ...(observationStatus === "complete" ? { starDelta7d: effect.observed, expectedStarDelta7d: effect.expected, excessStars7d: effect.excess } : {}), series: snaps.slice(0, 30).reverse().map((s) => ({ at: s.at, stars: s.stars, uniques: s.viewsUniques14d ?? undefined, downloads: s.npmDownloadsMonth ?? undefined })) });
   }
   return out;
 }
@@ -147,17 +176,16 @@ export function lastSnapshot(ctx: AppContext, ownerId: string, repo: string) {
 /** 채널·문체별 성과 요약. 발행 7일 뒤 스타 증가, 발행 전 추세를 뺀 증가, 방문자·반응 평균. */
 export function performanceSummary(ctx: AppContext, ownerId: string): PerformanceSummary {
   const pubs = listPublicationsWithMetrics(ctx, ownerId);
-  // 같은 저장소에 비슷한 때 여러 채널로 올리면 스타 증가는 하나다. 글마다 전부 주면 모든 채널이 같은 성과로 보인다. 나눠서 센다.
-  const share = (p: PublicationWithMetrics, v: number | undefined) => (v === undefined ? undefined : v / (1 + (p.sharedWith ?? 0)));
-  const delta = (p: PublicationWithMetrics) => share(p, p.starDelta7d);
-  const excess = (p: PublicationWithMetrics) => share(p, p.excessStars7d);
-  const uniq = (p: PublicationWithMetrics) => p.series.filter((s) => s.at > p.publishedAt).at(-1)?.uniques;
+  // 동시 게시의 저장소 스타는 어느 글에서 왔는지 모른다. 임의 배분으로 추천 자료를 만들지 않는다.
+  const attributable = (p: PublicationWithMetrics) => p.observationStatus === "complete" && !p.sharedWith;
+  const delta = (p: PublicationWithMetrics) => attributable(p) ? p.starDelta7d : undefined;
+  const excess = (p: PublicationWithMetrics) => attributable(p) ? p.excessStars7d : undefined;
   const likes = (p: PublicationWithMetrics) => p.autoStats?.likes ?? p.manualStats?.likes;
   const avg = (xs: (number | undefined)[]) => { const v = xs.filter((x): x is number => x !== undefined); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : undefined; };
   const group = <K extends string>(key: (p: PublicationWithMetrics) => K | undefined) => {
     const m = new Map<K, PublicationWithMetrics[]>();
     for (const p of pubs) { const k = key(p); if (k) m.set(k, [...(m.get(k) ?? []), p]); }
-    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, measured: ps.filter((p) => p.starDelta7d !== undefined).length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgUniques: avg(ps.map(uniq)), avgLikes: avg(ps.map(likes)) })).sort((a, b) => b.count - a.count);
+    return [...m.entries()].map(([k, ps]) => ({ key: k, count: ps.length, measured: ps.filter((p) => delta(p) !== undefined).length, pending: ps.filter((p) => p.observationStatus === "pending").length, unattributed: ps.filter((p) => Boolean(p.sharedWith)).length, avgStarDelta: avg(ps.map(delta)), avgExcessStars: avg(ps.map(excess)), avgLikes: avg(ps.filter((p) => p.observationStatus === "complete").map(likes)) })).sort((a, b) => b.count - a.count);
   };
   return {
     byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
@@ -183,8 +211,7 @@ export function channelResultsForJudge(ctx: AppContext, ownerId: string): string
 function computeChannelResults(ctx: AppContext, ownerId: string): string[] {
   // 표본 기준은 스타 수치가 있는 글 수다. 글이 셋이어도 수치가 하나뿐이면 평균이 그 하나다.
   return performanceSummary(ctx, ownerId).byChannel.filter((g) => (g.measured ?? 0) >= 2).map((g) => [
-    `${g.key}: ${g.count} posts (${g.measured} with star data; gains split across same-repo posts within 7 days)`,
+    `${g.key}: ${g.count} posts (${g.measured} with completed 7-day star observations and no overlapping same-repo posts; observational, not causal attribution)`,
     g.avgExcessStars !== undefined ? `avg ${g.avgExcessStars > 0 ? "+" : ""}${g.avgExcessStars} stars beyond the prior trend in 7 days` : g.avgStarDelta !== undefined ? `avg +${g.avgStarDelta} stars in 7 days (no prior trend)` : "",
-    g.avgLikes !== undefined ? `avg ${g.avgLikes} reactions` : "",
   ].filter(Boolean).join(", "));
 }

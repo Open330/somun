@@ -190,6 +190,7 @@ export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; 
     schema: JUDGE_SCHEMA,
     system: `You are the editor for a developer who builds far more than they announce.
 Decide whether this unit of work is worth a public post, and say why in a way the developer can argue with.
+Start with the concrete value for the named reader: what task changes, and why should that reader care now? A useful capability can be worth sharing without a measurement or a failure story. Do not confuse repository activity with reader value. In the angle, select one supported reader benefit; do not invent a benefit to fill a gap.
 You are skeptical of hype and of "AI-made" as a selling point. Score five criteria 0, 1, or 2 each. Be stingy with 2s:
 - runnable: can a reader try it within a minute from a link? A repo URL is a supplied link: never claim there is no link when repo or homepage includes a URL. If installation or demo steps are absent, explain that specific gap instead.
 - numbers: is there a real measurement, count, or before/after?
@@ -206,7 +207,7 @@ suggestedChannels: subset of the enabled channels.`,
 /** 한 번도 알린 적 없는 저장소: 이번 창의 변경 크기가 아니라 프로젝트 자체를 소개할 만한지 본다. */
 export const INTRODUCTION_JUDGE_HEADING = "## Introducing the project to new readers";
 const INTRODUCTION_JUDGE = `${INTRODUCTION_JUDGE_HEADING}
-The editor has not announced this repository through this tool yet (no copied drafts or registered posts). This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
+The editor has not confirmed a publication for this repository on at least one enabled channel through this tool yet. Copied drafts are not publications. This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
 - novelty: the project itself is new to readers.
 - audience: who it is for, from the profile.
@@ -240,11 +241,11 @@ export type DraftOptions = { guide?: string; instruction?: string; previous?: { 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
   // 첫 소개는 변경 목록이 아니다. 목록을 요구하면 소개 뒤에 변경이 줄줄이 붙는다(도그푸딩에서 확인).
-  if (introduction) return (channel === "x" ? "## Short introduction\nUse two short factual sentences followed by the supplied link. Aim for at most 220 characters including the link, leaving room below the 280-character limit. Name one core task, not the whole list of supported channels or checks.\n\n" : "") + "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows a capability a user can see today. Never mention implementation details (databases, process model, background jobs, timeouts, refactors, dependency or build changes). If Facts has a homepage, link to the homepage rather than the repository. If the channel rules name a 'what changed' section (무엇이 달라졌나 / 변경 내용), use it to say what the project is and does (for example 무엇인가), not to list changes.";
+  if (introduction) return (channel === "x" ? "## Short introduction\nUse two short factual sentences followed by the supplied link. Aim for at most 220 characters including the link, leaving room below the 280-character limit. The first sentence must name the project and its concrete task with an active verb. Never spend a line saying only that it is a tool for developers. The second sentence adds one non-repeated workflow step or supported limitation. Do not attach a dangling 'for developers who ...' phrase after another complete audience description. Name one core task, not the whole list of supported channels or checks.\n\n" : "") + "## First introduction\nWrite for readers encountering this project for the first time. This post introduces the project: lead with what it is and who it is for (from the profile), then how it works. Do not list recent changes. Use at most one, and only if it shows a capability a user can see today. Never mention implementation details (databases, process model, background jobs, timeouts, refactors, dependency or build changes). If Facts has a homepage, link to the homepage rather than the repository. If the channel rules name a 'what changed' section (무엇이 달라졌나 / 변경 내용), use it to say what the project is and does (for example 무엇인가), not to list changes.";
   const highlights = c.evidence.highlights?.filter((text) => text.trim()) ?? [];
   if (!highlights.length) return "";
   if (channel === "x" || channel === "threads") return "## Coverage\nSelect concrete changes that fit this channel. Keep each selected operation accurate. Do not imply this is a complete change list when details are omitted.";
-  return ["## Required change checklist", "Preserve every distinct change below, including its component and operation. Shorten background and repetition rather than omit changes. Use compact sentences or a list within the channel character limit. Before returning, check every item against the draft. Do not add new effects or measurements.", ...highlights.map((text) => `- ${text}`)].join("\n");
+  return ["## Available changes", "Write about ONE change that best supports the supplied angle and named audience. Explain its exact component and operation within the channel character limit. At most one supporting change may be included, only when it directly supports the SAME reader task. These are available facts, not a required checklist. Do not turn a social post into a full changelog or imply omitted changes do not exist. If the Editor instruction explicitly requests a complete changelog, preserve every distinct change below instead. Do not add new effects or measurements.", ...highlights.map((text) => `- ${text}`)].join("\n");
 }
 
 const EXAMPLE_LABEL: Record<string, string> = {
@@ -276,6 +277,8 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     schema: DRAFT_SCHEMA,
     system: `You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.
 Hard rules:
+- Lead with one specific, supported reader task or capability. State it once. Remove repeated descriptions, generic benefits, redundant safety disclaimers, and sentences that only restate that this is a tool. Mention a limitation once, only when required by the channel and supported by Facts. Do not translate technical operations into a different operation or add consequences not established by Facts.
+- If a technical operation is ambiguous in the supplied material, preserve its original term in parentheses or choose a different, unambiguous fact. For example, settling a dependency promise is not reprocessing or deduplicating the dependency itself. Do not turn a performance label into a specific cause, measurement, or user outcome.
 - Every fact, number, and link must come from the Facts block. Never invent a number. If a number is missing, omit the numeric claim. Never insert [number needed] or [숫자 확인] placeholders.
 - Never mention that the code was written with AI or agents unless the tool itself is about agents.
 - Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.

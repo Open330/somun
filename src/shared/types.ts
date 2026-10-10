@@ -94,22 +94,25 @@ export type Draft = { purpose?: DraftPurpose; id: number; candidateId: number; c
 export type GuideSuggestion = { id: number; rule: string; category: "voice" | "structure" | "facts" | "format"; count: number; sources: { kind: "edit" | "drop"; draftId: number; at: number }[]; status: "pending" | "accepted" | "dismissed"; createdAt: number; updatedAt: number };
 
 /** 발행 성과 요약. 채널·문체별 평균. */
-/** avgStarDelta: 발행 후 7일 스타 증가 평균. avgExcessStars: 그중 발행 전 추세를 뺀 증가(발행 효과) 평균. */
-export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; /** 스타 수치가 있는 글 수. */ measured?: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
+/** avgStarDelta: 발행 후 7일 스타 증가 평균. avgExcessStars: 그중 발행 전 추세를 뺀 증가 평균. 인과 효과는 아니다. */
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; /** 관측 완료, 동시 게시 없는 스타 표본 수. */ measured?: number; pending?: number; unattributed?: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
 export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; judgment: Judgment | null };
 
 export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
-export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: { likes?: number; comments?: number; reposts?: number }; autoStats?: AutoStats; autoStatsAt?: number };
+export type PublicationStats = { likes?: number; comments?: number; reposts?: number; visits?: number; installs?: number; signups?: number };
+/** url이 빈 문자열이면 URL 없이 사용자가 확인한 게시다. */
+export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: PublicationStats; autoStats?: AutoStats; autoStatsAt?: number };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
 export type PublicationWithMetrics = Publication & {
   candidateTitle: string; repo: string; baselineStars?: number; latestStars?: number; series: MetricPoint[]; voice?: string;
-  /** 발행 후 7일 스타 증가, 발행 전 추세로 기대한 증가, 그 차이(발행 효과). 자료가 모자라면 없음. */
+  observationStatus?: "pending" | "complete" | "insufficient";
+  /** 발행 후 7일 스타 증가, 발행 전 추세로 기대한 증가, 그 차이. 인과 효과는 아니며 자료가 모자라면 없음. */
   starDelta7d?: number; expectedStarDelta7d?: number; excessStars7d?: number;
-  /** 같은 저장소에 앞뒤 7일 안에 올린 다른 글 수. 스타 변화는 저장소 단위라 이 글들과 나눠 가진다. */
+  /** 같은 저장소에 앞뒤 7일 안에 올린 다른 글 수. 채널별 스타 기여는 구분할 수 없다. */
   sharedWith?: number;
 };
 
@@ -146,19 +149,18 @@ export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields
 export type CandidateDetail = { unpublishedDraftCount?: number; candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[]; consistency: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] };
 
 /** SSE 이벤트: 어느 자원이 바뀌었는지만. 화면은 다시 fetch한다. */
-export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs"; id?: number };
+export type ChangeEvent = { resource: "candidates" | "drafts" | "publications" | "settings" | "sources" | "examples" | "keys" | "jobs" | "reviews"; id?: number };
 
 export type ConnectorsView = {
   github: { mode: "app" | "token" | "none"; appConfigured: boolean; appSlug?: string; installUrl?: string; installations: { id: number; account: string; repos: number; watched: number; updatedAt: number }[]; manualTargets: string[]; lastPolledAt?: number; lastError?: string };
   sessions: { lastUploadAt?: number; sessionCount14d: number; sources: string[] };
 };
 
-/**
- * 학습 효과. 복사한 초안 기준: 고치지 않고 쓴 비율과 평균 수정량(0~1). 수정량이 낮아질수록 초안이 내 문체에 가까워진 것.
- * avgEditRatio는 고친 복사본만의 평균이다(그대로 쓴 글은 unchangedRate에만 들어간다). 고친 글이 없으면 없음.
- */
+/** 복사한 초안의 수정량과 관측된 검토 결과. 학습의 인과 효과를 뜻하지 않는다.
+ * avgEditRatio는 고친 복사본만의 평균이며, 고친 글이 없으면 없음. */
 export type LearningBucket = { copied: number; unchangedRate: number; avgEditRatio?: number };
 export type LearningStats = LearningBucket & {
+  outcomes?: { generated: number; reviewed: number; prepared: number; published: number; unfinished: number; dropped: number; regenerations: number; medianReviewSeconds?: number; factReports: number; dropReasons: { reason: FeedbackReason; count: number }[] };
   byWeek: (LearningBucket & { week: string })[];
   /** 문체 설정 버전별. 처음 쓰인 순서. 설정을 바꾼 뒤 수정량이 줄었는지 본다. */
   byStyle: (LearningBucket & { styleKey: string; firstAt: number; current: boolean })[];

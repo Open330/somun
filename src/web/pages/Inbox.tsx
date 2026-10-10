@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
-import { ApiError, post, useResource } from "../lib/api";
+import { ApiError, patch, post, useResource } from "../lib/api";
+import { CHANNELS, type Channel } from "@core/channels";
 import { GenerationStatus } from "../components/GenerationStatus";
 import { Onboarding } from "../components/Onboarding";
 import { t } from "../i18n";
@@ -70,7 +71,12 @@ export default function Inbox() {
             (filter === "all" ? category(c, running) !== "archived" : category(c, running) === filter) &&
             `${c.title} ${c.repo}`.toLowerCase().includes(query.trim().toLowerCase()),
         )
-        .sort((a, b) => b.updatedAt - a.updatedAt),
+        .sort(
+          (a, b) =>
+            Number(category(b, running) === "review") - Number(category(a, running) === "review") ||
+            (b.judgment?.total ?? -1) - (a.judgment?.total ?? -1) ||
+            b.updatedAt - a.updatedAt,
+        ),
     [rows, filter, query, running],
   );
 
@@ -155,7 +161,9 @@ export default function Inbox() {
       />
     );
   if (!rows || !sources) return <Skeleton rows={4} />;
-  const firstDraft = rows.find((c) => category(c, running) === "review");
+  const recommended = visible.find((c) => !running.has(c.id) && ["review", "fresh"].includes(category(c, running)));
+  const firstDraft = visible.find((c) => category(c, running) === "review");
+  const firstPreparation = !rows.some((c) => c.status === "published" || c.status === "drafted" || c.unpublishedDraftCount);
   const firstUse = rows.length === 0;
   return (
     <>
@@ -207,6 +215,84 @@ export default function Inbox() {
         </div>
       )}
       <GenerationStatus onChange={reload} compact />
+      {firstPreparation && settings && (
+        <div className="card mb-14">
+          <label className="field">
+            <span>{t("첫 게시 채널 · 하나부터 시작하세요")}</span>
+            <select
+              aria-label={t("첫 게시 채널")}
+              value={enabledTargets(settings.channelLangs).length === 1 ? enabledTargets(settings.channelLangs)[0].channel : ""}
+              disabled={busy}
+              onChange={async (ev) => {
+                const channel = ev.target.value as Channel;
+                if (!channel) return;
+                setBusy(true);
+                try {
+                  await patch("/settings", { channelLangs: { [channel]: [CHANNELS[channel].fixedLang ?? settings.ui?.locale ?? "ko"] } });
+                  reloadSettings();
+                } catch (err) {
+                  setMessage({ text: (err as Error).message, error: true, channels: true });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <option value="" disabled>
+                {t("채널 선택")}
+              </option>
+              {(["x", "threads", "linkedin", "show_hn", "show_gn"] as const).map((ch) => (
+                <option key={ch} value={ch}>
+                  {CHANNELS[ch].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {enabledTargets(settings.channelLangs).length === 1 && !CHANNELS[enabledTargets(settings.channelLangs)[0].channel].fixedLang && (
+            <label className="field">
+              <span>{t("첫 게시 언어")}</span>
+              <select
+                aria-label={t("첫 게시 언어")}
+                value={enabledTargets(settings.channelLangs)[0].lang}
+                disabled={busy}
+                onChange={async (ev) => {
+                  const lang = ev.target.value,
+                    channel = enabledTargets(settings.channelLangs)[0].channel;
+                  setBusy(true);
+                  try {
+                    await patch("/settings", { channelLangs: { [channel]: [lang] } });
+                    reloadSettings();
+                  } catch (err) {
+                    setMessage({ text: (err as Error).message, error: true, channels: true });
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {[...new Set([enabledTargets(settings.channelLangs)[0].lang, "ko", "en"])].map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="tiny muted">{t("프로젝트 하나와 초안 하나를 먼저 완성한 뒤, 설정에서 다른 채널을 추가할 수 있습니다.")}</p>
+        </div>
+      )}
+      {recommended && !query && filter === "all" && (
+        <div className="next-action">
+          <div>
+            <h2>{t("지금 검토할 이야기")}</h2>
+            <b>{recommended.title}</b>
+            <p className="small muted">
+              {recommended.judgment?.reasoning || t("아직 판단하지 않은 글감입니다. 근거를 확인하고 알릴 내용을 골라보세요.")}
+            </p>
+          </div>
+          <Link className="btn primary" to={`/c/${recommended.id}`}>
+            {t("추천 글감 열기")}
+          </Link>
+        </div>
+      )}
       {firstUse ? (
         <>
           <Onboarding rows={rows} sources={sources} settings={settings} />

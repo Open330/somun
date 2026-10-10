@@ -1,0 +1,166 @@
+{
+  "date": "2026-10-07",
+  "scope": "Real local browser and isolated SQLite; synthetic inputs, fixture worker responses; no human participants, OAuth, production writes or external publishing",
+  "results": [
+    {
+      "scenario": "minseo",
+      "viewport": "1440x1000",
+      "steps": [
+        {
+          "label": "빈 계정에서 첫 소스 연결 발견",
+          "status": "pass"
+        },
+        {
+          "label": "블로그 연결과 실제 RSS 수집",
+          "status": "pass"
+        },
+        {
+          "label": "생성 전에 모델 설정 안내와 불필요한 작업 방지",
+          "status": "pass"
+        },
+        {
+          "label": "모델 설정에서 로컬 워커로 전환",
+          "status": "pass"
+        },
+        {
+          "label": "소개글 수정과 복사",
+          "status": "pass"
+        },
+        {
+          "label": "게시 링크 기록과 새로고침 유지",
+          "status": "pass"
+        }
+      ],
+      "pageErrors": [],
+      "overflows": [],
+      "observedApiErrors": []
+    },
+    {
+      "scenario": "alex",
+      "viewport": "1440x1000",
+      "steps": [
+        {
+          "label": "게시 완료 화면에서 한국어로 전환",
+          "status": "pass"
+        },
+        {
+          "label": "다른 언어 소개글 생성과 검토 목록 복귀",
+          "status": "pass"
+        },
+        {
+          "label": "한국어 게시 후 같은 언어 새 버전 생성",
+          "status": "pass"
+        },
+        {
+          "label": "LinkedIn 추가 채널 생성",
+          "status": "pass"
+        }
+      ],
+      "pageErrors": [],
+      "overflows": [],
+      "observedApiErrors": []
+    },
+    {
+      "scenario": "jisu",
+      "viewport": "390x844",
+      "steps": [
+        {
+          "label": "설정 조회 실패에도 초안 확인과 설정 재시도",
+          "status": "pass"
+        },
+        {
+          "label": "390px 모바일에서 수정 시작",
+          "status": "pass"
+        },
+        {
+          "label": "저장 실패에도 입력 보존",
+          "status": "pass"
+        },
+        {
+          "label": "저장 전 언어 전환 취소 시 입력 보존",
+          "status": "pass"
+        },
+        {
+          "label": "오류 해소 후 재저장과 게시 기록",
+          "status": "pass"
+        }
+      ],
+      "pageErrors": [],
+      "overflows": [],
+      "observedApiErrors": []
+    },
+    {
+      "scenario": "audit_product",
+      "viewport": "1440x1000",
+      "steps": [
+        {
+          "label": "첫 채널 하나와 언어를 화면에서 설정",
+          "status": "pass"
+        },
+        {
+          "label": "검토 시간 기록과 복사·게시 분리",
+          "status": "pass"
+        },
+        {
+          "label": "링크 없이 실제 게시 날짜 기록·수정과 채널별 소개",
+          "status": "pass"
+        },
+        {
+          "label": "관측 중과 동시 게시 기여 구분·검토 결과 표시",
+          "status": "pass"
+        },
+        {
+          "label": "영어에서도 검토 결과와 관측 상태 표시",
+          "status": "pass"
+        },
+        {
+          "label": "게시글 방문·설치 기록과 미측정 값 구분",
+          "status": "pass"
+        }
+      ],
+      "pageErrors": [],
+      "overflows": [],
+      "observedApiErrors": []
+    },
+    {
+      "scenario": "audit_product_mobile",
+      "viewport": "390x844",
+      "steps": [
+        {
+          "label": "첫 채널 하나와 언어를 화면에서 설정",
+          "status": "pass"
+        },
+        {
+          "label": "검토 시간 기록과 복사·게시 분리",
+          "status": "pass"
+        },
+        {
+          "label": "링크 없이 실제 게시 날짜 기록·수정과 채널별 소개",
+          "status": "pass"
+        },
+        {
+          "label": "관측 중과 동시 게시 기여 구분·검토 결과 표시",
+          "status": "pass"
+        },
+        {
+          "label": "영어에서도 검토 결과와 관측 상태 표시",
+          "status": "pass"
+        },
+        {
+          "label": "게시글 방문·설치 기록과 미측정 값 구분",
+          "status": "pass"
+        }
+      ],
+      "pageErrors": [],
+      "overflows": [],
+      "observedApiErrors": []
+    }
+  ],
+  "resolvedFindings": [
+    {
+      "issue": "English mobile Voice sample fact badge expanded the page width",
+      "change": "Confined the sample grid to its available width and allowed its badges to wrap",
+      "verification": "Final desktop/mobile Korean and English scenarios have no horizontal overflow"
+    }
+  ]
+}
