@@ -59,7 +59,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
 
 it("keeps the migration schema aligned with the latest generation snapshot", () => {
   const db = openDb(":memory:");
-  const snapshot = JSON.parse(readFileSync("drizzle/meta/0015_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
+  const snapshot = JSON.parse(readFileSync("drizzle/meta/0016_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
   try {
     for (const [name, table] of Object.entries(snapshot.tables)) {
       const columns = db.$client.prepare("SELECT name FROM pragma_table_info(?)").all(name) as { name: string }[];

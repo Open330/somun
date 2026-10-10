@@ -200,8 +200,8 @@ function ManualStats({ id, stats }: { id: number; stats?: PublicationStats }) {
         string
       >,
   );
-  const [saved, setSaved] = useState<PublicationStats | undefined>(undefined);
-  const displayed = saved ?? stats;
+  const [saved, setSaved] = useState<{ source?: PublicationStats; value: PublicationStats }>();
+  const displayed = saved && saved.source === stats ? saved.value : stats;
   const invalid = STAT_KEYS.some((k) => values[k] !== "" && (!Number.isSafeInteger(Number(values[k])) || Number(values[k]) < 0));
   return (
     <div className="publication-stats stack gap-6">
@@ -218,6 +218,12 @@ function ManualStats({ id, stats }: { id: number; stats?: PublicationStats }) {
           className="ghost sm"
           onClick={() => {
             setError(null);
+            setValues(
+              Object.fromEntries(STAT_KEYS.map((k) => [k, displayed?.[k] === undefined ? "" : String(displayed[k])])) as Record<
+                keyof PublicationStats,
+                string
+              >,
+            );
             setOpen(true);
           }}
         >
@@ -252,7 +258,7 @@ function ManualStats({ id, stats }: { id: number; stats?: PublicationStats }) {
                 const input = Object.fromEntries(STAT_KEYS.filter((k) => values[k] !== "").map((k) => [k, Number(values[k])]));
                 try {
                   await post(`/publications/${id}/stats`, input);
-                  setSaved(input);
+                  setSaved({ source: stats, value: input });
                   setOpen(false);
                 } catch (err) {
                   setError((err as Error).message);

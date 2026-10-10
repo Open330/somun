@@ -220,6 +220,35 @@ it("records conversions alongside automatic reactions without inventing zero for
   expect(screen.queryByText(/게시글 가입 수 0/)).toBeNull();
 });
 
+it("discards cancelled stats and adopts fresh server values after a local save", async () => {
+  const publication = {
+    id: 7,
+    candidateId: 1,
+    repo: "a/b",
+    candidateTitle: "Post",
+    channel: "x",
+    url: "",
+    publishedAt: Date.now(),
+    series: [],
+    manualStats: { visits: 12 },
+  };
+  set("/publications", [publication]);
+  render(wrap(createElement(Published)));
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  fireEvent.change(screen.getByLabelText("게시글 방문 수"), { target: { value: "99" } });
+  fireEvent.click(screen.getByRole("button", { name: "취소" }));
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  expect((screen.getByLabelText("게시글 방문 수") as HTMLInputElement).value).toBe("12");
+  fireEvent.change(screen.getByLabelText("게시글 방문 수"), { target: { value: "13" } });
+  fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await waitFor(() => expect(screen.getByText(/게시글 방문 수 13/)).toBeTruthy());
+  set("/publications", [{ ...publication, manualStats: { visits: 20 } }]);
+  fireEvent.click(screen.getByRole("button", { name: "반응 새로 받기" }));
+  await waitFor(() => expect(screen.getByText(/게시글 방문 수 20/)).toBeTruthy());
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  expect((screen.getByLabelText("게시글 방문 수") as HTMLInputElement).value).toBe("20");
+});
+
 const draft: Draft = {
   id: 1,
   candidateId: 1,
