@@ -89,6 +89,7 @@ export default function Pick() {
         <div>
           <h1>{t("무엇을 만들어볼까요?")}</h1>
           <p className="lede">
+            {t("처음에는 프로젝트 하나로 첫 게시글을 완성해 보세요.")}{" "}
             {tr("지켜볼 저장소를 고르세요. 고른 것만 읽고, 아래 방식대로 글감을 만듭니다. 나중에 {link}에서 바꿀 수 있습니다.", {
               link: <a href="/connectors">{t("연결")}</a>,
             })}

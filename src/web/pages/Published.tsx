@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { PerformanceSummary, PublicationWithMetrics } from "@shared/types";
+import type { PerformanceSummary, PublicationStats, PublicationWithMetrics } from "@shared/types";
 import { VOICE_PRESETS } from "@core/voice";
 import { channelLabel, ErrorState, MetricChart, Skeleton, fmtDate } from "../components/ui";
 import { post, useResource } from "../lib/api";
@@ -61,22 +61,28 @@ export default function Published() {
           {summary && (summary.byChannel.length > 1 || summary.byVoice.length > 1) && (
             <div className="perf">
               <div className="perf-col">
-                <div className="tiny muted mb-6">{t("채널별 · 발행 7일 뒤")}</div>
+                <div className="tiny muted mb-6">{t("채널별 · 7일 스타 관측")}</div>
                 {summary.byChannel.map((g) => (
-                  <div key={g.key} className="perf-row">
-                    <span>
-                      {channelLabel(g.key)} <span className="muted">{g.count}</span>
-                    </span>
-                    <span className="mono">
-                      {starText(g)}
-                      {g.avgUniques !== undefined ? ` · ${t("방문 {n}", { n: g.avgUniques })}` : ""}
-                      {g.avgLikes !== undefined ? ` · ${t("반응 {n}", { n: g.avgLikes })}` : ""}
-                    </span>
+                  <div key={g.key} className="stack gap-4 mb-10">
+                    <div className="perf-row">
+                      <span>
+                        {channelLabel(g.key)} <span className="muted">{g.count}</span>
+                      </span>
+                      <span className="mono">{starText(g)}</span>
+                    </div>
+                    <div className="row wrap gap-6 tiny muted">
+                      <span className="badge outline">{t("관측 완료 {n}건", { n: g.measured ?? 0 })}</span>
+                      {Boolean(g.pending) && <span className="badge outline">{t("관측 중 {n}건", { n: g.pending ?? 0 })}</span>}
+                      {Boolean(g.unattributed) && (
+                        <span className="badge outline">{t("기여 구분 불가 {n}건", { n: g.unattributed ?? 0 })}</span>
+                      )}
+                      {g.avgLikes !== undefined && <span>{t("누적 반응 평균 {n}", { n: g.avgLikes })}</span>}
+                    </div>
                   </div>
                 ))}
               </div>
               <div className="perf-col">
-                <div className="tiny muted mb-6">{t("문체별 · 발행 7일 뒤")}</div>
+                <div className="tiny muted mb-6">{t("문체별 · 7일 스타 관측")}</div>
                 {summary.byVoice.map((g) => (
                   <div key={g.key} className="perf-row">
                     <span>
@@ -85,7 +91,7 @@ export default function Published() {
                     </span>
                     <span className="mono">
                       {starText(g)}
-                      {g.avgLikes !== undefined ? ` · ${t("반응 {n}", { n: g.avgLikes })}` : ""}
+                      {g.avgLikes !== undefined ? ` · ${t("누적 반응 평균 {n}", { n: g.avgLikes })}` : ""}
                     </span>
                   </div>
                 ))}
@@ -99,6 +105,9 @@ export default function Published() {
               )}
             </p>
           )}
+          <p className="tiny muted">
+            {t("통계는 관측 결과이며 홍보의 인과 효과를 입증하지 않습니다. 같은 저장소의 동시 게시물은 채널별 스타 평균에서 제외합니다.")}
+          </p>
           <div className="rows">
             {rows.map((p) => {
               const delta = p.latestStars !== undefined && p.baselineStars !== undefined ? p.latestStars - p.baselineStars : undefined;
@@ -111,13 +120,20 @@ export default function Published() {
                     </Link>
                     <div className="tiny muted">
                       {fmtDate(p.publishedAt)} ·{" "}
-                      <a href={p.url} target="_blank" rel="noreferrer">
-                        {p.url.replace(/^https?:\/\//, "").slice(0, 60)}
-                      </a>
+                      {p.url ? (
+                        <a href={p.url} target="_blank" rel="noreferrer">
+                          {p.url.replace(/^https?:\/\//, "").slice(0, 60)}
+                        </a>
+                      ) : (
+                        <span>{t("게시 확인됨 · 링크 미등록")}</span>
+                      )}
                     </div>
                   </div>
                   <div className="row gap-10">
                     <div className="small muted pub-stars">
+                      {p.observationStatus === "pending" && <div>{t("7일 관측 중 · 추천 성과에서 제외")}</div>}
+                      {p.observationStatus === "insufficient" && <div>{t("7일 관측 자료 부족 · 추천 성과에서 제외")}</div>}
+                      {Boolean(p.sharedWith) && <div>{t("동시 게시 · 채널별 스타 기여 구분 불가")}</div>}
                       <div>
                         {t("스타")} {p.baselineStars ?? "?"} → {p.latestStars ?? "?"}{" "}
                         {delta !== undefined && (
@@ -152,9 +168,8 @@ export default function Published() {
                         : `♥ ${p.autoStats.likes ?? 0} · ↻ ${p.autoStats.reposts ?? 0} · ${t("답글 {n}", { n: p.autoStats.comments ?? 0 })}${p.autoStats.views ? ` · ${t("조회 {n}", { n: p.autoStats.views })}` : ""}`}{" "}
                       <span className="badge ok">{t("자동")}</span>
                     </span>
-                  ) : (
-                    <ManualStats id={p.id} stats={p.manualStats} />
-                  )}
+                  ) : null}
+                  <ManualStats id={p.id} stats={p.manualStats} />
                 </div>
               );
             })}
@@ -165,52 +180,103 @@ export default function Published() {
   );
 }
 
-function ManualStats({ id, stats }: { id: number; stats?: { likes?: number; comments?: number; reposts?: number } }) {
+const STAT_LABELS = {
+  likes: "좋아요 수",
+  comments: "댓글 수",
+  reposts: "리포스트 수",
+  visits: "게시글 방문 수",
+  installs: "게시글 설치 수",
+  signups: "게시글 가입 수",
+} as const;
+const STAT_KEYS = Object.keys(STAT_LABELS) as (keyof PublicationStats)[];
+
+function ManualStats({ id, stats }: { id: number; stats?: PublicationStats }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [v, setV] = useState({ likes: stats?.likes ?? 0, comments: stats?.comments ?? 0, reposts: stats?.reposts ?? 0 });
-  if (!open)
-    return (
-      <button
-        className="ghost sm"
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {stats ? `${t("반응")} ${stats.likes ?? 0}·${stats.comments ?? 0}·${stats.reposts ?? 0}` : t("반응 입력")}
-      </button>
-    );
+  const [values, setValues] = useState(
+    () =>
+      Object.fromEntries(STAT_KEYS.map((k) => [k, stats?.[k] === undefined ? "" : String(stats[k])])) as Record<
+        keyof PublicationStats,
+        string
+      >,
+  );
+  const [saved, setSaved] = useState<{ source?: PublicationStats; value: PublicationStats }>();
+  const displayed = saved && saved.source === stats ? saved.value : stats;
+  const invalid = STAT_KEYS.some((k) => values[k] !== "" && (!Number.isSafeInteger(Number(values[k])) || Number(values[k]) < 0));
   return (
-    <div className="row small gap-6">
-      {(["likes", "comments", "reposts"] as const).map((k) => (
-        <input
-          key={k}
-          type="number"
-          value={v[k]}
-          className="num-input"
-          title={k}
-          onChange={(ev) => setV({ ...v, [k]: Number(ev.target.value) })}
-        />
-      ))}
-      <button
-        className="sm"
-        onClick={async () => {
-          setError(null);
-          try {
-            await post(`/publications/${id}/stats`, v);
-            setOpen(false);
-          } catch (err) {
-            setError((err as Error).message);
-          }
-        }}
-      >
-        {t("저장")}
-      </button>
-      {error && (
-        <span role="alert" className="tiny">
-          {t("저장하지 못했습니다.")} {error}
-        </span>
+    <div className="publication-stats stack gap-6">
+      {displayed && (
+        <p className="small muted m-0">
+          {t("직접 기록")}:{" "}
+          {STAT_KEYS.filter((k) => displayed[k] !== undefined)
+            .map((k) => `${t(STAT_LABELS[k])} ${displayed[k]}`)
+            .join(" · ") || t("미측정")}
+        </p>
+      )}
+      {!open ? (
+        <button
+          className="ghost sm"
+          onClick={() => {
+            setError(null);
+            setValues(
+              Object.fromEntries(STAT_KEYS.map((k) => [k, displayed?.[k] === undefined ? "" : String(displayed[k])])) as Record<
+                keyof PublicationStats,
+                string
+              >,
+            );
+            setOpen(true);
+          }}
+        >
+          {t("성과·반응 입력")}
+        </button>
+      ) : (
+        <>
+          <p className="tiny muted m-0">
+            {t("외부 분석에서 확인한 게시글별 수치를 입력하세요. 비워 두면 미측정이며 자동 수집한 값이 아닙니다.")}
+          </p>
+          <div className="row wrap gap-8">
+            {STAT_KEYS.map((k) => (
+              <label className="field" key={k}>
+                <span>{t(STAT_LABELS[k])}</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={values[k]}
+                  className="num-input"
+                  onChange={(ev) => setValues({ ...values, [k]: ev.target.value })}
+                />
+              </label>
+            ))}
+          </div>
+          <div className="toolbar">
+            <button
+              className="sm"
+              disabled={invalid}
+              onClick={async () => {
+                setError(null);
+                const input = Object.fromEntries(STAT_KEYS.filter((k) => values[k] !== "").map((k) => [k, Number(values[k])]));
+                try {
+                  await post(`/publications/${id}/stats`, input);
+                  setSaved({ source: stats, value: input });
+                  setOpen(false);
+                } catch (err) {
+                  setError((err as Error).message);
+                }
+              }}
+            >
+              {t("저장")}
+            </button>
+            <button className="ghost sm" onClick={() => setOpen(false)}>
+              {t("취소")}
+            </button>
+          </div>
+          {error && (
+            <span role="alert" className="tiny">
+              {t("저장하지 못했습니다.")} {error}
+            </span>
+          )}
+        </>
       )}
     </div>
   );

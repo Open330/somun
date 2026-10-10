@@ -1,0 +1,486 @@
+{
+  "date": "2026-10-10",
+  "baseRevision": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+  "dirtyIntegration": true,
+  "environment": "Node 22.23.3; isolated SQLite; local browser; fixture worker; no production writes, external publishing, or live LLM calls",
+  "tests": {
+    "files": 69,
+    "passed": 616
+  },
+  "checks": [
+    "typecheck",
+    "lint",
+    "web format",
+    "production build",
+    "staged secret scan"
+  ],
+  "browser": {
+    "passedSteps": 27,
+    "reports": [
+      {
+        "persona": "audit_product",
+        "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+        "viewport": "1440x1000",
+        "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+        "steps": [
+          {
+            "label": "첫 채널 하나와 언어를 화면에서 설정",
+            "status": "pass",
+            "automationMs": 647
+          },
+          {
+            "label": "검토 시간 기록과 복사·게시 분리",
+            "status": "pass",
+            "automationMs": 1835
+          },
+          {
+            "label": "링크 없이 실제 게시 날짜 기록·수정과 채널별 소개",
+            "status": "pass",
+            "automationMs": 236
+          },
+          {
+            "label": "관측 중과 동시 게시 기여 구분·검토 결과 표시",
+            "status": "pass",
+            "automationMs": 440
+          },
+          {
+            "label": "영어에서도 검토 결과와 관측 상태 표시",
+            "status": "pass",
+            "automationMs": 391
+          },
+          {
+            "label": "게시글 방문·설치 기록과 미측정 값 구분",
+            "status": "pass",
+            "automationMs": 233
+          }
+        ],
+        "findings": [],
+        "pageErrors": [],
+        "dialogs": [],
+        "requests": [],
+        "screenshots": [
+          {
+            "file": "audit_product-first-channel.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-copied-not-posted.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-publication-confirmed.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-observation-status.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-review-outcomes.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-review-outcomes-en.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-observation-status-en.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product-manual-results-en.png",
+            "overflow": false
+          }
+        ]
+      },
+      {
+        "persona": "audit_product_mobile",
+        "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+        "viewport": "390x844",
+        "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+        "steps": [
+          {
+            "label": "첫 채널 하나와 언어를 화면에서 설정",
+            "status": "pass",
+            "automationMs": 404
+          },
+          {
+            "label": "검토 시간 기록과 복사·게시 분리",
+            "status": "pass",
+            "automationMs": 1662
+          },
+          {
+            "label": "링크 없이 실제 게시 날짜 기록·수정과 채널별 소개",
+            "status": "pass",
+            "automationMs": 183
+          },
+          {
+            "label": "관측 중과 동시 게시 기여 구분·검토 결과 표시",
+            "status": "pass",
+            "automationMs": 402
+          },
+          {
+            "label": "영어에서도 검토 결과와 관측 상태 표시",
+            "status": "pass",
+            "automationMs": 338
+          },
+          {
+            "label": "게시글 방문·설치 기록과 미측정 값 구분",
+            "status": "pass",
+            "automationMs": 189
+          }
+        ],
+        "findings": [],
+        "pageErrors": [],
+        "dialogs": [],
+        "requests": [],
+        "screenshots": [
+          {
+            "file": "audit_product_mobile-first-channel.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-copied-not-posted.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-publication-confirmed.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-observation-status.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-review-outcomes.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-review-outcomes-en.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-observation-status-en.png",
+            "overflow": false
+          },
+          {
+            "file": "audit_product_mobile-manual-results-en.png",
+            "overflow": false
+          }
+        ]
+      },
+      {
+        "persona": "minseo",
+        "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+        "viewport": "1440x1000",
+        "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+        "steps": [
+          {
+            "label": "빈 계정에서 첫 소스 연결 발견",
+            "status": "pass",
+            "automationMs": 746
+          },
+          {
+            "label": "블로그 연결과 실제 RSS 수집",
+            "status": "pass",
+            "automationMs": 416
+          },
+          {
+            "label": "생성 전에 모델 설정 안내와 불필요한 작업 방지",
+            "status": "pass",
+            "automationMs": 89
+          },
+          {
+            "label": "모델 설정에서 로컬 워커로 전환",
+            "status": "pass",
+            "automationMs": 799
+          },
+          {
+            "label": "소개글 수정과 복사",
+            "status": "pass",
+            "automationMs": 131
+          },
+          {
+            "label": "게시 링크 기록과 새로고침 유지",
+            "status": "pass",
+            "automationMs": 298
+          }
+        ],
+        "findings": [],
+        "pageErrors": [],
+        "dialogs": [],
+        "requests": [],
+        "screenshots": [
+          {
+            "file": "minseo-first-candidate.png",
+            "overflow": false
+          },
+          {
+            "file": "minseo-model-setup.png",
+            "overflow": false
+          },
+          {
+            "file": "minseo-published.png",
+            "overflow": false
+          }
+        ]
+      },
+      {
+        "persona": "alex",
+        "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+        "viewport": "1440x1000",
+        "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+        "steps": [
+          {
+            "label": "게시 완료 화면에서 한국어로 전환",
+            "status": "pass",
+            "automationMs": 371
+          },
+          {
+            "label": "다른 언어 소개글 생성과 검토 목록 복귀",
+            "status": "pass",
+            "automationMs": 626
+          },
+          {
+            "label": "한국어 게시 후 같은 언어 새 버전 생성",
+            "status": "pass",
+            "automationMs": 391
+          },
+          {
+            "label": "LinkedIn 추가 채널 생성",
+            "status": "pass",
+            "automationMs": 168
+          }
+        ],
+        "findings": [
+          {
+            "kind": "navigation-count",
+            "observed": "미게시 초안은 검토 목록에 있지만 탐색 메뉴의 초안 개수 표시 요소는 1개다."
+          },
+          {
+            "kind": "review-entry",
+            "observed": "검토할 초안으로 진입했다."
+          }
+        ],
+        "pageErrors": [],
+        "dialogs": [],
+        "requests": [],
+        "screenshots": [
+          {
+            "file": "alex-review-inbox.png",
+            "overflow": false
+          },
+          {
+            "file": "alex-review-entry.png",
+            "overflow": false
+          },
+          {
+            "file": "alex-new-version.png",
+            "overflow": false
+          },
+          {
+            "file": "alex-linkedin.png",
+            "overflow": false
+          }
+        ]
+      },
+      {
+        "persona": "jisu",
+        "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+        "viewport": "390x844",
+        "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+        "steps": [
+          {
+            "label": "설정 조회 실패에도 초안 확인과 설정 재시도",
+            "status": "pass",
+            "automationMs": 767
+          },
+          {
+            "label": "390px 모바일에서 수정 시작",
+            "status": "pass",
+            "automationMs": 269
+          },
+          {
+            "label": "저장 실패에도 입력 보존",
+            "status": "pass",
+            "automationMs": 149
+          },
+          {
+            "label": "저장 전 언어 전환 취소 시 입력 보존",
+            "status": "pass",
+            "automationMs": 63
+          },
+          {
+            "label": "오류 해소 후 재저장과 게시 기록",
+            "status": "pass",
+            "automationMs": 277
+          }
+        ],
+        "findings": [],
+        "pageErrors": [],
+        "dialogs": [
+          "저장하지 않은 수정 내용이 있습니다. 내용을 버리고 이동할까요?"
+        ],
+        "requests": [],
+        "screenshots": [
+          {
+            "file": "jisu-settings-error.png",
+            "overflow": false
+          },
+          {
+            "file": "jisu-editing.png",
+            "overflow": false
+          },
+          {
+            "file": "jisu-save-error.png",
+            "overflow": false
+          },
+          {
+            "file": "jisu-published.png",
+            "overflow": false
+          },
+          {
+            "file": "jisu-other-language.png",
+            "overflow": false
+          }
+        ]
+      }
+    ],
+    "initialFailure": {
+      "persona": "alex",
+      "commit": "be0e6566e98122297cd308b2c8dddad1d1fd6459",
+      "viewport": "1440x1000",
+      "environment": "anonymous local app; isolated SQLite; synthetic feed; fixture worker responses",
+      "steps": [
+        {
+          "label": "게시 완료 화면에서 한국어로 전환",
+          "status": "pass",
+          "automationMs": 636
+        },
+        {
+          "label": "다른 언어 소개글 생성과 검토 목록 복귀",
+          "status": "pass",
+          "automationMs": 1207
+        },
+        {
+          "label": "한국어 게시 후 같은 언어 새 버전 생성",
+          "status": "fail",
+          "error": "The expression evaluated to a falsy value:\n\n  assert(db.select().from(schema.drafts).all().filter((d) => d.lang === 'ko').every((d) => d.purpose === 'introduction'))\n",
+          "automationMs": 445
+        }
+      ],
+      "findings": [
+        {
+          "kind": "navigation-count",
+          "observed": "미게시 초안은 검토 목록에 있지만 탐색 메뉴의 초안 개수 표시 요소는 1개다."
+        },
+        {
+          "kind": "review-entry",
+          "observed": "검토할 초안으로 진입했다."
+        }
+      ],
+      "pageErrors": [],
+      "dialogs": [],
+      "requests": [],
+      "screenshots": [
+        {
+          "file": "alex-review-inbox.png",
+          "overflow": false
+        },
+        {
+          "file": "alex-review-entry.png",
+          "overflow": false
+        },
+        {
+          "file": "alex-new-version.png",
+          "overflow": false
+        },
+        {
+          "file": "alex-failure.png",
+          "overflow": false
+        }
+      ],
+      "executionError": "The expression evaluated to a falsy value:\n\n  assert(db.select().from(schema.drafts).all().filter((d) => d.lang === 'ko').every((d) => d.purpose === 'introduction'))\n",
+      "lastVisibleText": "본문으로 바로 가기\n소문\nsomun\n워크스페이스\n글감\n1\n발행 기록\n연결 관리\n문체\n설정\n작업\n진행 중인 작업 없음\n분석 로컬 워커 · 초안 로컬 워커\n만드는 일에 집중하세요.\n\n알릴 이야기는 여기 모아둘게요.\n\n화면 언어\n한국어\nEnglish\n토큰 세션\n나가기\n글감\n/\n릴리스\n·\npersona/formleaf\nFormLeaf CSV export\n발행됨\n⋯\n로컬 워커에 요청했습니다. 워커를 실행해 두면 완성된 초안이 여기에 도착합니다.\n모델 설정 확인\n×\n초안\n초안 검토·수정\n복사해 직접 게시\n게시 링크 기록\n문체: 담백한 기록 ↗\nX\n✓✓\n, 이 채널의 모든 언어를 게시했습니다\nLinkedIn\n−\n, 초안 없음\nEN\nKO\n게시 기록을 남겼어요\n\n올림 https://example.test/alex-ko-v2\n\n발행 기록에서 게시 후 변화를 확인할 수 있어요.\n\n발행 기록 보기 →\n링크 고치기\n초안 다시 보기\n기록 지우기\n프로젝트 배경과 문체 참고\n무엇이 달라졌나\nExports responses as CSV.\n사실\n데모\n없음 (올리기 전 GIF나 스크린샷을 준비하세요)\n한계\nFile attachments are not supported.\n링크 미리보기 점검\n원자료 · 릴리스 노트, 머지된 PR, 커밋 제목\n발행됨\nX\nexample.test/alex-old\n오후 03:32\nX\nexample.test/alex-ko-v1\n오후 03:32\nX\nexample.test/alex-ko-v2\n오후 03:32\n발행 기록에 저장했습니다."
+    },
+    "resolution": "실제 게시 확인 후 첫 소개를 계속 기대하던 브라우저 검사를 소개→업데이트로 정정. 제품 코드는 변경하지 않음."
+  },
+  "userStudy": {
+    "realParticipants": 0,
+    "templateSummary": {
+      "plannedParticipants": 6,
+      "observedParticipants": 0,
+      "pairedPublishableTimedParticipants": 0,
+      "medianSavedPercent": null,
+      "pairs": [
+        {
+          "id": "P01",
+          "order": "manual-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        },
+        {
+          "id": "P02",
+          "order": "somun-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        },
+        {
+          "id": "P03",
+          "order": "manual-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        },
+        {
+          "id": "P04",
+          "order": "somun-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        },
+        {
+          "id": "P05",
+          "order": "manual-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        },
+        {
+          "id": "P06",
+          "order": "somun-first",
+          "manualStatus": "not-started",
+          "somunStatus": "not-started",
+          "savedPercent": null
+        }
+      ],
+      "manual": {
+        "started": 0,
+        "completed": 0,
+        "abandoned": [],
+        "publishable": 0,
+        "importantFactCorrections": 0,
+        "factCorrectionsUnmeasured": 0,
+        "timeUnmeasured": 0
+      },
+      "somun": {
+        "started": 0,
+        "completed": 0,
+        "abandoned": [],
+        "publishable": 0,
+        "importantFactCorrections": 0,
+        "factCorrectionsUnmeasured": 0,
+        "timeUnmeasured": 0
+      },
+      "returnUse": {
+        "opportunities": 0,
+        "used": 0,
+        "notUsed": 0,
+        "unmeasured": 0
+      },
+      "limitation": "게시 가능한 완료 과업의 짝만 시간 비교에 포함합니다. 중단·미측정은 별도 보고하며, 소수 표본의 기술 통계는 일반적 효과나 인과관계를 입증하지 않습니다."
+    }
+  }
+}

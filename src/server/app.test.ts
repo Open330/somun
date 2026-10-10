@@ -29,6 +29,37 @@ describe("HTTP response boundaries", () => {
 
   const headers = { Authorization: "Bearer test-token", "Content-Type": "application/json" };
 
+  it("accepts a single selected channel, another selection, and deliberately empty channel settings", async () => {
+    for (const channelLangs of [{ x: ["en"] }, { threads: ["ko"] }, {}]) {
+      const res = await app.request("/api/settings", { method: "PATCH", headers, body: JSON.stringify({ channelLangs }) });
+      expect(res.status).toBe(200);
+      expect((await res.json()).channelLangs).toEqual(channelLangs);
+    }
+    expect((await app.request("/api/settings", { method: "PATCH", headers, body: JSON.stringify({ channelLangs: { unknown: ["ko"] } }) })).status).toBe(400);
+  });
+
+  it("accepts URL-less confirmation and actual posting time, and validates review checkpoints", async () => {
+    const now = Date.now();
+    const candidateId = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", type: "release", title: "t", repo: "me/tool", key: "k", evidence: {}, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId: "local", candidateId, channel: "x", lang: "ko", version: 1, purpose: "introduction", body: "Body", lint: [], status: "proposed", model: "fixture", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const send = (method: string, path: string, body: unknown) => app.request(path, { method, headers, body: JSON.stringify(body) });
+    const res = await send("POST", "/api/publications", { candidateId, draftId, channel: "x", lang: "ko", publishedAt: now - 86400e3 });
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    expect(ctx.db.select().from(schema.publications).get()).toMatchObject({ id, url: "", publishedAt: now - 86400e3 });
+    expect((await send("POST", `/api/publications/${id}/stats`, { visits: 12, installs: 0 })).status).toBe(204);
+    expect(ctx.db.select().from(schema.publications).get()?.manualStats).toEqual({ visits: 12, installs: 0 });
+    expect((await send("POST", `/api/publications/${id}/stats`, { signups: -1 })).status).toBe(400);
+    expect((await send("POST", `/api/publications/${id}/stats`, { visits: 1.5 })).status).toBe(400);
+    expect((await send("PATCH", `/api/publications/${id}`, { publishedAt: now - 2 * 86400e3 })).status).toBe(204);
+    expect((await send("POST", "/api/publications", { candidateId, channel: "x", publishedAt: now + 86400e3 })).status).toBe(400);
+    expect((await send("POST", "/api/publications", { candidateId, draftId, channel: "linkedin" })).status).toBe(400);
+    const sessionId = "00000000-0000-4000-8000-000000000001";
+    expect((await send("PATCH", `/api/drafts/${draftId}/review`, { sessionId, activeSeconds: 0 })).status).toBe(204);
+    expect((await send("PATCH", `/api/drafts/${draftId}/review`, { sessionId, activeSeconds: -1 })).status).toBe(400);
+    expect((await send("PATCH", `/api/drafts/${draftId}/review`, { sessionId: "bad", activeSeconds: 0 })).status).toBe(400);
+  });
+
   it("keeps unknown API routes out of the SPA fallback", async () => {
     for (const path of ["/api", "/api/does-not-exist"]) {
       const res = await app.request(path, { headers });

@@ -38,7 +38,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   linkedin: {
     id: "linkedin", label: "LinkedIn", defaultLangs: ["ko"], maxChars: 3000, hasTitle: false,
-    rules: "First line is the result or the problem in one sentence, under 40 characters so it ends above the fold. Then 3-5 paragraphs: problem → what was built → numbers or before/after → what was learned → link. 2-3 sentences per paragraph. No emoji bullets. Hashtags only on the last line, at most 3. No 'excited to share' phrasing.",
+    rules: "First line is the concrete task or change in one sentence, under 40 characters so it ends above the fold. Use 2-5 short paragraphs including the link paragraph; one factual sentence per paragraph is enough. Add supporting details, a before/after, or a lesson only when Facts supplies them. When only one fact is supplied, the hook plus link is enough: never restate the hook to fill paragraphs. No emoji bullets. Hashtags only on the last line, at most 3. No 'excited to share' phrasing.",
     mediaHint: "실제 데이터가 보이는 스크린샷 1장 (대시보드, 터미널 출력, 전후 비교)",
     composeUrl: "https://www.linkedin.com/feed/?shareActive=true",
     runbook: ["화~목 오전 7~9시가 도달이 가장 좋음. 주말은 피함", "첫 줄이 접힘선 위에서 끝나는지 확인 (40자)", "실제 데이터가 보이는 스크린샷 1장", "해시태그는 마지막 줄 최대 3개"],
@@ -52,7 +52,7 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
   show_gn: {
     id: "show_gn", label: "Show GN", fixedLang: "ko", defaultLangs: ["ko"], maxChars: 3000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Use short Korean sections grounded in Facts, with each heading on its own line (plain text or Markdown): 무엇이 달라졌나 / 변경 내용. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section; the profile's 'why it exists' supports a 왜 section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.",
+    rules: "Title: 'Show GN: <이름> - <한 줄 설명>'. Use one concise Korean section about the main change, with its heading on its own line (plain text or Markdown): 무엇이 달라졌나 or 변경 내용. Do not repeat the same fact under both headings or append the full release list unless the Editor instruction requests it. Add 왜 / 기존 도구와 다른 점 / 기술 결정 / 한계 only when Facts explicitly supports that section; the profile's 'why it exists' supports a 왜 section. Do not present a release change as a comparison with other tools. Facts only, no marketing words. Include a runnable command only if Facts supplies that exact command. Omit unsupported sections. Never ask for votes or comments.",
     mediaHint: "링크는 GitHub 저장소 또는 데모 페이지",
     composeUrl: "https://news.hada.io/new",
     runbook: ["평일 오전 9~11시 등록이 첫 화면에 오래 남음", "사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],
@@ -70,7 +70,8 @@ export const ALL_CHANNELS = Object.keys(CHANNELS) as Channel[];
 
 /** 채널별 언어 설정. 기본값. */
 export type ChannelLangs = Partial<Record<Channel, string[]>>;
-export const DEFAULT_CHANNEL_LANGS: ChannelLangs = { x: ["en", "ko"], linkedin: ["ko"], show_hn: ["en"], show_gn: ["ko"] };
+/** 처음에는 초안 하나만 검토한다. 저장된 기존 채널 선택에는 영향을 주지 않는다. */
+export const DEFAULT_CHANNEL_LANGS: ChannelLangs = { x: ["ko"] };
 
 /** 설정에서 활성화된 (channel, lang) 쌍. 고정 언어 채널은 설정과 무관하게 그 언어. */
 export function enabledTargets(langs: ChannelLangs): { channel: Channel; lang: string }[] {

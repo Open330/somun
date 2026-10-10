@@ -112,7 +112,7 @@ export function explorationChannel(ctx: AppContext, ownerId: string, candidates:
 
 /**
  * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
- * 단, 첫 소개 초안을 만든 뒤에 이 저장소를 알렸다면(복사·게시 등록) 더는 첫 소개가 아니다. 다시 쓰면 업데이트가 된다.
+ * 단, 같은 채널에 실제 게시했다고 확인했다면 다시 쓰는 목적은 업데이트다.
  */
 export function requestedIntroduction(ctx: AppContext, ownerId: string, candidateId: number, channel?: Channel, lang?: string, explicit?: boolean): boolean | undefined {
   if (explicit !== undefined) return explicit;
@@ -120,7 +120,11 @@ export function requestedIntroduction(ctx: AppContext, ownerId: string, candidat
   const previous = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   if (!previous?.purpose) return undefined;
   // 다른 채널에서 알린 것은 이 채널 독자에게 소개한 것이 아니다. 같은 채널에서 알렸을 때만 업데이트로 바꾼다.
-  if (previous.purpose === "introduction" && announcedSince(ctx, ownerId, candidateId, previous.createdAt, channel)) return false;
+  if (previous.purpose === "introduction") {
+    // 나중에 등록·수정한 실제 게시 시각이 생성 시각보다 앞서도, 이 초안의 게시 확인은 유효하다.
+    const published = ctx.db.select({ id: schema.publications.id }).from(schema.publications).where(and(eq(schema.publications.ownerId, ownerId), eq(schema.publications.candidateId, candidateId), eq(schema.publications.draftId, previous.id), eq(schema.publications.channel, channel))).get();
+    if (published || announcedSince(ctx, ownerId, candidateId, previous.createdAt, channel)) return false;
+  }
   return previous.purpose === "introduction";
 }
 
@@ -138,16 +142,18 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
-  const introduction = requested ?? !hasAnnounced(ctx, ownerId, row.repo);
+  const anyUnannounced = enabledTargets(settings.channelLangs).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
+  const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
   if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
+  const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.
-  const staleAngle = !introduction && judgment !== null && judgment !== undefined && announcedSince(ctx, ownerId, candidateId, judgment.createdAt);
+  // 채널이 섞이면 판단의 각도는 새 독자용 소개다. 이미 알린 채널의 업데이트에 재사용하지 않는다.
+  const staleAngle = !introduction && judgment !== null && judgment !== undefined && (anyUnannounced || prev?.purpose === "introduction" || announcedSince(ctx, ownerId, candidateId, judgment.createdAt, channel));
   const angle = requested || staleAngle ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
-  const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
     guide: voiceGuideFor(settings.voice, lang, channel),
     profile,

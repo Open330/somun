@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { editRatio } from "../core/metrics.js";
 import type { Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft } from "../core/lint.js";
@@ -17,6 +17,18 @@ function getDraftRow(ctx: AppContext, ownerId: string, id: number) {
   const d = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.id, id), eq(schema.drafts.ownerId, ownerId))).get();
   if (!d) throw new NotFoundError("draft");
   return d;
+}
+
+/** 역순·재전송에도 누적 시간을 줄이지 않는다. 본문·클립보드·키 입력은 수집하지 않는다. */
+export function recordDraftReview(ctx: AppContext, ownerId: string, draftId: number, input: { sessionId: string; activeSeconds: number }): void {
+  getDraftRow(ctx, ownerId, draftId);
+  const previous = ctx.db.select().from(schema.draftReviews).where(eq(schema.draftReviews.id, input.sessionId)).get();
+  if (previous && (previous.ownerId !== ownerId || previous.draftId !== draftId)) throw new NotFoundError("review");
+  const now = Date.now(), startedAt = previous?.startedAt ?? now;
+  const activeSeconds = Math.min(input.activeSeconds, Math.ceil((now - startedAt) / 1000));
+  ctx.db.insert(schema.draftReviews).values({ id: input.sessionId, ownerId, draftId, startedAt, activeSeconds, updatedAt: now })
+    .onConflictDoUpdate({ target: schema.draftReviews.id, set: { activeSeconds: sql`max(${schema.draftReviews.activeSeconds}, ${activeSeconds})`, updatedAt: now }, where: and(eq(schema.draftReviews.ownerId, ownerId), eq(schema.draftReviews.draftId, draftId)) }).run();
+  if (!previous || activeSeconds > previous.activeSeconds) emit(ctx, ownerId, { resource: "reviews", id: draftId });
 }
 
 /** 채널·언어별로 프롬프트 후보가 되는 내 예시 수. 오래된 것부터 물러난다. */

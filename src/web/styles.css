@@ -375,7 +375,8 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .preset-pick { all: unset; cursor: pointer; display: grid; gap: 3px; }
 .preset-pick:hover b { color: var(--accent); }
 .preset-sample { white-space: pre-wrap; font-size: 13px; line-height: 1.55; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; color: var(--ink); }
-.sample-work { display: grid; gap: 6px; padding: 10px 14px; margin-bottom: 12px; border: 1px dashed var(--line-strong); border-radius: 10px; font-size: 13px; }
+.sample-work { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 14px; margin-bottom: 12px; border: 1px dashed var(--line-strong); border-radius: 10px; font-size: 13px; }
+.sample-work .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .presets { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .preset:hover { border-color: var(--accent); }
 .preset.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -742,6 +743,8 @@ button.chip { min-height: 28px; }
 /* 발행 기록 */
 .pub-title { font-weight: 600; color: var(--ink); }
 .pub-stars { text-align: right; }
+.publication-stats { grid-column: 1 / -1; }
+.publication-stats > button { align-self: flex-start; }
 /* 글감 상세 */
 .side-block h2.limits-head { margin-top: 14px; }
 .side-block > .callout + .callout { margin-top: 6px; }

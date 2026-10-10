@@ -71,6 +71,7 @@ it("clears the leave guard after a successful save", async () => {
   const { router } = setup();
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "saved-model" } });
   fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await screen.findByText("저장했습니다");
   await waitFor(() => expect(screen.queryByText("저장하지 않은 설정 변경이 있습니다.")).toBeNull());
   const reload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(reload);

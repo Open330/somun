@@ -6,19 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Draft, SettingsView } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../app/settings";
 import Inbox from "./Inbox";
+import Published from "./Published";
 import DraftPanel from "./candidate/DraftPanel";
 import Candidate from "./Candidate";
 import Connectors from "./Connectors";
 import ProfileBlock from "./candidate/ProfileBlock";
 
-const { resources, post } = vi.hoisted(() => ({
+const { resources, post, patch } = vi.hoisted(() => ({
   resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(),
   post: vi.fn(),
+  patch: vi.fn(),
 }));
 vi.mock("../lib/api", () => ({
   useResource: (path: string) => resources.get(path) ?? { reload() {} },
   post,
-  patch: vi.fn(),
+  patch,
   del: vi.fn(),
 }));
 vi.mock("../lib/auth/context", () => ({ useAuth: () => ({ user: null }) }));
@@ -28,6 +30,7 @@ const wrap = (component: ReturnType<typeof createElement>) =>
 beforeEach(() => {
   resources.clear();
   post.mockReset().mockResolvedValue({});
+  patch.mockReset().mockResolvedValue(undefined);
   set("/candidates", []);
   set("/sources", []);
   set("/settings", { ...DEFAULT_SETTINGS, llm: { ...DEFAULT_SETTINGS.llm, apiKeySet: false } } as SettingsView);
@@ -87,6 +90,23 @@ it("explains which profile edits survive regeneration and links back to the sour
 });
 
 describe("first useful outcome", () => {
+  it("starts with one channel and lets the first user choose its language without visiting Settings", async () => {
+    render(wrap(createElement(Inbox)));
+    expect((screen.getByLabelText("첫 게시 채널") as HTMLSelectElement).value).toBe("x");
+    fireEvent.change(screen.getByLabelText("첫 게시 언어"), { target: { value: "en" } });
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/settings", { channelLangs: { x: ["en"] } }));
+  });
+
+  it("suggests ready drafts first and chooses the higher judgment score before recency", () => {
+    const base = { repo: "a/b", type: "release", evidence: {}, status: "drafted", unpublishedDraftCount: 1 };
+    set("/candidates", [
+      { ...base, id: 1, title: "Newer lower value", updatedAt: 200, judgment: { total: 6, reasoning: "Low" } },
+      { ...base, id: 2, title: "Higher reader value", updatedAt: 100, judgment: { total: 9, reasoning: "High" } },
+    ]);
+    render(wrap(createElement(Inbox)));
+    expect(screen.getByRole("link", { name: "추천 글감 열기" }).getAttribute("href")).toBe("/c/2");
+    expect(screen.queryByLabelText("첫 게시 채널")).toBeNull();
+  });
   it("offers a concrete first step instead of empty draft sections", () => {
     render(wrap(createElement(Inbox)));
     expect(screen.getByRole("link", { name: /첫 소스 연결하기/ }).getAttribute("href")).toBe("/connectors");
@@ -153,6 +173,80 @@ describe("first useful outcome", () => {
     fireEvent.click(screen.getByRole("button", { name: "전체 글감 보기" }));
     expect(screen.getByRole("link", { name: "A change" })).toBeTruthy();
   });
+});
+
+it("confirms actual publication without requiring a URL and allows correcting its time", async () => {
+  post.mockResolvedValue({ id: 7 });
+  render(panel());
+  const time = "2026-01-02T09:30";
+  fireEvent.change(screen.getByLabelText("실제 게시 시각"), { target: { value: time } });
+  fireEvent.click(screen.getByRole("button", { name: "게시했어요 · 링크는 나중에" }));
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      "/publications",
+      expect.objectContaining({ draftId: 1, url: "", publishedAt: new Date(time).getTime() }),
+    ),
+  );
+  expect(screen.getByText("게시 확인됨 · 링크 미등록")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "링크 고치기" }));
+  const corrected = "2026-01-01T09:30";
+  fireEvent.change(screen.getByLabelText("실제 게시 시각"), { target: { value: corrected } });
+  fireEvent.click(screen.getByRole("button", { name: "링크 저장" }));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith("/publications/7", { url: "", publishedAt: new Date(corrected).getTime() }));
+  expect(screen.queryByRole("link", { name: "" })).toBeNull();
+});
+
+it("records conversions alongside automatic reactions without inventing zero for unmeasured fields", async () => {
+  set("/publications", [
+    {
+      id: 7,
+      candidateId: 1,
+      repo: "a/b",
+      candidateTitle: "Post",
+      channel: "x",
+      url: "",
+      publishedAt: Date.now(),
+      series: [],
+      autoStats: { likes: 3, source: "fixture" },
+    },
+  ]);
+  render(wrap(createElement(Published)));
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  fireEvent.change(screen.getByLabelText("게시글 방문 수"), { target: { value: "12" } });
+  fireEvent.change(screen.getByLabelText("게시글 설치 수"), { target: { value: "0" } });
+  fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await waitFor(() => expect(post).toHaveBeenCalledWith("/publications/7/stats", { visits: 12, installs: 0 }));
+  expect(screen.getByText(/게시글 방문 수 12/)).toBeTruthy();
+  expect(screen.queryByText(/게시글 가입 수 0/)).toBeNull();
+});
+
+it("discards cancelled stats and adopts fresh server values after a local save", async () => {
+  const publication = {
+    id: 7,
+    candidateId: 1,
+    repo: "a/b",
+    candidateTitle: "Post",
+    channel: "x",
+    url: "",
+    publishedAt: Date.now(),
+    series: [],
+    manualStats: { visits: 12 },
+  };
+  set("/publications", [publication]);
+  render(wrap(createElement(Published)));
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  fireEvent.change(screen.getByLabelText("게시글 방문 수"), { target: { value: "99" } });
+  fireEvent.click(screen.getByRole("button", { name: "취소" }));
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  expect((screen.getByLabelText("게시글 방문 수") as HTMLInputElement).value).toBe("12");
+  fireEvent.change(screen.getByLabelText("게시글 방문 수"), { target: { value: "13" } });
+  fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await waitFor(() => expect(screen.getByText(/게시글 방문 수 13/)).toBeTruthy());
+  set("/publications", [{ ...publication, manualStats: { visits: 20 } }]);
+  fireEvent.click(screen.getByRole("button", { name: "반응 새로 받기" }));
+  await waitFor(() => expect(screen.getByText(/게시글 방문 수 20/)).toBeTruthy());
+  fireEvent.click(screen.getByRole("button", { name: "성과·반응 입력" }));
+  expect((screen.getByLabelText("게시글 방문 수") as HTMLInputElement).value).toBe("20");
 });
 
 const draft: Draft = {
@@ -452,7 +546,7 @@ it("does not apply an unlinked legacy publication to a new draft", () => {
       }),
     ),
   );
-  expect(screen.getByRole("button", { name: "게시 링크 저장" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "게시했어요 · 링크는 나중에" })).toBeTruthy();
 });
 
 it("keeps partially published candidates in the review list", () => {

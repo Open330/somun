@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Channel } from "../core/channels.js";
 import { editRatio } from "../core/metrics.js";
 import { schema } from "../infra/db/index.js";
-import type { LearningBucket, LearningStats } from "../shared/types.js";
+import type { FeedbackReason, LearningBucket, LearningStats } from "../shared/types.js";
 import type { AppContext } from "./context.js";
 import { getSettings, styleKeyOf } from "./settings.js";
 
@@ -56,7 +56,28 @@ export function learningStats(ctx: AppContext, ownerId: string, weeks = 12): Lea
   const settings = getSettings(ctx, ownerId);
   const current = styleKeyOf(settings.voice);
   const activeOwnExamples = ctx.db.select({ source: schema.examples.source }).from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.active, true))).all().filter((e) => e.source !== "seed").length;
+  const allDrafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.ownerId, ownerId)).all();
+  const seconds = new Map<number, number>();
+  for (const r of ctx.db.select().from(schema.draftReviews).where(eq(schema.draftReviews.ownerId, ownerId)).all()) seconds.set(r.draftId, (seconds.get(r.draftId) ?? 0) + r.activeSeconds);
+  const reviewed = allDrafts.filter((d) => seconds.has(d.id));
+  const publishedIds = new Set(ctx.db.select({ draftId: schema.publications.draftId }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).all().map((p) => p.draftId));
+  const prepared = reviewed.filter((d) => d.copiedAt !== null);
+  const durations = prepared.map((d) => seconds.get(d.id)!).filter((s) => s > 0).sort((a, b) => a - b);
+  const feedback = ctx.db.select().from(schema.feedback).where(and(eq(schema.feedback.ownerId, ownerId), eq(schema.feedback.targetType, "draft"))).orderBy(asc(schema.feedback.createdAt), asc(schema.feedback.id)).all();
+  const latestReason = new Map(feedback.map((f) => [Number(f.targetId), f.reason as FeedbackReason]));
+  const dropped = reviewed.filter((d) => d.status === "dropped");
+  const dropReasons = new Map<FeedbackReason, number>();
+  for (const d of dropped) { const reason = latestReason.get(d.id); if (reason) dropReasons.set(reason, (dropReasons.get(reason) ?? 0) + 1); }
   return {
+    outcomes: {
+      generated: allDrafts.length, reviewed: reviewed.length, prepared: prepared.length,
+      published: reviewed.filter((d) => publishedIds.has(d.id)).length,
+      unfinished: reviewed.filter((d) => d.copiedAt === null && !publishedIds.has(d.id) && d.status !== "dropped").length,
+      dropped: dropped.length, regenerations: allDrafts.filter((d) => d.version > 1).length,
+      ...(durations.length ? { medianReviewSeconds: Math.round((durations[Math.floor((durations.length - 1) / 2)] + durations[Math.floor(durations.length / 2)]) / 2) } : {}),
+      factReports: new Set(feedback.filter((f) => f.reason === "wrong_facts" && seconds.has(Number(f.targetId))).map((f) => f.targetId)).size,
+      dropReasons: [...dropReasons].map(([reason, count]) => ({ reason, count })),
+    },
     ...bucket(rows.map((r) => r.ratio)),
     byWeek: [...group((r) => weekOf(r.at)).entries()].filter(([w]) => Date.parse(w) >= since - 7 * DAY).map(([week, rs]) => ({ week, ...bucket(rs.map((r) => r.ratio)) })).sort((a, b) => a.week.localeCompare(b.week)),
     byStyle: [...group((r) => r.styleKey).entries()].map(([styleKey, rs]) => ({ styleKey, firstAt: Math.min(...rs.map((r) => r.createdAt)), current: styleKey === current, ...bucket(rs.map((r) => r.ratio)) })).sort((a, b) => a.firstAt - b.firstAt),

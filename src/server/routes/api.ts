@@ -23,8 +23,8 @@ import { connectorsView, githubAppConfig, issueInstallLink, listInstallationRepo
 import type { Config } from "../config.js";
 import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
 import { queueStep, requestedIntroduction } from "../../app/pipeline.js";
-import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublicationUrl } from "../../app/publications.js";
-import { addExample, dropDraft, importSeeds, listExamples, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
+import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublication } from "../../app/publications.js";
+import { addExample, dropDraft, importSeeds, listExamples, recordDraftReview, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettings, getSettingsView, updateSettings } from "../../app/settings.js";
 import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
@@ -67,7 +67,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       rubricWeights: z.object({ runnable: z.number().min(0).max(5), numbers: z.number().min(0).max(5), lesson: z.number().min(0).max(5), novelty: z.number().min(0).max(5), audience: z.number().min(0).max(5) })
         .refine((w) => Object.values(w).some((v) => v > 0), "At least one weight must be above 0").optional(),
       draftThreshold: z.number().min(0).max(10).optional(), deferThreshold: z.number().min(0).max(10).optional(),
-      channelLangs: z.record(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
+      channelLangs: z.partialRecord(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
@@ -158,6 +158,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // drafts
   app.post("/drafts/:id/edit", async (c) => c.json(saveDraftEdit(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ title: z.string().optional(), body: z.string().min(1), markCopied: z.boolean(), copyIfClean: z.boolean().optional(), base: z.object({ title: z.string().optional(), body: z.string() }).optional() })))));
   app.post("/drafts/:id/drop", async (c) => { const i = await body(c, z.object({ reason, note: z.string().optional() })); dropDraft(ctx, c.get("ownerId"), id(c.req.param("id")), i.reason, i.note); return c.body(null, 204); });
+  app.patch("/drafts/:id/review", async (c) => { recordDraftReview(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ sessionId: z.string().uuid(), activeSeconds: z.number().int().min(0).max(86400) }))); return c.body(null, 204); });
 
   // repo profiles (정체성 기준선)
   app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));
@@ -189,14 +190,23 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
   app.post("/publications", async (c) => {
     const ownerId = c.get("ownerId");
-    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.string().url() })));
+    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
     // 발행 전 추세의 기준점이 없으면 뒤에서 GitHub 스타 시각으로 채운다. 실패해도 등록은 그대로다.
     void backfillStarTrend(ctx, ownerId, id).catch((err: Error) => ctx.log.warn({ publicationId: id, err: err.message }, "star trend backfill failed"));
     return c.json({ id });
   });
-  app.patch("/publications/:id", async (c) => { updatePublicationUrl(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ url: z.string().url() }))).url); return c.body(null, 204); });
+  app.patch("/publications/:id", async (c) => {
+    const ownerId = c.get("ownerId"), publicationId = id(c.req.param("id"));
+    updatePublication(ctx, ownerId, publicationId, await body(c, z.object({ url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
+    void backfillStarTrend(ctx, ownerId, publicationId).catch((err: Error) => ctx.log.warn({ publicationId, err: err.message }, "star trend backfill failed"));
+    return c.body(null, 204);
+  });
   app.delete("/publications/:id", (c) => { removePublication(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
-  app.post("/publications/:id/stats", async (c) => { setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: z.number().optional(), comments: z.number().optional(), reposts: z.number().optional() }))); return c.body(null, 204); });
+  app.post("/publications/:id/stats", async (c) => {
+    const count = z.number().int().nonnegative();
+    setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: count.optional(), comments: count.optional(), reposts: count.optional(), visits: count.optional(), installs: count.optional(), signups: count.optional() })));
+    return c.body(null, 204);
+  });
 
   // examples
   app.get("/examples", (c) => c.json(listExamples(ctx, c.get("ownerId"), c.req.query("channel") as Channel | undefined)));

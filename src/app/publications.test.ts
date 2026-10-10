@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { channelResultsForJudge, performanceSummary, registerPublication, removePublication, snapshotMetrics, updatePublicationUrl } from "./publications.js";
+import { channelResultsForJudge, performanceSummary, registerPublication, removePublication, snapshotMetrics, updatePublicationUrl, updatePublication, listPublicationsWithMetrics } from "./publications.js";
 import { learningStats } from "./learning-stats.js";
 import { saveDraftEdit } from "./review.js";
 
@@ -49,8 +49,8 @@ it("returns a candidate without drafts to its judged or new stage when its only 
   expect(ctx.db.select().from(schema.candidates).get()?.status).toBe("new");
 });
 
-function purposeDraft(purpose: "introduction" | "update", version = 1) {
-  return Number(ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel: "x", lang: "en", version, purpose, body: purpose === "introduction" ? "A tool for developers." : "Adds --watch.", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+function purposeDraft(purpose: "introduction" | "update", version = 1, channel = "x") {
+  return Number(ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId, channel, lang: "en", version, purpose, body: purpose === "introduction" ? "A tool for developers." : "Adds --watch.", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
 }
 
 it("rejects another channel's URL before writing a publication or changing the candidate", () => {
@@ -84,7 +84,7 @@ it("does not announce changes when an introduction is posted", () => {
 
 it("clears change marks if only an introduction remains after deleting an update", () => {
   const introduction = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction"), channel: "x", url: "https://x.com/me/status/1" });
-  const update = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update", 2), channel: "linkedin", url: "https://example.test/post" });
+  const update = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update", 2, "linkedin"), channel: "linkedin", url: "https://example.test/post" });
   expect(ledger().publishedChannel).toBe("linkedin");
   removePublication(ctx, "me", update);
   expect(ledger().publishedAt).toBeNull();
@@ -94,7 +94,7 @@ it("clears change marks if only an introduction remains after deleting an update
 });
 
 it("keeps the update's change marks when an introduction is posted and removed", () => {
-  registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update"), channel: "linkedin", url: "https://example.test/post" });
+  registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update", 1, "linkedin"), channel: "linkedin", url: "https://example.test/post" });
   const introduction = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("introduction", 2), channel: "x", url: "https://x.com/me/status/1" });
   expect(ledger().publishedChannel).toBe("linkedin");
   removePublication(ctx, "me", introduction);
@@ -148,13 +148,71 @@ it("keeps the pre-post snapshot when stars arrive after a post instead of overwr
   expect(rows[0].at).toBe(t0);
 });
 
-it("splits one repository's star gain between posts made within the same week instead of crediting each in full", () => {
+it("excludes overlapping same-repository posts from channel star attribution", () => {
   const DAY = 86400e3, at = Date.now() - 9 * DAY;
   for (const [d, stars] of [[-5, 100], [-1, 100], [6.9, 140]] as const) ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/tool", stars, forks: 0, at: at + d * DAY }).run();
   ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "x", url: "https://x.com/me/status/1", publishedAt: at }).run();
   ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "show_hn", url: "https://news.ycombinator.com/item?id=1", publishedAt: at + 2 * 3600e3 }).run();
   const byChannel = performanceSummary(ctx, "me").byChannel;
-  expect(byChannel.map((g) => [g.key, g.avgStarDelta, g.avgExcessStars]).sort()).toEqual([["show_hn", 20, 20], ["x", 20, 20]]);
+  expect(byChannel.map((g) => [g.key, g.avgStarDelta, g.avgExcessStars]).sort()).toEqual([["show_hn", undefined, undefined], ["x", undefined, undefined]]);
   // 채널당 수치 있는 글이 하나뿐이면 판단에 넘기지 않는다.
   expect(channelResultsForJudge(ctx, "me")).toEqual([]);
+});
+
+it("preserves the actual posting time when registered late and keeps URL-less confirmation editable", () => {
+  const posted = Date.now() - 3 * 86400e3;
+  const id = registerPublication(ctx, "me", { candidateId, draftId: purposeDraft("update"), channel: "x", publishedAt: posted });
+  expect(ctx.db.select().from(schema.publications).get()).toMatchObject({ id, url: "", publishedAt: posted });
+  expect(ledger().publishedAt).toBe(posted);
+  const corrected = posted - 86400e3;
+  updatePublication(ctx, "me", id, { url: "https://x.com/me/status/3", publishedAt: corrected });
+  expect(ctx.db.select().from(schema.publications).get()).toMatchObject({ url: "https://x.com/me/status/3", publishedAt: corrected });
+  expect(ledger().publishedAt).toBe(corrected);
+  expect(() => updatePublication(ctx, "other", id, { publishedAt: posted })).toThrow("publication");
+  expect(() => registerPublication(ctx, "me", { candidateId, channel: "x", publishedAt: Date.now() + 86400e3 })).toThrow();
+});
+
+it("does not recommend with incomplete, stale, or overlapping observations", () => {
+  const day = 86400e3, now = Date.now();
+  const post = (at: number) => ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "x", url: "", publishedAt: at }).run();
+  const point = (at: number, stars: number) => ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/tool", at, stars, forks: 0 }).run();
+  post(now - day);
+  point(now - 2 * day, 10); point(now, 20);
+  expect(listPublicationsWithMetrics(ctx, "me")[0].observationStatus).toBe("pending");
+  expect(listPublicationsWithMetrics(ctx, "me")[0].starDelta7d).toBeUndefined();
+  expect(performanceSummary(ctx, "me").byChannel[0]).toMatchObject({ measured: 0, pending: 1 });
+  ctx.db.delete(schema.publications).run(); ctx.db.delete(schema.metricSnapshots).run();
+  post(now - 9 * day);
+  point(now - 10 * day, 10); point(now - 8 * day, 20);
+  expect(listPublicationsWithMetrics(ctx, "me")[0].observationStatus).toBe("insufficient");
+  point(now - 2.1 * day, 30);
+  expect(listPublicationsWithMetrics(ctx, "me")[0]).toMatchObject({ observationStatus: "complete", starDelta7d: 20 });
+  post(now - 9 * day + 3600e3);
+  expect(performanceSummary(ctx, "me").byChannel[0]).toMatchObject({ measured: 0, unattributed: 2 });
+  expect(channelResultsForJudge(ctx, "me")).toEqual([]);
+});
+
+it("uses completed non-overlapping observations as reference, without claiming causality", () => {
+  const day = 86400e3, now = Date.now();
+  for (const ago of [30, 10]) {
+    const at = now - ago * day;
+    ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "x", url: "", publishedAt: at }).run();
+    for (const [d, stars] of [[-7, 10], [0, 20], [6.9, 40]]) ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/tool", at: at + d * day, stars, forks: 0 }).run();
+  }
+  expect(performanceSummary(ctx, "me").byChannel[0]).toMatchObject({ measured: 2, avgStarDelta: 20 });
+  expect(channelResultsForJudge(ctx, "me")[0]).toContain("observational, not causal attribution");
+});
+
+it("keeps completed historical observations when more than 60 newer snapshots exist", () => {
+  const day = 86400e3, now = Date.now();
+  ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "x", url: "", publishedAt: now - 90 * day }).run();
+  for (let i = 120; i >= 0; i--) ctx.db.insert(schema.metricSnapshots).values({ ownerId: "me", repo: "me/tool", at: now - i * day, stars: 120 - i, forks: 0 }).run();
+  expect(listPublicationsWithMetrics(ctx, "me")[0]).toMatchObject({ observationStatus: "complete", starDelta7d: 7 });
+});
+
+it("keeps the latest actual posting time when an earlier post is registered later", () => {
+  const now = Date.now(), day = 86400e3;
+  registerPublication(ctx, "me", { candidateId, channel: "x", publishedAt: now - day });
+  registerPublication(ctx, "me", { candidateId, channel: "linkedin", publishedAt: now - 3 * day });
+  expect(ledger()).toMatchObject({ publishedAt: now - day, publishedChannel: "x" });
 });

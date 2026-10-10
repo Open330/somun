@@ -158,11 +158,11 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "preferred_link", ok: text.includes(link), detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
-  // LinkedIn은 접힘선 위 한 줄 뒤에 3~5문단(채널 규칙). 한 덩어리 글은 모바일에서 읽히지 않는다.
+  // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.
   if (channel === "linkedin") {
     const paragraphs = body.split(/\n\s*\n/).filter((p) => p.trim()).length;
-    const ok = paragraphs >= 3 && paragraphs <= 7;
-    results.push({ rule: "paragraphs", ok, detail: ok ? undefined : say(`문단 ${paragraphs}개. 3~5문단으로 나눠 주세요.`, `${paragraphs} paragraph(s). Split into 3-5 paragraphs.`) });
+    const ok = paragraphs >= 2 && paragraphs <= 7;
+    results.push({ rule: "paragraphs", ok, detail: ok ? undefined : say(`문단 ${paragraphs}개. 근거가 적으면 훅과 링크만으로 2문단이면 충분합니다.`, `${paragraphs} paragraph(s). With limited evidence, a hook and a link in two paragraphs are enough.`) });
   }
 
   if (channel === "show_hn" || channel === "x") {

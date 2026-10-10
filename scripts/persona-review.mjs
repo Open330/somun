@@ -16,6 +16,7 @@ import { createApp } from '../dist/server/src/server/app.js';
 import { loadConfig } from '../dist/server/src/server/config.js';
 import { updateSettings } from '../dist/server/src/app/settings.js';
 import { pendingJobs, claimJob, completeJob } from '../dist/server/src/app/jobs.js';
+import { buildPrompt } from '../dist/server/src/app/pipeline.js';
 
 const audit = process.argv[2]?.startsWith('audit_');
 const output = resolve(process.env.PERSONA_OUT || `docs/ux/personas/2026-09-27/${audit ? 'followup/verified' : 'after'}`);
@@ -60,7 +61,9 @@ async function run(name, mobile, scenario) {
     const file = `${name}-${label}.png`;
     await page.screenshot({ path: resolve(output, file), fullPage: false, animations: 'disabled' });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    if (overflow) report.findings.push({ kind: 'horizontal-overflow', label, elements: await page.evaluate(() => [...document.querySelectorAll('main *')].filter((el) => el.getBoundingClientRect().right > innerWidth + 1).map((el) => ({ tag: el.tagName, className: el.className, text: el.textContent?.slice(0, 120), right: el.getBoundingClientRect().right })).slice(0, 12)) });
     report.screenshots.push({ file, overflow });
+    assert.equal(overflow, false, `Horizontal overflow: ${label}`);
   }
   async function step(label, fn) {
     const start = Date.now();
@@ -97,7 +100,90 @@ async function run(name, mobile, scenario) {
   }
 }
 
+async function productScenario({ ctx, db, page, base, snap, step, seed, addDraft }) {
+  const day = 86400e3;
+  const localTime = (at) => new Date(at - new Date(at).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  await step('첫 채널 하나와 언어를 화면에서 설정', async () => {
+    await page.goto(base);
+    assert.equal(await page.getByLabel('첫 게시 채널', { exact: true }).inputValue(), 'x');
+    await page.getByLabel('첫 게시 언어', { exact: true }).selectOption('en');
+    await until(() => db.select().from(schema.settings).get()?.data.channelLangs.x[0] === 'en');
+    await snap('first-channel');
+  });
+  const cid = seed();
+  updateSettings(ctx, 'local', { channelLangs: { x: ['ko'] } });
+  const did = addDraft(cid, { lang: 'ko' });
+  db.$client.prepare('UPDATE drafts SET created_at = ? WHERE id = ?').run(Date.now() - 3 * day, did);
+  await step('검토 시간 기록과 복사·게시 분리', async () => {
+    await page.goto(`${base}/c/${cid}`);
+    await page.getByRole('button', { name: '초안 복사', exact: true }).waitFor();
+    await page.bringToFront();
+    await pause(1400);
+    await page.getByRole('button', { name: '초안 복사', exact: true }).click();
+    await until(() => db.select().from(schema.drafts).get()?.copiedAt);
+    assert.equal(db.select().from(schema.publications).all().length, 0);
+    assert.equal(buildPrompt(ctx, 'local', 'draft', cid, 'x', 'ko').draftPurpose, 'introduction');
+    await until(() => db.select().from(schema.draftReviews).all().some((r) => r.activeSeconds > 0));
+    await snap('copied-not-posted');
+  });
+  await step('링크 없이 실제 게시 날짜 기록·수정과 채널별 소개', async () => {
+    await page.getByLabel('실제 게시 시각', { exact: true }).fill(localTime(Date.now() - 2 * day));
+    await page.getByRole('button', { name: '게시했어요 · 링크는 나중에', exact: true }).click();
+    await page.getByText('게시 확인됨 · 링크 미등록', { exact: true }).waitFor();
+    const p = db.select().from(schema.publications).get();
+    assert.equal(p.url, '');
+    assert(Math.abs(p.publishedAt - (Date.now() - 2 * day)) < 60000);
+    assert.equal(buildPrompt(ctx, 'local', 'draft', cid, 'x', 'ko').draftPurpose, 'update');
+    assert.equal(buildPrompt(ctx, 'local', 'draft', cid, 'linkedin', 'ko').draftPurpose, 'introduction');
+    await page.getByRole('button', { name: '링크 고치기', exact: true }).click();
+    const corrected = localTime(Date.now() - day);
+    await page.getByLabel('실제 게시 시각', { exact: true }).fill(corrected);
+    await page.getByRole('button', { name: '링크 저장', exact: true }).click();
+    await until(() => db.select().from(schema.publications).get().publishedAt === new Date(corrected).getTime());
+    await snap('publication-confirmed');
+  });
+  await step('관측 중과 동시 게시 기여 구분·검토 결과 표시', async () => {
+    const now = Date.now();
+    for (const [d, stars] of [[-16, 0], [-9, 10], [-2.1, 30], [0, 32]]) db.insert(schema.metricSnapshots).values({ ownerId: 'local', repo: 'persona/formleaf', at: now + d * day, stars, forks: 0 }).run();
+    for (const channel of ['linkedin', 'show_gn']) db.insert(schema.publications).values({ ownerId: 'local', candidateId: cid, channel, url: '', publishedAt: now - 9 * day }).run();
+    await page.goto(`${base}/published`);
+    await page.getByText('7일 관측 중 · 추천 성과에서 제외', { exact: true }).waitFor();
+    assert.equal(await page.getByText('동시 게시 · 채널별 스타 기여 구분 불가', { exact: true }).count(), 2);
+    assert.equal(await page.locator('a[href=""]').count(), 0);
+    await snap('observation-status');
+    await page.goto(`${base}/voice`);
+    await page.getByRole('heading', { name: /검토 결과/ }).waitFor();
+    await page.getByText('복사까지 활성 검토 시간 · 중앙값', { exact: true }).waitFor();
+    await page.getByRole('heading', { name: /검토 결과/ }).scrollIntoViewIfNeeded();
+    await snap('review-outcomes');
+  });
+  await step('영어에서도 검토 결과와 관측 상태 표시', async () => {
+    await page.locator('select[aria-label="화면 언어"]:visible').selectOption('en');
+    await page.getByRole('heading', { name: /Review outcomes/ }).waitFor();
+    await page.getByRole('heading', { name: /Review outcomes/ }).scrollIntoViewIfNeeded();
+    await snap('review-outcomes-en');
+    await page.goto(`${base}/published`);
+    await page.getByText('7-day observation in progress · excluded from recommendation results', { exact: true }).waitFor();
+    await snap('observation-status-en');
+  });
+  await step('게시글 방문·설치 기록과 미측정 값 구분', async () => {
+    const card = page.locator('.pub').first();
+    await card.getByRole('button', { name: 'Edit outcomes and reactions', exact: true }).click();
+    await card.getByLabel('Post visits', { exact: true }).fill('12');
+    await card.getByLabel('Post installs', { exact: true }).fill('0');
+    await card.getByRole('button', { name: 'Save', exact: true }).click();
+    await until(() => db.select().from(schema.publications).all().some((p) => p.manualStats?.visits === 12));
+    const stats = db.select().from(schema.publications).all().find((p) => p.manualStats?.visits === 12).manualStats;
+    assert.deepEqual(stats, { visits: 12, installs: 0 });
+    await card.getByText('Manually recorded: Post visits 12 · Post installs 0', { exact: true }).waitFor();
+    await card.scrollIntoViewIfNeeded();
+    await snap('manual-results-en');
+  });
+}
+
 const scenarios = {
+  audit_product: productScenario,
+  audit_product_mobile: productScenario,
   audit_link: async ({ db, page, base, report, snap, step, seed, addDraft, publish }) => {
     const cid = seed(); addDraft(cid);
     await page.goto(`${base}/c/${cid}`);
@@ -226,13 +312,13 @@ const scenarios = {
       await publish('alex-ko-v1'); await page.getByRole('button', { name: '초안 다시 보기' }).click();
       await page.getByRole('button', { name: '다시 쓰기', exact: true }).click();
       await page.getByRole('button', { name: '같은 문체로 다시 쓰기' }).click(); await worker();
-      await page.getByRole('button', { name: '게시 링크 저장', exact: true }).waitFor();
+      await page.getByRole('button', { name: '게시했어요 · 링크는 나중에', exact: true }).waitFor();
       assert.equal(await page.getByText('이미 게시한 초안입니다.', { exact: true }).count(), 0);
       await snap('new-version'); await publish('alex-ko-v2');
       assert.equal(db.select().from(schema.publications).all().length, 3);
-      assert(db.select().from(schema.drafts).all().filter((d) => d.lang === 'ko').every((d) => d.purpose === 'introduction'));
+      assert.deepEqual(db.select().from(schema.drafts).all().filter((d) => d.lang === 'ko').sort((a, b) => a.version - b.version).map((d) => d.purpose), ['introduction', 'update']);
     });
-    await step('LinkedIn 추가 채널 생성', async () => { await page.getByRole('button', { name: /LinkedIn/ }).click(); await page.getByRole('button', { name: '서비스 처음 소개하기' }).click(); await worker(); await page.getByRole('button', { name: '게시 링크 저장', exact: true }).waitFor(); await snap('linkedin'); });
+    await step('LinkedIn 추가 채널 생성', async () => { await page.getByRole('button', { name: /LinkedIn/ }).click(); await page.getByRole('button', { name: '서비스 처음 소개하기' }).click(); await worker(); await page.getByRole('button', { name: '게시했어요 · 링크는 나중에', exact: true }).waitFor(); await snap('linkedin'); });
   },
   jisu: async ({ db, page, base, report, snap, step, seed, addDraft, publish }) => {
     const cid = seed(); addDraft(cid, { lang: 'ko' });
@@ -271,5 +357,5 @@ const scenarios = {
     });
   },
 };
-try { for (const [name, scenario] of Object.entries(scenarios)) if ((!process.argv[2] && !name.startsWith('audit_')) || process.argv[2] === name) await run(name, name === 'jisu', scenario); }
+try { for (const [name, scenario] of Object.entries(scenarios)) if ((!process.argv[2] && !name.startsWith('audit_')) || process.argv[2] === name) await run(name, name === 'jisu' || name.endsWith('_mobile'), scenario); }
 finally { await browser.close(); await new Promise((done) => fixture.close(done)); globalThis.fetch = originalFetch; }

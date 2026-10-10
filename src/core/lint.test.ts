@@ -189,6 +189,8 @@ it("asks LinkedIn posts to come in paragraphs", () => {
   expect(wall.find((r) => r.rule === "paragraphs")?.ok).toBe(false);
   const split = lintDraft("linkedin", undefined, "Hook.\n\nWhat it is.\n\nHow it works.\n\nhttps://somun.jiun.dev");
   expect(split.find((r) => r.rule === "paragraphs")?.ok).toBe(true);
+  const focused = lintDraft("linkedin", undefined, "CSV 내보내기를 지원합니다.\n\nhttps://somun.jiun.dev");
+  expect(focused.find((r) => r.rule === "paragraphs")?.ok).toBe(true);
 });
 
 describe("dogfooding guardrails", () => {

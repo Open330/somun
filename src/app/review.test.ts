@@ -6,7 +6,7 @@ import { GenerationConflictError, type AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, pendingJobs, retryGeneration } from "./jobs.js";
 import { learningStats } from "./learning-stats.js";
 import { acceptSuggestion, applyLesson, GUIDE_MAX_LINES, listSuggestions, tagLegacySuggestions } from "./learning.js";
-import { dropDraft, OWN_EXAMPLE_CAP, saveDraftEdit } from "./review.js";
+import { dropDraft, OWN_EXAMPLE_CAP, recordDraftReview, saveDraftEdit } from "./review.js";
 import { getSettingsView, updateSettings } from "./settings.js";
 import { editProfile, ensureProfile, getProfile, regenerateProfile } from "./profiles.js";
 import { buildPrompt, examplesFor, processNewCandidates } from "./pipeline.js";
@@ -28,6 +28,29 @@ beforeEach(() => {
   candidateId = Number(ctx.db.insert(schema.candidates).values({ ownerId: OWNER, type: "release", title: "tool v1", repo: "me/tool", key: "k", evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool" }, status: "drafted", createdAt: now, updatedAt: now }).run().lastInsertRowid);
 });
 afterEach(() => ctx.db.$client.close());
+
+it("records active review time idempotently, isolates sessions, and includes unfinished and discarded reviews", () => {
+  vi.useFakeTimers();
+  try {
+    const now = Date.now();
+    const copied = draft("Ready https://github.com/me/tool"), unfinished = draft("Unfinished"), discarded = draft("Wrong fact");
+    recordDraftReview(ctx, OWNER, copied, { sessionId: "s1", activeSeconds: 0 });
+    vi.setSystemTime(now + 60000);
+    recordDraftReview(ctx, OWNER, copied, { sessionId: "s1", activeSeconds: 30 });
+    recordDraftReview(ctx, OWNER, copied, { sessionId: "s1", activeSeconds: 30 });
+    recordDraftReview(ctx, OWNER, copied, { sessionId: "s1", activeSeconds: 10 });
+    expect(ctx.db.select().from(schema.draftReviews).get()?.activeSeconds).toBe(30);
+    expect(() => recordDraftReview(ctx, "other", copied, { sessionId: "s1", activeSeconds: 60 })).toThrow();
+    expect(() => recordDraftReview(ctx, OWNER, unfinished, { sessionId: "s1", activeSeconds: 60 })).toThrow();
+    saveDraftEdit(ctx, OWNER, copied, { body: "Ready https://github.com/me/tool", markCopied: true });
+    recordDraftReview(ctx, OWNER, unfinished, { sessionId: "s2", activeSeconds: 0 });
+    recordDraftReview(ctx, OWNER, discarded, { sessionId: "s3", activeSeconds: 0 });
+    dropDraft(ctx, OWNER, discarded, "wrong_facts");
+    ctx.db.insert(schema.publications).values({ ownerId: OWNER, candidateId, draftId: copied, channel: "x", url: "", publishedAt: Date.now() }).run();
+    expect(learningStats(ctx, OWNER).outcomes).toMatchObject({ generated: 3, reviewed: 3, prepared: 1, published: 1, unfinished: 1, dropped: 1, medianReviewSeconds: 30, factReports: 1, dropReasons: [{ reason: "wrong_facts", count: 1 }] });
+    expect(learningStats(ctx, "other").outcomes).toMatchObject({ generated: 0, reviewed: 0, factReports: 0 });
+  } finally { vi.useRealTimers(); }
+});
 
 describe("voice examples come only from copied drafts", () => {
   it("does not turn an edit that was never copied into an example, but queues a lesson", () => {

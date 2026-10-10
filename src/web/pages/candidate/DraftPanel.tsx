@@ -10,13 +10,15 @@ import { useAuth } from "../../lib/auth/context";
 import { linkTargets } from "../../lib/link-target";
 import { setUnsaved } from "../../lib/unsaved";
 import { dateLocale, t } from "../../i18n";
+import { localDateTime } from "../../lib/publication-time";
+import { useDraftReview } from "../../lib/useDraftReview";
 
 /**
  * 채널·언어 하나의 초안: 검토, 수정, 복사, 다시 쓰기, 버리기, 게시 링크 기록.
  * 수정 중 이탈은 SPA 이동(useBlocker)과 새로고침·외부 이동(beforeunload)에서 막는다.
  */
 
-type PublicationLink = Pick<Publication, "id" | "url" | "draftId">;
+type PublicationLink = Pick<Publication, "id" | "url" | "draftId"> & { publishedAt?: number };
 
 const REWRITE_HINTS = ["더 짧게", "첫 문장을 문제로 시작", "숫자를 앞으로", "한계를 더 구체적으로", "질문으로 끝내기", "덜 격식 있게"];
 
@@ -98,9 +100,17 @@ export default function DraftPanel({
   const [view, setView] = useState<"preview" | "text">("preview");
   const [step, setStep] = useState<"draft" | "post">("draft");
   const [url, setUrl] = useState("");
+  const [publishedAt, setPublishedAt] = useState(() => localDateTime());
   const [recorded, setRecorded] = useState<PublicationLink | null>(null);
   useEffect(() => {
-    if (recorded && publications.some((p) => p.id === recorded.id && p.url === recorded.url)) setRecorded(null);
+    if (
+      recorded &&
+      publications.some(
+        (p) =>
+          p.id === recorded.id && p.url === recorded.url && (recorded.publishedAt === undefined || p.publishedAt === recorded.publishedAt),
+      )
+    )
+      setRecorded(null);
   }, [recorded, publications]);
   const [removedIds, setRemovedIds] = useState<number[]>([]);
   const records = [...(recorded ? [recorded] : []), ...publications].filter((p) => !removedIds.includes(p.id));
@@ -115,6 +125,9 @@ export default function DraftPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   // 다른 탭이 먼저 저장했을 때 다시 시도할 동작. 입력은 그대로 두고 덮어쓸지 사용자가 고른다.
   const [conflict, setConflict] = useState<{ copyAfter: boolean } | null>(null);
+  const flushReview = useDraftReview(
+    !shownPublication && (editing || shown?.status !== "copied") ? (editing ? latest?.id : shown?.id) : undefined,
+  );
   const unsaved = editing && (body !== (latest?.body ?? "") || title !== (latest?.title ?? ""));
   const blocker = useBlocker(unsaved);
   useEffect(() => {
@@ -232,6 +245,7 @@ export default function DraftPanel({
         const after = bodyChanged ? unsupported(saved?.lint) : undefined;
         if (after) setActionError(warningText(after));
       }
+      void flushReview();
       if (copyAfter) {
         setCopiedId(latest.id);
         setStep("post");
@@ -286,7 +300,7 @@ export default function DraftPanel({
         <PublishedCard
           key={displayedPublication.id}
           publication={displayedPublication}
-          onUpdated={(url) => setRecorded({ ...displayedPublication, url })}
+          onUpdated={(updates) => setRecorded({ ...displayedPublication, ...updates })}
           showToast={showToast}
           onShowDraft={shown ? () => setShowDraft(true) : undefined}
           onRemoved={() => {
@@ -621,6 +635,7 @@ export default function DraftPanel({
               setAction("drop");
               setActionError(null);
               try {
+                void flushReview();
                 await post(`/drafts/${latest.id}/drop`, { reason: dropReason });
                 setDropOpen(false);
                 showToast(t("버렸습니다. 사유가 다음 초안에 반영됩니다."));
@@ -710,8 +725,9 @@ export default function DraftPanel({
                   channel,
                   lang,
                   url: url.trim(),
+                  publishedAt: new Date(publishedAt).getTime(),
                 });
-                setRecorded({ id: r.id, draftId: postDraft.id, url: url.trim() });
+                setRecorded({ id: r.id, draftId: postDraft.id, url: url.trim(), publishedAt: new Date(publishedAt).getTime() });
                 setShowDraft(false);
                 setUrl("");
                 showToast(t("발행 기록에 저장했습니다."));
@@ -724,10 +740,21 @@ export default function DraftPanel({
           >
             <label className="field">
               <span>{t("이미 게시했나요? 게시글 링크")}</span>
-              <input type="url" required placeholder="https://…" value={url} onChange={(ev) => setUrl(ev.target.value)} />
+              <input type="url" placeholder="https://…" value={url} onChange={(ev) => setUrl(ev.target.value)} />
+              <small>{t("링크는 나중에 추가해도 됩니다. 실제 게시한 경우에만 확인해 주세요.")}</small>
             </label>
-            <button disabled={action !== null || !/^https?:\/\//.test(url.trim())} type="submit">
-              {action === "publish" ? t("저장 중…") : t("게시 링크 저장")}
+            <label className="field">
+              <span>{t("실제 게시 시각")}</span>
+              <input
+                type="datetime-local"
+                required
+                value={publishedAt}
+                max={localDateTime()}
+                onChange={(ev) => setPublishedAt(ev.target.value)}
+              />
+            </label>
+            <button disabled={action !== null || Boolean(url.trim() && !/^https?:\/\//.test(url.trim())) || !publishedAt} type="submit">
+              {action === "publish" ? t("저장 중…") : url.trim() ? t("게시 링크 저장") : t("게시했어요 · 링크는 나중에")}
             </button>
           </form>
         </div>
@@ -744,14 +771,15 @@ function PublishedCard({
   onRemoved,
   onUpdated,
 }: {
-  publication: { id: number; url: string };
+  publication: PublicationLink;
   showToast: (m: string) => void;
   onShowDraft?: () => void;
   onRemoved: () => void;
-  onUpdated: (url: string) => void;
+  onUpdated: (updates: { url: string; publishedAt?: number }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [url, setUrl] = useState(publication.url);
+  const [publishedAt, setPublishedAt] = useState(() => localDateTime(publication.publishedAt));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = async (fn: () => Promise<unknown>, done: string) => {
@@ -781,18 +809,33 @@ function PublishedCard({
           className="publication-form"
           onSubmit={async (ev) => {
             ev.preventDefault();
-            if (await run(() => patch(`/publications/${publication.id}`, { url: url.trim() }), t("링크를 고쳤습니다."))) {
-              onUpdated(url.trim());
+            const updates = { url: url.trim(), publishedAt: new Date(publishedAt).getTime() };
+            if (await run(() => patch(`/publications/${publication.id}`, updates), t("링크를 고쳤습니다."))) {
+              onUpdated(updates);
               setEditing(false);
             }
           }}
         >
           <label className="field">
             <span>{t("게시글 링크")}</span>
-            <input type="url" required value={url} onChange={(ev) => setUrl(ev.target.value)} />
+            <input type="url" value={url} onChange={(ev) => setUrl(ev.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("실제 게시 시각")}</span>
+            <input
+              type="datetime-local"
+              required
+              value={publishedAt}
+              max={localDateTime()}
+              onChange={(ev) => setPublishedAt(ev.target.value)}
+            />
           </label>
           <div className="toolbar">
-            <button className="primary" type="submit" disabled={busy || !/^https?:\/\//.test(url.trim())}>
+            <button
+              className="primary"
+              type="submit"
+              disabled={busy || Boolean(url.trim() && !/^https?:\/\//.test(url.trim())) || !publishedAt}
+            >
               {busy ? t("저장 중…") : t("링크 저장")}
             </button>
             <button
@@ -800,6 +843,7 @@ function PublishedCard({
               className="ghost"
               onClick={() => {
                 setUrl(publication.url);
+                setPublishedAt(localDateTime(publication.publishedAt));
                 setEditing(false);
               }}
             >
@@ -810,9 +854,13 @@ function PublishedCard({
       ) : (
         <p className="small">
           <span className="badge ok">{t("올림")}</span>{" "}
-          <a href={publication.url} target="_blank" rel="noreferrer">
-            {publication.url}
-          </a>
+          {publication.url ? (
+            <a href={publication.url} target="_blank" rel="noreferrer">
+              {publication.url}
+            </a>
+          ) : (
+            <span>{t("게시 확인됨 · 링크 미등록")}</span>
+          )}
         </p>
       )}
       <p className="tiny muted">{t("발행 기록에서 게시 후 변화를 확인할 수 있어요.")}</p>

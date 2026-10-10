@@ -99,6 +99,16 @@ export const draftEdits = sqliteTable("draft_edits", {
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("draft_edits_draft").on(t.draftId)]);
 
+/** 화면이 보이고 활성화된 동안의 검토 시간. 세션별 누적값으로 재전송을 중복 집계하지 않는다. */
+export const draftReviews = sqliteTable("draft_reviews", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  draftId: integer("draft_id").notNull(),
+  startedAt: integer("started_at").notNull(),
+  activeSeconds: integer("active_seconds").notNull().default(0),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("draft_reviews_owner_draft").on(t.ownerId, t.draftId)]);
+
 export const examples = sqliteTable("examples", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   ownerId: text("owner_id").notNull(),
@@ -123,7 +133,7 @@ export const publications = sqliteTable("publications", {
   lang: text("lang"),
   url: text("url").notNull(),
   publishedAt: integer("published_at").notNull(),
-  manualStats: json<{ likes?: number; comments?: number; reposts?: number }>("manual_stats"),
+  manualStats: json<import("../../shared/types.js").PublicationStats>("manual_stats"),
   /** 공개 엔드포인트에서 자동 수집한 반응. X(FxTwitter), Show HN(HN API). 없으면 null. */
   autoStats: json<{ likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string }>("auto_stats"),
   autoStatsAt: integer("auto_stats_at"),

@@ -3,6 +3,59 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "좋아요 수": "Likes",
+  "댓글 수": "Comments",
+  "리포스트 수": "Reposts",
+  "게시글 방문 수": "Post visits",
+  "게시글 설치 수": "Post installs",
+  "게시글 가입 수": "Post signups",
+  "직접 기록": "Manually recorded",
+  미측정: "Not measured",
+  "성과·반응 입력": "Edit outcomes and reactions",
+  "외부 분석에서 확인한 게시글별 수치를 입력하세요. 비워 두면 미측정이며 자동 수집한 값이 아닙니다.":
+    "Enter post-specific counts verified in external analytics. Blank fields are unmeasured; these values are not collected automatically.",
+
+  "수정량은 실제 복사한 초안만 집계합니다. 링크만 등록한 글과 외부에서의 수정은 포함하지 않습니다.":
+    "Editing statistics include only drafts actually copied. Link-only registrations and edits outside Somun are excluded.",
+  "채널 선택": "Select a channel",
+  "채널별 · 7일 스타 관측": "By channel · 7-day star observations",
+  "문체별 · 7일 스타 관측": "By style · 7-day star observations",
+  "누적 반응 평균 {n}": "Average cumulative reactions {n}",
+  "링크는 나중에 추가해도 됩니다. 실제 게시한 경우에만 확인해 주세요.":
+    "You can add the link later. Confirm only if you actually published the post.",
+  "실제 게시 시각": "Actual publication time",
+  "게시했어요 · 링크는 나중에": "Published · add link later",
+  "게시 확인됨 · 링크 미등록": "Publication confirmed · no link yet",
+  "관측 완료 {n}건": "{n} completed observations",
+  "관측 중 {n}건": "{n} observations in progress",
+  "기여 구분 불가 {n}건": "{n} posts with unattributed gains",
+  "7일 관측 중 · 추천 성과에서 제외": "7-day observation in progress · excluded from recommendation results",
+  "7일 관측 자료 부족 · 추천 성과에서 제외": "Insufficient 7-day data · excluded from recommendation results",
+  "동시 게시 · 채널별 스타 기여 구분 불가": "Overlapping posts · star gains cannot be attributed to individual channels",
+  "처음에는 프로젝트 하나로 첫 게시글을 완성해 보세요.": "Start by preparing a first post for one project.",
+  "첫 게시 채널 · 하나부터 시작하세요": "First publication channel · start with one",
+  "첫 게시 채널": "First publication channel",
+  "현재 여러 채널 선택됨": "Multiple channels currently selected",
+  "프로젝트 하나와 초안 하나를 먼저 완성한 뒤, 설정에서 다른 채널을 추가할 수 있습니다.":
+    "Finish one draft for one project first. You can add other channels in Settings.",
+  "지금 검토할 이야기": "A story to review next",
+  "아직 판단하지 않은 글감입니다. 근거를 확인하고 알릴 내용을 골라보세요.":
+    "This candidate has not been assessed yet. Review the evidence and choose what to share.",
+  "추천 글감 열기": "Open suggested candidate",
+  "검토 결과": "Review outcomes",
+  "수정량은 문체 참고 지표입니다. 수정이 적다고 사실이 정확하거나 시간이 절약됐다는 뜻은 아닙니다.":
+    "Editing amount is a reference for style. Fewer edits do not establish factual accuracy or time savings.",
+  "검토 시작": "Reviews started",
+  "검토한 초안 · 복사 · 게시 확인": "Reviewed drafts · copied · confirmed published",
+  "미완료 · 버림 · 재작성": "Unfinished · discarded · regenerated",
+  "복사까지 활성 검토 시간 · 중앙값": "Active review time until copying · median",
+  "사실 오류로 보고한 초안": "Drafts reported for factual errors",
+  "검토 기록은 이 기능 적용 이후부터 수집합니다. 시간이 0초인 표본은 시간 중앙값에서 제외합니다. 창이 비활성화된 시간과 외부 편집·게시 시간은 포함하지 않습니다. 직접 작성한 시간과 비교해야 절약 효과를 판단할 수 있습니다.":
+    "Review tracking starts with this feature. Samples with zero measured seconds are excluded from the time median. Time in inactive windows and editing or publishing outside Somun are excluded. Compare against writing directly to assess time savings.",
+  "통계는 관측 결과이며 홍보의 인과 효과를 입증하지 않습니다. 같은 저장소의 동시 게시물은 채널별 스타 평균에서 제외합니다.":
+    "These are observations, not evidence of a causal publicity effect. Overlapping posts for the same repository are excluded from channel star averages.",
+  "첫 게시 언어": "First publication language",
+
   "공유 모델의 현재 요청 가능 여부와 내 계정의 실행 한도입니다. 제공사 응답에 따라 이용 상태가 달라질 수 있습니다.":
     "Current shared model availability and your account’s execution limit. Availability may change with provider responses.",
   "개요 형식": "Outline format",
