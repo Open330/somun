@@ -4,7 +4,7 @@ import { CHANNELS, channelSpec, type Channel } from "./channels.js";
  * 문체 프리셋. 초안 프롬프트에 "문체 지침"으로 들어간다.
  * 예시 문장(문체 예시)에서 문체를 유추하는 대신, 여기서 고른 지침이 문체를 정한다. 예시는 선택 사항이다.
  */
-export type VoicePreset = { id: string; name: string; description: string; ko: string; en: string; sample: { ko: string; en: string } };
+export type VoicePreset = { id: string; name: string; description: string; ko: string; en: string; channelKo?: string; channelEn?: string; sample: { ko: string; en: string } };
 
 export const VOICE_PRESETS: VoicePreset[] = [
   {
@@ -13,6 +13,9 @@ export const VOICE_PRESETS: VoicePreset[] = [
     description: "무엇을 왜 했고 아직 안 되는 것은 무엇인지. 감탄 없이 합니다체.",
     ko: "합니다체로 씁니다. 문장마다 주어와 목적어를 분명히 써서 무엇을 어떻게 했는지 한 번에 읽히게 합니다. 사실 → 이유 → 한계 순서로 씁니다. 형용사와 부사는 빼고 동사와 숫자로 말합니다.",
     en: "Plain declarative sentences. Say what changed, why, and one thing that still does not work. Prefer verbs and numbers over adjectives. No hype, no exclamation marks.",
+    // 채널의 어조·구조와 함께 쓸 때는 담백함을 유지하되 합니다체나 필수 한계 절을 강제하지 않는다.
+    channelKo: "담백하고 구체적으로. 주어와 목적어를 분명히. 형용사와 부사보다 구체적인 동사와 근거 있는 사실. 감탄과 과장 없이. 말투·문장 순서·마지막 질문은 선택한 채널 기준.",
+    channelEn: "Be plain, concrete and factual. Prefer verbs over adjectives, with no hype or exclamation marks. Follow the selected channel for register, composition and closing; do not add an unsupported or unrequested limitation.",
     sample: {
       ko: "repopulse 0.4.0을 올렸습니다. 어느 저장소에 이번 주 스타가 붙었는지 터미널에서 보여주는 CLI입니다.\n\n이번 판은 조직 저장소도 읽습니다. 1주 단위 집계는 캐시해 두어 두 번째 실행부터는 API를 부르지 않습니다.\n\n아직 GitHub만 됩니다. GitLab은 다음 판입니다. https://github.com/example/repopulse",
       en: "repopulse 0.4.0 is out. It is a CLI that shows which of your repos got stars this week, in the terminal.\n\nThis release reads organization repos too, and caches weekly counts so the second run makes no API calls.\n\nGitHub only for now; GitLab is next. https://github.com/example/repopulse",
@@ -96,15 +99,16 @@ export const channelTag = (channel: Channel) => `[${channelSpec(channel).label}]
  * 프리셋 + 작성자 지침. 표시 없는 줄은 모든 채널에 쓴다. channel을 주면 다른 채널 표시가 붙은 줄을 빼고,
  * 채널이 없는 글(영상 대본 등)에는 채널 표시가 붙은 줄을 모두 뺀다.
  */
-export function voiceGuideFor(voice: { preset?: string; guide?: string } | undefined, lang: string, channel?: Channel): string {
+export function voiceGuideFor(voice: { preset?: string; guide?: string; chosenAt?: number } | undefined, lang: string, channel?: Channel): string {
   const p = voicePreset(voice?.preset);
-  const base = lang === "ko" ? p.ko : p.en;
+  // 사용자가 선택하지 않은 기본 합니다체는 채널의 어조를 덮지 않는다. 영상처럼 채널이 없는 요청에는 기본 문체를 쓴다.
+  const base = channel && p.id === DEFAULT_VOICE_PRESET && voice?.chosenAt === undefined ? "" : lang === "ko" ? (channel ? p.channelKo ?? p.ko : p.ko) : (channel ? p.channelEn ?? p.en : p.en);
   const others = Object.values(CHANNELS).filter((c) => c.id !== channel).map((c) => channelTag(c.id as Channel));
   const extra = voice?.guide?.split("\n").filter((line) => {
     const custom = /^\s*\[(custom_[a-z0-9-]+)\]/.exec(line)?.[1];
     return (!custom || custom === channel) && !others.some((tag) => line.trim().startsWith(tag));
   }).join("\n").trim();
-  return extra ? `${base}\n\nAuthor's own guide (takes precedence where they conflict):\n${extra}` : base;
+  return extra ? [base, `Author's own guide (takes precedence where they conflict):\n${extra}`].filter(Boolean).join("\n\n") : base;
 }
 
 /**
@@ -119,6 +123,6 @@ export const KO_FLUENCY_RULES = `Korean fluency rules (violations make the text 
 - Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings). Never transliterate names into Hangul: X, Threads, LinkedIn, Show HN, GeekNews, GitHub, Gemini, Claude Code, Codex, API, CLI, npm, RSS, TypeScript (never 엑스, 링크드인, 쇼 에이치엔, 긱뉴스, 깃허브, 제미나이, 에이피아이, 씨엘아이, 엔피엠).
 - Translate ordinary technical prose into established Korean: code frame → 코드 프레임, line endings → 줄바꿈, path segments → 경로 구성 요소, dependencies → 의존성, proxy context matchers → 프록시 컨텍스트 매처. Preserve identifiers such as CRLF and node_modules.
 - For an ambiguous operation, preserve the exact source verb instead of guessing its meaning. For example, keep the word settling unchanged unless Facts explains the underlying operation. Do not turn a Promise/dependency operation into a financial metaphor.
-- Use everyday Korean for product copy: social media post → 게시글, marketing copy → 홍보 문구, software project updates → 프로젝트 변경 내용. Avoid 마케팅 카피, 포스트, 업데이트로부터, 발명된 숫자; say 홍보 문구, 게시글, 변경 내용을 읽어, 근거에 없는 수치.
+- Use everyday Korean for product copy: social media post → 게시글, marketing copy → 홍보 문구, software project updates → 프로젝트 변경 내용, writing voice/style examples → 문체 예시 (not 음성 예시). Avoid 마케팅 카피, 포스트, 업데이트로부터, 발명된 숫자; say 홍보 문구, 게시글, 변경 내용을 읽어, 근거에 없는 수치.
 - Keep human roles literal: users → 사용자, readers → 독자, developers → 개발자. A user is never a child (자식); reserve child/parent for an explicitly technical hierarchy in Facts. Preserve who does what to whom, and whether a feature is supported or unsupported.
 - Before returning, replace unnecessary English phrases with these Korean terms and confirm that each changed component and operation retains its original meaning.`;
