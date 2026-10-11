@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
-import { CHANNELS, type Channel } from "../core/channels.js";
+import { channelSpec, type Channel, type CustomChannel } from "../core/channels.js";
 import type { LintResult } from "../core/lint.js";
 import { draftPurposeOf } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { NotFoundError } from "./context.js";
 import { JOB_LEASE_MS } from "./jobs.js";
+import { getSettings } from "./settings.js";
 import { lintDraftFor } from "./pipeline.js";
 
 /**
@@ -14,26 +15,26 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["no_body_link", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 type DraftJob = { id: number; candidateId: number; channel?: Channel | null; user: string };
 
-export function readDraft(channel: Channel, json: unknown): { title?: string; body: string } {
+export function readDraft(channel: Channel, json: unknown, customChannels: CustomChannel[] = []): { title?: string; body: string } {
   const r = (json ?? {}) as { title?: unknown; body?: unknown };
-  return { title: CHANNELS[channel].hasTitle ? String(r.title ?? "").trim() || undefined : undefined, body: String(r.body ?? "").trim() };
+  return { title: channelSpec(channel, customChannels).hasTitle ? String(r.title ?? "").trim() || undefined : undefined, body: String(r.body ?? "").trim() };
 }
 
 /** 고칠 수 있는 린트 위반. 본문이 비었으면 null(비교할 수 없는 결과). */
 export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, json: unknown): LintResult[] | null {
   const channel = job.channel as Channel;
-  const d = readDraft(channel, json);
+  const d = readDraft(channel, json, getSettings(ctx, ownerId).customChannels);
   const purpose = draftPurposeOf(null, job.user);
   return d.body ? lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose).filter((l) => !l.ok && REPAIRABLE.has(l.rule)) : null;
 }
 
 /** 보정 요청 프롬프트: 원래 요청 + 직전 초안 + 고칠 점. */
-export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[]): string {
-  const prev = readDraft(job.channel as Channel, json);
+export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[], customChannels: CustomChannel[] = []): string {
+  const prev = readDraft(job.channel as Channel, json, customChannels);
   return [
     job.user,
     "",
@@ -74,5 +75,5 @@ export function checkLocalResult(ctx: AppContext, ownerId: string, id: number, i
   if (issues === null) return { issues: [{ rule: "empty_body" }] };
   if (!issues.length) return { issues: [] };
   ctx.db.update(schema.llmJobs).set({ claimedAt: now }).where(eq(schema.llmJobs.id, j.id)).run();
-  return { issues: issues.map(({ rule, detail }) => ({ rule, detail })), repairUser: repairPrompt(job, json, issues) };
+  return { issues: issues.map(({ rule, detail }) => ({ rule, detail })), repairUser: repairPrompt(job, json, issues, getSettings(ctx, ownerId).customChannels) };
 }

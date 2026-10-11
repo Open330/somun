@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
-import { CHANNELS, type Channel } from "@core/channels";
+import { channelSpec, type Channel, type ChannelSpec } from "@core/channels";
 import { trackLinks } from "@core/links";
 import type { Draft, Publication } from "@shared/types";
-import { channelLabel, LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
+import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
 import { useAuth } from "../../lib/auth/context";
@@ -37,6 +37,7 @@ const LangSeg = ({ langs, lang, onLang }: { langs: string[]; lang: string; onLan
 
 export default function DraftPanel({
   cid,
+  preset,
   channel,
   lang,
   langs,
@@ -50,10 +51,12 @@ export default function DraftPanel({
   draftModelResetAt,
   onDirty,
   homepage,
+  sourceLink,
   initialDraftId,
   track = true,
 }: {
   cid: number;
+  preset?: ChannelSpec;
   channel: Channel;
   lang: string;
   langs: string[];
@@ -67,6 +70,7 @@ export default function DraftPanel({
   draftModelResetAt?: number;
   onDirty?: (dirty: boolean) => void;
   homepage?: string;
+  sourceLink?: string;
   initialDraftId?: number;
   track?: boolean;
 }) {
@@ -94,7 +98,7 @@ export default function DraftPanel({
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
-  const spec = CHANNELS[channel];
+  const spec = preset ?? channelSpec(channel);
   const [title, setTitle] = useState(latest?.title ?? "");
   const [body, setBody] = useState(latest?.body ?? "");
   const [view, setView] = useState<"preview" | "text">("preview");
@@ -664,11 +668,38 @@ export default function DraftPanel({
             </b>
             {spec.composeUrl && (
               <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">
-                {t("{channel} 작성 화면 열기", { channel: channelLabel(channel) })} ↗
+                {t("{channel} 작성 화면 열기", { channel: spec.label })} ↗
               </a>
             )}
           </div>
           <p className="small muted post-caption">{t("채널에 직접 게시한 뒤 링크를 저장하세요.")}</p>
+          {spec.linkPlacement === "reply" && (homepage || sourceLink) && (
+            <div className="row wrap gap-8 small">
+              <span>{t("첫 답글 링크")}</span>
+              <a
+                href={postDraft.purpose === "introduction" ? homepage || sourceLink : sourceLink || homepage}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {postDraft.purpose === "introduction" ? homepage || sourceLink : sourceLink || homepage}
+              </a>
+              <button
+                className="ghost sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      (postDraft.purpose === "introduction" ? homepage || sourceLink : sourceLink || homepage)!,
+                    );
+                    showToast(t("링크를 복사했습니다."));
+                  } catch {
+                    setActionError(t("링크를 복사하지 못했습니다."));
+                  }
+                }}
+              >
+                {t("답글 링크 복사")}
+              </button>
+            </div>
+          )}
           {targets && (
             <div className="row gap-8 small">
               <span className="muted">{t("링크를 연결할 판")}</span>

@@ -25,7 +25,7 @@ async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: Ll
   const before = draftIssues(ctx, ownerId, job, first.json);
   if (!before?.length || !worthRepairing(ctx, ownerId, job.candidateId)) return first;
   try {
-    const second = await run(repairPrompt(job, first.json, before));
+    const second = await run(repairPrompt(job, first.json, before, getSettings(ctx, ownerId).customChannels));
     const after = draftIssues(ctx, ownerId, job, second.json);
     const better = isBetterRepair(before, after, { before: JSON.stringify(first.json ?? ""), after: JSON.stringify(second.json ?? "") });
     ctx.log.info({ jobId: job.id, before: before.map((l) => l.rule), after: after?.map((l) => l.rule), kept: better ? "repaired" : "first" }, "draft repair");

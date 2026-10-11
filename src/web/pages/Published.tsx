@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { PerformanceSummary, PublicationStats, PublicationWithMetrics } from "@shared/types";
+import type { PerformanceSummary, PublicationStats, PublicationWithMetrics, SettingsView } from "@shared/types";
 import { VOICE_PRESETS } from "@core/voice";
 import { channelLabel, ErrorState, MetricChart, Skeleton, fmtDate } from "../components/ui";
 import { post, useResource } from "../lib/api";
 import { t } from "../i18n";
 
 export default function Published() {
+  const { data: settings } = useResource<SettingsView>("/settings", ["settings"]);
   const { data: rows, error, reload } = useResource<PublicationWithMetrics[]>("/publications", ["publications", "candidates"]);
   const { data: summary } = useResource<PerformanceSummary>("/publications/summary", ["publications", "candidates"]);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,7 +67,7 @@ export default function Published() {
                   <div key={g.key} className="stack gap-4 mb-10">
                     <div className="perf-row">
                       <span>
-                        {channelLabel(g.key)} <span className="muted">{g.count}</span>
+                        {channelLabel(g.key, settings?.customChannels)} <span className="muted">{g.count}</span>
                       </span>
                       <span className="mono">{starText(g)}</span>
                     </div>
@@ -113,7 +114,7 @@ export default function Published() {
               const delta = p.latestStars !== undefined && p.baselineStars !== undefined ? p.latestStars - p.baselineStars : undefined;
               return (
                 <div key={p.id} className="pub">
-                  <span className="badge outline">{channelLabel(p.channel)}</span>
+                  <span className="badge outline">{channelLabel(p.channel, settings?.customChannels)}</span>
                   <div className="min-w-0">
                     <Link to={`/c/${p.candidateId}${p.draftId ? `?draft=${p.draftId}` : ""}`} className="pub-title">
                       {p.candidateTitle}

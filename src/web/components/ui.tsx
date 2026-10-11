@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Candidate, Judgment } from "@shared/types";
-import { LANGS } from "@core/channels";
+import { LANGS, type CustomChannel } from "@core/channels";
 import { dateLocale, getLocale, t } from "../i18n";
 
 /** 라벨 표는 한국어 원문(번역 키)이다. 화면에 쓸 때는 channelLabel·typeLabel처럼 t()를 거친다. */
@@ -12,7 +12,10 @@ export const CHANNEL_LABEL: Record<string, string> = {
   show_gn: "Show GN",
   blog: "블로그 개요",
 };
-export const channelLabel = (channel: string): string => t(CHANNEL_LABEL[channel] ?? channel);
+export const channelLabel = (channel: string, customChannels: readonly CustomChannel[] = []): string =>
+  channel.startsWith("custom_")
+    ? (customChannels.find((c) => c.id === channel)?.label ?? t("커스텀 채널"))
+    : t(CHANNEL_LABEL[channel] ?? channel);
 
 /** 채널 아이콘. 단색 SVG. HN·GN은 사이트 색 사각형 안에 글자. */
 export function ChannelIcon({ channel, size = 16 }: { channel: string; size?: number }) {
@@ -191,6 +194,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     has_limitation: t("한계 없음"),
     has_number_or_limit: t("숫자·한계 없음"),
     has_link: t("링크 없음"),
+    no_body_link: t("링크 위치 확인"),
     no_exclamation: t("감탄부호"),
     length: t("길이 초과"),
     title_length: t("제목 길이"),

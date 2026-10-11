@@ -1,4 +1,4 @@
-import { CHANNELS, type Channel } from "./channels.js";
+import { channelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, type CandidateLike, type ProfileLike } from "./prompts.js";
 
@@ -90,9 +90,9 @@ export function unsupportedNumbers(text: string, source: string): string[] {
 
 const withoutUnit = (token: string) => token.replace(/(?<=\d)(?:ms|s|min|h|kb|mb|gb|tb)$/, "");
 
-export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko"): LintResult[] {
+export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
-  const spec = CHANNELS[channel];
+  const spec = channelPreset ?? channelSpec(channel);
   const text = `${title ?? ""}\n${body}`;
   const lower = text.toLowerCase();
   const normalized = normalizeForMatch(text);
@@ -150,10 +150,11 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? say("제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요.", "This limitation is not in the evidence. Check the source.") : undefined });
   }
 
-  if (channel === "x" || channel === "linkedin") {
+  if (channel === "x" || channel === "linkedin" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
     results.push({ rule: "has_link", ok: LINK.test(body) });
   }
-  if (facts.preferLink && channel !== "blog") {
+  if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
+  if (facts.preferLink && channel !== "blog" && spec.linkPlacement !== "reply" && spec.linkPlacement !== "none" && channel !== "threads") {
     const link = facts.preferLink.replace(/\/+$/, "");
     results.push({ rule: "preferred_link", ok: text.includes(link), detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }

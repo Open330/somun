@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ALL_CHANNELS, CHANNELS, LANGS, type Channel } from "@core/channels";
+import { channelCatalog, channelSpec, LANGS, type Channel } from "@core/channels";
 import { SAMPLE_WORK, VOICE_PRESETS } from "@core/voice";
 import type { Example, GuideSuggestion, LearningBucket, LearningStats, SettingsView } from "@shared/types";
 import { channelLabel, ErrorState, Skeleton, Toast, relTime, useToast, langLabel, REASONS } from "../components/ui";
@@ -212,18 +212,20 @@ export default function Voice() {
               value={draft.channel}
               onChange={(ev) => {
                 const c = ev.target.value as Channel;
-                setDraft({ ...draft, channel: c, lang: CHANNELS[c].fixedLang ?? draft.lang });
+                setDraft({ ...draft, channel: c, lang: channelSpec(c, settings?.customChannels).fixedLang ?? draft.lang });
               }}
             >
-              {ALL_CHANNELS.map((c) => (
-                <option key={c} value={c}>
-                  {channelLabel(c)}
-                </option>
-              ))}
+              {channelCatalog(settings?.customChannels)
+                .map((s) => s.id)
+                .map((c) => (
+                  <option key={c} value={c}>
+                    {channelLabel(c, settings?.customChannels)}
+                  </option>
+                ))}
             </select>
             <select
               value={draft.lang}
-              disabled={Boolean(CHANNELS[draft.channel].fixedLang)}
+              disabled={Boolean(channelSpec(draft.channel, settings?.customChannels).fixedLang)}
               onChange={(ev) => setDraft({ ...draft, lang: ev.target.value })}
             >
               {Object.keys(LANGS).map((l) => (
@@ -232,7 +234,7 @@ export default function Voice() {
                 </option>
               ))}
             </select>
-            {CHANNELS[draft.channel].hasTitle && (
+            {channelSpec(draft.channel, settings?.customChannels).hasTitle && (
               <input placeholder={t("제목")} value={draft.title} onChange={(ev) => setDraft({ ...draft, title: ev.target.value })} />
             )}
           </div>
@@ -269,12 +271,14 @@ export default function Voice() {
           {t("전체")}
           <span className="st">{examples.length}</span>
         </button>
-        {ALL_CHANNELS.map((c) => (
-          <button key={c} className={ch === c ? "active" : ""} onClick={() => setCh(c)}>
-            {channelLabel(c)}
-            <span className="st">{examples.filter((e) => e.channel === c).length || ""}</span>
-          </button>
-        ))}
+        {channelCatalog(settings?.customChannels)
+          .map((s) => s.id)
+          .map((c) => (
+            <button key={c} className={ch === c ? "active" : ""} onClick={() => setCh(c)}>
+              {channelLabel(c, settings?.customChannels)}
+              <span className="st">{examples.filter((e) => e.channel === c).length || ""}</span>
+            </button>
+          ))}
       </div>
       {list.length === 0 ? (
         <div className="empty small">{t("이 채널의 예시가 없습니다.")}</div>
@@ -285,7 +289,7 @@ export default function Voice() {
               <div className="min-w-0">
                 <div className="row wrap gap-6 mb-2">
                   <span className="badge outline">
-                    {channelLabel(e.channel)} · {e.lang.toUpperCase()}
+                    {channelLabel(e.channel, settings?.customChannels)} · {e.lang.toUpperCase()}
                   </span>
                   <span className={`badge ${e.source === "seed" ? "" : "ok"}`}>
                     {e.source === "seed" ? t("참고") : e.source === "edited" ? t("내가 고침") : t("내가 승인")}

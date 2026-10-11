@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source, WeeklyPickView } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
 import { ApiError, patch, post, useResource } from "../lib/api";
-import { CHANNELS, type Channel } from "@core/channels";
+import { channelCatalog, channelSpec, type Channel } from "@core/channels";
 import { GenerationStatus } from "../components/GenerationStatus";
 import { Onboarding } from "../components/Onboarding";
 import { t } from "../i18n";
@@ -126,7 +126,7 @@ export default function Inbox() {
       setMessage({ text: t("모델 설정을 확인할 수 없습니다. 설정을 다시 불러온 뒤 시도해 주세요."), error: true, model: true });
       return;
     }
-    if (!enabledTargets(settings.channelLangs).length) {
+    if (!enabledTargets(settings.channelLangs, settings.customChannels).length) {
       setMessage({ text: t("초안을 만들 채널과 언어를 먼저 선택해 주세요."), error: true, channels: true });
       return;
     }
@@ -333,14 +333,20 @@ export default function Inbox() {
             <span>{t("첫 게시 채널 · 하나부터 시작하세요")}</span>
             <select
               aria-label={t("첫 게시 채널")}
-              value={enabledTargets(settings.channelLangs).length === 1 ? enabledTargets(settings.channelLangs)[0].channel : ""}
+              value={
+                enabledTargets(settings.channelLangs, settings.customChannels).length === 1
+                  ? enabledTargets(settings.channelLangs, settings.customChannels)[0].channel
+                  : ""
+              }
               disabled={busy}
               onChange={async (ev) => {
                 const channel = ev.target.value as Channel;
                 if (!channel) return;
                 setBusy(true);
                 try {
-                  await patch("/settings", { channelLangs: { [channel]: [CHANNELS[channel].fixedLang ?? settings.ui?.locale ?? "ko"] } });
+                  await patch("/settings", {
+                    channelLangs: { [channel]: [channelSpec(channel, settings.customChannels).fixedLang ?? settings.ui?.locale ?? "ko"] },
+                  });
                   reloadSettings();
                 } catch (err) {
                   setMessage({ text: (err as Error).message, error: true, channels: true });
@@ -352,42 +358,43 @@ export default function Inbox() {
               <option value="" disabled>
                 {t("채널 선택")}
               </option>
-              {(["x", "threads", "linkedin", "show_hn", "show_gn"] as const).map((ch) => (
-                <option key={ch} value={ch}>
-                  {CHANNELS[ch].label}
+              {channelCatalog(settings.customChannels).map((spec) => (
+                <option key={spec.id} value={spec.id}>
+                  {spec.label}
                 </option>
               ))}
             </select>
           </label>
-          {enabledTargets(settings.channelLangs).length === 1 && !CHANNELS[enabledTargets(settings.channelLangs)[0].channel].fixedLang && (
-            <label className="field">
-              <span>{t("첫 게시 언어")}</span>
-              <select
-                aria-label={t("첫 게시 언어")}
-                value={enabledTargets(settings.channelLangs)[0].lang}
-                disabled={busy}
-                onChange={async (ev) => {
-                  const lang = ev.target.value,
-                    channel = enabledTargets(settings.channelLangs)[0].channel;
-                  setBusy(true);
-                  try {
-                    await patch("/settings", { channelLangs: { [channel]: [lang] } });
-                    reloadSettings();
-                  } catch (err) {
-                    setMessage({ text: (err as Error).message, error: true, channels: true });
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {[...new Set([enabledTargets(settings.channelLangs)[0].lang, "ko", "en"])].map((lang) => (
-                  <option key={lang} value={lang}>
-                    {lang.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {enabledTargets(settings.channelLangs, settings.customChannels).length === 1 &&
+            !channelSpec(enabledTargets(settings.channelLangs, settings.customChannels)[0].channel, settings.customChannels).fixedLang && (
+              <label className="field">
+                <span>{t("첫 게시 언어")}</span>
+                <select
+                  aria-label={t("첫 게시 언어")}
+                  value={enabledTargets(settings.channelLangs, settings.customChannels)[0].lang}
+                  disabled={busy}
+                  onChange={async (ev) => {
+                    const lang = ev.target.value,
+                      channel = enabledTargets(settings.channelLangs, settings.customChannels)[0].channel;
+                    setBusy(true);
+                    try {
+                      await patch("/settings", { channelLangs: { [channel]: [lang] } });
+                      reloadSettings();
+                    } catch (err) {
+                      setMessage({ text: (err as Error).message, error: true, channels: true });
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {[...new Set([enabledTargets(settings.channelLangs, settings.customChannels)[0].lang, "ko", "en"])].map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           <p className="tiny muted">{t("프로젝트 하나와 초안 하나를 먼저 완성한 뒤, 설정에서 다른 채널을 추가할 수 있습니다.")}</p>
         </div>
       )}
@@ -406,7 +413,9 @@ export default function Inbox() {
                 : pick.draft?.status === "copied"
                   ? t("복사했어요. 게시했다면 글감에서 링크를 남겨 주세요.")
                   : pick.draft
-                    ? t("{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.", { channel: CHANNELS[pick.draft.channel].label })
+                    ? t("{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.", {
+                        channel: channelSpec(pick.draft.channel, settings?.customChannels).label,
+                      })
                     : pick.preparing
                       ? t("초안을 준비하고 있어요. 잠시 뒤 이 자리에서 열 수 있습니다.")
                       : t("초안이 아직 없습니다. 글감을 열어 초안을 쓰세요.")}

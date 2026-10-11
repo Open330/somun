@@ -40,14 +40,15 @@ export function Onboarding({ rows, sources, settings }: { rows: CandidateListIte
             </div>
           </li>
         </ol>
-        {settings && (!enabledTargets(settings.channelLangs).length || settings.llm.credentialsConfigured === false) && (
-          <div className="onboarding-setup small">
-            {!enabledTargets(settings.channelLangs).length && (
-              <Link to="/settings?tab=channels">{t("초안을 만들 채널과 언어 선택 →")}</Link>
-            )}
-            {settings.llm.credentialsConfigured === false && <Link to="/settings?tab=model">{t("초안 생성 모델 연결 →")}</Link>}
-          </div>
-        )}
+        {settings &&
+          (!enabledTargets(settings.channelLangs, settings.customChannels).length || settings.llm.credentialsConfigured === false) && (
+            <div className="onboarding-setup small">
+              {!enabledTargets(settings.channelLangs, settings.customChannels).length && (
+                <Link to="/settings?tab=channels">{t("초안을 만들 채널과 언어 선택 →")}</Link>
+              )}
+              {settings.llm.credentialsConfigured === false && <Link to="/settings?tab=model">{t("초안 생성 모델 연결 →")}</Link>}
+            </div>
+          )}
         {!connected && (
           <Link className="btn primary" to="/connectors">
             {t("첫 소스 연결하기")} <span aria-hidden>→</span>

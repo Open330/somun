@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useBlocker, useSearchParams } from "react-router-dom";
-import { ALL_CHANNELS, CHANNELS, LANGS, type Channel } from "@core/channels";
+import { channelCatalog, LANGS, type ChannelSpec } from "@core/channels";
 import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "@core/models";
 import type { KeyStatus, SettingsView } from "@shared/types";
-import { channelLabel, CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast, langLabel } from "../components/ui";
+import { CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast, langLabel } from "../components/ui";
 import { api, patch, post, useResource } from "../lib/api";
 import { dateLocale, getLocale, t } from "../i18n";
 import { tr } from "../i18n/rich";
+import ChannelPresets from "./ChannelPresets";
 import VideoBridges from "./VideoBridges";
 import { setUnsaved } from "../lib/unsaved";
 
@@ -82,13 +83,16 @@ export default function Settings() {
   const [bannedEdit, setBanned] = useState<string | null>(null);
   const [thresholdsEdit, setThresholds] = useState<{ draft: number; defer: number } | null>(null);
   const [llmEdit, setLlm] = useState<ModelForm | null>(null);
-  const dirty = Boolean(
-    settings &&
-    ((llmEdit && JSON.stringify(llmEdit) !== JSON.stringify(modelForm(settings))) ||
-      (bannedEdit !== null && bannedEdit !== settings.bannedPhrases.join("\n")) ||
-      (thresholdsEdit && (thresholdsEdit.draft !== settings.draftThreshold || thresholdsEdit.defer !== settings.deferThreshold)) ||
-      webhook),
-  );
+  const [channelDirty, setChannelDirty] = useState(false);
+  const dirty =
+    channelDirty ||
+    Boolean(
+      settings &&
+      ((llmEdit && JSON.stringify(llmEdit) !== JSON.stringify(modelForm(settings))) ||
+        (bannedEdit !== null && bannedEdit !== settings.bannedPhrases.join("\n")) ||
+        (thresholdsEdit && (thresholdsEdit.draft !== settings.draftThreshold || thresholdsEdit.defer !== settings.deferThreshold)) ||
+        webhook),
+    );
   // 같은 설정 페이지의 탭 이동은 입력을 보존한다. 다른 화면으로 나갈 때만 막는다.
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
   // 이탈 보호를 화면의 미저장 상태와 같은 커밋에서 갱신한다. 저장 직후 남은 리스너가 이동을 막지 않게 한다.
@@ -127,7 +131,7 @@ export default function Settings() {
   const thresholds = thresholdsEdit ?? { draft: settings.draftThreshold, defer: settings.deferThreshold };
   const llm = llmEdit ?? modelForm(settings);
 
-  const setLangs = (ch: Channel, langs: string[]) => void update({ channelLangs: { ...settings.channelLangs, [ch]: langs } });
+  const setLangs = (ch: ChannelSpec["id"], langs: string[]) => void update({ channelLangs: { ...settings.channelLangs, [ch]: langs } });
 
   return (
     <>
@@ -317,9 +321,15 @@ export default function Settings() {
                 "채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).",
               )}
             </p>
-            {ALL_CHANNELS.map((ch) => (
-              <ChannelLangRow key={ch} ch={ch} langs={settings.channelLangs[ch] ?? []} onChange={(l) => setLangs(ch, l)} />
+            {channelCatalog(settings.customChannels).map((spec) => (
+              <ChannelLangRow
+                key={spec.id}
+                spec={spec}
+                langs={settings.channelLangs[spec.id] ?? []}
+                onChange={(l) => setLangs(spec.id, l)}
+              />
             ))}
+            <ChannelPresets settings={settings} onSave={update} onDirty={setChannelDirty} />
             <label className="row small gap-6 mt-12">
               <input
                 type="checkbox"
@@ -608,8 +618,7 @@ export default function Settings() {
   );
 }
 
-function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[]; onChange: (l: string[]) => void }) {
-  const spec = CHANNELS[ch];
+function ChannelLangRow({ spec, langs, onChange }: { spec: ChannelSpec; langs: string[]; onChange: (l: string[]) => void }) {
   const [custom, setCustom] = useState("");
   const on = langs.length > 0;
   const common = Object.keys(LANGS);
@@ -618,7 +627,7 @@ function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[];
       <div className="channel-lang-name">
         <label className="row gap-8">
           <input type="checkbox" checked={on} onChange={() => onChange(on ? [] : spec.defaultLangs)} />
-          <b>{channelLabel(ch)}</b>
+          <b>{spec.label}</b>
         </label>
         <div className="tiny muted channel-lang-hint">
           {spec.maxChars ? t("{n}자", { n: spec.maxChars }) : t("길이 제한 없음")}
@@ -647,7 +656,7 @@ function ChannelLangRow({ ch, langs, onChange }: { ch: Channel; langs: string[];
               </button>
             ))}
           <input
-            aria-label={t("{channel} 언어 코드 추가", { channel: channelLabel(ch) })}
+            aria-label={t("{channel} 언어 코드 추가", { channel: spec.label })}
             className="sm lang-code-input"
             placeholder={t("코드 추가")}
             value={custom}
