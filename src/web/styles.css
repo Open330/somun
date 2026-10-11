@@ -461,6 +461,12 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .next-action { margin-top: 18px; padding: 22px 26px; background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .next-action h2 { margin: 0 0 4px; font-size: 16px; color: var(--ink); letter-spacing: 0; text-transform: none; }
 .next-action p { font-size: 13px; color: var(--ink-2); margin: 0; }
+.next-action.weekly-pick { border-color: var(--accent); }
+.next-action.weekly-pick b { display: block; margin: 2px 0 4px; }
+.next-action .tiny { margin-top: 6px; }
+details.low-score { margin-top: 8px; }
+details.low-score summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; }
+.story-meta button.ghost.sm { padding: 0 6px; font-size: 12px; }
 .inline-notice { margin: 0 0 20px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); background: var(--accent-soft); border-radius: 10px; font-size: 13px; }
 .inline-notice > span { flex: 1; }
 .inline-notice.is-error { background: var(--danger-soft); }

@@ -294,20 +294,18 @@ it("shows the judge what the editor overrode, including deferring a draft verdic
   expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("The editor overrode");
 });
 
-it("adds one under-posted everyday channel to the judge's picks, never launch channels", () => {
-  updateSettings(ctx, "test", { channelLangs: { x: ["en"], linkedin: ["ko"], threads: ["ko"], show_hn: ["en"], show_gn: ["ko"] } });
+it("drafts one target automatically: the judge's first pick, else the least-posted everyday channel", () => {
+  updateSettings(ctx, "test", { channelLangs: { x: ["en", "ko"], linkedin: ["ko"], threads: ["ko"], show_hn: ["en"], show_gn: ["ko"] }, ui: { locale: "ko" } });
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
-  const judge = () => applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "r", suggestedChannels: ["x"] } });
-  const drafted = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft").map((j) => j.channel).sort();
-  // LinkedIn에는 이미 한 번 올렸다. Threads가 더 적게 올린 채널이라 그쪽을 탐색한다.
-  ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: "linkedin", url: "https://www.linkedin.com/posts/a-1", publishedAt: 1 }).run();
-  judge();
-  expect(drafted()).toEqual(["threads", "x"]);
-  // 일상 채널 모두 두 번 이상 올렸으면 판단의 추천만 따른다.
+  const judge = (suggestedChannels: string[]) => applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "r", suggestedChannels } });
+  const drafted = () => ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft").map((j) => `${j.channel}/${j.lang}`);
+  judge(["linkedin", "x"]);
+  expect(drafted()).toEqual(["linkedin/ko"]);
+  // 판단이 고른 채널이 없으면 가장 덜 올린 일상 채널 하나. 언어는 화면 언어를 우선한다. 출시용 채널은 고르지 않는다.
   ctx.db.delete(schema.llmJobs).run();
   for (const ch of ["linkedin", "threads", "threads"]) ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, channel: ch, url: `https://example.test/${ch}/${Math.random()}`, publishedAt: 2 }).run();
-  judge();
-  expect(drafted()).toEqual(["x"]);
+  judge([]);
+  expect(drafted()).toEqual(["x/ko"]);
 });
 
 it("does not call release housekeeping PRs unreleased work", () => {

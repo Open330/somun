@@ -107,6 +107,84 @@ describe("first useful outcome", () => {
     expect(screen.getByRole("link", { name: "추천 글감 열기" }).getAttribute("href")).toBe("/c/2");
     expect(screen.queryByLabelText("첫 게시 채널")).toBeNull();
   });
+  it("puts this week's pick on top with a link straight to its draft, and can pick another", async () => {
+    set("/candidates", [
+      { id: 3, repo: "a/b", title: "Release 2", type: "release", status: "drafted", unpublishedDraftCount: 1, updatedAt: 1, evidence: {} },
+    ]);
+    set("/weekly-pick", {
+      candidateId: 3,
+      week: "2026-10-12",
+      pickedAt: 1,
+      title: "Release 2",
+      repo: "a/b",
+      type: "release",
+      total: 7,
+      reason: "Readers can try it now.",
+      draft: { id: 9, channel: "x", lang: "ko", status: "proposed" },
+      preparing: false,
+    });
+    render(wrap(createElement(Inbox)));
+    expect(screen.getByRole("heading", { name: "이번 주 한 편" })).toBeTruthy();
+    expect(screen.getByText(/X 초안이 준비되어 있어요/)).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: /초안 검토하기/ }).some((l) => l.getAttribute("href") === "/c/3?draft=9")).toBe(true);
+    post.mockResolvedValue({ candidateId: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "다른 글감으로" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/weekly-pick", { again: true }));
+    expect(await screen.findByText("다른 후보가 없어 지금 글감을 유지합니다.")).toBeTruthy();
+  });
+  it("offers to pick this week's post when none is chosen yet", async () => {
+    set("/candidates", [{ id: 1, repo: "a/b", title: "A change", type: "release", status: "new", updatedAt: 1, evidence: {} }]);
+    set("/weekly-pick", null);
+    render(wrap(createElement(Inbox)));
+    fireEvent.click(screen.getByRole("button", { name: "이번 주 한 편 고르기" }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/weekly-pick", {}));
+  });
+  it("asks whether copied drafts were posted and offers notification setup once", async () => {
+    set("/candidates", [
+      {
+        id: 4,
+        repo: "a/b",
+        title: "Copied story",
+        type: "release",
+        status: "drafted",
+        unpublishedDraftCount: 1,
+        awaitingPublication: 1,
+        updatedAt: 1,
+        evidence: {},
+      },
+    ]);
+    render(wrap(createElement(Inbox)));
+    expect(screen.getByText(/복사한 글 1개를 게시했나요/)).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "Copied story" }).some((l) => l.getAttribute("href") === "/c/4")).toBe(true);
+    expect(screen.getByRole("link", { name: "알림 설정" }).getAttribute("href")).toBe("/settings?tab=notify");
+    fireEvent.click(screen.getAllByRole("button", { name: "알림 닫기" }).at(-1)!);
+    await waitFor(() => expect(patch).toHaveBeenCalledWith("/settings", { ui: { notifyTipDismissedAt: expect.any(Number) } }));
+  });
+  it("folds earlier weeks of the same repo and low-score stories", () => {
+    const ask = { total: 2, reasoning: "Thin", decision: "ask" };
+    set("/candidates", [
+      { id: 10, repo: "a/b", title: "a/b (W41)", type: "in-progress", status: "new", updatedAt: 300, evidence: {} },
+      { id: 11, repo: "a/b", title: "a/b (W40)", type: "in-progress", status: "new", updatedAt: 200, evidence: {} },
+      { id: 12, repo: "a/b", title: "a/b (W39)", type: "in-progress", status: "new", updatedAt: 100, evidence: {} },
+      {
+        id: 13,
+        repo: "c/d",
+        title: "Weak story",
+        type: "release",
+        status: "judged",
+        latestJudgmentId: 1,
+        updatedAt: 50,
+        evidence: { highlightsAt: 1, highlights: ["x"] },
+        judgment: ask,
+      },
+    ]);
+    render(wrap(createElement(Inbox)));
+    expect(screen.getByRole("link", { name: "a/b (W41)" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "a/b (W40)" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "이전 주 2개" }));
+    expect(screen.getByRole("link", { name: "a/b (W40)" })).toBeTruthy();
+    expect(screen.getByText(/점수가 낮은 글감 1개/)).toBeTruthy();
+  });
   it("offers a concrete first step instead of empty draft sections", () => {
     render(wrap(createElement(Inbox)));
     expect(screen.getByRole("link", { name: /첫 소스 연결하기/ }).getAttribute("href")).toBe("/connectors");

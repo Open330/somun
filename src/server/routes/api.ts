@@ -26,6 +26,7 @@ import { queueStep, requestedIntroduction } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublication } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, recordDraftReview, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettings, getSettingsView, updateSettings } from "../../app/settings.js";
+import { pickWeekly, weeklyPickView } from "../../app/weekly-pick.js";
 import { assertModelEndpoint } from "../../app/net-policy.js";
 import { listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
@@ -71,7 +72,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
-      ui: z.object({ onboardingDismissedAt: z.number().optional(), locale: z.enum(["ko", "en"]).optional() }).optional(),
+      ui: z.object({ onboardingDismissedAt: z.number().optional(), notifyTipDismissedAt: z.number().optional(), locale: z.enum(["ko", "en"]).optional() }).optional(),
       notify: z.object({ discordWebhookUrl: z.string().url().startsWith("https://discord.com/api/webhooks/").or(z.literal("")).optional(), weekly: z.boolean() }).optional(),
       voice: z.object({ preset: z.string().max(40), guide: z.string().max(GUIDE_MAX_CHARS), useExamples: z.boolean(), chosenAt: z.number().optional() }).optional(),
       trackLinks: z.boolean().optional(),
@@ -107,6 +108,9 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.post("/candidates/:id/status", async (c) => { setCandidateStatus(ctx, c.get("ownerId"), id(c.req.param("id")), (await body(c, z.object({ status: z.enum(["new", "judged", "drafted", "published", "dropped", "deferred"]) }))).status); return c.body(null, 204); });
   app.post("/candidates/:id/override", async (c) => { const i = await body(c, z.object({ decision: z.enum(["draft", "drop"]), reason, note: z.string().optional() })); overrideJudgment(ctx, c.get("ownerId"), id(c.req.param("id")), i.decision, i.reason, i.note); return c.body(null, 204); });
   // Persist first, acknowledge immediately; clients follow the status resource.
+  // 이번 주 한 편. POST는 지금 고르거나(이번 주에 고른 것이 있으면 그대로), again이면 다음 후보로 바꾼다.
+  app.get("/weekly-pick", (c) => c.json(weeklyPickView(ctx, c.get("ownerId"))));
+  app.post("/weekly-pick", async (c) => c.json(pickWeekly(ctx, c.get("ownerId"), { again: (await body(c, z.object({ again: z.boolean().optional() }))).again })));
   app.post("/candidates/judge", async (c) => {
     const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) }));
     if (!enabledTargets(getSettings(ctx, c.get("ownerId")).channelLangs).length) throw new InvalidInputError(say(localeOf(ctx, c.get("ownerId")), "초안을 만들 채널과 언어를 먼저 선택해 주세요.", "Choose a channel and language before preparing drafts."));

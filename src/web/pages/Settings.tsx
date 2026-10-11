@@ -337,7 +337,7 @@ export default function Settings() {
               <h3>{t("주간 요약")}</h3>
               <p className="small muted">
                 {t(
-                  "수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 09:00에 검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.",
+                  "수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 10:00에 이번 주 한 편·게시 확인·검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.",
                 )}
               </p>
               <label className="field">
@@ -359,7 +359,7 @@ export default function Settings() {
                   checked={settings.notify?.weekly ?? false}
                   onChange={(ev) => void update({ notify: { weekly: ev.target.checked } })}
                 />{" "}
-                {t("월요일 09:00 KST 주간 요약 보내기")}
+                {t("월요일 10:00 KST 주간 요약 보내기")}
               </label>
               <div className="toolbar mt-10">
                 <button

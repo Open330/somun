@@ -1,7 +1,7 @@
 import { enabledTargets } from "@core/channels";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source } from "@shared/types";
+import type { CandidateListItem, JobProgress, ModelAvailability, SettingsView, Source, WeeklyPickView } from "@shared/types";
 import { ErrorState, Section, Skeleton, StageChip, relTime, stageOf, typeLabel } from "../components/ui";
 import { ApiError, patch, post, useResource } from "../lib/api";
 import { CHANNELS, type Channel } from "@core/channels";
@@ -52,6 +52,15 @@ export default function Inbox() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [requested, setRequested] = useState<number[]>([]);
+  const { data: pick, reload: reloadPick } = useResource<WeeklyPickView | null>("/weekly-pick", [
+    "settings",
+    "candidates",
+    "drafts",
+    "jobs",
+  ]);
+  const [picking, setPicking] = useState(false);
+  // 같은 저장소의 이전 주 '진행 중' 글감을 펼친 저장소.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const collectable = (sources ?? []).filter((s) => s.enabled && s.targets.length && ["github", "blog"].includes(s.kind));
   const latestPoll = Math.max(0, ...collectable.map((s) => s.lastPolledAt ?? 0));
   const counts = useMemo(() => {
@@ -149,6 +158,25 @@ export default function Inbox() {
     }
   }
 
+  async function choosePick(again: boolean) {
+    setPicking(true);
+    setMessage(null);
+    try {
+      const next = await post<WeeklyPickView | null>("/weekly-pick", again ? { again: true } : {});
+      if (!next) setMessage({ text: t("고를 글감이 없습니다. 새 변경을 가져온 뒤 다시 시도해 주세요.") });
+      else if (again && next.candidateId === pick?.candidateId) setMessage({ text: t("다른 후보가 없어 지금 글감을 유지합니다.") });
+      reloadPick();
+    } catch (err) {
+      setMessage({
+        text: `${t("이번 주 한 편을 고르지 못했습니다.")} ${(err as Error).message}`,
+        error: true,
+        model: err instanceof ApiError && err.status === 429,
+      });
+    } finally {
+      setPicking(false);
+    }
+  }
+
   if (error || sourceError)
     return (
       <ErrorState
@@ -165,6 +193,90 @@ export default function Inbox() {
   const firstDraft = visible.find((c) => category(c, running) === "review");
   const firstPreparation = !rows.some((c) => c.status === "published" || c.status === "drafted" || c.unpublishedDraftCount);
   const firstUse = rows.length === 0;
+  // 복사만 하고 게시 기록이 없는 글감. 게시했다면 링크를 남겨야 성과를 볼 수 있다.
+  const awaiting = rows.filter((c) => c.awaitingPublication && c.status !== "dropped");
+  const notifyTip = settings && !settings.ui?.notifyTipDismissedAt && !(settings.notify?.weekly && settings.notify.discordWebhookSet);
+  // 같은 저장소·같은 상태의 주간 '진행 중' 글감은 가장 최근 것만 보인다. 검토할 초안이 있는 글감은 접지 않는다.
+  const foldKey = (c: CandidateListItem) =>
+    c.type === "in-progress" && category(c, running) !== "review" ? `${c.repo}\u0000${category(c, running)}` : null;
+  const newestInGroup = new Map<string, CandidateListItem>();
+  for (const c of visible) {
+    const key = foldKey(c);
+    if (key && (newestInGroup.get(key)?.updatedAt ?? -1) < c.updatedAt) newestInGroup.set(key, c);
+  }
+  const olderOf = (c: CandidateListItem) => {
+    const key = foldKey(c);
+    return key && newestInGroup.get(key)?.id === c.id ? visible.filter((o) => o.id !== c.id && foldKey(o) === key).length : 0;
+  };
+  const hiddenOlder = (c: CandidateListItem) => {
+    const key = foldKey(c);
+    return key !== null && newestInGroup.get(key)?.id !== c.id && !expanded.has(key) && !query;
+  };
+  // 판단이 '추가 근거 필요'로 본 낮은 점수 글감은 접어 둔다.
+  const lowScore = (c: CandidateListItem) => stageOf(c).key === "ask" && (c.judgment?.total ?? 0) < (settings?.deferThreshold ?? 4);
+  const row = (c: CandidateListItem) => (
+    <article className="story-row" key={c.id}>
+      <div className="story-content">
+        <div className="story-meta">
+          <span>{c.repo}</span>
+          <span>·</span>
+          <span>{typeLabel(c.type)}</span>
+          <span>· {relTime(c.updatedAt)}</span>
+          {olderOf(c) > 0 && !query && (
+            <button
+              className="ghost sm"
+              aria-expanded={expanded.has(foldKey(c)!)}
+              onClick={() =>
+                setExpanded((prev) => {
+                  const key = foldKey(c)!;
+                  const next = new Set(prev);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
+                  return next;
+                })
+              }
+            >
+              {expanded.has(foldKey(c)!) ? t("이전 주 접기") : t("이전 주 {n}개", { n: olderOf(c) })}
+            </button>
+          )}
+        </div>
+        <Link className="story-title" to={`/c/${c.id}`}>
+          {c.title}
+        </Link>
+        <p>
+          {c.judgment?.reasoning.split("\n")[0] ||
+            c.evidence.highlights?.[0] ||
+            t("이 변화에서 알릴 만한 내용을 찾아 초안으로 정리할 수 있어요.")}
+        </p>
+      </div>
+      <div className="story-actions">
+        <StageChip stage={stageOf(c)} />
+        {c.judgment && (
+          <span className="story-score" title={t("설정한 판단 기준의 가중 합계")}>
+            {t("추천점수 {n}", { n: c.judgment.total })}
+          </span>
+        )}
+        <div className="toolbar">
+          {stageOf(c).key === "fresh" && (
+            <button
+              className="sm"
+              disabled={requested.includes(c.id) || quotaFull}
+              title={
+                quotaFull ? t("오늘 공유 모델 실행 한도에 도달했습니다. 모델 설정에서 개인 키나 로컬 워커를 쓸 수 있습니다.") : undefined
+              }
+              onClick={() => void judge(c.id)}
+            >
+              {requested.includes(c.id) ? t("요청 중…") : t("초안 준비")}
+            </button>
+          )}
+          <Link className="btn sm" to={`/c/${c.id}`}>
+            {category(c, running) === "review" ? t("초안 검토") : t("자세히 보기")}
+            <span aria-hidden> →</span>
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
   return (
     <>
       <header className="page-head workspace-head">
@@ -279,18 +391,90 @@ export default function Inbox() {
           <p className="tiny muted">{t("프로젝트 하나와 초안 하나를 먼저 완성한 뒤, 설정에서 다른 채널을 추가할 수 있습니다.")}</p>
         </div>
       )}
-      {recommended && !query && filter === "all" && (
-        <div className="next-action">
+      {!firstUse && !query && filter === "all" && pick && (
+        <div className="next-action weekly-pick">
           <div>
-            <h2>{t("지금 검토할 이야기")}</h2>
-            <b>{recommended.title}</b>
+            <h2>{t("이번 주 한 편")}</h2>
+            <b>{pick.title}</b>
             <p className="small muted">
-              {recommended.judgment?.reasoning || t("아직 판단하지 않은 글감입니다. 근거를 확인하고 알릴 내용을 골라보세요.")}
+              {pick.reason || t("이번 주에 알리기 좋은 글감으로 골랐습니다.")}
+              {pick.total !== undefined && ` · ${t("추천점수 {n}", { n: pick.total })}`}
+            </p>
+            <p className="tiny muted">
+              {pick.posted
+                ? t("이번 주 한 편을 게시했어요. 다음 주 월요일에 새로 고릅니다.")
+                : pick.draft?.status === "copied"
+                  ? t("복사했어요. 게시했다면 글감에서 링크를 남겨 주세요.")
+                  : pick.draft
+                    ? t("{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.", { channel: CHANNELS[pick.draft.channel].label })
+                    : pick.preparing
+                      ? t("초안을 준비하고 있어요. 잠시 뒤 이 자리에서 열 수 있습니다.")
+                      : t("초안이 아직 없습니다. 글감을 열어 초안을 쓰세요.")}
             </p>
           </div>
-          <Link className="btn primary" to={`/c/${recommended.id}`}>
-            {t("추천 글감 열기")}
-          </Link>
+          <div className="toolbar">
+            <button className="ghost sm" disabled={picking} onClick={() => void choosePick(true)}>
+              {picking ? t("고르는 중…") : t("다른 글감으로")}
+            </button>
+            <Link className="btn primary" to={pick.draft ? `/c/${pick.candidateId}?draft=${pick.draft.id}` : `/c/${pick.candidateId}`}>
+              {pick.draft && !pick.posted && pick.draft.status !== "copied" ? t("초안 검토하기") : t("글감 열기")}{" "}
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
+        </div>
+      )}
+      {!firstUse && !query && filter === "all" && !pick && (recommended || rows.length > 0) && (
+        <div className="next-action">
+          <div>
+            <h2>{t("이번 주 한 편")}</h2>
+            {recommended && <b>{recommended.title}</b>}
+            <p className="small muted">
+              {t("쌓인 글감 중 이번 주에 올릴 하나를 고르고 초안 하나를 준비합니다. 매주 월요일 아침에도 자동으로 고릅니다.")}
+            </p>
+          </div>
+          <div className="toolbar">
+            {recommended && (
+              <Link className="btn" to={`/c/${recommended.id}`}>
+                {t("추천 글감 열기")}
+              </Link>
+            )}
+            <button className="primary" disabled={picking} onClick={() => void choosePick(false)}>
+              {picking ? t("고르는 중…") : t("이번 주 한 편 고르기")}
+            </button>
+          </div>
+        </div>
+      )}
+      {!firstUse && awaiting.length > 0 && (
+        <div className="inline-notice" role="status">
+          <span>
+            {t("복사한 글 {n}개를 게시했나요? 게시했다면 링크를 남겨야 반응과 성과를 볼 수 있어요.", { n: awaiting.length })}{" "}
+            {awaiting.slice(0, 3).map((c, i) => (
+              <span key={c.id}>
+                {i > 0 && " · "}
+                <Link to={`/c/${c.id}`}>{c.title}</Link>
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
+      {!firstUse && notifyTip && (
+        <div className="inline-notice" role="status">
+          <span>{t("매주 월요일 '이번 주 한 편'과 게시 확인을 Discord로 받아볼 수 있어요.")}</span>
+          <Link to="/settings?tab=notify">{t("알림 설정")}</Link>
+          <button
+            className="ghost sm"
+            aria-label={t("알림 닫기")}
+            onClick={async () => {
+              try {
+                await patch("/settings", { ui: { notifyTipDismissedAt: Date.now() } });
+                reloadSettings();
+              } catch (err) {
+                setMessage({ text: (err as Error).message, error: true });
+              }
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
       {firstUse ? (
@@ -360,57 +544,18 @@ export default function Inbox() {
               const items = visible.filter((c) => category(c, running) === key);
               if (!items.length) return null;
               return (
-                <Section key={key} title={t(label)} count={items.length}>
-                  <div className="story-list">
-                    {items.map((c) => (
-                      <article className="story-row" key={c.id}>
-                        <div className="story-content">
-                          <div className="story-meta">
-                            <span>{c.repo}</span>
-                            <span>·</span>
-                            <span>{typeLabel(c.type)}</span>
-                            <span>· {relTime(c.updatedAt)}</span>
-                          </div>
-                          <Link className="story-title" to={`/c/${c.id}`}>
-                            {c.title}
-                          </Link>
-                          <p>
-                            {c.judgment?.reasoning.split("\n")[0] ||
-                              c.evidence.highlights?.[0] ||
-                              t("이 변화에서 알릴 만한 내용을 찾아 초안으로 정리할 수 있어요.")}
-                          </p>
-                        </div>
-                        <div className="story-actions">
-                          <StageChip stage={stageOf(c)} />
-                          {c.judgment && (
-                            <span className="story-score" title={t("설정한 판단 기준의 가중 합계")}>
-                              {t("추천점수 {n}", { n: c.judgment.total })}
-                            </span>
-                          )}
-                          <div className="toolbar">
-                            {stageOf(c).key === "fresh" && (
-                              <button
-                                className="sm"
-                                disabled={requested.includes(c.id) || quotaFull}
-                                title={
-                                  quotaFull
-                                    ? t("오늘 공유 모델 실행 한도에 도달했습니다. 모델 설정에서 개인 키나 로컬 워커를 쓸 수 있습니다.")
-                                    : undefined
-                                }
-                                onClick={() => void judge(c.id)}
-                              >
-                                {requested.includes(c.id) ? t("요청 중…") : t("초안 준비")}
-                              </button>
-                            )}
-                            <Link className="btn sm" to={`/c/${c.id}`}>
-                              {category(c, running) === "review" ? t("초안 검토") : t("자세히 보기")}
-                              <span aria-hidden> →</span>
-                            </Link>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                <Section key={key} title={t(label)} count={items.filter((c) => !hiddenOlder(c)).length}>
+                  <div className="story-list">{items.filter((c) => !hiddenOlder(c) && !(key === "attention" && lowScore(c))).map(row)}</div>
+                  {key === "attention" && items.some(lowScore) && (
+                    <details className="low-score">
+                      <summary>
+                        {t("점수가 낮은 글감 {n}개 · 추가 근거가 생기면 다시 판단합니다", {
+                          n: items.filter((c) => lowScore(c) && !hiddenOlder(c)).length,
+                        })}
+                      </summary>
+                      <div className="story-list">{items.filter((c) => lowScore(c) && !hiddenOlder(c)).map(row)}</div>
+                    </details>
+                  )}
                 </Section>
               );
             })
