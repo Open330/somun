@@ -16,7 +16,7 @@ import type { AppContext } from './context.js';
 
 let ctx: AppContext;
 let app: ReturnType<typeof createApp>;
-const preset: CustomChannel = { ...channelSpec('threads'), id: 'custom_newsletter', label: 'Newsletter', identity: { audience: 'Maintainers', purpose: 'Weekly changes', tone: 'Direct', structure: 'Summary and evidence' }, hasTitle: true, titleMaxChars: 30, maxChars: 200, linkPlacement: 'body', rules: 'Use facts only.' };
+const preset: CustomChannel = { ...channelSpec('threads'), id: 'custom_newsletter', label: 'Newsletter', identity: { audience: 'Maintainers', purpose: 'Weekly changes', tone: 'Direct', structure: 'Summary and evidence' }, hasTitle: true, titleMaxChars: 30, maxChars: 200, maxSentences: 3, linkPlacement: 'body', rules: 'Use facts only.' };
 const headers = { Authorization: 'Bearer test', 'Content-Type': 'application/json' };
 beforeEach(() => {
  ctx = { db: openDb(':memory:'), log: pino({ level: 'silent' }), env: {}, bus: new EventEmitter(), usage: { record() {} } } as unknown as AppContext;
@@ -30,6 +30,9 @@ it('creates, edits and disables an owned preset without losing its identity or o
  expect(enabledTargets(getSettings(ctx, 'local').channelLangs, getSettings(ctx, 'local').customChannels)).toEqual([{ channel: 'x', lang: 'ko' }, { channel: preset.id, lang: 'en' }]);
  expect((await save({ customChannels: [{ ...preset, label: 'Weekly notes' }] })).status).toBe(200);
  expect(channelSpec(preset.id, getSettings(ctx, 'local').customChannels).label).toBe('Weekly notes');
+ expect(channelSpec(preset.id, getSettings(ctx, 'local').customChannels).maxSentences).toBe(3);
+ expect((await save({ customChannels: [{ ...preset, maxSentences: undefined }] })).status).toBe(200);
+ expect(channelSpec(preset.id, getSettings(ctx, 'local').customChannels).maxSentences).toBeUndefined();
  expect((await save({ channelLangs: { [preset.id]: [] } })).status).toBe(200);
  expect(enabledTargets(getSettings(ctx, 'local').channelLangs, getSettings(ctx, 'local').customChannels)).toEqual([]);
  expect(getSettings(ctx, 'local').customChannels).toHaveLength(1);
@@ -41,7 +44,7 @@ it('rejects another account’s preset, unknown channels and invalid configurati
  const other = createApp(ctx, loadConfig({ SOMUN_TOKEN: 'test', SOMUN_TOKEN_OWNER_ID: 'other' }));
  expect((await save({ channelLangs: { [preset.id]: ['en'] } }, other)).status).toBe(400);
  expect((await other.request('/api/candidates/1/redraft', { method: 'POST', headers, body: JSON.stringify({ targets: [{ channel: preset.id, lang: 'en' }] }) })).status).toBe(400);
- for (const customChannels of [[preset, preset], [{ ...preset, label: '   ' }], [{ ...preset, composeUrl: 'javascript:alert(1)' }], [{ ...preset, titleMaxChars: undefined }], [{ ...preset, maxChars: 1 }]]) {
+ for (const customChannels of [[preset, preset], [{ ...preset, label: '   ' }], [{ ...preset, composeUrl: 'javascript:alert(1)' }], [{ ...preset, titleMaxChars: undefined }], [{ ...preset, maxChars: 1 }], [{ ...preset, maxSentences: 0 }], [{ ...preset, maxSentences: 1.5 }], [{ ...preset, maxSentences: 51 }]]) {
   expect((await save({ customChannels })).status).toBe(400);
  }
  expect(getSettings(ctx, 'local').customChannels).toEqual([preset]);

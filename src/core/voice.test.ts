@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { lintDraft } from "./lint.js";
 import { VOICE_PRESETS, voiceGuideFor } from "./voice.js";
+import { channelSpec } from "./channels.js";
 
 describe("voice presets", () => {
   it("have unique ids", () => {
@@ -12,7 +13,8 @@ describe("voice presets", () => {
     for (const channel of id === "friendly" ? (["threads", "x"] as const) : (["threads"] as const)) {
       // Threads에서는 공통 문체 샘플의 URL을 첫 답글로 옮긴 본문을 검사한다.
       const adapted = channel === "threads" ? body.replace(/https?:\/\/\S+/g, "").trim() : body;
-      const failed = lintDraft(channel, undefined, adapted).filter((r) => !r.ok);
+      // 문체 샘플은 여러 채널의 글이지 Threads용 완성 초안이 아니다. 형식·금지어는 검사하되 문장 수를 강제하지 않는다.
+      const failed = lintDraft(channel, undefined, adapted, undefined, undefined, undefined, { ...channelSpec(channel), maxSentences: undefined }).filter((r) => !r.ok);
       expect(failed, `${channel}: ${JSON.stringify(failed)}`).toEqual([]);
     }
   });
