@@ -49,6 +49,13 @@ export function assertSharedQueueCapacity(ctx: AppContext, ownerId: string, now 
  */
 export const backgroundReserve = (limit: number) => Math.min(20, Math.floor(limit * 0.4));
 
+/** 자동 작업이 runs번 더 실행해도 사용자 몫(backgroundReserve)을 건드리지 않는가. 공유 모델을 쓰지 않으면 늘 그렇다. */
+export function hasBackgroundCapacity(ctx: AppContext, ownerId: string, runs = 1, llm = getSettings(ctx, ownerId).llm, now = Date.now()): boolean {
+  if (!usesSharedModel(ctx, ownerId, llm)) return true;
+  const usage = sharedUsage(ctx, ownerId, now);
+  return usage.used + runs <= usage.limit - backgroundReserve(usage.limit);
+}
+
 /** Reserve before network I/O; failures still use capacity. Persisted and atomic across processes/restarts. */
 export function reserveSharedExecution(ctx: AppContext, ownerId: string, now = Date.now(), config?: LlmConfig, opts: { background?: boolean } = {}): void {
   if (!usesSharedModel(ctx, ownerId, config)) return;

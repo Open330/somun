@@ -34,10 +34,19 @@ function unpublishedCount(drafts: { id: number; channel: string; lang: string; v
   return [...latest.values()].filter((d) => !published.has(d.id)).length;
 }
 
-/** 복사했지만 같은 글감·채널에 게시 기록이 없는 판. 초안을 잇지 않은 예전 게시 기록도 게시로 본다. */
-function copiedUnposted<T extends { candidateId: number; channel: string; status: string }>(drafts: T[], publications: { candidateId: number; channel: string }[]): T[] {
+/**
+ * 복사했지만 같은 글감·채널에 게시 기록이 없는 글. 글감·채널마다 하나로 센다(여러 판·언어를 복사해도 게시는 한 번이다).
+ * 초안을 잇지 않은 예전 게시 기록도 게시로 본다.
+ */
+function copiedUnposted<T extends { id: number; candidateId: number; channel: string; status: string }>(drafts: T[], publications: { candidateId: number; channel: string }[]): T[] {
   const posted = new Set(publications.map((p) => `${p.candidateId}:${p.channel}`));
-  return drafts.filter((d) => d.status === "copied" && !posted.has(`${d.candidateId}:${d.channel}`));
+  const latest = new Map<string, T>();
+  for (const d of drafts) {
+    const key = `${d.candidateId}:${d.channel}`;
+    if (d.status !== "copied" || posted.has(key)) continue;
+    if ((latest.get(key)?.id ?? -1) < d.id) latest.set(key, d);
+  }
+  return [...latest.values()];
 }
 
 /** 게시 여부를 물을 판. 복사는 게시가 아니므로(실제로 올렸는지 모른다) 사용자에게 확인을 받는다. 보관한 글감은 뺀다. */

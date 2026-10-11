@@ -3,7 +3,7 @@ import { collectAll } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { sendWeeklySummaries } from "./notify.js";
-import { pickWeeklyAll } from "./weekly-pick.js";
+import { pickWeeklyAll, prepareWeeklyPicks } from "./weekly-pick.js";
 import { refreshReactions } from "./reactions.js";
 import { pruneFinishedJobs } from "./jobs.js";
 import { pruneInstallRecords } from "./connectors.js";
@@ -35,14 +35,16 @@ export function startScheduler(ctx: AppContext, pattern: string): { stop: () => 
   const sweep = new Cron("7 * * * *", { protect: true, timezone: "UTC" }, () => step(ctx, "sweep", async () => {
     const n = await processNewCandidates(ctx);
     if (n) ctx.log.info({ n }, "hourly sweep processed new candidates");
+    const p = prepareWeeklyPicks(ctx);
+    if (p) ctx.log.info({ n: p }, "hourly sweep prepared weekly picks");
   }));
-  // 월요일 08:00 KST = 일요일 23:00 UTC. 이번 주 한 편을 고르고 초안 하나를 준비한다(한 시간 뒤 요약에 실린다).
-  const pick = new Cron("0 23 * * 0", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly-pick", () => {
+  // 월요일 09:30 KST = 00:30 UTC. 매일 수집(00:00 UTC)과 공유 한도 초기화 뒤에 이번 주 한 편을 고르고 초안 하나를 준비한다.
+  const pick = new Cron("30 0 * * 1", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly-pick", () => {
     const n = pickWeeklyAll(ctx);
     if (n) ctx.log.info({ n }, "weekly picks chosen");
   }));
-  // 월요일 09:00 KST = 일요일 24:00 UTC. 주간 요약.
-  const weekly = new Cron("0 0 * * 1", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly", async () => {
+  // 월요일 10:00 KST = 01:00 UTC. 주간 요약(이번 주 한 편을 고른 뒤).
+  const weekly = new Cron("0 1 * * 1", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly", async () => {
     const n = await sendWeeklySummaries(ctx);
     if (n) ctx.log.info({ n }, "weekly summaries sent");
   }));

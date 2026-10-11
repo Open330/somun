@@ -5,6 +5,7 @@ import { getSettings, updateSettings } from "./settings.js";
 import { listSuggestions } from "./learning.js";
 import { say } from "./i18n.js";
 import { weeklyPickView } from "./weekly-pick.js";
+import type { WeeklyPickView } from "../shared/types.js";
 import { awaitingPublication } from "./candidates.js";
 
 /**
@@ -28,7 +29,7 @@ export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force 
   const top = [...review, ...fresh].filter((c) => c.id !== pick?.candidateId).slice(0, 5).map((c) => `• ${c.title}  <${base}/c/${c.id}>`).join("\n");
   const content = [
     say(lc, "**소문 주간 요약**", "**somun weekly summary**"),
-    ...(pick ? [say(lc, `**이번 주 한 편:** ${pick.title}${pick.draft ? " (초안 준비됨)" : ""}  <${base}/c/${pick.candidateId}>`, `**This week's pick:** ${pick.title}${pick.draft ? " (draft ready)" : ""}  <${base}/c/${pick.candidateId}>`)] : []),
+    ...(pick ? [say(lc, `**이번 주 한 편:** ${pick.title}${pickState(pick, "ko")}  <${base}/c/${pick.candidateId}>`, `**This week's pick:** ${pick.title}${pickState(pick, "en")}  <${base}/c/${pick.candidateId}>`)] : []),
     ...(awaiting.length ? [say(lc, `복사만 하고 게시 기록이 없는 글 ${awaiting.length}개. 게시했다면 링크를 남겨 주세요.`, `${awaiting.length} copied posts have no publication yet. If you posted them, leave the link.`)] : []),
     say(lc, `검수할 초안 ${review.length}개 · 새 글감 ${fresh.length}개 · 보류 ${deferred.length}개${sugg ? ` · 지침 제안 ${sugg}개` : ""}`, `${review.length} drafts to review · ${fresh.length} new candidates · ${deferred.length} deferred${sugg ? ` · ${sugg} guide suggestions` : ""}`),
     top || say(lc, "이번 주는 알릴 게 없습니다. 정상입니다.", "Nothing to announce this week. That is normal."),
@@ -40,7 +41,15 @@ export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force 
   return { ok: true, sent: content };
 }
 
-/** 월요일 09:00 KST에 weekly가 켜진 모든 소유자에게. */
+const pickState = (p: WeeklyPickView, lc: "ko" | "en") => {
+  const ko = lc === "ko";
+  if (p.posted) return ko ? " (게시함)" : " (posted)";
+  if (p.draft?.status === "copied") return ko ? " (복사함 · 게시했다면 링크를 남겨 주세요)" : " (copied · leave the link if you posted it)";
+  if (p.draft) return ko ? " (초안 준비됨)" : " (draft ready)";
+  return p.preparing ? (ko ? " (초안 준비 중)" : " (preparing a draft)") : "";
+};
+
+/** 월요일 10:00 KST(이번 주 한 편을 고른 뒤)에 weekly가 켜진 모든 소유자에게. */
 export async function sendWeeklySummaries(ctx: AppContext): Promise<number> {
   const owners = ctx.db.select({ ownerId: schema.settings.ownerId }).from(schema.settings).all();
   let n = 0;

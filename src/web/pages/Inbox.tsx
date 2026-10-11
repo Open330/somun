@@ -196,16 +196,22 @@ export default function Inbox() {
   // 복사만 하고 게시 기록이 없는 글감. 게시했다면 링크를 남겨야 성과를 볼 수 있다.
   const awaiting = rows.filter((c) => c.awaitingPublication && c.status !== "dropped");
   const notifyTip = settings && !settings.ui?.notifyTipDismissedAt && !(settings.notify?.weekly && settings.notify.discordWebhookSet);
-  // 같은 저장소의 주간 '진행 중' 글감은 가장 최근 것만 보인다.
-  const newestInProgress = new Map<string, CandidateListItem>();
-  for (const c of visible)
-    if (c.type === "in-progress" && (newestInProgress.get(c.repo)?.updatedAt ?? -1) < c.updatedAt) newestInProgress.set(c.repo, c);
-  const olderOf = (c: CandidateListItem) =>
-    newestInProgress.get(c.repo)?.id === c.id
-      ? visible.filter((o) => o.type === "in-progress" && o.repo === c.repo && o.id !== c.id).length
-      : 0;
-  const hiddenOlder = (c: CandidateListItem) =>
-    c.type === "in-progress" && newestInProgress.get(c.repo)?.id !== c.id && !expanded.has(c.repo) && !query;
+  // 같은 저장소·같은 상태의 주간 '진행 중' 글감은 가장 최근 것만 보인다. 검토할 초안이 있는 글감은 접지 않는다.
+  const foldKey = (c: CandidateListItem) =>
+    c.type === "in-progress" && category(c, running) !== "review" ? `${c.repo}\u0000${category(c, running)}` : null;
+  const newestInGroup = new Map<string, CandidateListItem>();
+  for (const c of visible) {
+    const key = foldKey(c);
+    if (key && (newestInGroup.get(key)?.updatedAt ?? -1) < c.updatedAt) newestInGroup.set(key, c);
+  }
+  const olderOf = (c: CandidateListItem) => {
+    const key = foldKey(c);
+    return key && newestInGroup.get(key)?.id === c.id ? visible.filter((o) => o.id !== c.id && foldKey(o) === key).length : 0;
+  };
+  const hiddenOlder = (c: CandidateListItem) => {
+    const key = foldKey(c);
+    return key !== null && newestInGroup.get(key)?.id !== c.id && !expanded.has(key) && !query;
+  };
   // 판단이 '추가 근거 필요'로 본 낮은 점수 글감은 접어 둔다.
   const lowScore = (c: CandidateListItem) => stageOf(c).key === "ask" && (c.judgment?.total ?? 0) < (settings?.deferThreshold ?? 4);
   const row = (c: CandidateListItem) => (
@@ -219,17 +225,18 @@ export default function Inbox() {
           {olderOf(c) > 0 && !query && (
             <button
               className="ghost sm"
-              aria-expanded={expanded.has(c.repo)}
+              aria-expanded={expanded.has(foldKey(c)!)}
               onClick={() =>
                 setExpanded((prev) => {
+                  const key = foldKey(c)!;
                   const next = new Set(prev);
-                  if (next.has(c.repo)) next.delete(c.repo);
-                  else next.add(c.repo);
+                  if (next.has(key)) next.delete(key);
+                  else next.add(key);
                   return next;
                 })
               }
             >
-              {expanded.has(c.repo) ? t("이전 주 접기") : t("이전 주 {n}개", { n: olderOf(c) })}
+              {expanded.has(foldKey(c)!) ? t("이전 주 접기") : t("이전 주 {n}개", { n: olderOf(c) })}
             </button>
           )}
         </div>
@@ -394,11 +401,15 @@ export default function Inbox() {
               {pick.total !== undefined && ` · ${t("추천점수 {n}", { n: pick.total })}`}
             </p>
             <p className="tiny muted">
-              {pick.draft
-                ? t("{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.", { channel: CHANNELS[pick.draft.channel].label })
-                : pick.preparing
-                  ? t("초안을 준비하고 있어요. 잠시 뒤 이 자리에서 열 수 있습니다.")
-                  : t("초안이 아직 없습니다. 글감을 열어 초안을 쓰세요.")}
+              {pick.posted
+                ? t("이번 주 한 편을 게시했어요. 다음 주 월요일에 새로 고릅니다.")
+                : pick.draft?.status === "copied"
+                  ? t("복사했어요. 게시했다면 글감에서 링크를 남겨 주세요.")
+                  : pick.draft
+                    ? t("{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.", { channel: CHANNELS[pick.draft.channel].label })
+                    : pick.preparing
+                      ? t("초안을 준비하고 있어요. 잠시 뒤 이 자리에서 열 수 있습니다.")
+                      : t("초안이 아직 없습니다. 글감을 열어 초안을 쓰세요.")}
             </p>
           </div>
           <div className="toolbar">
@@ -406,7 +417,8 @@ export default function Inbox() {
               {picking ? t("고르는 중…") : t("다른 글감으로")}
             </button>
             <Link className="btn primary" to={pick.draft ? `/c/${pick.candidateId}?draft=${pick.draft.id}` : `/c/${pick.candidateId}`}>
-              {pick.draft ? t("초안 검토하기") : t("글감 열기")} <span aria-hidden>→</span>
+              {pick.draft && !pick.posted && pick.draft.status !== "copied" ? t("초안 검토하기") : t("글감 열기")}{" "}
+              <span aria-hidden>→</span>
             </Link>
           </div>
         </div>
@@ -532,12 +544,14 @@ export default function Inbox() {
               const items = visible.filter((c) => category(c, running) === key);
               if (!items.length) return null;
               return (
-                <Section key={key} title={t(label)} count={items.length}>
+                <Section key={key} title={t(label)} count={items.filter((c) => !hiddenOlder(c)).length}>
                   <div className="story-list">{items.filter((c) => !hiddenOlder(c) && !(key === "attention" && lowScore(c))).map(row)}</div>
                   {key === "attention" && items.some(lowScore) && (
                     <details className="low-score">
                       <summary>
-                        {t("점수가 낮은 글감 {n}개 · 추가 근거가 생기면 다시 판단합니다", { n: items.filter(lowScore).length })}
+                        {t("점수가 낮은 글감 {n}개 · 추가 근거가 생기면 다시 판단합니다", {
+                          n: items.filter((c) => lowScore(c) && !hiddenOlder(c)).length,
+                        })}
                       </summary>
                       <div className="story-list">{items.filter((c) => lowScore(c) && !hiddenOlder(c)).map(row)}</div>
                     </details>

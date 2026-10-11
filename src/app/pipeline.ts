@@ -1,4 +1,4 @@
-import { assertSharedQueueCapacity, backgroundReserve, SharedQuotaError, sharedUsage, usesSharedModel } from "./shared-quota.js";
+import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
 import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
@@ -112,13 +112,16 @@ export function explorationChannel(ctx: AppContext, ownerId: string, candidates:
 
 /**
  * 자동으로 만들 초안 하나의 대상. 판단이 고른 채널 중 첫째, 없으면 가장 덜 올린 일상 채널(탐색), 그것도 없으면 첫 일상 채널.
+ * 출시용 채널(Show HN·Show GN)과 블로그 개요는 판단이 고를 때만 쓴다. 단 allowLaunch(사용자가 올릴 글을 고른 이번 주 한 편)면 일상 채널이 없을 때 쓴다.
  * 언어는 화면 언어를 우선한다. 나머지 채널·언어는 사용자가 글감 화면에서 요청할 때 만든다(쓰지 않을 초안을 쌓지 않게).
+ * 판단이 채널을 고르면 탐색 채널을 덧붙이지 않는다: 초안을 하나로 줄인 대가다. 탐색은 판단이 채널을 고르지 않았을 때만 한다.
  */
-export function primaryTarget(ctx: AppContext, ownerId: string, settings: Pick<ReturnType<typeof getSettings>, "channelLangs" | "ui">, suggested: Channel[] = []): { channel: Channel; lang: string } | undefined {
+export function primaryTarget(ctx: AppContext, ownerId: string, settings: Pick<ReturnType<typeof getSettings>, "channelLangs" | "ui">, suggested: Channel[] = [], opts: { allowLaunch?: boolean } = {}): { channel: Channel; lang: string } | undefined {
   const targets = enabledTargets(settings.channelLangs);
   if (!targets.length) return undefined;
   const channels = [...new Set(targets.map((t) => t.channel))];
-  const channel = suggested.find((ch) => channels.includes(ch)) ?? explorationChannel(ctx, ownerId, channels) ?? channels.find((ch) => EXPLORABLE.includes(ch)) ?? channels[0];
+  const channel = suggested.find((ch) => channels.includes(ch)) ?? explorationChannel(ctx, ownerId, channels) ?? channels.find((ch) => EXPLORABLE.includes(ch)) ?? (opts.allowLaunch ? channels[0] : undefined);
+  if (!channel) return undefined;
   const langs = targets.filter((t) => t.channel === channel).map((t) => t.lang);
   const locale = settings.ui?.locale ?? "ko";
   return { channel, lang: langs.includes(locale) ? locale : langs[0] };
@@ -187,6 +190,13 @@ export const SWEEP_MAX_FAILURES = 3;
  * 다이제스트가 끝난 후보는 판단부터 잇는다(다이제스트를 반복하지 않는다). 최근에 실패했거나 여러 번 실패한 후보는 건너뛴다.
  * 수동 모드에서는 사용자가 고른 것만 judgeCandidates로 태운다.
  */
+/** 지금 요약을 판단·초안에 그대로 쓸 수 있는가: 알릴 변경이 있고, 요약 뒤에 새 신호가 합쳐지지 않았다(판단이 요약 뒤에 바꾼 updatedAt은 새 신호가 아니다). */
+export function digestUsable(c: { updatedAt: number; evidence: unknown }, judgedAt?: number): boolean {
+  const ev = c.evidence as Evidence;
+  if (!ev.highlightsAt || !ev.highlights?.some((h) => h.trim())) return false;
+  return c.updatedAt <= ev.highlightsAt || (judgedAt !== undefined && judgedAt >= ev.highlightsAt && c.updatedAt <= judgedAt);
+}
+
 export async function processNewCandidates(ctx: AppContext, ownerId?: string): Promise<number> {
   const where = ownerId ? and(eq(schema.candidates.status, "new"), eq(schema.candidates.ownerId, ownerId)) : eq(schema.candidates.status, "new");
   const rows = ctx.db.select().from(schema.candidates).where(where).all();
@@ -198,19 +208,17 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     settingsByOwner.set(c.ownerId, s);
     if (s.watch.mode !== "auto" || !enabledTargets(s.channelLangs).length) continue;
     // 자동 작업 몫이 다 찼으면 넣지 않는다(넣어도 실패로 쌓이고, 실패 횟수 때문에 다음 날에도 다시 시도하지 않게 된다).
-    if (usesSharedModel(ctx, c.ownerId, s.llm)) {
-      const usage = sharedUsage(ctx, c.ownerId, now);
-      if (usage.used >= usage.limit - backgroundReserve(usage.limit)) continue;
-    }
+    if (!hasBackgroundCapacity(ctx, c.ownerId, 1, s.llm, now)) continue;
     // 로컬 워커가 이 저장소의 프로필을 만드는 중이면 기다린다. 프로필이 반영되면 jobs.completeJob이 다시 부른다.
     if (s.llm.provider === "local-agent" && pendingProfileJob(ctx, c.ownerId, c.repo)) continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
     // 다이제스트 뒤에 새 신호가 합쳐졌으면(updatedAt이 더 늦음) 요약이 낡았으므로 다이제스트부터 다시 한다.
     const digestedAt = (c.evidence as Evidence).highlightsAt;
     const kind: JobKind = digestedAt && c.updatedAt <= digestedAt ? "judge" : "digest";
-    const jobs = ctx.db.select({ status: schema.llmJobs.status, finishedAt: schema.llmJobs.finishedAt }).from(schema.llmJobs).where(and(eq(schema.llmJobs.candidateId, c.id), eq(schema.llmJobs.kind, kind))).all();
-    if (jobs.some((j) => j.status === "pending" || j.status === "claimed")) continue;
-    const failed = jobs.filter((j) => j.status === "failed");
+    const all = ctx.db.select({ kind: schema.llmJobs.kind, status: schema.llmJobs.status, finishedAt: schema.llmJobs.finishedAt }).from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, c.id)).all();
+    // 어떤 단계든 진행 중이면 기다린다(이번 주 한 편처럼 요약 뒤 초안을 잇는 작업에 판단을 겹쳐 초안을 또 만들지 않게).
+    if (all.some((j) => j.status === "pending" || j.status === "claimed")) continue;
+    const failed = all.filter((j) => j.kind === kind && j.status === "failed");
     if (failed.length >= SWEEP_MAX_FAILURES || failed.some((j) => (j.finishedAt ?? 0) > now - SWEEP_BACKOFF_MS)) continue;
     try { queueStep(ctx, c.ownerId, kind, c.id, undefined, undefined, { background: true }); n++; }
     catch (err) { if (!(err instanceof GenerationConflictError) && !(err instanceof SharedQuotaError)) throw err; }
@@ -292,7 +300,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
-      if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction, automatic: true });
+      if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction, automatic: true, background: continuation.background });
     } else next("judge");
     return { kind: "digest", highlights: highlights.length };
   }

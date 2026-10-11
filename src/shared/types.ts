@@ -66,10 +66,10 @@ export type Settings = {
   voice: VoiceSettings;
   /** 화면 상태. 온보딩 체크리스트를 닫은 시각 등. */
   ui?: { onboardingDismissedAt?: number; notifyTipDismissedAt?: number; locale?: Locale };
-  /** 알림. Discord 웹훅 하나. weekly면 월요일 09:00 KST에 요약을 보낸다. */
+  /** 알림. Discord 웹훅 하나. weekly면 월요일 10:00 KST에 요약을 보낸다. */
   notify?: { discordWebhookUrl?: string; weekly: boolean; lastSentAt?: number };
   /** 이번 주 한 편. 서버가 고른다(설정 PATCH로는 바꿀 수 없다). history는 지난 주들에 고른 글감(같은 것을 매주 다시 고르지 않게). */
-  weeklyPick?: { candidateId: number; week: string; pickedAt: number; history: number[] };
+  weeklyPick?: { candidateId: number; week: string; pickedAt: number; history: number[]; skipped?: number[]; prepareAttempts?: number };
   /** 복사할 때 홈페이지·App Store 링크에 채널 표시(utm, ct)를 붙인다. 기본 켜짐. */
   trackLinks?: boolean;
 };
@@ -130,7 +130,8 @@ export type ModelAvailability = {
   models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "degraded" | "unknown" | "local" | "missing"; retryAt?: number; /** degraded: 최근 실패한 HTTP 상태(예: 503). */ lastStatus?: number }[];
 };
 
-export type GenerationPlan = { introduction?: boolean; targets: { channel: Channel; lang: string }[]; instruction?: string };
+/** background: 예약 작업이 이은 계획. 이어지는 초안도 공유 한도의 자동 작업 몫으로 센다. */
+export type GenerationPlan = { introduction?: boolean; targets: { channel: Channel; lang: string }[]; instruction?: string; background?: boolean };
 export type JobProgress = { id: number; kind: JobKind; candidateId: number; /** profile 작업의 저장소. */ repo?: string; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };
 
 export type Job = { continuation?: GenerationPlan; /** 자동 처리가 시작한 작업(공유 한도의 마지막 몫을 쓰지 않는다). */ background?: boolean; id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
@@ -185,4 +186,6 @@ export type WeeklyPickView = {
   reason?: string;
   draft?: { id: number; channel: Channel; lang: string; status: DraftStatus };
   preparing: boolean;
+  /** 이 글감에 게시 기록이 있다. */
+  posted: boolean;
 };

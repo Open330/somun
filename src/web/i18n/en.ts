@@ -670,12 +670,12 @@ export const en: Record<string, string> = {
   "채널마다 초안을 만들 언어를 고릅니다. 언어가 하나도 없으면 그 채널은 꺼진 것입니다. Show HN·Show GN처럼 언어가 정해진 채널은 켜기만 합니다. 목록에 없는 언어는 코드로 추가할 수 있습니다(예: ja, zh, es).":
     "Choose the languages to write drafts in for each channel. A channel with no languages is off. Channels with a fixed language, like Show HN and Show GN, only need to be turned on. Add languages not in the list by code (e.g. ja, zh, es).",
   "주간 요약": "Weekly summary",
-  "수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 09:00에 검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.":
-    "In manual mode, you only see new candidates when you visit. Add a Discord webhook to get a count of drafts ready for review, new candidates, and guide suggestions every Monday at 09:00. Create the URL in Discord channel settings → Integrations → Webhooks.",
+  "수동 모드에서는 들어와야 새 글감을 압니다. Discord 웹훅 하나를 넣으면 월요일 10:00에 이번 주 한 편·게시 확인·검수할 초안·새 글감·지침 제안 수를 보냅니다. Discord 채널 설정 → 연동 → 웹훅에서 URL을 만듭니다.":
+    "In manual mode, you only see new candidates when you visit. Add a Discord webhook to get this week's pick, posting reminders and counts of drafts to review, new candidates and guide suggestions every Monday at 10:00. Create the URL in Discord channel settings → Integrations → Webhooks.",
   "Discord 웹훅 URL": "Discord webhook URL",
   설정됨: "Set",
   "저장된 URL 유지 (바꾸려면 새로 입력)": "Keep saved URL (enter a new one to change)",
-  "월요일 09:00 KST 주간 요약 보내기": "Send weekly summary Mondays at 09:00 KST",
+  "월요일 10:00 KST 주간 요약 보내기": "Send weekly summary Mondays at 10:00 KST",
   "웹훅 저장": "Save webhook",
   "보냈습니다. Discord를 확인하세요.": "Sent. Check Discord.",
   "지금 시험 발송": "Send test now",
@@ -1257,4 +1257,6 @@ export const en: Record<string, string> = {
   "이전 주 {n}개": "{n} earlier weeks",
   "이전 주 접기": "Hide earlier weeks",
   "점수가 낮은 글감 {n}개 · 추가 근거가 생기면 다시 판단합니다": "{n} low-score stories · judged again when new evidence arrives",
+  "이번 주 한 편을 게시했어요. 다음 주 월요일에 새로 고릅니다.": "You posted this week's pick. A new one is picked next Monday.",
+  "복사했어요. 게시했다면 글감에서 링크를 남겨 주세요.": "Copied. If you posted it, leave the link on the story.",
 };

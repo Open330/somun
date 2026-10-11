@@ -7,7 +7,8 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { awaitingPublication } from "./candidates.js";
 import { getSettings, updateSettings } from "./settings.js";
-import { pickWeek, pickWeekly, pickWeeklyAll, rankForPick, weeklyPickView } from "./weekly-pick.js";
+import { ensurePrepared, pickWeek, pickWeekly, pickWeeklyAll, prepareWeeklyPicks, rankForPick, weeklyPickView } from "./weekly-pick.js";
+import { applyResult, processNewCandidates } from "./pipeline.js";
 
 const DAY = 86_400_000;
 // 2026-10-12(월) 08:00 KST
@@ -78,7 +79,8 @@ it("picks once a week, prepares one draft for the primary target, and moves on w
   const second = pickWeekly(ctx, "me", { now: MONDAY + DAY, again: true });
   expect(second?.candidateId).toBe(raw);
   expect(jobs()[1]).toEqual({ kind: "digest", candidateId: raw, channel: null, lang: null, continuation: { targets: [{ channel: "x", lang: "ko" }] } });
-  expect(getSettings(ctx, "me").weeklyPick?.history).toEqual([digested]);
+  // 이번 주에 넘긴 것은 skipped(다음 주엔 다시 후보), 지난 주들의 것만 history.
+  expect(getSettings(ctx, "me").weeklyPick).toMatchObject({ history: [], skipped: [digested] });
   // 고를 것이 더 없으면 지금 것을 유지한다.
   expect(pickWeekly(ctx, "me", { now: MONDAY + DAY, again: true })?.candidateId).toBe(raw);
 });
@@ -96,10 +98,10 @@ it("does not re-pick last week's pick and does not prepare a draft that already 
 
 it("scheduled picks leave the user's share of the shared quota alone", () => {
   add({ title: "release" }, ["A."]);
-  // 50회 중 29회 사용: 자동 작업 몫(30회)에 두 번(요약·초안)을 더 쓸 자리가 없다.
-  ctx.db.insert(schema.appState).values({ key: `shared_quota:${createHash("sha256").update("me").digest("hex")}`, value: JSON.stringify({ day: new Date(MONDAY).toISOString().slice(0, 10), count: 29 }), updatedAt: MONDAY }).run();
+  // 50회 중 30회 사용: 자동 작업 몫(30회)을 다 썼다. 요약이 있어 초안 한 번이면 되지만 그 자리도 없다.
+  ctx.db.insert(schema.appState).values({ key: `shared_quota:${createHash("sha256").update("me").digest("hex")}`, value: JSON.stringify({ day: new Date(MONDAY).toISOString().slice(0, 10), count: 30 }), updatedAt: MONDAY }).run();
   expect(pickWeeklyAll(ctx, MONDAY)).toBe(1);
-  expect(weeklyPickView(ctx, "me")?.title).toBe("release");
+  expect(weeklyPickView(ctx, "me", MONDAY)?.title).toBe("release");
   expect(jobs()).toHaveLength(0);
   // 사용자가 직접 고르면 사용자 몫으로 준비한다.
   ctx.db.update(schema.appState).set({ value: JSON.stringify({ day: "2000-01-01", count: 0 }) }).run();
@@ -115,3 +117,75 @@ it("lists copied drafts without a publication on that channel", () => {
   ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId: c, channel: "x", url: "https://x.com/a/status/1", publishedAt: 6 }).run();
   expect(awaitingPublication(ctx, "me")).toEqual([]);
 });
+
+it("drafts directly from a judged candidate's digest instead of digesting again", () => {
+  const c = add({ title: "release" }, ["Adds a flag."]);
+  judge(c, 5, ["x"]);
+  // 판단이 요약 뒤에 updatedAt을 바꿨다. 새 신호가 아니므로 요약을 다시 돌리지 않는다.
+  ctx.db.update(schema.candidates).set({ updatedAt: MONDAY - DAY + 10 }).run();
+  ctx.db.update(schema.judgments).set({ createdAt: MONDAY - DAY + 10 }).run();
+  pickWeekly(ctx, "me", { now: MONDAY });
+  expect(jobs()).toEqual([{ kind: "draft", candidateId: c, channel: "x", lang: "ko", continuation: null }]);
+});
+
+it("shows nothing as this week's pick once the week has passed", () => {
+  add({ title: "release" }, ["A."]);
+  ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId: 1, channel: "x", lang: "ko", version: 1, body: "b", lint: [], status: "copied", model: "t", createdAt: 1, updatedAt: 1 }).run();
+  updateSettings(ctx, "me", { weeklyPick: { candidateId: 1, week: "2026-10-05", pickedAt: MONDAY - 7 * DAY, history: [] } });
+  expect(weeklyPickView(ctx, "me", MONDAY)).toBeNull();
+  // 고를 것이 없는 주에도 지난주 것을 이번 주 한 편이라고 하지 않는다.
+  expect(pickWeekly(ctx, "me", { now: MONDAY })).toBeNull();
+});
+
+it("retries a skipped preparation in the hourly sweep, a limited number of times", () => {
+  const c = add({ title: "release" }, ["A."]);
+  const quota = (count: number) => ctx.db.insert(schema.appState).values({ key: `shared_quota:${createHash("sha256").update("me").digest("hex")}`, value: JSON.stringify({ day: new Date(MONDAY).toISOString().slice(0, 10), count }), updatedAt: MONDAY })
+    .onConflictDoUpdate({ target: schema.appState.key, set: { value: JSON.stringify({ day: new Date(MONDAY).toISOString().slice(0, 10), count }) } }).run();
+  quota(30);
+  pickWeeklyAll(ctx, MONDAY);
+  expect(jobs()).toHaveLength(0);
+  quota(0);
+  expect(prepareWeeklyPicks(ctx, MONDAY)).toBe(1);
+  expect(jobs()).toEqual([{ kind: "draft", candidateId: c, channel: "x", lang: "ko", continuation: null }]);
+  // 진행 중이면 다시 넣지 않고, 실패해도 정해진 횟수까지만 다시 준비한다.
+  expect(prepareWeeklyPicks(ctx, MONDAY)).toBe(0);
+  for (let i = 0; i < 3; i++) {
+    ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: MONDAY }).run();
+    ensurePrepared(ctx, "me", { now: MONDAY, background: true });
+  }
+  expect(getSettings(ctx, "me").weeklyPick?.prepareAttempts).toBe(3);
+  ctx.db.update(schema.llmJobs).set({ status: "failed", finishedAt: MONDAY }).run();
+  expect(ensurePrepared(ctx, "me", { now: MONDAY, background: true })).toBe(false);
+});
+
+it("keeps the scheduled continuation draft in the background share and the sweep off a pick being prepared", async () => {
+  updateSettings(ctx, "me", { watch: { mode: "auto", recentDays: 30 } });
+  const c = add({ title: "new repo", type: "new-repo" });
+  pickWeekly(ctx, "me", { now: MONDAY, background: true });
+  expect(jobs()).toEqual([{ kind: "digest", candidateId: c, channel: null, lang: null, continuation: { targets: [{ channel: "x", lang: "ko" }], background: true } }]);
+  // 요약이 진행 중인 동안 매시간 정리가 판단을 겹쳐 넣지 않는다.
+  expect(await processNewCandidates(ctx, "me")).toBe(0);
+  const digest = ctx.db.select().from(schema.llmJobs).get()!;
+  ctx.db.update(schema.llmJobs).set({ status: "done", finishedAt: MONDAY }).run();
+  applyResult(ctx, "me", { kind: "digest", candidateId: c, model: "t", result: { highlights: ["Adds a flag."], limitations: [] } }, digest.continuation ?? undefined);
+  const draft = ctx.db.select().from(schema.llmJobs).all().find((j) => j.kind === "draft")!;
+  expect(draft.meta).toMatchObject({ background: true });
+  expect(await processNewCandidates(ctx, "me")).toBe(0);
+});
+
+it("reports the pick's state: copied, then posted", () => {
+  const c = add({ title: "release" });
+  pickWeekly(ctx, "me", { now: MONDAY });
+  ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId: c, channel: "x", lang: "ko", version: 1, body: "b", lint: [], status: "copied", model: "t", createdAt: 1, updatedAt: 1 }).run();
+  expect(weeklyPickView(ctx, "me", MONDAY)).toMatchObject({ draft: { status: "copied" }, posted: false });
+  ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId: c, channel: "x", url: "https://x.com/a/status/1", publishedAt: 2 }).run();
+  expect(weeklyPickView(ctx, "me", MONDAY)?.posted).toBe(true);
+});
+
+it("counts one awaiting post per candidate and channel, however many versions were copied", () => {
+  const c = add({ title: "release" });
+  for (const [lang, version] of [["ko", 1], ["ko", 2], ["en", 1]] as const)
+    ctx.db.insert(schema.drafts).values({ ownerId: "me", candidateId: c, channel: "x", lang, version, body: "b", lint: [], status: "copied", model: "t", copiedAt: version, createdAt: 1, updatedAt: 1 }).run();
+  expect(awaitingPublication(ctx, "me")).toHaveLength(1);
+});
+
