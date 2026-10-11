@@ -2,11 +2,14 @@
  * 채널 = 플랫폼. 언어는 채널의 설정이다 (채널마다 여러 언어, 코드는 자유).
  * 초안은 (channel, lang) 쌍으로 만들어진다. Show HN처럼 언어가 고정된 채널도 있다.
  */
-export type Channel = "x" | "threads" | "linkedin" | "show_hn" | "show_gn" | "blog";
+export type BuiltinChannel = "x" | "threads" | "linkedin" | "show_hn" | "show_gn" | "blog";
+export type Channel = BuiltinChannel | `custom_${string}`;
+export type ChannelIdentity = { audience: string; purpose: string; tone: string; structure: string };
 
 export type ChannelSpec = {
   id: Channel;
   label: string;
+  identity?: ChannelIdentity;
   /** 고정 언어가 있으면 그 언어만. 없으면 사용자가 고른다. */
   fixedLang?: string;
   defaultLangs: string[];
@@ -17,11 +20,12 @@ export type ChannelSpec = {
   rules: string;
   mediaHint: string;
   composeUrl: string;
+  linkPlacement?: "body" | "reply" | "none";
   /** 복사한 뒤 올리기 전에 확인할 것 */
   runbook: string[];
 };
 
-export const CHANNELS: Record<Channel, ChannelSpec> = {
+export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
   x: {
     id: "x", label: "X", defaultLangs: ["en", "ko"], maxChars: 280, hasTitle: false,
     rules: "Exactly three short lines separated by blank lines. Line 1: the concrete change or a problem explicitly supported by Facts, no adjectives. Use first-person experience only if Facts explicitly describes the author having that experience. Line 2: what changed for the user, one sentence. Line 3: a supplied number or limitation if available, then the link. Omit missing evidence rather than inventing it or inserting placeholders. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
@@ -66,7 +70,34 @@ export const CHANNELS: Record<Channel, ChannelSpec> = {
   },
 };
 
-export const ALL_CHANNELS = Object.keys(CHANNELS) as Channel[];
+export const ALL_CHANNELS = Object.keys(CHANNELS) as BuiltinChannel[];
+
+/** 기본 채널의 편집 정체성. 플랫폼의 자동 게시 규칙이 아닌 초안 프리셋이다. */
+export const CHANNEL_IDENTITIES: Record<BuiltinChannel, ChannelIdentity> = {
+  x: { audience: "빠르게 훑어보는 사용자와 개발자", purpose: "한 가지 변화와 실제로 할 수 있는 일을 짧게 알리기", tone: "직접적이고 간결한 평서문", structure: "변화 또는 독자 과업 → 구체적 기능 → 근거가 있는 수치/한계와 링크" },
+  threads: { audience: "경험과 관점에 반응하는 대화 상대", purpose: "짧은 관점이나 질문으로 대화 시작하기", tone: "편안한 대화체, 과장 없이", structure: "한두 문장으로 관점 또는 질문. 링크는 첫 답글" },
+  linkedin: { audience: "직무와 업무 맥락을 중시하는 동료", purpose: "업무에서 달라진 점과 근거 있는 경험 공유", tone: "차분하고 구체적인 업무 설명", structure: "짧은 훅 → 사실과 업무 맥락 → 근거 있는 시사점 → 링크" },
+  show_hn: { audience: "직접 써 보고 기술적 선택을 논의하는 개발자", purpose: "실행 가능한 제품과 구현 내용을 소개", tone: "사실 중심, 기술적이고 솔직하게", structure: "제목 + 첫 댓글: 기능 → 근거 있는 동작/설계 → 한계 → 열린 질문" },
+  show_gn: { audience: "기술 뉴스와 직접 쓸 도구를 찾는 한국어 독자", purpose: "핵심 기능이나 변화를 사실 중심으로 설명", tone: "간결한 한국어, 홍보 어휘 없이", structure: "제목 → 무엇인가/변경 내용 → 근거 있는 한계. 댓글/추천 요청 없이" },
+  blog: { audience: "배경과 과정을 자세히 이해하려는 독자", purpose: "근거를 배치한 긴 글의 개요 준비", tone: "설명 중심의 차분한 문장", structure: "제목 후보 3개 → 4~6개 절과 넣을 근거 → 실제 독자 질문" },
+};
+
+/** 사용자 프리셋은 계정 설정에 저장한다. 기본 채널을 수정하거나 전역 레지스트리에 추가하지 않는다. */
+export type CustomChannel = ChannelSpec & { id: `custom_${string}`; identity: ChannelIdentity };
+export function channelSpec(channel: Channel, customChannels: readonly CustomChannel[] = []): ChannelSpec {
+  const base = CHANNELS[channel as BuiltinChannel];
+  if (base) return { ...base, linkPlacement: channel === "threads" ? "reply" : "body", identity: CHANNEL_IDENTITIES[channel as BuiltinChannel] };
+  const custom = customChannels.find((c) => c.id === channel);
+  if (custom) return custom;
+  // 비활성화된 과거 초안은 이름 없이도 읽을 수 있다. API에서 새 요청은 등록된 채널만 허용한다.
+  return { id: channel, label: channel, defaultLangs: ["ko"], maxChars: null, hasTitle: false, rules: "Facts only.", mediaHint: "", composeUrl: "", runbook: [] };
+}
+export function channelCatalog(customChannels: readonly CustomChannel[] = []): ChannelSpec[] {
+  return [...ALL_CHANNELS.map((id) => channelSpec(id)), ...customChannels];
+}
+export function knownChannel(channel: string, customChannels: readonly CustomChannel[] = []): boolean {
+  return Object.hasOwn(CHANNELS, channel) || customChannels.some((c) => c.id === channel);
+}
 
 /** 채널별 언어 설정. 기본값. */
 export type ChannelLangs = Partial<Record<Channel, string[]>>;
@@ -74,10 +105,10 @@ export type ChannelLangs = Partial<Record<Channel, string[]>>;
 export const DEFAULT_CHANNEL_LANGS: ChannelLangs = { x: ["ko"] };
 
 /** 설정에서 활성화된 (channel, lang) 쌍. 고정 언어 채널은 설정과 무관하게 그 언어. */
-export function enabledTargets(langs: ChannelLangs): { channel: Channel; lang: string }[] {
+export function enabledTargets(langs: ChannelLangs, customChannels: readonly CustomChannel[] = []): { channel: Channel; lang: string }[] {
   const out: { channel: Channel; lang: string }[] = [];
-  for (const ch of ALL_CHANNELS) {
-    const spec = CHANNELS[ch];
+  for (const spec of channelCatalog(customChannels)) {
+    const ch = spec.id;
     const list = langs[ch];
     if (!list || list.length === 0) continue;
     for (const lang of spec.fixedLang ? [spec.fixedLang] : list) out.push({ channel: ch, lang });

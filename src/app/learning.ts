@@ -1,7 +1,7 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { editLessonPrompt } from "../core/prompts.js";
-import { CHANNELS, type Channel } from "../core/channels.js";
+import { knownChannel, type Channel } from "../core/channels.js";
 import { channelTag } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
 import type { GuideSuggestion } from "../shared/types.js";
@@ -38,7 +38,7 @@ export function tagLegacySuggestions(ctx: AppContext): number {
   for (const r of legacy) {
     const ids = r.sources.map((src) => src.draftId);
     const drafts = ids.length ? ctx.db.select({ id: schema.drafts.id, channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.ownerId, r.ownerId), inArray(schema.drafts.id, ids))).all() : [];
-    const channels = [...new Set(drafts.map((d) => d.channel))].filter((ch) => ch in CHANNELS) as Channel[];
+    const channels = [...new Set(drafts.map((d) => d.channel))].filter((ch) => knownChannel(ch, getSettings(ctx, r.ownerId).customChannels)) as Channel[];
     if (!channels.length) continue;
     ctx.db.transaction((tx) => {
       for (const channel of channels) {
@@ -102,7 +102,7 @@ export function applyLesson(ctx: AppContext, ownerId: string, draftId: number, k
   if (!rule || category === "none" || rule.length > 160) return undefined;
   // 형식·구성 규칙은 그 채널의 모양에서 나온다(X를 줄이라는 규칙이 LinkedIn에 들어가면 안 된다). 채널 표시를 붙여 그 채널에만 쓴다.
   const channel = ["format", "structure"].includes(category) ? ctx.db.select({ channel: schema.drafts.channel }).from(schema.drafts).where(and(eq(schema.drafts.id, draftId), eq(schema.drafts.ownerId, ownerId))).get()?.channel : undefined;
-  const scoped = channel && channel in CHANNELS ? `${channelTag(channel as Channel)} ${rule}` : rule;
+  const scoped = channel && knownChannel(channel, getSettings(ctx, ownerId).customChannels) ? `${channelTag(channel as Channel)} ${rule}` : rule;
   return upsertSuggestion(ctx, ownerId, scoped, category, { kind, draftId, at: Date.now() });
 }
 

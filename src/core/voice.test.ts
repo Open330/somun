@@ -10,7 +10,9 @@ describe("voice presets", () => {
   it.each(VOICE_PRESETS.flatMap((p) => (["ko", "en"] as const).map((lang) => [p.id, lang] as const)))("%s sample (%s) passes lint", (id, lang) => {
     const body = VOICE_PRESETS.find((p) => p.id === id)!.sample[lang];
     for (const channel of id === "friendly" ? (["threads", "x"] as const) : (["threads"] as const)) {
-      const failed = lintDraft(channel, undefined, body).filter((r) => !r.ok);
+      // Threads에서는 공통 문체 샘플의 URL을 첫 답글로 옮긴 본문을 검사한다.
+      const adapted = channel === "threads" ? body.replace(/https?:\/\/\S+/g, "").trim() : body;
+      const failed = lintDraft(channel, undefined, adapted).filter((r) => !r.ok);
       expect(failed, `${channel}: ${JSON.stringify(failed)}`).toEqual([]);
     }
   });

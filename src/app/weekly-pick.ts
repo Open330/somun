@@ -135,7 +135,7 @@ export function weeklyPickView(ctx: AppContext, ownerId: string, now = Date.now(
 }
 
 const ownersWithChannels = (ctx: AppContext) =>
-  ctx.db.select({ ownerId: schema.settings.ownerId }).from(schema.settings).all().map((r) => r.ownerId).filter((id) => enabledTargets(getSettings(ctx, id).channelLangs).length > 0);
+  ctx.db.select({ ownerId: schema.settings.ownerId }).from(schema.settings).all().map((r) => r.ownerId).filter((id) => { const s = getSettings(ctx, id); return enabledTargets(s.channelLangs, s.customChannels).length > 0; });
 
 /** 월요일 아침 예약 실행(수집과 한도 초기화 뒤). 채널을 켠 모든 계정에 대해 이번 주 한 편을 정한다. */
 export function pickWeeklyAll(ctx: AppContext, now = Date.now()): number {

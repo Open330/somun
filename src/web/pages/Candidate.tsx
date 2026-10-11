@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { enabledTargets, targetKey, type Channel } from "@core/channels";
+import { enabledTargets, channelSpec, targetKey, type Channel } from "@core/channels";
 import { DEFAULT_DRAFT_MODEL } from "@core/models";
 import { voicePreset } from "@core/voice";
 import type { CandidateDetail, Draft, JobProgress, KeyStatus, SettingsView } from "@shared/types";
@@ -66,7 +66,7 @@ export default function Candidate() {
     return m;
   }, [data?.drafts]);
   const targets = useMemo(() => {
-    const enabled = enabledTargets(settings?.channelLangs ?? {});
+    const enabled = enabledTargets(settings?.channelLangs ?? {}, settings?.customChannels);
     const fromDrafts = [...draftsByTarget.keys()].map((k) => {
       const [channel, lang] = k.split(":");
       return { channel: channel as Channel, lang };
@@ -78,7 +78,7 @@ export default function Candidate() {
       seen.add(k);
       return true;
     });
-  }, [draftsByTarget, settings?.channelLangs]);
+  }, [draftsByTarget, settings?.channelLangs, settings?.customChannels]);
   // 채널 단위 탭. 언어는 채널 안에서 고른다 (활성 언어가 둘 이상일 때만 토글이 보인다).
   const channels = useMemo(() => [...new Set(targets.map((x) => x.channel))], [targets]);
   const langsOf = (ch: Channel) => targets.filter((x) => x.channel === ch).map((x) => x.lang);
@@ -162,7 +162,7 @@ export default function Candidate() {
     }
   };
   const redraftAll = () => {
-    const targets = enabledTargets(settings?.channelLangs ?? {});
+    const targets = enabledTargets(settings?.channelLangs ?? {}, settings?.customChannels);
     if (!targets.length) {
       setGenerationNotice({ text: t("초안을 만들 채널과 언어를 먼저 선택해 주세요."), error: true, channels: true });
       return Promise.resolve(false);
@@ -339,7 +339,7 @@ export default function Candidate() {
               {consistency
                 .map(
                   (x) =>
-                    `${channelLabel(x.channel)}: ${x.onlyIn.map((o) => t("{lang}에만 {numbers}", { lang: o.lang.toUpperCase(), numbers: o.numbers.join(", ") })).join(" · ")}`,
+                    `${channelLabel(x.channel, settings?.customChannels)}: ${x.onlyIn.map((o) => t("{lang}에만 {numbers}", { lang: o.lang.toUpperCase(), numbers: o.numbers.join(", ") })).join(" · ")}`,
                 )
                 .join(" / ")}
               . {t("한쪽에만 있는 숫자는 사실 확인 뒤 맞추세요.")}
@@ -389,7 +389,7 @@ export default function Candidate() {
                   onClick={() => switchDraft(() => setTab(ch))}
                 >
                   <ChannelIcon channel={ch} />
-                  {channelLabel(ch)}
+                  {channelLabel(ch, settings?.customChannels)}
                   {short && (
                     <>
                       <span className={`st st-${tone}`} aria-hidden>
@@ -413,6 +413,7 @@ export default function Candidate() {
           )}
           {current && curKey && (
             <DraftPanel
+              preset={channelSpec(current.channel, settings?.customChannels)}
               key={`${cid}:${curKey}:${requestedDraftId ?? ""}`}
               initialDraftId={requestedDraftId}
               cid={cid}
@@ -434,6 +435,7 @@ export default function Candidate() {
               publications={publications.filter((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
               busy={busy === `draft:${curKey}` || busy === "draft"}
               showToast={showToast}
+              sourceLink={e.repoUrl}
               homepage={e.homepage}
               track={settings?.trackLinks !== false}
               onRedraft={(instruction, introduction) => redraft([current], instruction, `draft:${curKey}`, introduction)}
@@ -640,7 +642,7 @@ export default function Candidate() {
                   <div key={p.id} className="row between">
                     <span className="row gap-6">
                       <ChannelIcon channel={p.channel} size={14} />
-                      {channelLabel(p.channel)}
+                      {channelLabel(p.channel, settings?.customChannels)}
                     </span>
                     <a href={p.url} target="_blank" rel="noreferrer">
                       {p.url.replace(/^https?:\/\//, "").slice(0, 40)}

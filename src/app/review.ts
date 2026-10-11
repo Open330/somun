@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { editRatio } from "../core/metrics.js";
-import type { Channel } from "../core/channels.js";
+import { channelSpec, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft } from "../core/lint.js";
 import { schema } from "../infra/db/index.js";
 import type { Draft, Evidence, Example, FeedbackReason } from "../shared/types.js";
@@ -72,7 +72,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const changed = d.body !== input.body || (d.title ?? "") !== (input.title ?? "");
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}, settings.ui?.locale);
+  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
   if (input.markCopied && input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok)) input = { ...input, markCopied: false };
   if (changed) {
     ctx.db.insert(schema.draftEdits).values({ ownerId, draftId: id, channel: d.channel, before: d.body, after: input.body, createdAt: now }).run();

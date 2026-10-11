@@ -7,12 +7,12 @@ import type { PerformanceSummary, Channel, PublicationStats, PublicationWithMetr
 import { getCandidateRow, toPublication } from "./candidates.js";
 import { emit, InvalidInputError, NotFoundError, type AppContext } from "./context.js";
 import { publicationChannel } from "../core/publication-url.js";
-import { CHANNELS } from "../core/channels.js";
+import { channelSpec } from "../core/channels.js";
 import { localeOf, say } from "./i18n.js";
 
 function validateUrl(ctx: AppContext, ownerId: string, channel: Channel, url: string): void {
   const actual = publicationChannel(url);
-  if (actual && actual !== channel) throw new InvalidInputError(say(localeOf(ctx, ownerId), `이 링크는 ${CHANNELS[actual].label} 주소입니다. ${CHANNELS[channel].label} 게시글 링크를 입력하거나 해당 채널에서 등록해 주세요.`, `This is a ${CHANNELS[actual].label} URL. Enter a ${CHANNELS[channel].label} post URL or register it under the matching channel.`));
+  if (actual && actual !== channel && !channel.startsWith("custom_")) throw new InvalidInputError(say(localeOf(ctx, ownerId), `이 링크는 ${channelSpec(actual).label} 주소입니다. ${channelSpec(channel).label} 게시글 링크를 입력하거나 해당 채널에서 등록해 주세요.`, `This is a ${channelSpec(actual).label} URL. Enter a ${channelSpec(channel).label} post URL or register it under the matching channel.`));
 }
 
 /**

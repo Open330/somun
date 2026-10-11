@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { ALL_CHANNELS, enabledTargets, type Channel } from "../../core/channels.js";
+import { ALL_CHANNELS, enabledTargets, knownChannel, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { backfillStarTrend, collectAll, profileMaterialFor } from "../../app/collect.js";
 import { checkLocalResult } from "../../app/draft-repair.js";
@@ -36,7 +36,8 @@ import { issueBridgeToken, listBridgeTokens, revokeBridgeToken, videoConfig } fr
 import { VIDEO_ASPECTS, VIDEO_DURATIONS } from "../../shared/video.js";
 import { launchCheck } from "../../app/launch-check.js";
 
-const channel = z.enum(ALL_CHANNELS as [Channel, ...Channel[]]);
+const channel = z.union([z.enum(ALL_CHANNELS), z.string().regex(/^custom_[a-z0-9-]{1,64}$/)]).transform((c) => c as Channel);
+const identity = z.object({ audience: z.string().trim().min(1).max(500), purpose: z.string().trim().min(1).max(500), tone: z.string().trim().min(1).max(500), structure: z.string().trim().min(1).max(1000) });
 const lang = z.string().min(2).max(8).regex(/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/);
 const reason = z.enum(["wrong_facts", "voice", "wrong_channel", "not_yet", "not_worth", "other"]);
 const id = (v: string) => {
@@ -48,7 +49,7 @@ const id = (v: string) => {
 /** /api 아래 전부. 얇은 층: 검증 → 유스케이스 → JSON. */
 export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore = new TicketStore()) {
   const app = new Hono<{ Variables: AuthVars }>();
-  const body = async <T>(c: { req: { json: () => Promise<unknown> } }, schema: z.ZodType<T>): Promise<T> => {
+  const body = async <T>(c: { req: { json: () => Promise<unknown> }; get: (key: "ownerId") => string }, schema: z.ZodType<T>): Promise<T> => {
     let input: unknown;
     try {
       input = await c.req.json();
@@ -56,7 +57,19 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       if (err instanceof SyntaxError) throw new HTTPException(400, { message: "invalid JSON" });
       throw err;
     }
-    return schema.parse(input);
+    const parsed = schema.parse(input);
+    const current = getSettings(ctx, c.get("ownerId"));
+    const customChannels = (parsed as Partial<typeof current>)?.customChannels ?? current.customChannels;
+    const check = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, item] of Object.entries(value)) {
+        if (key === "channel" && typeof item === "string" && !knownChannel(item, customChannels)) throw new InvalidInputError("Unknown channel for this account");
+        if (key === "channelLangs" && item && typeof item === "object" && Object.keys(item).some((id) => !knownChannel(id, customChannels))) throw new InvalidInputError("Unknown channel for this account");
+        check(item);
+      }
+    };
+    check(parsed);
+    return parsed;
   };
 
   app.get("/me", (c) => c.json({ ownerId: c.get("ownerId") }));
@@ -68,7 +81,8 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
       rubricWeights: z.object({ runnable: z.number().min(0).max(5), numbers: z.number().min(0).max(5), lesson: z.number().min(0).max(5), novelty: z.number().min(0).max(5), audience: z.number().min(0).max(5) })
         .refine((w) => Object.values(w).some((v) => v > 0), "At least one weight must be above 0").optional(),
       draftThreshold: z.number().min(0).max(10).optional(), deferThreshold: z.number().min(0).max(10).optional(),
-      channelLangs: z.partialRecord(channel, z.array(lang)).optional(), bannedPhrases: z.array(z.string()).optional(),
+      channelLangs: z.record(channel, z.array(lang)).optional(),
+      customChannels: z.array(z.object({ id: z.string().regex(/^custom_[a-z0-9-]{1,64}$/).transform((id) => id as `custom_${string}`), label: z.string().trim().min(1).max(80), identity, defaultLangs: z.array(lang).min(1).max(8), maxChars: z.number().int().min(100).max(30000).nullable(), hasTitle: z.boolean(), titleMaxChars: z.number().int().min(10).max(300).optional(), rules: z.string().trim().min(1).max(4000), mediaHint: z.string().max(500), composeUrl: z.union([z.string().url().regex(/^https?:\/\//), z.literal("")]), linkPlacement: z.enum(["body", "reply", "none"]).optional(), runbook: z.array(z.string().max(500)).max(10) }).strict().refine((p) => !p.hasTitle || p.titleMaxChars !== undefined, "Title length is required")).max(20).optional(), bannedPhrases: z.array(z.string()).optional(),
       llm: z.object({ provider: z.enum(["gemini", "anthropic", "openai", "local-agent"]), model: z.string().optional(), draftModel: z.string().optional(), apiKey: z.string().optional(), baseUrl: z.string().optional(), agentCli: z.enum(["claude", "codex"]).optional() }).optional(),
       keepApiKey: z.boolean().optional(),
       watch: z.object({ mode: z.enum(["manual", "auto"]), recentDays: z.number().int().min(1).max(365) }).optional(),
@@ -113,7 +127,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.post("/weekly-pick", async (c) => c.json(pickWeekly(ctx, c.get("ownerId"), { again: (await body(c, z.object({ again: z.boolean().optional() }))).again })));
   app.post("/candidates/judge", async (c) => {
     const { ids } = await body(c, z.object({ ids: z.array(z.number().int()).min(1).max(50) }));
-    if (!enabledTargets(getSettings(ctx, c.get("ownerId")).channelLangs).length) throw new InvalidInputError(say(localeOf(ctx, c.get("ownerId")), "초안을 만들 채널과 언어를 먼저 선택해 주세요.", "Choose a channel and language before preparing drafts."));
+    if (!enabledTargets(getSettings(ctx, c.get("ownerId")).channelLangs, getSettings(ctx, c.get("ownerId")).customChannels).length) throw new InvalidInputError(say(localeOf(ctx, c.get("ownerId")), "초안을 만들 채널과 언어를 먼저 선택해 주세요.", "Choose a channel and language before preparing drafts."));
     const jobs = ctx.db.$client.transaction(() => [...new Set(ids)].map((cid) => queueStep(ctx, c.get("ownerId"), "digest", cid))).immediate();
     c.header("Location", "/api/jobs/status"); c.header("Retry-After", "5");
     return c.json({ started: jobs.length, jobs }, 202);

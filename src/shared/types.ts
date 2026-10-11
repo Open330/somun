@@ -1,7 +1,7 @@
 /** 서버와 웹이 공유하는 도메인 타입. DB 행과 API 응답의 모양. */
-import type { Channel, ChannelLangs } from "../core/channels.js";
+import type { Channel, ChannelLangs, CustomChannel } from "../core/channels.js";
 import type { CheckItem } from "../core/launch-check.js";
-export type { Channel, ChannelLangs } from "../core/channels.js";
+export type { Channel, ChannelLangs, CustomChannel } from "../core/channels.js";
 
 export type SourceKind = "github" | "npm" | "blog" | "sessions" | "omp";
 export type SignalKind = "release" | "pr_merged" | "repo_created" | "readme_changed" | "star_milestone" | "download_milestone" | "blog_post" | "omp_session" | "commit_batch";
@@ -58,6 +58,8 @@ export type Settings = {
   deferThreshold: number;
   /** 채널별 활성 언어. 비어 있으면 그 채널은 꺼진 것. */
   channelLangs: ChannelLangs;
+  /** 계정별 커스텀 채널과 편집 정체성 프리셋. */
+  customChannels?: CustomChannel[];
   bannedPhrases: string[];
   llm: LlmConfig;
   /** 새 글감 처리 방식. manual: 모아만 두고 사용자가 고른 것만 판단. auto: 최근 recentDays 안에 갱신된 글감은 자동으로 판단·초안. */

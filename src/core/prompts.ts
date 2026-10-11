@@ -5,7 +5,7 @@
  * 첫 소개 초안은 프로필이 없으면 README를 직접 참고한다.
  * 판단과 초안은 다이제스트가 추린 highlights + 기본 사실만 본다. 전체를 넘기지 않는다.
  */
-import { CHANNELS, langInstruction, langName, type Channel } from "./channels.js";
+import { channelSpec, langInstruction, langName, type Channel, type ChannelSpec } from "./channels.js";
 import { KO_FLUENCY_RULES } from "./voice.js";
 import type { Locale } from "../shared/locale.js";
 
@@ -183,11 +183,11 @@ export const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 
-export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean; overrides?: string[] }): PromptSpec {
+export function judgePrompt(c: CandidateLike, ctx: { recentPublished: string[]; enabledChannels: string[]; channelPresets?: ChannelSpec[]; feedback: { targetType: string; reason: string; note?: string }[]; profile?: ProfileLike; alreadyPublished?: string[]; repoDrops?: number; channelResults?: string[]; locale?: Locale; introduction?: boolean; overrides?: string[] }): PromptSpec {
   const feedbackText = ctx.feedback.length ? `\nRecent editor feedback (most recent first), use it to calibrate:\n${ctx.feedback.map((f) => `- [${f.targetType}] ${f.reason}${f.note ? `: ${f.note}` : ""}`).join("\n")}` : "";
   return {
     schemaName: "judgment",
-    schema: JUDGE_SCHEMA,
+    schema: { ...JUDGE_SCHEMA, properties: { ...JUDGE_SCHEMA.properties, suggestedChannels: { type: "array", items: { type: "string", enum: ctx.enabledChannels } } } },
     system: `You are the editor for a developer who builds far more than they announce.
 Decide whether this unit of work is worth a public post, and say why in a way the developer can argue with.
 Start with the concrete value for the named reader: what task changes, and why should that reader care now? A useful capability can be worth sharing without a measurement or a failure story. Do not confuse repository activity with reader value. In the angle, select one supported reader benefit; do not invent a benefit to fill a gap.
@@ -200,7 +200,7 @@ You are skeptical of hype and of "AI-made" as a selling point. Score five criter
 reasoning: 3-5 plain sentences in ${ctx.locale === "en" ? "English" : "Korean"}, first sentence is the verdict.
 angle: the one-sentence angle a post should take, or empty string.
 suggestedChannels: subset of the enabled channels.`,
-    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", ctx.overrides?.length ? `\nThe editor overrode these past judgments (most recent first). Match the editor's bar for similar candidates:\n- ${ctx.overrides.join("\n- ")}` : "", feedbackText].join("\n"),
+    user: [factsBlock(c, ctx.profile), ctx.introduction ? `\n${INTRODUCTION_JUDGE}` : "", ctx.recentPublished.length ? `\nPublished in the last 30 days (novelty check):\n- ${ctx.recentPublished.join("\n- ")}` : "\nNothing published in the last 30 days.", ctx.alreadyPublished?.length ? `\nChanges of this repo already announced (score novelty low if the digest repeats them):\n- ${ctx.alreadyPublished.join("\n- ")}` : "", ctx.repoDrops ? `\nThe editor has dropped ${ctx.repoDrops} post(s) from this repo as "not worth announcing". Be stricter: prefer defer/ask unless this is clearly different.` : "", `\nEnabled channels: ${ctx.enabledChannels.join(", ")}`, ctx.channelPresets?.length ? `Channel identities (choose the exact id for the matching audience and purpose):\n${JSON.stringify(ctx.channelPresets.map((p) => ({ id: p.id, label: p.label, identity: p.identity })))}` : "", ctx.channelResults?.length ? `\nHow this developer's past posts did per channel (use it when choosing suggestedChannels; small samples, do not over-weight):\n- ${ctx.channelResults.join("\n- ")}` : "", ctx.overrides?.length ? `\nThe editor overrode these past judgments (most recent first). Match the editor's bar for similar candidates:\n- ${ctx.overrides.join("\n- ")}` : "", feedbackText].join("\n"),
   };
 }
 
@@ -236,7 +236,7 @@ export function instructionOf(user: string): string | undefined {
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
 }
 
-export type DraftOptions = { guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
+export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
@@ -264,7 +264,7 @@ export function withoutFalseFirstClaims(reasoning: string, releaseCount: number 
 }
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
-  const spec = CHANNELS[channel];
+  const spec = opts.channelSpec ?? channelSpec(channel);
   // Introductions describe capabilities, not how much repository activity produced them.
   const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
@@ -301,7 +301,9 @@ Hard rules:
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
       publicName ? `Public project name: ${publicName}. Use this exact name in prose; owner/repo belongs only inside URLs.` : "",
       langInstruction(lang),
+      spec.identity ? `Channel identity: audience=${spec.identity.audience}; purpose=${spec.identity.purpose}; tone=${spec.identity.tone}; structure=${spec.identity.structure}` : "",
       `Rules: ${spec.rules}`,
+      `Link placement (takes precedence over conflicting preset rules): ${spec.linkPlacement ?? "body"}. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
@@ -317,7 +319,7 @@ Hard rules:
       opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,
-      draftCoverageGuide(c, channel, opts.introduction),
+      spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : draftCoverageGuide(c, channel, opts.introduction),
     ].filter((l) => l !== undefined).join("\n"),
   };
 }

@@ -1,7 +1,7 @@
 import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
-import { CHANNELS, enabledTargets, type Channel } from "../core/channels.js";
+import { channelSpec, knownChannel, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
@@ -116,11 +116,11 @@ export function explorationChannel(ctx: AppContext, ownerId: string, candidates:
  * 언어는 화면 언어를 우선한다. 나머지 채널·언어는 사용자가 글감 화면에서 요청할 때 만든다(쓰지 않을 초안을 쌓지 않게).
  * 판단이 채널을 고르면 탐색 채널을 덧붙이지 않는다: 초안을 하나로 줄인 대가다. 탐색은 판단이 채널을 고르지 않았을 때만 한다.
  */
-export function primaryTarget(ctx: AppContext, ownerId: string, settings: Pick<ReturnType<typeof getSettings>, "channelLangs" | "ui">, suggested: Channel[] = [], opts: { allowLaunch?: boolean } = {}): { channel: Channel; lang: string } | undefined {
-  const targets = enabledTargets(settings.channelLangs);
+export function primaryTarget(ctx: AppContext, ownerId: string, settings: Pick<ReturnType<typeof getSettings>, "channelLangs" | "customChannels" | "ui">, suggested: Channel[] = [], opts: { allowLaunch?: boolean } = {}): { channel: Channel; lang: string } | undefined {
+  const targets = enabledTargets(settings.channelLangs, settings.customChannels);
   if (!targets.length) return undefined;
   const channels = [...new Set(targets.map((t) => t.channel))];
-  const channel = suggested.find((ch) => channels.includes(ch)) ?? explorationChannel(ctx, ownerId, channels) ?? channels.find((ch) => EXPLORABLE.includes(ch)) ?? (opts.allowLaunch ? channels[0] : undefined);
+  const channel = suggested.find((ch) => channels.includes(ch)) ?? explorationChannel(ctx, ownerId, channels) ?? channels.find((ch) => EXPLORABLE.includes(ch) || ch.startsWith("custom_")) ?? (opts.allowLaunch ? channels[0] : undefined);
   if (!channel) return undefined;
   const langs = targets.filter((t) => t.channel === channel).map((t) => t.lang);
   const locale = settings.ui?.locale ?? "ko";
@@ -159,11 +159,12 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
-  const anyUnannounced = enabledTargets(settings.channelLangs).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
+  const anyUnannounced = enabledTargets(settings.channelLangs, settings.customChannels).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
   const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs).map((t) => t.channel))], feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
+  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
+  if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
   const prev = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.candidateId, candidateId), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang), ne(schema.drafts.status, "dropped"))).orderBy(desc(schema.drafts.version)).get();
   // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.
@@ -172,6 +173,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const angle = requested || staleAngle ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   return draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
+    channelSpec: channelSpec(channel, settings.customChannels),
     guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
     disputed,
@@ -206,7 +208,7 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
   for (const c of rows) {
     const s = settingsByOwner.get(c.ownerId) ?? getSettings(ctx, c.ownerId);
     settingsByOwner.set(c.ownerId, s);
-    if (s.watch.mode !== "auto" || !enabledTargets(s.channelLangs).length) continue;
+    if (s.watch.mode !== "auto" || !enabledTargets(s.channelLangs, s.customChannels).length) continue;
     // 자동 작업 몫이 다 찼으면 넣지 않는다(넣어도 실패로 쌓이고, 실패 횟수 때문에 다음 날에도 다시 시도하지 않게 된다).
     if (!hasBackgroundCapacity(ctx, c.ownerId, 1, s.llm, now)) continue;
     // 로컬 워커가 이 저장소의 프로필을 만드는 중이면 기다린다. 프로필이 반영되면 jobs.completeJob이 다시 부른다.
@@ -272,7 +274,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
 export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null) {
   const c = getCandidateRow(ctx, ownerId, candidateId);
   const settings = getSettings(ctx, ownerId);
-  return lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), settings.ui?.locale);
+  return lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), settings.ui?.locale, channelSpec(channel, settings.customChannels));
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
@@ -312,7 +314,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const total = rubricTotal(scores, settings.rubricWeights);
     const noChanges = Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
-    const targets = enabledTargets(settings.channelLangs);
+    const targets = enabledTargets(settings.channelLangs, settings.customChannels);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
     const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
@@ -330,8 +332,9 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
 
   const channel = args.channel, lang = args.lang;
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
+  if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const r = args.result as { title?: string; body?: string };
-  const spec = CHANNELS[channel];
+  const spec = channelSpec(channel, settings.customChannels);
   const title = spec.hasTitle ? String(r.title ?? "").trim() || undefined : undefined;
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");

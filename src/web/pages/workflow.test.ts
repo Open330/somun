@@ -812,3 +812,42 @@ it.each([
   expect(screen.getByRole("button", { name: label }).getAttribute("title")).toBe(label.slice(3));
   expect(screen.queryByText("생성 작업이 완료됐어요")).toBeNull();
 });
+
+it("copies the Threads reply link without recording a draft copy or publication", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const draft = {
+    id: 1,
+    candidateId: 1,
+    channel: "threads",
+    lang: "ko",
+    version: 1,
+    model: "fixture",
+    body: "어떤 작업에 쓰시나요?",
+    status: "proposed",
+    lint: [],
+    purpose: "introduction",
+    createdAt: 1,
+    updatedAt: 1,
+  } as Draft;
+  render(
+    wrap(
+      createElement(DraftPanel, {
+        cid: 1,
+        channel: "threads",
+        lang: "ko",
+        langs: ["ko"],
+        onLang: vi.fn(),
+        drafts: [draft],
+        busy: false,
+        onRedraft: async () => true,
+        showToast: vi.fn(),
+        homepage: "https://example.test",
+        sourceLink: "https://github.com/me/tool",
+      }),
+    ),
+  );
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "답글 링크 복사" })));
+  expect(writeText).toHaveBeenCalledWith("https://example.test");
+  expect(post).not.toHaveBeenCalled();
+});

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { DEFAULT_CHANNEL_LANGS, type Channel } from "../core/channels.js";
+import { DEFAULT_CHANNEL_LANGS, knownChannel, type Channel } from "../core/channels.js";
 import { DEFAULT_BANNED_PHRASES } from "../core/lint.js";
 import { DEFAULT_VOICE_PRESET } from "../core/voice.js";
 import { schema } from "../infra/db/index.js";
@@ -116,6 +116,11 @@ export function getSettingsView(ctx: AppContext, ownerId: string): SettingsView 
 export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<Settings>, keepApiKey = true): SettingsView {
   const current = getSettings(ctx, ownerId);
   const next: Settings = { ...current, ...patch };
+  if (patch.customChannels || patch.channelLangs) {
+    const presets = next.customChannels ?? [];
+    if (new Set(presets.map((p) => p.id)).size !== presets.length || Object.keys(next.channelLangs).some((id) => !knownChannel(id, presets))) throw new InvalidInputError("Unknown or duplicate channel preset");
+    if ((current.customChannels ?? []).some((p) => !presets.some((n) => n.id === p.id))) throw new InvalidInputError("Disable a custom channel instead of removing its preset and history");
+  }
   // 웹훅 URL은 빈 문자열이면 지우고, 없으면 기존 값을 지킨다.
   if (patch.notify) next.notify = { ...current.notify, weekly: patch.notify.weekly, discordWebhookUrl: patch.notify.discordWebhookUrl === "" ? undefined : patch.notify.discordWebhookUrl ?? current.notify?.discordWebhookUrl, lastSentAt: current.notify?.lastSentAt };
   // 화면 상태는 항목별로 합친다(언어를 바꿔도 온보딩 닫은 시각이 지워지지 않게).
