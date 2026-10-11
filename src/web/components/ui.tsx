@@ -209,6 +209,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     paragraphs: t("문단"),
     sections: t("구성 확인"),
     open_question: t("끝맺음 질문"),
+    sentence_count: t("문장 수"),
     no_transliterated_names: t("이름 표기"),
     mixed_korean_terms: t("표현 확인"),
     mixed_language: t("영어 문장"),

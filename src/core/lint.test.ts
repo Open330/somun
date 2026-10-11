@@ -331,3 +331,15 @@ it("flags an untranslated English sentence in a Korean post but not names or com
   expect(rule("설치는 다음과 같습니다.\n`npm install -g muxa and run it in the terminal`")?.ok).toBe(true);
   expect(rule("Claude Code, Codex, Gemini CLI, OpenCode, Aider\n위 도구를 지원합니다.")?.ok).toBe(true);
 });
+
+
+it("counts the closing question in a channel sentence limit, excluding URLs and decimal/version boundaries", () => {
+  const spec = { id: "custom_short" as const, label: "Short", defaultLangs: ["ko"], maxChars: null, maxSentences: 3, hasTitle: false, rules: "Facts only.", mediaHint: "", composeUrl: "", runbook: [] };
+  const check = (body: string, limit = 3) => lintDraft(spec.id, undefined, body, [], {}, "ko", { ...spec, maxSentences: limit }).find((r) => r.rule === "sentence_count");
+  expect(check("초안을 작성해요. 문체 예시를 학습해요. 어디에 올리시나요?")?.ok).toBe(true);
+  expect(check("초안을 작성해요. 문체 예시를 학습해요. 검증이 필요해요. 어디에 올리시나요?")?.ok).toBe(false);
+  expect(check("v1.2 supports 0.5 seconds. Where do you use it? https://example.com/v1.2", 2)?.ok).toBe(true);
+  expect(check("도구예요。 어디에 올리나요？", 2)?.ok).toBe(true);
+  expect(lintDraft(spec.id, undefined, "One. Two. Three. Four.", [], {}, "en", { ...spec, maxSentences: undefined }).some((r) => r.rule === "sentence_count")).toBe(false);
+  expect(lintDraft("threads", undefined, "One. Two. Three.").find((r) => r.rule === "sentence_count")?.ok).toBe(false);
+});

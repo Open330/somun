@@ -306,6 +306,7 @@ Hard rules:
       langInstruction(lang),
       `Link placement (takes precedence over conflicting preset rules): ${spec.linkPlacement ?? "body"}. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
+      spec.maxSentences ? `Maximum ${spec.maxSentences} sentences in the entire body, including the closing question.` : "",
       spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
       "",
@@ -323,7 +324,8 @@ Hard rules:
       "## Selected channel contract",
       spec.identity ? `Write for this audience: ${spec.identity.audience}\nThe post must serve this purpose: ${spec.identity.purpose}\nUse this tone in every sentence: ${spec.identity.tone}\nFollow this composition and closing: ${spec.identity.structure}` : "",
       `Rules: ${spec.rules}`,
-      "Before returning JSON, check the body against this channel’s tone and closing structure. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
+      publicName ? `Keep the project name exactly as ${publicName}, including its original spelling. Never translate or transliterate it.` : "",
+      "Before returning JSON, check the body against this channel’s tone, total sentence budget and closing structure. Count the closing question within that budget; remove optional detail rather than append another sentence. Do not add a limitation unless the selected channel explicitly asks for one. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
       spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : draftCoverageGuide(c, channel, opts.introduction),
     ].filter((l) => l !== undefined).join("\n"),
   };

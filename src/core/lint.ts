@@ -186,6 +186,13 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "open_question", ok: /\?/.test(body), detail: say("작성자 댓글을 열린 질문 하나로 끝내 주세요.", "End the author comment with one open question.") });
   }
 
+  if (spec.maxSentences !== undefined) {
+    // URL의 마침표나 버전·소수점은 문장 경계가 아니다. 표준 문장 분절로 본문만 센다.
+    const text = body.replace(/https?:\/\/\S+/g, "").trim();
+    const count = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].filter((s) => s.segment.trim()).length;
+    results.push({ rule: "sentence_count", ok: count <= spec.maxSentences, detail: say(`본문 ${count}문장 / 최대 ${spec.maxSentences}문장. 마지막 질문도 포함해 줄여 주세요.`, `Body: ${count} sentences / maximum ${spec.maxSentences}. Include the closing question in this limit.`) });
+  }
+
   if (spec.maxChars !== null) {
     const len = [...body].length;
     results.push({ rule: "length", ok: len <= spec.maxChars, detail: `${len}/${spec.maxChars}` });

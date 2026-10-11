@@ -166,6 +166,18 @@ export default function ChannelPresets({ settings, onSave, onDirty }: Props) {
               onChange={(e) => setForm({ ...form, maxChars: e.target.value ? Number(e.target.value) : null })}
             />
           </label>
+          <label className="field">
+            <span>{t("최대 문장 수")}</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              aria-label={t("최대 문장 수")}
+              value={form.maxSentences ?? ""}
+              onChange={(e) => setForm({ ...form, maxSentences: e.target.value ? Number(e.target.value) : undefined })}
+            />
+            <small className="muted">{t("마지막 질문도 포함합니다. 비워 두면 제한하지 않습니다.")}</small>
+          </label>
           <label className="row gap-8">
             <input
               type="checkbox"

@@ -14,6 +14,8 @@ export type ChannelSpec = {
   fixedLang?: string;
   defaultLangs: string[];
   maxChars: number | null;
+  /** 마침표·물음표 등으로 끝나는 본문의 최대 문장 수. 미설정이면 제한하지 않는다. */
+  maxSentences?: number;
   hasTitle: boolean;
   titleMaxChars?: number;
   /** 언어와 무관한 형식 규칙 (LLM에 그대로 전달) */
@@ -34,7 +36,7 @@ export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
     runbook: ["영어 글은 화~목 미국 동부 오전 9~11시(한국 22~24시), 한국어 글은 평일 오전 8~9시나 저녁 21~22시", "이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
   },
   threads: {
-    id: "threads", label: "Threads", defaultLangs: ["ko"], maxChars: 500, hasTitle: false,
+    id: "threads", label: "Threads", defaultLangs: ["ko"], maxChars: 500, maxSentences: 2, hasTitle: false,
     rules: "One or two sentences, conversational. Take a position or end with a question rather than informing. No link in the body (it goes in the first reply).",
     mediaHint: "선택. 스크린샷 1장이면 충분",
     composeUrl: "https://www.threads.net/",
@@ -119,7 +121,7 @@ export function enabledTargets(langs: ChannelLangs, customChannels: readonly Cus
 /** 언어 코드 → 이름과 문체 힌트. 목록에 없는 코드도 쓸 수 있다 (이름은 코드 그대로). */
 export const LANGS: Record<string, { name: string; nativeName: string; style: string }> = {
   en: { name: "English", nativeName: "English", style: "Plain, direct, no exclamation marks." },
-  ko: { name: "Korean", nativeName: "한국어", style: "존댓말 평서형('만들었습니다'). 감탄사 없음. 번역투 금지, 짧은 문장." },
+  ko: { name: "Korean", nativeName: "한국어", style: "말투는 선택한 채널의 어조를 따릅니다. 감탄사 없음. 번역투 금지, 짧은 문장." },
   ja: { name: "Japanese", nativeName: "日本語", style: "です・ます調。誇張なし。" },
   zh: { name: "Chinese (Simplified)", nativeName: "简体中文", style: "平实直接，避免营销用语。" },
   es: { name: "Spanish", nativeName: "Español", style: "Registro neutro, sin exclamaciones." },

@@ -14,6 +14,7 @@ import { processServerJob } from "./generation-worker.js";
 import { generationStatus, pendingJobs, claimJob, JOB_LEASE_MS, completeJob } from "./jobs.js";
 import { processNewCandidates, queueStep } from "./pipeline.js";
 import { updateSettings } from "./settings.js";
+import { channelSpec, type CustomChannel } from "../core/channels.js";
 
 vi.mock("../infra/llm/providers.js", async (original) => ({ ...await original<typeof import("../infra/llm/providers.js")>(), runLlm: vi.fn() }));
 let ctx: AppContext, app: ReturnType<typeof createApp>, cid: number;
@@ -397,4 +398,21 @@ it("charges repair against the actual shared model config even if settings chang
   expect(runLlm).toHaveBeenCalledTimes(1);
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(long.body);
   expect(ctx.usage.record).toHaveBeenCalledTimes(1);
+});
+
+
+it("repairs an owned custom-channel sentence overflow before saving the draft", async () => {
+  const preset: CustomChannel = { ...channelSpec("threads"), id: "custom_short", label: "Short", maxSentences: 3, identity: { audience: "Developers", purpose: "Get feedback", tone: "Conversational", structure: "Task, operation, question" } };
+  updateSettings(ctx, "local", { customChannels: [preset], channelLangs: { [preset.id]: ["en"] } });
+  const first = { title: "", body: "Fixes CRLF positions. Reads the source. Needs review. Which files do you use?" };
+  const repaired = { title: "", body: "Fixes CRLF positions. Which files do you use?" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
+  const response = await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: preset.id, lang: "en" }] });
+  expect(response.status).toBe(202);
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("sentence_count");
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(repaired.body);
+  expect(saved.lint.find((r) => r.rule === "sentence_count")?.ok).toBe(true);
 });
