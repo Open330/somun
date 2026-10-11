@@ -284,31 +284,32 @@ Hard rules:
 - Include one real limitation from Facts when the channel asks for one. If Facts lists no limitation, leave it out. Never invent one: no "API may change", "still beta", "not tested" unless Facts says so.
 - Refer to the project by "how to name it" from the profile when Facts has one; otherwise by the repo name after the slash. Use the full owner/name only inside links. Never shorten, respell or invent owners or names.
 - Do not invent a backstory, a problem the author "hit", or a motivation. The opening must be supported by the digest or Facts. If the digest has no problem statement, open with ${opts.introduction ? "what the project is and who it is for" : "what changed"}.
-- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", "만듭니다", "만들었습니다", "개발했습니다", or "출시했습니다" without that evidence. For a first introduction, default to "<project> is/does ..." or "<프로젝트>는 ... 도구입니다"; a profile describing the project is not evidence that the current author created it.
+- A connected repository or release does not establish that the author built, owns, or released it. Use neutral attribution unless Facts explicitly establishes the author’s role. Do not imply personal authorship with "we released", "I built", "만듭니다", "만들었습니다", "개발했습니다", or "출시했습니다" without that evidence. For a first introduction, describe the project’s supported task neutrally in the register required by the selected channel; a profile describing the project is not evidence that the current author created it. Neutral attribution does not require 합니다체.
 - Passive wording can imply authorship too: avoid "made for", "built to solve", "만들었습니다", "만들었으며", or "만들기 위해" about the author unless their role and motivation are explicitly supported. Describe the project’s task and audience directly instead.
 - Repository bookkeeping (commit counts, release counts, stars, first-release dates) is context, not a product capability or proof of maturity. Omit it unless the supplied change or Editor instruction specifically announces that milestone. Never turn "commits: 90" into "developed through 90 commits".
-- For Korean updates without an established author role, use "<project> <version> 변경 사항입니다" or describe the operation directly. Avoid "<project> <version>을 출시했습니다"; it reads as the poster announcing their own release.
+- For Korean updates without an established author role, describe the change or operation neutrally in the register required by the selected channel. Avoid "<project> <version>을 출시했습니다"; it reads as the poster announcing their own release.
 - Do not add general claims about affected users, scale, bottlenecks, or benefits beyond Facts. If a required section has no evidence, omit that section rather than filling it with plausible context.
 - When a technical operation has no unambiguous translation, retain the original technical wording rather than substitute a different operation.
 - Keep technical nouns as the established term in the target language or the original English word (secrets → 시크릿, vault → 볼트, engine → 엔진). Never swap them for a nearby everyday word (secrets ≠ 비밀번호).
 - Use the numbers from "Numbers you may use" directly. If that line has no matching number, omit the claim.
 - No emoji, no exclamation marks, no press-release phrases, no bullet lists made of emoji.
-- Follow the Voice guide for register, sentence length, and how to open and close. If Examples are given, they only illustrate the same voice; never copy their facts.
-- If an Editor instruction is given, it overrides the guide for this rewrite. Keep everything else the same unless the instruction says otherwise.
+- The selected channel identity and Rules determine the audience, purpose, tone/register, sentence budget, and opening/closing structure. The general Voice guide is supplemental: use it only where compatible with that channel. A generic 합니다체 voice or facts → reason → limitation pattern must not override a channel asking for 해요체, a short conversation, or a closing question. Do not append a generic limitation simply to fill the voice pattern.
+- When the channel asks for a position or a question and Facts contains no author position, ask one specific, answerable question about the supported task or workflow. A factual announcement plus a generic caution is not a position or a question. Never invent the author’s experience or opinion.
+- For a Korean channel requiring 해요체, use 해요/돼요/예요/있어요 endings in EVERY declarative sentence, not 합니다/됩니다/입니다/있습니다. Questions may end with 나요?/세요? Match the selected register from the first sentence through the last, including neutral project introductions.
+- Examples illustrate style only within the selected channel contract; they do not override its tone or structure and never supply facts.
+- If an Editor instruction is given, it overrides channel tone/structure and the general Voice guide for this rewrite, while factual grounding, configured length/title limits, and link placement still apply. Keep everything else the same unless the instruction says otherwise.
 - Factual grounding takes priority over channel format and voice instructions. Never invent personal experience, measurements, runnable commands, or limitations to fill a requested section.
 - title must be an empty string if the channel has no title.`,
     user: [
       `## Channel: ${spec.label} · Language: ${langName(lang)}`,
       publicName ? `Public project name: ${publicName}. Use this exact name in prose; owner/repo belongs only inside URLs.` : "",
       langInstruction(lang),
-      spec.identity ? `Channel identity: audience=${spec.identity.audience}; purpose=${spec.identity.purpose}; tone=${spec.identity.tone}; structure=${spec.identity.structure}` : "",
-      `Rules: ${spec.rules}`,
       `Link placement (takes precedence over conflicting preset rules): ${spec.linkPlacement ?? "body"}. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
       spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
       "",
-      opts.guide ? `## Voice guide\n${opts.guide}` : "",
+      opts.guide ? `## Voice guide (apply only where compatible with the selected channel)\n${opts.guide}` : "",
       lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
       opts.previous ? `\n## Previous version (rewrite this; do not repeat it verbatim)\n${opts.previous.title ? `Title: ${opts.previous.title}\n` : ""}${opts.previous.body}` : "",
       opts.instruction ? `${INSTRUCTION_HEADING}${opts.instruction}` : "",
@@ -319,6 +320,10 @@ Hard rules:
       opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,
+      "## Selected channel contract",
+      spec.identity ? `Write for this audience: ${spec.identity.audience}\nThe post must serve this purpose: ${spec.identity.purpose}\nUse this tone in every sentence: ${spec.identity.tone}\nFollow this composition and closing: ${spec.identity.structure}` : "",
+      `Rules: ${spec.rules}`,
+      "Before returning JSON, check the body against this channel’s tone and closing structure. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
       spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : draftCoverageGuide(c, channel, opts.introduction),
     ].filter((l) => l !== undefined).join("\n"),
   };

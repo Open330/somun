@@ -32,3 +32,16 @@ it("applies channel-tagged guide lines only to their channel", () => {
   expect(voiceGuideFor(voice, "en")).not.toContain("[LinkedIn]");
   expect(voiceGuideFor(voice, "en")).toContain("Lead with the change.");
 });
+
+it("lets the channel supply tone until the author chooses a general voice, preserving scoped author guidance", () => {
+  const voice = { preset: "plain", guide: "Use exact feature names.\n[Threads] Ask about the workflow.\n[X] One short announcement." };
+  const threadGuide = voiceGuideFor(voice, "ko", "threads");
+  expect(threadGuide).not.toContain("합니다체");
+  expect(threadGuide).toContain("Use exact feature names.");
+  expect(threadGuide).toContain("Ask about the workflow.");
+  expect(threadGuide).not.toContain("One short announcement.");
+  expect(voiceGuideFor({ ...voice, chosenAt: 1 }, "ko", "threads")).toContain("구체적인 동사");
+  expect(voiceGuideFor({ ...voice, chosenAt: 1 }, "ko", "threads")).not.toContain("합니다체로 씁니다");
+  expect(voiceGuideFor({ preset: "plain", guide: "" }, "ko")).toContain("합니다체");
+  expect(voiceGuideFor({ preset: "question", guide: "" }, "ko", "threads")).toContain("구체적인 질문");
+});

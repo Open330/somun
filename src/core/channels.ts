@@ -75,7 +75,7 @@ export const ALL_CHANNELS = Object.keys(CHANNELS) as BuiltinChannel[];
 /** 기본 채널의 편집 정체성. 플랫폼의 자동 게시 규칙이 아닌 초안 프리셋이다. */
 export const CHANNEL_IDENTITIES: Record<BuiltinChannel, ChannelIdentity> = {
   x: { audience: "빠르게 훑어보는 사용자와 개발자", purpose: "한 가지 변화와 실제로 할 수 있는 일을 짧게 알리기", tone: "직접적이고 간결한 평서문", structure: "변화 또는 독자 과업 → 구체적 기능 → 근거가 있는 수치/한계와 링크" },
-  threads: { audience: "경험과 관점에 반응하는 대화 상대", purpose: "짧은 관점이나 질문으로 대화 시작하기", tone: "편안한 대화체, 과장 없이", structure: "한두 문장으로 관점 또는 질문. 링크는 첫 답글" },
+  threads: { audience: "경험과 관점에 반응하는 대화 상대", purpose: "짧은 관점이나 질문으로 대화 시작하기", tone: "편안한 대화체, 한국어는 해요체. 과장 없이", structure: "한두 문장으로 관점 또는 질문. 링크는 첫 답글" },
   linkedin: { audience: "직무와 업무 맥락을 중시하는 동료", purpose: "업무에서 달라진 점과 근거 있는 경험 공유", tone: "차분하고 구체적인 업무 설명", structure: "짧은 훅 → 사실과 업무 맥락 → 근거 있는 시사점 → 링크" },
   show_hn: { audience: "직접 써 보고 기술적 선택을 논의하는 개발자", purpose: "실행 가능한 제품과 구현 내용을 소개", tone: "사실 중심, 기술적이고 솔직하게", structure: "제목 + 첫 댓글: 기능 → 근거 있는 동작/설계 → 한계 → 열린 질문" },
   show_gn: { audience: "기술 뉴스와 직접 쓸 도구를 찾는 한국어 독자", purpose: "핵심 기능이나 변화를 사실 중심으로 설명", tone: "간결한 한국어, 홍보 어휘 없이", structure: "제목 → 무엇인가/변경 내용 → 근거 있는 한계. 댓글/추천 요청 없이" },
