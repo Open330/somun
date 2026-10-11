@@ -1235,4 +1235,26 @@ export const en: Record<string, string> = {
     "Select the features and requirements supported by the public PR, commit, and README.",
   "공개 PR·커밋·README를 바탕으로 구성한 편집 예시입니다. 실제 초안은 연결한 소스와 모델에 따라 달라집니다.":
     "Editorial examples based on a public PR, commit, and README. Actual drafts vary with connected sources and the model.",
+  "이번 주 한 편": "This week's pick",
+  "이번 주 한 편 고르기": "Pick this week's post",
+  "쌓인 글감 중 이번 주에 올릴 하나를 고르고 초안 하나를 준비합니다. 매주 월요일 아침에도 자동으로 고릅니다.":
+    "Picks one story to post this week from what has piled up and prepares one draft. It also picks automatically every Monday morning.",
+  "이번 주 한 편을 고르지 못했습니다.": "Couldn't pick this week's post.",
+  "다른 후보가 없어 지금 글감을 유지합니다.": "No other candidate, so the current one stays.",
+  "이번 주에 알리기 좋은 글감으로 골랐습니다.": "Picked as a good story to share this week.",
+  "고를 글감이 없습니다. 새 변경을 가져온 뒤 다시 시도해 주세요.": "Nothing to pick. Fetch new changes and try again.",
+  "{channel} 초안이 준비되어 있어요. 확인하고 복사해 게시하세요.": "A {channel} draft is ready. Check it, copy it and post.",
+  "초안을 준비하고 있어요. 잠시 뒤 이 자리에서 열 수 있습니다.": "Preparing the draft. You can open it here shortly.",
+  "초안이 아직 없습니다. 글감을 열어 초안을 쓰세요.": "No draft yet. Open the story to write one.",
+  "다른 글감으로": "Pick another",
+  "고르는 중…": "Picking…",
+  "글감 열기": "Open story",
+  "복사한 글 {n}개를 게시했나요? 게시했다면 링크를 남겨야 반응과 성과를 볼 수 있어요.":
+    "Did you post the {n} copied drafts? Leave the link so reactions and results can be tracked.",
+  "매주 월요일 '이번 주 한 편'과 게시 확인을 Discord로 받아볼 수 있어요.":
+    "Get this week's pick and posting reminders on Discord every Monday.",
+  "알림 설정": "Notification settings",
+  "이전 주 {n}개": "{n} earlier weeks",
+  "이전 주 접기": "Hide earlier weeks",
+  "점수가 낮은 글감 {n}개 · 추가 근거가 생기면 다시 판단합니다": "{n} low-score stories · judged again when new evidence arrives",
 };

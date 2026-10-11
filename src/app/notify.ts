@@ -4,6 +4,8 @@ import type { AppContext } from "./context.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { listSuggestions } from "./learning.js";
 import { say } from "./i18n.js";
+import { weeklyPickView } from "./weekly-pick.js";
+import { awaitingPublication } from "./candidates.js";
 
 /**
  * 주간 요약 알림. Discord 웹훅 하나. 수동 모드에서 "들어와야 아는" 문제를 푼다.
@@ -21,9 +23,13 @@ export async function sendWeeklySummary(ctx: AppContext, ownerId: string, force 
   const deferred = rows.filter((c) => c.status === "deferred");
   const sugg = listSuggestions(ctx, ownerId).length;
   const base = ctx.env.publicUrl ?? "https://somun.jiun.dev";
-  const top = [...review, ...fresh].slice(0, 5).map((c) => `• ${c.title}  <${base}/c/${c.id}>`).join("\n");
+  const pick = weeklyPickView(ctx, ownerId);
+  const awaiting = awaitingPublication(ctx, ownerId);
+  const top = [...review, ...fresh].filter((c) => c.id !== pick?.candidateId).slice(0, 5).map((c) => `• ${c.title}  <${base}/c/${c.id}>`).join("\n");
   const content = [
     say(lc, "**소문 주간 요약**", "**somun weekly summary**"),
+    ...(pick ? [say(lc, `**이번 주 한 편:** ${pick.title}${pick.draft ? " (초안 준비됨)" : ""}  <${base}/c/${pick.candidateId}>`, `**This week's pick:** ${pick.title}${pick.draft ? " (draft ready)" : ""}  <${base}/c/${pick.candidateId}>`)] : []),
+    ...(awaiting.length ? [say(lc, `복사만 하고 게시 기록이 없는 글 ${awaiting.length}개. 게시했다면 링크를 남겨 주세요.`, `${awaiting.length} copied posts have no publication yet. If you posted them, leave the link.`)] : []),
     say(lc, `검수할 초안 ${review.length}개 · 새 글감 ${fresh.length}개 · 보류 ${deferred.length}개${sugg ? ` · 지침 제안 ${sugg}개` : ""}`, `${review.length} drafts to review · ${fresh.length} new candidates · ${deferred.length} deferred${sugg ? ` · ${sugg} guide suggestions` : ""}`),
     top || say(lc, "이번 주는 알릴 게 없습니다. 정상입니다.", "Nothing to announce this week. That is normal."),
     `<${base}/>`,

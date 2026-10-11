@@ -3,6 +3,7 @@ import { collectAll } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
 import { sendWeeklySummaries } from "./notify.js";
+import { pickWeeklyAll } from "./weekly-pick.js";
 import { refreshReactions } from "./reactions.js";
 import { pruneFinishedJobs } from "./jobs.js";
 import { pruneInstallRecords } from "./connectors.js";
@@ -35,10 +36,15 @@ export function startScheduler(ctx: AppContext, pattern: string): { stop: () => 
     const n = await processNewCandidates(ctx);
     if (n) ctx.log.info({ n }, "hourly sweep processed new candidates");
   }));
+  // 월요일 08:00 KST = 일요일 23:00 UTC. 이번 주 한 편을 고르고 초안 하나를 준비한다(한 시간 뒤 요약에 실린다).
+  const pick = new Cron("0 23 * * 0", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly-pick", () => {
+    const n = pickWeeklyAll(ctx);
+    if (n) ctx.log.info({ n }, "weekly picks chosen");
+  }));
   // 월요일 09:00 KST = 일요일 24:00 UTC. 주간 요약.
   const weekly = new Cron("0 0 * * 1", { protect: true, timezone: "UTC" }, () => step(ctx, "weekly", async () => {
     const n = await sendWeeklySummaries(ctx);
     if (n) ctx.log.info({ n }, "weekly summaries sent");
   }));
-  return { stop: () => { daily.stop(); sweep.stop(); weekly.stop(); } };
+  return { stop: () => { daily.stop(); sweep.stop(); pick.stop(); weekly.stop(); } };
 }

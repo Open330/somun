@@ -65,9 +65,11 @@ export type Settings = {
   /** 문체: 프리셋 + 자유 지침. useExamples가 꺼져 있으면 문체 예시는 프롬프트에 넣지 않는다. */
   voice: VoiceSettings;
   /** 화면 상태. 온보딩 체크리스트를 닫은 시각 등. */
-  ui?: { onboardingDismissedAt?: number; locale?: Locale };
+  ui?: { onboardingDismissedAt?: number; notifyTipDismissedAt?: number; locale?: Locale };
   /** 알림. Discord 웹훅 하나. weekly면 월요일 09:00 KST에 요약을 보낸다. */
   notify?: { discordWebhookUrl?: string; weekly: boolean; lastSentAt?: number };
+  /** 이번 주 한 편. 서버가 고른다(설정 PATCH로는 바꿀 수 없다). history는 지난 주들에 고른 글감(같은 것을 매주 다시 고르지 않게). */
+  weeklyPick?: { candidateId: number; week: string; pickedAt: number; history: number[] };
   /** 복사할 때 홈페이지·App Store 링크에 채널 표시(utm, ct)를 붙인다. 기본 켜짐. */
   trackLinks?: boolean;
 };
@@ -99,7 +101,8 @@ export type PerformanceSummary = { byChannel: { key: string; label: string; coun
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
-export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; judgment: Judgment | null };
+/** awaitingPublication: 복사했지만 게시 기록이 없는 판 수(게시 여부를 물을 대상). */
+export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; awaitingPublication?: number; judgment: Judgment | null };
 
 export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
 export type PublicationStats = { likes?: number; comments?: number; reposts?: number; visits?: number; installs?: number; signups?: number };
@@ -167,4 +170,19 @@ export type LearningStats = LearningBucket & {
   byChannel: (LearningBucket & { channel: Channel })[];
   guideLines: number;
   activeOwnExamples: number;
+};
+
+/** 이번 주 한 편. 초안이 있으면 바로 검토할 판, 없으면 준비 중인지. */
+export type WeeklyPickView = {
+  candidateId: number;
+  week: string;
+  pickedAt: number;
+  title: string;
+  repo: string;
+  type: CandidateType;
+  /** 판단 합계(10점 만점). 판단 전이면 없음. */
+  total?: number;
+  reason?: string;
+  draft?: { id: number; channel: Channel; lang: string; status: DraftStatus };
+  preparing: boolean;
 };

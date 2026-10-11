@@ -111,6 +111,20 @@ export function explorationChannel(ctx: AppContext, ownerId: string, candidates:
 }
 
 /**
+ * 자동으로 만들 초안 하나의 대상. 판단이 고른 채널 중 첫째, 없으면 가장 덜 올린 일상 채널(탐색), 그것도 없으면 첫 일상 채널.
+ * 언어는 화면 언어를 우선한다. 나머지 채널·언어는 사용자가 글감 화면에서 요청할 때 만든다(쓰지 않을 초안을 쌓지 않게).
+ */
+export function primaryTarget(ctx: AppContext, ownerId: string, settings: Pick<ReturnType<typeof getSettings>, "channelLangs" | "ui">, suggested: Channel[] = []): { channel: Channel; lang: string } | undefined {
+  const targets = enabledTargets(settings.channelLangs);
+  if (!targets.length) return undefined;
+  const channels = [...new Set(targets.map((t) => t.channel))];
+  const channel = suggested.find((ch) => channels.includes(ch)) ?? explorationChannel(ctx, ownerId, channels) ?? channels.find((ch) => EXPLORABLE.includes(ch)) ?? channels[0];
+  const langs = targets.filter((t) => t.channel === channel).map((t) => t.lang);
+  const locale = settings.ui?.locale ?? "ko";
+  return { channel, lang: langs.includes(locale) ? locale : langs[0] };
+}
+
+/**
  * 명시한 선택이 없으면 같은 채널·언어의 최신 유효 초안 목적을 이어받는다.
  * 단, 같은 채널에 실제 게시했다고 확인했다면 다시 쓰는 목적은 업데이트다.
  */
@@ -298,12 +312,10 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {
-      // 추천은 지난 성과에 기대므로 한 번 빠진 채널은 자료가 쌓이지 않아 영영 빠진다(탐색 없는 고착).
-      // 그래서 추천 밖의 일상 채널 하나를 덧붙인다: 올린 글이 2개 미만인 채널 중 가장 적게 올린 채널.
+      // 초안은 하나만 자동으로 만든다. 채널·언어마다 만들면 대부분 읽히지 않은 채 쌓였다(운영: 36개 중 29개 미검토).
       // 출시용 채널(Show HN·Show GN)과 블로그 개요는 판단이 고를 때만 쓴다(작은 업데이트에 출시 글을 만들지 않게).
-      const explore = suggested.length ? explorationChannel(ctx, ownerId, targets.map((t) => t.channel).filter((ch) => !suggested.includes(ch))) : undefined;
-      const picked = suggested.length ? targets.filter((t) => suggested.includes(t.channel) || t.channel === explore) : targets;
-      for (const t of picked) next("draft", t.channel, t.lang);
+      const target = primaryTarget(ctx, ownerId, settings, suggested);
+      if (target) next("draft", target.channel, target.lang);
     }
     return { kind: "judge", decision, total };
   }

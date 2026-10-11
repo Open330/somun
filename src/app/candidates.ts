@@ -34,12 +34,31 @@ function unpublishedCount(drafts: { id: number; channel: string; lang: string; v
   return [...latest.values()].filter((d) => !published.has(d.id)).length;
 }
 
+/** 복사했지만 같은 글감·채널에 게시 기록이 없는 판. 초안을 잇지 않은 예전 게시 기록도 게시로 본다. */
+function copiedUnposted<T extends { candidateId: number; channel: string; status: string }>(drafts: T[], publications: { candidateId: number; channel: string }[]): T[] {
+  const posted = new Set(publications.map((p) => `${p.candidateId}:${p.channel}`));
+  return drafts.filter((d) => d.status === "copied" && !posted.has(`${d.candidateId}:${d.channel}`));
+}
+
+/** 게시 여부를 물을 판. 복사는 게시가 아니므로(실제로 올렸는지 모른다) 사용자에게 확인을 받는다. 보관한 글감은 뺀다. */
+export function awaitingPublication(ctx: AppContext, ownerId: string): { candidateId: number; draftId: number; channel: Channel; lang: string; copiedAt: number }[] {
+  const copied = ctx.db.select({ id: schema.drafts.id, candidateId: schema.drafts.candidateId, channel: schema.drafts.channel, lang: schema.drafts.lang, status: schema.drafts.status, copiedAt: schema.drafts.copiedAt, updatedAt: schema.drafts.updatedAt, candidateStatus: schema.candidates.status })
+    .from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
+    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.status, "copied"))).all()
+    .filter((d) => d.candidateStatus !== "dropped");
+  if (!copied.length) return [];
+  const publications = ctx.db.select({ candidateId: schema.publications.candidateId, channel: schema.publications.channel }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).all();
+  return copiedUnposted(copied, publications)
+    .map((d) => ({ candidateId: d.candidateId, draftId: d.id, channel: d.channel as Channel, lang: d.lang, copiedAt: d.copiedAt ?? d.updatedAt }))
+    .sort((a, b) => b.copiedAt - a.copiedAt);
+}
+
 export function listInbox(ctx: AppContext, ownerId: string): CandidateListItem[] {
   const rows = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId)).orderBy(desc(schema.candidates.updatedAt), desc(schema.candidates.id)).all();
   if (!rows.length) return [];
   // 소유자별 일괄 조회: 글감 수와 무관하게 쿼리 수를 유지하고 IN 인자 개수 제한도 피한다.
   const drafts = ctx.db.select({ id: schema.drafts.id, candidateId: schema.drafts.candidateId, channel: schema.drafts.channel, lang: schema.drafts.lang, version: schema.drafts.version, status: schema.drafts.status }).from(schema.drafts).where(eq(schema.drafts.ownerId, ownerId)).all();
-  const publications = ctx.db.select({ candidateId: schema.publications.candidateId, draftId: schema.publications.draftId }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).all();
+  const publications = ctx.db.select({ candidateId: schema.publications.candidateId, draftId: schema.publications.draftId, channel: schema.publications.channel }).from(schema.publications).where(eq(schema.publications.ownerId, ownerId)).all();
   const draftsByCandidate = new Map<number, typeof drafts>();
   for (const draft of drafts) {
     const group = draftsByCandidate.get(draft.candidateId) ?? [];
@@ -58,7 +77,11 @@ export function listInbox(ctx: AppContext, ownerId: string): CandidateListItem[]
     });
   const js = ctx.db.select().from(schema.judgments).where(and(eq(schema.judgments.ownerId, ownerId), inArray(schema.judgments.id, ctx.db.select({ id: schema.candidates.latestJudgmentId }).from(schema.candidates).where(eq(schema.candidates.ownerId, ownerId))))).all();
   const byId = new Map(js.map((j) => [j.id, toJudgment(j)]));
-  return selected.map((c) => ({ ...c, judgment: c.latestJudgmentId ? byId.get(c.latestJudgmentId) ?? null : null }));
+  // 게시 여부를 물을 판 수. 이미 읽은 초안·게시 기록으로 센다(쿼리를 늘리지 않는다).
+  const dropped = new Set(rows.filter((r) => r.status === "dropped").map((r) => r.id));
+  const awaiting = new Map<number, number>();
+  for (const d of copiedUnposted(drafts, publications)) if (!dropped.has(d.candidateId)) awaiting.set(d.candidateId, (awaiting.get(d.candidateId) ?? 0) + 1);
+  return selected.map((c) => ({ ...c, judgment: c.latestJudgmentId ? byId.get(c.latestJudgmentId) ?? null : null, ...(awaiting.has(c.id) ? { awaitingPublication: awaiting.get(c.id) } : {}) }));
 }
 
 export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number): CandidateDetail {
