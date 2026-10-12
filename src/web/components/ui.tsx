@@ -170,6 +170,8 @@ export function lintDetail(l: { rule: string; detail?: string; args?: Record<str
     return t("제공된 근거에서 찾지 못한 수치: {numbers}. 원문과 단위를 확인해 주세요.", { numbers: l.args.numbers });
   if (l.rule === "claims_need_review" && l.args?.phrases)
     return t("근거에서 찾지 못한 최상급·최초 주장: {phrases}. 원문에 있는 사실로 바꾸거나 빼 주세요.", { phrases: l.args.phrases });
+  if (l.rule === "endorsement_need_review" && l.args?.phrases)
+    return t("근거에 없는 평가·추천 표현: {phrases}. 확인된 기능이나 독자에게 묻는 질문으로 바꿔 주세요.", { phrases: l.args.phrases });
   if (l.rule === "author_role_need_review" && l.args?.phrases)
     return t(
       "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.",
@@ -204,11 +206,13 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     no_invented_limit: t("한계 확인"),
     numbers_need_review: t("수치 확인"),
     claims_need_review: t("주장 확인"),
+    endorsement_need_review: t("평가 근거 확인"),
     author_role_need_review: t("작성자 역할 확인"),
     outline_structure: t("개요 형식"),
     paragraphs: t("문단"),
     sections: t("구성 확인"),
     open_question: t("끝맺음 질문"),
+    question_specificity: t("질문 구체화"),
     sentence_count: t("문장 수"),
     no_transliterated_names: t("이름 표기"),
     mixed_korean_terms: t("표현 확인"),

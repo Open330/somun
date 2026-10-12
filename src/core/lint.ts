@@ -43,6 +43,22 @@ export const normalizeForMatch = (value: string) =>
 /** 숫자 없이 하는 최상급·최초·유일 주장. 원자료에 같은 말이 없으면 근거 없는 주장이다. */
 const SUPERLATIVE_CLAIMS = /\b(?:the (?:fastest|first|only|best|smallest|lightest|simplest)|fastest|world'?s first|first-ever|best-in-class|industry-leading|unmatched|unrivall?ed|blazing(?:ly)?[ -]fast|zero bugs|used by thousands)\b|최초의?|유일한|가장 (?:빠른|가벼운|작은|쉬운|강력한)|업계 최고|세계 최초/gi;
 
+/** 생성 모델이 대화체에 섞는 평가·추천. 모든 의미 오류를 판별하는 규칙은 아니다. */
+const ENDORSEMENT = /(?:정말|매우|아주|엄청(?:나게)?|너무)\s*(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,24}|(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,12}(?:것\s*같(?:아|습)|듯(?:해|합)|거(?:예요|에요)|겁니다)|(?:꼭|강력히|적극)\s*추천(?:해|합)|\b(?:i|we)\s+(?:really\s+)?(?:love|recommend)\b|\b(?:(?:really|extremely|incredibly)\s+(?:useful|convenient|helpful|easy)|(?:would|will|must)\s+(?:be\s+)?(?:really\s+)?(?:useful|convenient|helpful|great|easy))\b/giu;
+
+function unsupportedEndorsements(text: string, source: string): string[] {
+  const evidence = normalizeForMatch(source);
+  const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)].map((s) => s.segment.trim());
+  return [...new Set(sentences.filter((sentence) => {
+    // 독자에게 묻는 실제 질문은 작성자의 추천이나 감상 진술과 구분한다.
+    if (/[?？]["'”’]*$/.test(sentence)) return false;
+    const value = normalizeForMatch(sentence);
+    const matches = [...value.matchAll(ENDORSEMENT)].filter((m) => !/않|아니/.test(m[0]) && !/\b(?:not|never)\s*$/.test(value.slice(0, m.index)));
+    // '유용' 같은 낱말만 근거에 있다는 이유로 평가를 통과시키지 않는다. 같은 진술이 있어야 한다.
+    return matches.length > 0 && !evidence.includes(value.replace(/[.!。！]+$/, ""));
+  }))];
+}
+
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
@@ -131,6 +147,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const claims = [...new Set([...normalizeForMatch(text).matchAll(SUPERLATIVE_CLAIMS)].map((m) => m[0]))].filter((c) => !source.includes(c));
     results.push({ rule: "claims_need_review", ok: claims.length === 0, detail: claims.length ? say(`근거에서 찾지 못한 최상급·최초 주장: ${claims.join(", ")}. 원문에 있는 사실로 바꾸거나 빼 주세요.`, `Superlative or "first" claims not found in the evidence: ${claims.join(", ")}. Replace them with sourced facts or remove them.`) : undefined, args: claims.length ? { phrases: claims.join(", ") } : undefined });
   }
+  if (facts.sourceText !== undefined) {
+    const endorsements = unsupportedEndorsements(text, facts.sourceText);
+    results.push({ rule: "endorsement_need_review", ok: endorsements.length === 0, detail: endorsements.length ? say(`근거에 없는 평가·추천 표현: ${endorsements.join(" / ")}. 확인된 기능이나 독자에게 묻는 질문으로 바꿔 주세요.`, `Evaluation or recommendation not found in the evidence: ${endorsements.join(" / ")}. Replace it with a supported capability or a question for the reader.`) : undefined, args: endorsements.length ? { phrases: endorsements.join(" / ") } : undefined });
+  }
   const placeholder = /\[(number needed|숫자 확인)\]/i.test(body);
   results.push({ rule: "no_placeholder", ok: !placeholder, detail: placeholder ? say("채우지 못한 숫자가 있습니다", "There is an unfilled number placeholder") : undefined });
 
@@ -184,6 +204,16 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
   if (channel === "show_hn") {
     results.push({ rule: "open_question", ok: /\?/.test(body), detail: say("작성자 댓글을 열린 질문 하나로 끝내 주세요.", "End the author comment with one open question.") });
+  }
+
+  if (channel === "threads") {
+    const closing = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(body)].at(-1)?.segment.trim() ?? "";
+    const opinion = /어떻게\s*생각(?:하|해)|\bwhat\s+do\s+you\s+think\b/i.test(closing);
+    const trial = /(?:써|사용해)\s*보(?:셨|신)|사용(?:해|한)\s*적|\b(?:have|did)\s+you\s+(?:ever\s+)?(?:tried|used|try|use)\b/i.test(closing);
+    const specific = /어떤|어떻게|언제|어디|무엇|얼마나|\b(?:which|how|when|where|what)\b/i.test(closing);
+    // 사용 여부·일반 감상만 묻는 끝맺음은 작업 흐름을 묻도록 제안한다. 모든 질문의 의미를 판별하지는 않는다.
+    const vague = /[?？]["'”’]*$/.test(closing) && (opinion || (trial && !specific));
+    results.push({ rule: "question_specificity", ok: !vague, detail: vague ? say("제품 사용 여부나 일반 감상 대신, 어떤 입력·채널을 쓰거나 어떻게 검토하는지 구체적인 작업 흐름을 물어 주세요.", "Ask about a concrete workflow, such as inputs, channels or review steps, instead of a generic product-trial or opinion question.") : undefined });
   }
 
   if (spec.maxSentences !== undefined) {

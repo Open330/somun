@@ -1,3 +1,4 @@
+import { channelSpec } from "./channels.js";
 import { describe, expect, it } from "vitest";
 import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberTokens, unsupportedNumbers } from "./lint.js";
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
@@ -342,4 +343,50 @@ it("counts the closing question in a channel sentence limit, excluding URLs and 
   expect(check("도구예요。 어디에 올리나요？", 2)?.ok).toBe(true);
   expect(lintDraft(spec.id, undefined, "One. Two. Three. Four.", [], {}, "en", { ...spec, maxSentences: undefined }).some((r) => r.rule === "sentence_count")).toBe(false);
   expect(lintDraft("threads", undefined, "One. Two. Three.").find((r) => r.rule === "sentence_count")?.ok).toBe(false);
+});
+
+
+describe("unsupported generated endorsements", () => {
+  const facts = { sourceText: "somun reads releases, PRs and commits and prepares channel drafts." };
+  const check = (body: string, sourceText = facts.sourceText) => lintDraft("threads", undefined, body, [], { sourceText }).find((r) => r.rule === "endorsement_need_review");
+  it.each([
+    "somun은 초안을 작성해 주는데, 홍보가 서툰 개발자에게 정말 편할 것 같아요.",
+    "이 도구는 개발자에게 유용할 것 같아요.",
+    "이 도구가 정말 유용해요.",
+    "이 도구를 꼭 추천합니다.",
+    "It would be really useful for developers.",
+    "I recommend this tool for developers.",
+  ])("flags an endorsement not established by evidence: %s", (body) => {
+    expect(check(body)).toMatchObject({ ok: false, args: { phrases: body } });
+  });
+  it.each([
+    "somun은 릴리스와 PR을 읽어 초안을 작성해요. 어느 채널에 올리시나요?",
+    "여러분의 작업에서 이 기능이 유용할 것 같나요?",
+    "Do you find this really useful?",
+    "I do not recommend this tool.",
+    "This is not really useful.",
+    "이 도구는 정말 유용하지 않아요.",
+  ])("does not treat tasks, questions or negative statements as positive endorsements: %s", (body) => {
+    expect(check(body)?.ok).toBe(true);
+  });
+  it("requires the full statement in evidence rather than an adjective appearing under a different meaning", () => {
+    const body = "It would be useful for developers.";
+    expect(check(body, body)?.ok).toBe(true);
+    expect(check(body, "It would not be useful for developers.")?.ok).toBe(false);
+    expect(check("somun은 정말 유용해요.", "유용한 기능을 목표로 하는 도구입니다.")?.ok).toBe(false);
+  });
+  it("applies to owned personal channels and leaves inputs without grounding data unchanged", () => {
+    const spec = { ...channelSpec("threads"), id: "custom_updates" as const };
+    expect(lintDraft(spec.id, undefined, "I recommend this tool.", [], facts, "en", spec).find((r) => r.rule === "endorsement_need_review")?.ok).toBe(false);
+    expect(lintDraft("threads", undefined, "I recommend this tool.", []).some((r) => r.rule === "endorsement_need_review")).toBe(false);
+  });
+});
+
+
+it("suggests a concrete Threads workflow question without rejecting a position or scoped question", () => {
+  const check = (body: string) => lintDraft("threads", undefined, body, []).find((r) => r.rule === "question_specificity")?.ok;
+  for (const body of ["somun을 써보셨나요?", "somun을 사용해보신 적이 있나요?", "Have you tried this tool?", "What do you think?", "어떻게 생각하시나요?"]) expect(check(body)).toBe(false);
+  for (const body of ["어떤 채널에 올리시나요?", "어떤 환경에서 이 옵션을 써보셨나요?", "Which inputs have you used?", "이 작업에는 명시적인 경로가 필요해요."]) expect(check(body)).toBe(true);
+  const custom = { ...channelSpec("threads"), id: "custom_survey" as const };
+  expect(lintDraft(custom.id, undefined, "Have you tried this tool?", [], {}, "en", custom).some((r) => r.rule === "question_specificity")).toBe(false);
 });

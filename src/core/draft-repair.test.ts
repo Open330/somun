@@ -27,6 +27,23 @@ it("rejects a repair that launders an unsupported number into vague magnitude wo
   expect(isBetterRepair(before, [], texts("Memory use is lower now."))).toBe(true);
   // 원래 있던 표현은 새 표현이 아니다.
   expect(isBetterRepair(before, [], texts("It starts much faster."))).toBe(true);
-  // 수치 경고가 없던 보정은 문장 비교를 하지 않는다.
+  // 수치 경고가 없으면 막연한 크기 표현을 비교하지 않는다.
   expect(isBetterRepair([{ rule: "length" }], [], { before: "x", after: "dramatically" })).toBe(true);
+});
+
+
+it("does not trade an unsupported endorsement for a different endorsement when fixing format", () => {
+  const before = [{ rule: "sentence_count" }, { rule: "endorsement_need_review", detail: "It would be useful." }];
+  expect(isBetterRepair(before, [{ rule: "endorsement_need_review", detail: "I recommend it." }])).toBe(false);
+  expect(isBetterRepair(before, [{ rule: "endorsement_need_review", detail: "It would be useful." }])).toBe(true);
+  expect(isBetterRepair(before, [])).toBe(true);
+});
+
+
+it("rejects an automatic repair that changes an otherwise consistent Korean register", () => {
+  const issues = [{ rule: "endorsement_need_review" }];
+  expect(isBetterRepair(issues, [], { before: "somun은 초안을 작성해요. 정말 유용할 것 같아요.", after: "somun은 초안을 작성합니다." })).toBe(false);
+  expect(isBetterRepair(issues, [], { before: "somun은 초안을 작성해요. 정말 유용할 것 같아요.", after: "somun은 초안을 작성해요." })).toBe(true);
+  expect(isBetterRepair(issues, [], { before: "somun은 초안을 작성합니다. 정말 유용할 것 같습니다.", after: "somun은 초안을 작성해요." })).toBe(false);
+  expect(isBetterRepair(issues, [], { before: "I recommend this tool.", after: "The tool reads logs." })).toBe(true);
 });

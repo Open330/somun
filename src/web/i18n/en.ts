@@ -288,6 +288,12 @@ export const en: Record<string, string> = {
   "길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.":
     "Passed automatic rules such as length and banned phrases. Facts still need a separate check.",
   "형식 점검 통과": "Format check passed",
+  "질문 구체화": "Make the question specific",
+  "제품 사용 여부나 일반 감상 대신, 어떤 입력·채널을 쓰거나 어떻게 검토하는지 구체적인 작업 흐름을 물어 주세요.":
+    "Ask about a concrete workflow, such as inputs, channels or review steps, instead of a generic product-trial or opinion question.",
+  "평가 근거 확인": "Review endorsement evidence",
+  "근거에 없는 평가·추천 표현: {phrases}. 확인된 기능이나 독자에게 묻는 질문으로 바꿔 주세요.":
+    "Evaluation or recommendation not found in the evidence: {phrases}. Replace it with a supported capability or a question for the reader.",
   "금지 표현": "Banned phrase",
   "이모지 목록": "Emoji list",
   "숫자 없음": "No numbers",
