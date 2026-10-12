@@ -1,0 +1,25 @@
+{
+  "name": "grounded-voice-regression",
+  "cases": "grounded-voice-cases.json",
+  "repeats": 1,
+  "variants": [
+    {
+      "id": "historical",
+      "replay": {
+        "somun-threads-endorsement": {
+          "title": "",
+          "body": "somun은 릴리즈와 PR을 읽어 여러 채널용 게시글 초안을 작성해 주는데, 홍보가 서툰 개발자에게 정말 편할 것 같아요. 여러분은 공개 홍보 글을 쓸 때 어떤 부분이 가장 번거로우신가요?"
+        }
+      }
+    },
+    {
+      "id": "corrected",
+      "replay": {
+        "somun-threads-endorsement": {
+          "title": "",
+          "body": "somun은 릴리즈, PR, 커밋을 읽어 여러 채널의 게시글 초안을 작성해요. 평소에 공개 홍보 문구를 작성할 때 어떤 부분을 가장 신경 쓰시나요?"
+        }
+      }
+    }
+  ]
+}

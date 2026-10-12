@@ -1,0 +1,24 @@
+[
+  {
+    "id": "somun-threads-endorsement",
+    "channel": "threads",
+    "lang": "ko",
+    "introduction": true,
+    "candidate": {
+      "title": "somun introduction",
+      "type": "new-repo",
+      "evidence": {
+        "repo": "Open330/somun",
+        "repoUrl": "https://github.com/Open330/somun",
+        "description": "Reads GitHub releases, PRs and commits to prepare channel drafts. Automatically checks format and unsupported numbers; users review, copy and publish drafts themselves.",
+        "highlights": [],
+        "limitations": []
+      }
+    },
+    "required": [
+      "somun",
+      "초안"
+    ],
+    "reviewNotes": "Dogfooding에서 발견한 평가 표현을 재생하는 알려진 회귀 사례입니다. 독립 보류 평가나 실제 신규 모델 생성 성공률을 뜻하지 않습니다. 개인 계정·원고·프리셋 데이터는 포함하지 않습니다."
+  }
+]

@@ -416,3 +416,53 @@ it("repairs an owned custom-channel sentence overflow before saving the draft", 
   expect(saved.body).toBe(repaired.body);
   expect(saved.lint.find((r) => r.rule === "sentence_count")?.ok).toBe(true);
 });
+
+
+it("automatically removes unsupported praise even when the original draft passes format checks", async () => {
+  const first = { title: "", body: "Fixes CRLF positions. It would be really useful for developers." };
+  const repaired = { title: "", body: "Fixes CRLF positions. Which files do you use?" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }] });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("endorsement_need_review");
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(repaired.body);
+  expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(true);
+});
+
+it("keeps the endorsement warning when a bounded automatic repair fails", async () => {
+  const first = { title: "", body: "Fixes CRLF positions. I recommend this tool." };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockRejectedValueOnce(new Error("upstream failure"));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }] });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(first.body);
+  expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(false);
+});
+
+
+it("retains a review warning when an endorsement repair switches 해요체 to 합니다체", async () => {
+  const first = { title: "", body: "CRLF 위치를 수정해요. 정말 유용할 것 같아요." };
+  const changedTone = { title: "", body: "CRLF 위치를 수정합니다." };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(changedTone));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "ko" }] });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(first.body);
+  expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(false);
+});
+
+
+it("automatically rewrites a generic Threads trial question into a concrete workflow question", async () => {
+  const first = { title: "", body: "Fixes CRLF positions. Have you tried this tool?" };
+  const revised = { title: "", body: "Fixes CRLF positions. Which line endings do you use?" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(revised));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }] });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("question_specificity");
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(revised.body);
+});

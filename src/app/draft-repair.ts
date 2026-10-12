@@ -15,7 +15,7 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["no_body_link", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 type DraftJob = { id: number; candidateId: number; channel?: Channel | null; user: string };
 
@@ -35,6 +35,7 @@ export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, jso
 /** 보정 요청 프롬프트: 원래 요청 + 직전 초안 + 고칠 점. */
 export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[], customChannels: CustomChannel[] = []): string {
   const prev = readDraft(job.channel as Channel, json, customChannels);
+  const spec = channelSpec(job.channel as Channel, customChannels);
   return [
     job.user,
     "",
@@ -43,14 +44,24 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
     prev.body,
     "",
     "## Fix these problems",
-    "Rewrite the previous draft so these checks pass. Keep every fact and link from Facts, and change only what is needed.",
+    "Rewrite the previous draft so these checks pass. Preserve the requested main task or change, and keep every retained claim supported by Facts. Remove an unsupported claim or optional detail when needed; do not invent replacements. Keep the configured link placement.",
     ...issues.map((l) => `- ${l.rule}${l.detail ? `: ${l.detail}` : ""}`),
+    ...(issues.some((l) => l.rule === "question_specificity")
+      ? ["For question_specificity: write one short sentence about the main supported operation, then one concrete question about the reader’s existing inputs, channels or review steps. Remove secondary features instead of stacking clauses into a long opening. Keep the sentence budget and do not assert a new benefit."]
+      : []),
+    ...(issues.some((l) => l.rule === "endorsement_need_review")
+      ? ["For endorsement_need_review: remove unsupported praise, recommendations and predictions of convenience or usefulness. State the supported operation instead, or use the channel’s requested workflow question. Do not replace the flagged sentence with another ungrounded benefit or invented author experience."]
+      : []),
     ...(issues.some((l) => l.rule === "sentence_count")
       ? ["For sentence_count: count the closing question within the maximum. Keep the main supported task and operation, remove optional details or limitations, and keep the channel’s requested closing. Facts is evidence, not a checklist of claims to include."]
       : []),
     ...(issues.some((l) => l.rule === "numbers_need_review")
       ? ["For numbers_need_review: use the exact figure from Facts, or delete the claim. Never swap the number for vague size words (dramatically, significantly, halved, much faster, 대폭, 크게, 절반)."]
       : []),
+    "## Preserve the selected channel during repair",
+    spec.identity ? `Use this tone in every sentence: ${spec.identity.tone}.\nKeep this composition and closing: ${spec.identity.structure}.` : "Keep the original draft’s register and the requested channel structure.",
+    spec.maxSentences ? `Maximum ${spec.maxSentences} sentences including the closing question.` : "",
+    "Keep the original register. An explicit Editor instruction in the original request still applies. Preserve factual grounding, title/length limits and link placement.",
   ].join("\n");
 }
 
