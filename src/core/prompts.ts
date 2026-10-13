@@ -299,7 +299,8 @@ export function withoutFalseFirstClaims(reasoning: string, releaseCount: number 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = opts.channelSpec ?? channelSpec(channel);
   // Introductions describe capabilities, not how much repository activity produced them.
-  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined } } : c;
+  const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || c.evidence.readmeExcerpt?.trim());
+  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${EXAMPLE_LABEL[e.source] ?? " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
@@ -363,6 +364,7 @@ Hard rules:
       publicName ? `Keep the project name exactly as ${publicName}, including its original spelling. Never translate or transliterate it.` : "",
       "Before returning JSON, remove any personal endorsement or predicted user benefit that Facts does not establish. Friendly wording must describe the supported operation, not invent an opinion. Keep a capability’s stated prerequisites with that capability, or omit it. If a question is required, ask about a concrete current workflow instead of whether the reader has tried this product. Check the body against this channel’s tone, total sentence budget and closing structure. Count the closing question within that budget; remove optional detail rather than append another sentence. Do not add a limitation unless the selected channel explicitly asks for one. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
       draftCoverageGuide(c, channel, opts.introduction),
+      opts.introduction && hasBaseline ? "For this introduction, describe only baseline reader tasks and capabilities from the profile or README. PR bodies are constraints for checking those baseline claims, NOT a menu of recent behaviors to introduce. Do not add a recent behavior that is absent from the baseline, such as a retry, refund or feature-activation policy." : "",
       spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : "",
       prConditionsBlock(c.evidence),
     ].filter((l) => l !== undefined).join("\n"),

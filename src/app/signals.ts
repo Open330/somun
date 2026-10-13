@@ -96,9 +96,11 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
           const p = s.payload as { number?: number; body?: string; url?: string; bodyTruncated?: boolean };
           return typeof p.body === "string" && p.body.trim() && p.number && p.url ? [{ number: p.number, title: s.title, body: p.body, url: p.url, bodyTruncated: p.bodyTruncated }] : [];
         }).slice(0, 20);
-      if (details.length) {
-        const current = tx.select().from(schema.candidates).where(eq(schema.candidates.id, cand.id)).get()!;
-        tx.update(schema.candidates).set({ evidence: { ...(current.evidence as Evidence), mergedPrDetails: details } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
+      const current = tx.select().from(schema.candidates).where(eq(schema.candidates.id, cand.id)).get()!;
+      const currentEvidence = current.evidence as Evidence;
+      if (JSON.stringify(details) !== JSON.stringify(currentEvidence.mergedPrDetails ?? [])) {
+        // 새 조건을 읽지 않은 요약으로 업데이트 초안을 다시 쓰지 않는다. 기존 글은 보존한다.
+        tx.update(schema.candidates).set({ evidence: { ...currentEvidence, mergedPrDetails: details.length ? details : undefined, highlightsAt: undefined } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
       }
     }
   });
