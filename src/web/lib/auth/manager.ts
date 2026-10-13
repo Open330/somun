@@ -157,9 +157,10 @@ export class AuthManager {
       if (res.status === 401 || res.status === 403) return null;
       // 429·일시 장애를 null로 바꾸면 API가 인증 없이 호출돼 401 → 강제 로그아웃이 된다.
       if (!res.ok) throw new Error(`token issuance failed (${res.status})`);
-      const body = (await res.json()) as { token: string; expiresAt: number };
+      const body = (await res.json()) as NonNullable<typeof this.apiToken>;
       if (epoch !== this.authEpoch) return null;
-      this.apiToken = { token: body.token, expiresAt: normalizeExpiresAt(body.expiresAt) };
+      const { token, expiresAt } = body;
+      this.apiToken = { token, expiresAt: normalizeExpiresAt(expiresAt) };
       return body.token;
     })();
     this.apiTokenInFlight = pending;

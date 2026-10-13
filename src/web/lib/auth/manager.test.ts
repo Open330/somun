@@ -3,6 +3,7 @@ import { AuthManager } from "./manager";
 
 vi.mock("./config", () => ({ AUTH_URL: "https://auth.test", AUTH_AUDIENCE: "somun" }));
 afterEach(() => vi.unstubAllGlobals());
+const tokenReply: (value: string) => Response = (token) => Response.json({ token, expiresAt: Date.now() + 3600000 });
 
 function mockAuth(external: () => Promise<Response>) {
   const fetchMock = vi.fn(async (url: string) => {
@@ -18,7 +19,7 @@ function mockAuth(external: () => Promise<Response>) {
 it("shares one issuance across parallel initial requests and forced refreshes, then caches it", async () => {
   const fetchMock = mockAuth(async () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
-    return Response.json({ token: "test-api", expiresAt: Date.now() + 3600000 });
+    return tokenReply("test-api");
   });
   const manager = new AuthManager();
   expect(await Promise.all(Array.from({ length: 15 }, () => manager.fetchApiToken()))).toEqual(Array(15).fill("test-api"));
@@ -30,7 +31,7 @@ it("shares one issuance across parallel initial requests and forced refreshes, t
 
 it.each([429, 503])("keeps a temporary issuance failure (%s) distinct from expired authentication and permits retry", async (status) => {
   let fail = true;
-  mockAuth(async () => (fail ? new Response(null, { status }) : Response.json({ token: "recovered", expiresAt: Date.now() + 3600000 })));
+  mockAuth(async () => (fail ? new Response(null, { status }) : tokenReply("recovered")));
   const manager = new AuthManager();
   await manager.restore();
   await expect(manager.fetchApiToken()).rejects.toThrow(`token issuance failed (${status})`);
@@ -47,14 +48,14 @@ it("does not cache an issuance that finishes after logout", async () => {
   const pending = manager.fetchApiToken();
   await vi.waitFor(() => expect(complete).toBeTypeOf("function"));
   await manager.signOut();
-  complete(Response.json({ token: "stale", expiresAt: Date.now() + 3600000 }));
+  complete(tokenReply("stale"));
   expect(await pending).toBeNull();
   expect(manager.snapshot.status).toBe("signedOut");
 });
 
 it("clears the prior account's API token on a new login", async () => {
   let count = 0;
-  const fetchMock = mockAuth(async () => Response.json({ token: `account-token-${++count}`, expiresAt: Date.now() + 3600000 }));
+  const fetchMock = mockAuth(async () => tokenReply(`account-token-${++count}`));
   const manager = new AuthManager();
   expect(await manager.fetchApiToken()).toBe("account-token-1");
   await manager.exchangeCode("test-code");
