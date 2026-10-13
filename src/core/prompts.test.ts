@@ -103,3 +103,23 @@ it("grounds checks on the longer README text, not only the 1500-character prompt
   const c = { title: "a/m", type: "release", evidence: { repo: "a/m", repoUrl: "u", readmeExcerpt: long.slice(0, 1500), readmeForChecks: long } };
   expect(groundingText(c)).toContain("before 1.0.");
 });
+
+
+describe("draft purpose on channels with links outside the body", () => {
+  const candidate = { title: "somun update", type: "in-progress" as const, evidence: { repo: "Open330/somun", repoUrl: "https://github.com/Open330/somun", highlights: ["Added a side-by-side source comparison view."] } };
+  it("keeps the update coverage instruction for Threads with a reply link", () => {
+    const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: false });
+    expect(prompt.draftPurpose).toBe("update");
+    expect(prompt.user).toContain("## Coverage");
+    expect(prompt.user).toContain("lead with one concrete change from the supplied highlights");
+    expect(prompt.user).toContain("Keep supplied URLs out of the body");
+    expect(prompt.user).not.toContain("## First introduction");
+  });
+  it("keeps introduction coverage and the no-body-link rule together", () => {
+    const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
+    expect(prompt.draftPurpose).toBe("introduction");
+    expect(prompt.user).toContain("## First introduction");
+    expect(prompt.user).not.toContain("## Coverage");
+    expect(prompt.user).toContain("Keep supplied URLs out of the body");
+  });
+});

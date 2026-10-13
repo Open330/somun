@@ -390,3 +390,17 @@ it("suggests a concrete Threads workflow question without rejecting a position o
   const custom = { ...channelSpec("threads"), id: "custom_survey" as const };
   expect(lintDraft(custom.id, undefined, "Have you tried this tool?", [], {}, "en", custom).some((r) => r.rule === "question_specificity")).toBe(false);
 });
+
+
+describe("profile avoid terms in source links", () => {
+  it("keeps a required repository URL without warning about its owner or path", () => {
+    const result = lintDraft("x", undefined, "munjit은 생각을 글로 다듬습니다. https://github.com/jiunbae/munjit", [], { avoid: ["jiunbae"] });
+    expect(result.find((item) => item.rule === "avoid_terms")?.ok).toBe(true);
+    expect(result.find((item) => item.rule === "has_link")?.ok).toBe(true);
+  });
+  it("still flags forbidden wording in the title, body, and a Markdown label", () => {
+    for (const [title, body] of [["jiunbae 소개", "https://github.com/jiunbae/munjit"], [undefined, "JIUNBAE가 만든 글 https://github.com/jiunbae/munjit"], [undefined, "[jiunbae](https://github.com/jiunbae/munjit)"], [undefined, "(https://github.com/jiunbae/munjit)jiunbae"]]) {
+      expect(lintDraft("x", title, body!, [], { avoid: ["jiunbae"] }).find((item) => item.rule === "avoid_terms")?.ok).toBe(false);
+    }
+  });
+});
