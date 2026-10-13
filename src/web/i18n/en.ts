@@ -3,6 +3,8 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "변경 소식으로 쓰기": "Write an update",
+  "수집한 변경 내용을 알리는 새 초안을 씁니다.": "Write a new draft about the collected changes.",
   "커밋 제목": "Commit subject",
   "수집 당시 수치": "Metrics at collection time",
   "npm 월간 다운로드": "Monthly npm downloads",
