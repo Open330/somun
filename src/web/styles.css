@@ -122,7 +122,7 @@ select { width: auto; }
 .grid2 { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; }
 pre.evidence { white-space: pre-wrap; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); background: var(--surface-2); padding: 14px; border-radius: var(--radius-sm); max-height: 60vh; overflow: auto; margin: 0; }
 .lint { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-.draft-body { white-space: pre-wrap; line-height: 1.65; padding: 14px 16px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 15px; }
+.draft-body { overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.65; padding: 14px 16px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 15px; }
 .chart { display: block; max-width: 100%; height: auto; }
 .chart .line { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; }
 .chart .dot { fill: var(--accent); }
@@ -195,7 +195,7 @@ footer.landing-foot { padding-top: 40px; color: var(--muted); font-size: 13px; d
 .pv-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
 .pv-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--score)); display: inline-block; }
 .pv-avatar.sq { border-radius: 6px; }
-.pv-body { white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
+.pv-body { overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.55; font-size: 15px; }
 .pv-foot { margin-top: 10px; font-size: 12px; }
 .pv-hn { font-family: Verdana, Geneva, sans-serif; font-size: 13px; background: #f6f6ef; color: #222; border-color: #e6e6dc; }
 .pv-hn .muted { color: #828282; }
@@ -812,3 +812,20 @@ button.chip { min-height: 28px; }
 @media (max-width: 640px) { .topbar .mobile-work-button { position: sticky; left: -12px; margin-left: -12px; padding: 0 12px; align-self: stretch; z-index: 1; border: 0; border-right: 1px solid var(--line); border-radius: 0; background: var(--surface); } }
 .landing-review-note { max-width: 62em; margin-top: 20px; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .landing #why h2 { word-break: keep-all; }
+
+/* Sentence-by-sentence review of collected source material. */
+.draft-evidence-review { border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px; }
+.draft-evidence-review > summary { cursor: pointer; font-weight: 500; }
+.evidence-review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.evidence-review-grid > div { min-width: 0; }
+.evidence-review-grid h3 { font-size: 13px; margin: 0 0 8px; }
+.evidence-review-grid label { display: block; font-size: 12px; }
+.evidence-sentences { display: grid; gap: 6px; }
+.evidence-sentences button { display: block; white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; font-weight: 400; line-height: 1.6; }
+.evidence-sentences button[aria-pressed="true"] { border-color: var(--ink); background: var(--surface-2); }
+.evidence-selected { margin: 0 0 10px; padding-left: 10px; border-left: 2px solid var(--line-strong); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.evidence-source-results { max-height: 360px; overflow: auto; margin-top: 10px; }
+.evidence-source-card { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px; }
+.evidence-source-card h4 { font-size: 12px; margin: 0 0 6px; }
+.evidence-source-card pre { font: inherit; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+@media (max-width: 700px) { .evidence-review-grid { grid-template-columns: minmax(0, 1fr); } }

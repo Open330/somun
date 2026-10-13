@@ -435,6 +435,7 @@ export default function Candidate() {
               publications={publications.filter((p) => p.channel === current.channel && (p.lang ?? current.lang) === current.lang)}
               busy={busy === `draft:${curKey}` || busy === "draft"}
               showToast={showToast}
+              evidence={e}
               sourceLink={e.repoUrl}
               homepage={e.homepage}
               track={settings?.trackLinks !== false}
