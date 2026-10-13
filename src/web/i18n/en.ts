@@ -3,6 +3,27 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "커밋 제목": "Commit subject",
+  "수집 당시 수치": "Metrics at collection time",
+  "npm 월간 다운로드": "Monthly npm downloads",
+  "문장과 원자료 대조": "Compare sentences with sources",
+  "문장을 고르고 원문 표현으로 자료를 검색하세요. 검색 결과는 사실 확인 완료를 뜻하지 않습니다.":
+    "Choose a sentence and search using words from the source. Search results do not confirm factual accuracy.",
+  "수정 중인 문장을 보여줍니다. 자동 점검 결과는 저장 후 갱신됩니다.": "Showing your current edits. Automatic checks update after saving.",
+  "확인할 문장": "Sentence to review",
+  "글감에 저장된 자료": "Material saved with this candidate",
+  "원자료 검색": "Search source material",
+  "원문 단어나 수치 입력": "Enter a source word or number",
+  "전체 자료 보기": "Show all material",
+  "검색한 원자료": "Source search results",
+  "일치하는 원문 표현이 없습니다. 다른 단어로 검색하거나 전체 자료를 확인하세요. 번역·의역은 직접 대조해야 합니다.":
+    "No matching source wording. Try another word or view all material. Compare translations and paraphrases manually.",
+  "대조할 원문이 저장돼 있지 않습니다. 프로젝트 원문을 확인한 뒤 게시해 주세요.":
+    "No source text is saved for comparison. Check the project source before publishing.",
+  "수집된 자료이며 생성 당시 자료와 다를 수 있습니다. PR·커밋 제목만으로 세부 동작을 확정하지 마세요.":
+    "This is collected material and may differ from what was available at generation time. PR and commit titles alone do not establish detailed behavior.",
+  "프로젝트 원문 열기": "Open project source",
+  "프로젝트 설명": "Project description",
   "좋아요 수": "Likes",
   "댓글 수": "Comments",
   "리포스트 수": "Reposts",

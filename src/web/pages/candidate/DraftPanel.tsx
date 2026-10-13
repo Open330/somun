@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
 import { channelSpec, type Channel, type ChannelSpec } from "@core/channels";
 import { trackLinks } from "@core/links";
-import type { Draft, Publication } from "@shared/types";
+import type { Draft, Evidence, Publication } from "@shared/types";
 import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
@@ -12,6 +12,7 @@ import { setUnsaved } from "../../lib/unsaved";
 import { dateLocale, t } from "../../i18n";
 import { localDateTime } from "../../lib/publication-time";
 import { useDraftReview } from "../../lib/useDraftReview";
+import DraftEvidenceReview from "./DraftEvidenceReview";
 
 /**
  * 채널·언어 하나의 초안: 검토, 수정, 복사, 다시 쓰기, 버리기, 게시 링크 기록.
@@ -52,6 +53,7 @@ export default function DraftPanel({
   onDirty,
   homepage,
   sourceLink,
+  evidence,
   initialDraftId,
   track = true,
 }: {
@@ -71,6 +73,7 @@ export default function DraftPanel({
   onDirty?: (dirty: boolean) => void;
   homepage?: string;
   sourceLink?: string;
+  evidence?: Evidence;
   initialDraftId?: number;
   track?: boolean;
 }) {
@@ -424,6 +427,16 @@ export default function DraftPanel({
           </div>
         )}
       </div>
+
+      {evidence && (
+        <DraftEvidenceReview
+          title={spec.hasTitle ? (editing ? title : displayed.title) : undefined}
+          body={editing ? body : displayed.body}
+          lang={lang}
+          evidence={evidence}
+          editing={editing}
+        />
+      )}
 
       {checks.length > 0 && (
         <details className="draft-check">
