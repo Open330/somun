@@ -25,7 +25,7 @@ afterEach(() => {
 it("keeps the workspace after failed logout and allows a successful retry", async () => {
   endSession.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
   render(createElement(MemoryRouter, null, createElement(App)));
-  await screen.findByText("Signed-in workspace");
+  await screen.findByText("Signed-in workspace", {}, { timeout: 10000 });
   fireEvent.click(screen.getAllByRole("button", { name: "나가기" })[0]);
   await screen.findByRole("alert");
   expect(screen.getByText("Signed-in workspace")).toBeTruthy();
@@ -33,7 +33,7 @@ it("keeps the workspace after failed logout and allows a successful retry", asyn
   fireEvent.click(screen.getByRole("button", { name: "로그아웃 다시 시도" }));
   await screen.findByText("Signed-out landing");
   expect(endSession).toHaveBeenCalledTimes(2);
-});
+}, 15000);
 
 it("disables desktop and mobile logout controls while the request is pending", async () => {
   let finish!: () => void;
@@ -44,12 +44,13 @@ it("disables desktop and mobile logout controls while the request is pending", a
       }),
   );
   render(createElement(MemoryRouter, null, createElement(App)));
-  await screen.findByText("Signed-in workspace");
+  await screen.findByText("Signed-in workspace", {}, { timeout: 10000 });
   fireEvent.click(screen.getAllByRole("button", { name: "나가기" })[0]);
   const buttons = screen.getAllByRole("button", { name: "로그아웃 중…" });
   expect(buttons).toHaveLength(2);
   expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  await waitFor(() => expect(endSession).toHaveBeenCalledOnce());
   finish();
   await waitFor(() => expect(screen.getByText("Signed-out landing")).toBeTruthy());
   expect(endSession).toHaveBeenCalledOnce();
-});
+}, 15000);

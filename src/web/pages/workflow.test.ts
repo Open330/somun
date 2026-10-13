@@ -537,6 +537,7 @@ describe("service introduction", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
     expect((screen.getByRole("menuitem", { name: "서비스 처음 소개하기" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("menuitem", { name: "변경 소식으로 쓰기" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -850,4 +851,27 @@ it("copies the Threads reply link without recording a draft copy or publication"
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "답글 링크 복사" })));
   expect(writeText).toHaveBeenCalledWith("https://example.test");
   expect(post).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("lets the editor explicitly choose an update with an existing draft: %s", async (existing) => {
+  const onRedraft = vi.fn().mockResolvedValue(true);
+  render(
+    wrap(
+      createElement(DraftPanel, {
+        cid: 1,
+        channel: "threads",
+        lang: "ko",
+        langs: ["ko"],
+        onLang: vi.fn(),
+        drafts: existing ? [{ ...draft, channel: "threads", purpose: "introduction" }] : [],
+        busy: false,
+        onRedraft,
+        showToast: vi.fn(),
+      }),
+    ),
+  );
+  if (existing) fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+  fireEvent.click(screen.getByRole(existing ? "menuitem" : "button", { name: "변경 소식으로 쓰기" }));
+  await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, false));
+  expect(post).not.toHaveBeenCalledWith("/publications", expect.anything());
 });

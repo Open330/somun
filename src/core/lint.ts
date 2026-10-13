@@ -110,7 +110,6 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const spec = channelPreset ?? channelSpec(channel);
   const text = `${title ?? ""}\n${body}`;
-  const lower = text.toLowerCase();
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
 
@@ -121,7 +120,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
 
   // 프로필의 "글에 쓰지 않을 말". 프롬프트에만 두면 약한 모델이 그대로 쓴다.
   if (facts.avoid?.length) {
-    const used = facts.avoid.filter((w) => w.trim() && lower.includes(w.trim().toLowerCase()));
+    // Repository owners and paths in a required link are not editorial wording.
+    const wording = text.replace(/https?:\/\/[^\s<>()\[\]{}]+/gi, "").toLowerCase();
+    const used = facts.avoid.filter((w) => w.trim() && wording.includes(w.trim().toLowerCase()));
     results.push({ rule: "avoid_terms", ok: used.length === 0, detail: used.length ? say(`프로필에서 쓰지 않기로 한 말: ${used.join(", ")}`, `Words the profile says to avoid: ${used.join(", ")}`) : undefined });
   }
   if (/[가-힣]/.test(body)) {
