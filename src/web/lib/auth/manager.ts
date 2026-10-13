@@ -24,6 +24,8 @@ export class AuthManager {
   private accessTokenFetchedAt = 0;
   private apiToken: { token: string; expiresAt: number } | null = null;
   private refreshInFlight: Promise<string | null> | null = null;
+  private apiTokenInFlight: Promise<string | null> | null = null;
+  private authEpoch = 0;
   private listeners = new Set<() => void>();
   private restored = false;
   snapshot: AuthSnapshot = { status: "loading", user: null };
@@ -68,6 +70,9 @@ export class AuthManager {
     });
     if (!res.ok) throw new Error(`code exchange failed (${res.status})`);
     const body = (await res.json()) as { accessToken: string };
+    this.authEpoch++;
+    this.apiToken = null;
+    this.apiTokenInFlight = null;
     this.accessToken = body.accessToken;
     this.accessTokenFetchedAt = Date.now();
     await this.loadUser();
@@ -83,6 +88,8 @@ export class AuthManager {
     this.accessToken = null;
     this.accessTokenFetchedAt = 0;
     this.apiToken = null;
+    this.authEpoch++;
+    this.apiTokenInFlight = null;
     this.set({ status: "signedOut", user: null });
   }
 
@@ -136,17 +143,31 @@ export class AuthManager {
 
   async fetchApiToken(force = false): Promise<string | null> {
     if (!force && this.apiToken && Date.now() < this.apiToken.expiresAt - API_TOKEN_EARLY_REFRESH_MS) return this.apiToken.token;
-    const accessToken = await this.ensureAccessToken();
-    if (!accessToken) return null;
-    const res = await authFetch("/auth/token/external", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ aud: AUTH_AUDIENCE }),
-    });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { token: string; expiresAt: number };
-    this.apiToken = { token: body.token, expiresAt: normalizeExpiresAt(body.expiresAt) };
-    return body.token;
+    if (this.apiTokenInFlight) return this.apiTokenInFlight;
+    const epoch = this.authEpoch;
+    const pending = (async () => {
+      const accessToken = await this.ensureAccessToken();
+      if (!accessToken || epoch !== this.authEpoch) return null;
+      const res = await authFetch("/auth/token/external", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ aud: AUTH_AUDIENCE }),
+      });
+      if (epoch !== this.authEpoch) return null;
+      if (res.status === 401 || res.status === 403) return null;
+      // 429·일시 장애를 null로 바꾸면 API가 인증 없이 호출돼 401 → 강제 로그아웃이 된다.
+      if (!res.ok) throw new Error(`token issuance failed (${res.status})`);
+      const body = (await res.json()) as { token: string; expiresAt: number };
+      if (epoch !== this.authEpoch) return null;
+      this.apiToken = { token: body.token, expiresAt: normalizeExpiresAt(body.expiresAt) };
+      return body.token;
+    })();
+    this.apiTokenInFlight = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.apiTokenInFlight === pending) this.apiTokenInFlight = null;
+    }
   }
 }
 
