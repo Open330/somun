@@ -273,7 +273,8 @@ it("drops an introduction-era angle from update drafts and marks unreleased high
   registerPublication(ctx, "test", { candidateId: id, channel: "x" });
   const update = buildPrompt(ctx, "test", "draft", id, "x", "en").user;
   expect(update).not.toContain("Introduce vite to new readers");
-  expect(update).toContain("Items marked (unreleased) are on the main branch");
+  expect(update).toContain("Items marked (unreleased) are merged on main");
+  expect(update).toContain("This says NOTHING about production deployment");
 });
 
 it("shows the judge what the editor overrode, including deferring a draft verdict", () => {

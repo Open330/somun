@@ -18,8 +18,18 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
   const now = Date.now();
   ctx.db.transaction((tx) => {
     for (const s of incoming) {
-      const dup = tx.select({ id: schema.signals.id }).from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.ref, s.ref))).get();
-      if (dup) continue;
+      const dup = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.ref, s.ref))).get();
+      if (dup) {
+        // 예전 제목 전용 신호를 재수집으로 보완한다. 신호·글감·초안을 새로 만들지 않는다.
+        if (s.kind === "pr_merged" && typeof s.payload.body === "string" && JSON.stringify(dup.payload) !== JSON.stringify(s.payload)) {
+          tx.update(schema.signals).set({ payload: { ...(dup.payload as Record<string, unknown>), ...s.payload } }).where(eq(schema.signals.id, dup.id)).run();
+          if (dup.candidateId) {
+            const cand = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.id, dup.candidateId))).get();
+            if (cand) touched.add(cand.key);
+          }
+        }
+        continue;
+      }
       const ck = clusterKeyFor(s as SignalLike, cluster);
       let candidateId: number | null = null;
       if (ck) {
@@ -65,8 +75,8 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       const cand = tx.select().from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.key, key))).get();
       // 릴리스는 직전 30일, 진행 중 글감은 그것을 만든 최근 7일의 PR을 함께 묶는다(앞서 수집돼 고아로 남은 PR 포함).
       const span = cand?.type === "release" ? 30 * DAY : cand?.type === "in-progress" ? 7 * DAY : 0;
-      if (!cand || !span) continue;
-      const orphans = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, cand.repo), eq(schema.signals.kind, "pr_merged"), isNull(schema.signals.candidateId))).all();
+      if (!cand) continue;
+      const orphans = span ? tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.repo, cand.repo), eq(schema.signals.kind, "pr_merged"), isNull(schema.signals.candidateId))).all() : [];
       let titles = (cand.evidence as Evidence).mergedPrTitles;
       let attached = 0;
       for (const o of orphans) {
@@ -81,9 +91,18 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
         const ev = cand.evidence as Evidence;
         tx.update(schema.candidates).set({ evidence: { ...ev, mergedPrTitles: titles } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
       }
+      const details = tx.select().from(schema.signals).where(and(eq(schema.signals.ownerId, ownerId), eq(schema.signals.candidateId, cand.id), eq(schema.signals.kind, "pr_merged"))).orderBy(desc(schema.signals.occurredAt)).all()
+        .flatMap((s) => {
+          const p = s.payload as { number?: number; body?: string; url?: string; bodyTruncated?: boolean };
+          return typeof p.body === "string" && p.body.trim() && p.number && p.url ? [{ number: p.number, title: s.title, body: p.body, url: p.url, bodyTruncated: p.bodyTruncated }] : [];
+        }).slice(0, 20);
+      if (details.length) {
+        const current = tx.select().from(schema.candidates).where(eq(schema.candidates.id, cand.id)).get()!;
+        tx.update(schema.candidates).set({ evidence: { ...(current.evidence as Evidence), mergedPrDetails: details } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
+      }
     }
   });
-  if (inserted) emit(ctx, ownerId, { resource: "candidates" });
+  if (inserted || touched.size) emit(ctx, ownerId, { resource: "candidates" });
   return { inserted, candidates: [...touched] };
 }
 

@@ -19,6 +19,30 @@ const evidence: Evidence = {
   highlights: ["AI-generated claim to exclude"],
 };
 afterEach(cleanup);
+it("lets readers find activation conditions in the actual PR body", () => {
+  render(
+    <DraftEvidenceReview
+      body="저장소 읽기를 변경했어요."
+      editing={false}
+      lang="ko"
+      evidence={{
+        ...evidence,
+        mergedPrDetails: [
+          {
+            number: 113,
+            title: "Read repositories",
+            body: "Default off; activate with GITHUB_APP_REPO_ACCESS=true.",
+            url: "https://github.com/me/tool/pull/113",
+          },
+        ],
+      }}
+    />,
+  );
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Default off" } });
+  const results = screen.getByRole("region", { name: "검색한 원자료" });
+  expect(results.textContent).toContain("GITHUB_APP_REPO_ACCESS=true");
+  expect(results.textContent).toContain("#113");
+});
 const review = (body = "CSV를 별도 파일로 내보내요. 원본을 유지해요.", editing = false, source = evidence) => (
   <DraftEvidenceReview title="변경 소식" body={body} lang="ko" editing={editing} evidence={source} />
 );

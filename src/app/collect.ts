@@ -317,7 +317,7 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       for (const p of prs ?? []) {
         if (!p.merged_at) continue;
         const at = Date.parse(p.merged_at);
-        if (at >= since) signals.push({ kind: "pr_merged", repo: name, ref: `gh:pr:${name}#${p.number}`, title: p.title, payload: { number: p.number, url: p.html_url }, occurredAt: at });
+        if (at >= since) signals.push({ kind: "pr_merged", repo: name, ref: `gh:pr:${name}#${p.number}`, title: p.title, payload: { number: p.number, url: p.html_url, ...(typeof p.body === "string" ? { body: p.body.slice(0, 12000), bodyTruncated: p.body.length > 12000 } : {}) }, occurredAt: at });
       }
       const createdAt = Date.parse(repo.created_at);
       if (createdAt >= since) signals.push({ kind: "repo_created", repo: name, ref: `gh:repo:${name}`, title: name, payload: { description: repo.description }, occurredAt: createdAt });

@@ -18,6 +18,7 @@ function sourceMaterial(e: Evidence): Source[] {
     add(`${t("릴리스 노트")}${e.version ? ` · ${e.version}` : ""}`, e.releaseNotes);
   }
   for (const title of e.mergedPrTitles ?? []) add(t("머지된 PR"), title);
+  for (const pr of e.mergedPrDetails ?? []) add(`${t("머지된 PR")} #${pr.number} · ${pr.title}`, pr.body);
   for (const subject of e.commitSubjects ?? []) add(t("커밋 제목"), subject);
   const metrics: [string, number | undefined][] = [
     [t("스타"), e.stars],
