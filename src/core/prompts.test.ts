@@ -37,6 +37,13 @@ it("repeats verbatim source conditions at the end of digest and draft without la
   expect(draftPrompt(c, "show_hn", "en", [], undefined, { introduction: true }).system).toContain("Omit backend LLM provider");
 });
 
+it("does not attach recent conditional change highlights to first introductions", () => {
+  const intro = draftPrompt({ ...candidate, evidence: { ...candidate.evidence, description: "Formats source locations." } }, "show_hn", "en", [], undefined, { introduction: true });
+  for (const highlight of candidate.evidence.highlights) expect(intro.user).not.toContain(highlight);
+  expect(intro.user).toContain("PR bodies are constraints");
+  expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: false }).user).toContain(candidate.evidence.highlights[0]);
+});
+
 describe("draft coverage contract", () => {
   it.each(["show_hn", "show_gn", "linkedin", "blog"] as const)("keeps each supplied change visible to the %s generator", (channel) => {
     const prompt = draftPrompt(candidate, channel, "en", []);

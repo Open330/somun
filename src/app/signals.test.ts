@@ -21,6 +21,7 @@ it("backfills PR bodies on repeated collection without duplicating signals or ch
   const pr = { kind: "pr_merged" as const, repo: "a/x", ref: "pr1", title: "Read repositories via GitHub App", payload: { number: 1, url: "https://github.com/a/x/pull/1" }, occurredAt: Date.now() };
   ingestSignals(ctx, "o", 1, [pr], { recentPrCount: 3 }, ev("a/x"));
   const c = ctx.db.select().from(schema.candidates).get()!;
+  ctx.db.update(schema.candidates).set({ evidence: { ...(c.evidence as Evidence), highlights: ["Old change"], highlightsAt: 123 } }).run();
   ctx.db.insert(schema.drafts).values({ ownerId: "o", candidateId: c.id, channel: "x", lang: "ko", version: 1, body: "Original draft", lint: [], status: "edited", model: "test", createdAt: 1, updatedAt: 1 }).run();
   const before = ctx.db.select().from(schema.drafts).all();
   const updated = { ...pr, payload: { ...pr.payload, body: "Default off; enable only with GITHUB_APP_REPO_ACCESS=true." } };
@@ -29,6 +30,13 @@ it("backfills PR bodies on repeated collection without duplicating signals or ch
   expect(ctx.db.select().from(schema.signals).all()).toHaveLength(1);
   expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(1);
   expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).mergedPrDetails).toMatchObject([{ number: 1, body: updated.payload.body }]);
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).highlightsAt).toBeUndefined();
+  ctx.db.update(schema.candidates).set({ evidence: { ...(ctx.db.select().from(schema.candidates).get()!.evidence as Evidence), highlightsAt: 456 } }).run();
+  ingestSignals(ctx, "o", 1, [updated], { recentPrCount: 3 }, ev("a/x"));
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).highlightsAt).toBe(456);
+  ingestSignals(ctx, "o", 1, [{ ...updated, payload: { ...updated.payload, body: "" } }], { recentPrCount: 3 }, ev("a/x"));
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).mergedPrDetails).toBeUndefined();
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).highlightsAt).toBeUndefined();
   expect(ctx.db.select().from(schema.drafts).all()).toEqual(before);
   ingestSignals(ctx, "other", 1, [updated], { recentPrCount: 3 }, ev("a/x"));
   expect(ctx.db.select().from(schema.signals).all()).toHaveLength(2);
