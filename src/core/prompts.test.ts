@@ -1,8 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prSourceBlock, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
+
+it("carries conditional PR source data through digest, judge, draft and numeric grounding", () => {
+  const c = { ...candidate, evidence: { ...candidate.evidence, mergedPrDetails: [{ number: 111, title: "Deliver partial quiz", body: "Only the last attempt may deliver at least 50% of the requested questions. Default off for GitHub App.", url: "https://github.com/test/tool/pull/111" }] } };
+  const digest = digestPrompt(c);
+  const judge = judgePrompt(c, { recentPublished: [], enabledChannels: ["x"], feedback: [] });
+  const draft = draftPrompt(c, "threads", "ko", [], undefined, { introduction: false });
+  for (const prompt of [digest, judge, draft]) expect(prompt.user).toContain(c.evidence.mergedPrDetails[0].body);
+  expect(digest.system).toContain("last-attempt requirements");
+  expect(draft.user).toContain("never translate unreleased as not deployed");
+  expect(unsupportedNumbers("At least 50% on the last attempt", groundingText(c))).toEqual([]);
+  expect(unsupportedNumbers("At least 75% on the last attempt", groundingText(c))).not.toEqual([]);
+  expect(digestGroundingFromPrompt(digest.user)).toContain("Default off for GitHub App");
+});
+
+it("bounds PR source context by whole bodies and discloses collection truncation", () => {
+  const source = (number: number, body: string, bodyTruncated = false) => ({ number, title: `PR ${number}`, body, url: `https://github.com/test/tool/pull/${number}`, bodyTruncated });
+  const block = prSourceBlock({ ...candidate.evidence, mergedPrDetails: [source(1, "x".repeat(47000)), source(2, "MISSING".repeat(1000)), source(3, "Short source", true)] });
+  expect(block).toContain("Short source");
+  expect(block).not.toContain("MISSING");
+  expect(block).toContain("Source truncated during collection");
+});
 
 describe("draft coverage contract", () => {
   it.each(["show_hn", "show_gn", "linkedin", "blog"] as const)("keeps each supplied change visible to the %s generator", (channel) => {

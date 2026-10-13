@@ -15,6 +15,26 @@ function makeCtx(): AppContext {
 }
 const ev = (repo: string): Evidence => ({ repo, repoUrl: `https://github.com/${repo}`, stars: 30 });
 
+it("backfills PR bodies on repeated collection without duplicating signals or changing reviewed drafts", () => {
+  const ctx = makeCtx();
+  ctx.db.insert(schema.sources).values({ ownerId: "o", kind: "github", targets: ["a/x"], enabled: true }).run();
+  const pr = { kind: "pr_merged" as const, repo: "a/x", ref: "pr1", title: "Read repositories via GitHub App", payload: { number: 1, url: "https://github.com/a/x/pull/1" }, occurredAt: Date.now() };
+  ingestSignals(ctx, "o", 1, [pr], { recentPrCount: 3 }, ev("a/x"));
+  const c = ctx.db.select().from(schema.candidates).get()!;
+  ctx.db.insert(schema.drafts).values({ ownerId: "o", candidateId: c.id, channel: "x", lang: "ko", version: 1, body: "Original draft", lint: [], status: "edited", model: "test", createdAt: 1, updatedAt: 1 }).run();
+  const before = ctx.db.select().from(schema.drafts).all();
+  const updated = { ...pr, payload: { ...pr.payload, body: "Default off; enable only with GITHUB_APP_REPO_ACCESS=true." } };
+  expect(ingestSignals(ctx, "o", 1, [updated], { recentPrCount: 3 }, ev("a/x")).inserted).toBe(0);
+  ingestSignals(ctx, "o", 1, [updated], { recentPrCount: 3 }, ev("a/x"));
+  expect(ctx.db.select().from(schema.signals).all()).toHaveLength(1);
+  expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(1);
+  expect((ctx.db.select().from(schema.candidates).get()!.evidence as Evidence).mergedPrDetails).toMatchObject([{ number: 1, body: updated.payload.body }]);
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual(before);
+  ingestSignals(ctx, "other", 1, [updated], { recentPrCount: 3 }, ev("a/x"));
+  expect(ctx.db.select().from(schema.signals).all()).toHaveLength(2);
+  ctx.db.$client.close();
+});
+
 describe("repo-window candidates", () => {
   it("folds release, milestones and PRs of one repo into a single candidate", () => {
     const ctx = makeCtx();

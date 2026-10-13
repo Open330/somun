@@ -95,7 +95,7 @@ describe("collection guards", () => {
     const repo = { full_name: "me/solo", html_url: "https://github.com/me/solo", description: null, homepage: null, stargazers_count: 3, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: iso(1), fork: false, archived: false, private: false };
     const commit = (n: number, msg: string) => ({ sha: `sha${n}`, commit: { message: msg, committer: { date: iso(n) } } });
     let commits = [commit(1, "Add dark mode"), commit(2, "docs: typo"), commit(3, "Support CSV export"), commit(4, "chore: lint")];
-    let pulls: { number: number; title: string; merged_at: string; html_url: string }[] = [];
+    let pulls: { number: number; title: string; merged_at: string; html_url: string; body?: string }[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       if (url.endsWith("/repos/me/solo")) return new Response(JSON.stringify(repo), { status: 200 });
       if (url.includes("/commits")) return new Response(JSON.stringify(commits), { status: 200 });
@@ -126,6 +126,13 @@ describe("collection guards", () => {
     const [cand] = ctx.db.select().from(schema.candidates).all();
     expect(cand?.type).toBe("in-progress");
     expect(ctx.db.select().from(schema.signals).all().filter((s) => s.kind === "pr_merged").every((s) => s.candidateId === cand.id)).toBe(true);
+    // 제목 전용으로 저장된 기존 PR도 정상 재수집으로 본문 조건을 채운다.
+    pulls = pulls.map((p) => ({ ...p, body: p.number === 1 ? "Default off; enable explicitly." : "x".repeat(12001) }));
+    await collectGithubSource(ctx, id);
+    const details = (ctx.db.select().from(schema.candidates).get()!.evidence as { mergedPrDetails: { number: number; body: string; bodyTruncated: boolean }[] }).mergedPrDetails;
+    expect(details.find((p) => p.number === 1)?.body).toBe("Default off; enable explicitly.");
+    expect(details.find((p) => p.number === 2)).toMatchObject({ body: "x".repeat(12000), bodyTruncated: true });
+    expect(ctx.db.select().from(schema.signals).all()).toHaveLength(3);
   });
 
   it("collects an explicitly listed active fork, skips dormant repos without detail calls, and reports missing read permissions", async () => {

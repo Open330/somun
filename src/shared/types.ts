@@ -35,6 +35,8 @@ export type Evidence = {
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   /** README가 실험·로컬 전용으로 표시한 기능(절 제목). */ experimental?: string[];
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
+  /** 이 글감에 연결된 PR 원문. 제목만으로는 기능 조건을 알 수 없다. */
+  mergedPrDetails?: { number: number; title: string; body: string; url: string; bodyTruncated?: boolean }[];
   /** 원자료에서 찾지 못한 수치가 있어 highlights에서 뺀 요약. 판단·초안에 들어가지 않는다. */
   unverifiedHighlights?: { text: string; numbers: string[] }[];
   /** 이 창에서 넘은 임계. 글감이 아니라 사실로 쓴다. */
