@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prSourceBlock, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
@@ -23,6 +23,18 @@ it("bounds PR source context by whole bodies and discloses collection truncation
   expect(block).toContain("Short source");
   expect(block).not.toContain("MISSING");
   expect(block).toContain("Source truncated during collection");
+});
+
+it("repeats verbatim source conditions at the end of digest and draft without laundering them into verified facts", () => {
+  const body = "A title alone says one or two questions short.\n- 마지막 시도는 50% 이상이면 짧은 퀴즈를 반환합니다. 첫 시도는 여전히 전체 수를 요구합니다.\nUnrelated internal rename.";
+  const c = { ...candidate, evidence: { ...candidate.evidence, mergedPrDetails: [{ number: 111, title: "Partial result", body, url: "https://github.com/test/tool/pull/111" }] } };
+  const excerpts = prConditionsBlock(c.evidence);
+  expect(excerpts).toContain(body.split("\n")[1]);
+  expect(excerpts).not.toContain("Unrelated internal rename");
+  expect(excerpts).toContain("not an exhaustive list");
+  expect(digestPrompt(c).user.endsWith(excerpts)).toBe(true);
+  expect(draftPrompt(c, "threads", "ko", []).user.endsWith(excerpts)).toBe(true);
+  expect(draftPrompt(c, "show_hn", "en", [], undefined, { introduction: true }).system).toContain("Omit backend LLM provider");
 });
 
 describe("draft coverage contract", () => {
