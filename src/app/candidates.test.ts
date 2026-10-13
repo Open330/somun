@@ -3,7 +3,7 @@ import pino from "pino";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { listInbox, refreshEvidence } from "./candidates.js";
+import { getCandidateDetail, listInbox, refreshEvidence } from "./candidates.js";
 import type { CandidateStatus } from "../shared/types.js";
 
 let ctx: AppContext;
@@ -21,6 +21,16 @@ function draft(candidateId: number, version = 1, status = "proposed") {
 function publish(candidateId: number, draftId: number) {
   ctx.db.insert(schema.publications).values({ ownerId: "a", candidateId, draftId, channel: "x", lang: "en", url: "https://example.test/post", publishedAt: 1 }).run();
 }
+
+it("keeps complete review sources in the owner detail while excluding large bodies from inbox lists", () => {
+  const id = candidate("new", Date.now());
+  const evidence = { repo: "a/repo", repoUrl: "https://github.com/a/repo", readmeExcerpt: "Excerpt", readmeForChecks: "Full source with conditions", mergedPrDetails: [{ number: 1, title: "Change", body: "Default off", url: "https://github.com/a/repo/pull/1" }] };
+  ctx.db.update(schema.candidates).set({ evidence }).run();
+  expect(listInbox(ctx, "a")[0].evidence.mergedPrDetails).toBeUndefined();
+  expect(listInbox(ctx, "a")[0].evidence.readmeForChecks).toBeUndefined();
+  expect(getCandidateDetail(ctx, "a", id).candidate.evidence).toEqual(evidence);
+  expect(() => getCandidateDetail(ctx, "b", id)).toThrow();
+});
 
 it("keeps old actionable candidates behind 200 newer completed items and caps only completed items", () => {
   const active = [candidate("new", 1), candidate("judged", 2), candidate("drafted", 3)];
@@ -82,4 +92,3 @@ it("refreshes the current window's version but keeps a past window's own release
   expect(ev(old)).toMatchObject({ version: "v1.0", releaseNotes: "v1.0 notes", stars: 9 });
   expect(ev(cur)).toMatchObject({ version: "v1.1", releaseNotes: "v1.1 notes" });
 });
-

@@ -9,8 +9,8 @@ import { crossLangNumberDiff } from "../core/lint.js";
 
 const DAY = 24 * 3600 * 1000;
 
-/** 화면에 보내는 글감. 대조 전용 README 본문(최대 8000자)은 서버에서만 쓰므로 빼서 목록 응답을 가볍게 둔다. */
-const forClient = (e: Evidence): Evidence => { const { readmeForChecks: _checks, ...rest } = e; void _checks; return rest; };
+/** 목록은 큰 원문을 빼서 가볍게 두고, 소유자별 상세 응답은 대조용 원문을 제공한다. */
+const forClient = (e: Evidence): Evidence => { const { readmeForChecks: _checks, mergedPrDetails: _prs, ...rest } = e; void _checks; void _prs; return rest; };
 export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: forClient(r.evidence as Evidence), status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | "defer" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ purpose: r.purpose ?? undefined, id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
@@ -99,7 +99,7 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map(toDraft);
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));
-  return { candidate: toCandidate(c), unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
+  return { candidate: { ...toCandidate(c), evidence: c.evidence as Evidence }, unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };
 }
 
 const DEFERRED_BY_EDITOR = "deferred by editor";
