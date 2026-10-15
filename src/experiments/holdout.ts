@@ -10,7 +10,7 @@ import { casesSchema, configSchema, type ExperimentCase, type ExperimentConfig }
  * 개인 원고가 들어가므로 저장소에 올리지 않는 위치(experiments/holdout/)에 쓴다.
  */
 
-const EVIDENCE_KEYS = ["repo", "repoUrl", "description", "version", "releaseNotes", "readmeExcerpt", "highlights", "limitations", "stars", "forks", "commitCount", "releaseCount", "firstReleaseAt", "language", "license", "homepage", "npmPackage", "npmMonthlyDownloads", "demoAsset"] as const;
+const EVIDENCE_KEYS = ["repo", "repoUrl", "description", "version", "releaseNotes", "readmeExcerpt", "highlights", "limitations", "stars", "forks", "commitCount", "releaseCount", "firstReleaseAt", "language", "license", "homepage", "npmPackage", "npmMonthlyDownloads", "demoAsset", "mergedPrTitles", "mergedPrDetails"] as const;
 
 export function exportHoldout(db: Db, ownerId: string, opts: { max?: number; name?: string } = {}): { cases: ExperimentCase[]; config: ExperimentConfig; skipped: number } {
   const drafts = db.select().from(schema.drafts).where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.drafts.status, "copied"))).orderBy(desc(schema.drafts.updatedAt)).all();

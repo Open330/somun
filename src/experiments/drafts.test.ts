@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
 import { LlmError } from "../infra/llm/providers.js";
-import { blindReview, casesSchema, compare, configSchema, evaluate, execute, hash, summarizeReviews, validatePlan, type Report } from "./drafts.js";
+import { blindReview, casesSchema, compare, configSchema, evaluate, execute, hash, qualityReadiness, summarizeReviews, validatePlan, type Report } from "./drafts.js";
 
 const cases = casesSchema.parse(JSON.parse(readFileSync("experiments/cases.json", "utf8")));
 const config = configSchema.parse(JSON.parse(readFileSync("experiments/replay.json", "utf8")));
@@ -135,4 +135,64 @@ it("evaluates first introductions with the introduction prompt, and rejects empt
   await execute({ ...config, variants: [config.variants[0]] }, report, vi.fn().mockResolvedValue({ json: { title: "", body: "tool is a development tool. https://github.com/example/tool" }, provider: "gemini", model: "fixture" }), () => {});
   expect(report.results[0].prompt.user).toContain("## First introduction");
   expect(report.results[0].prompt.user).not.toContain("## Required change checklist");
+});
+
+it("preserves raw PR evidence through case parsing and actual prompt execution", async () => {
+  const raw = { number: 8, title: "restore navigation", body: "Keep English for every browser language.", url: "https://example.com/pull/8", bodyTruncated: true };
+  const test = casesSchema.parse([{ ...cases[0], candidate: { ...cases[0].candidate, evidence: { ...cases[0].candidate.evidence, mergedPrDetails: [raw] } } }])[0];
+  const report = { ...fresh(), cases: [test], expectedRows: 2 };
+  await execute(config, report, vi.fn(), () => {});
+  expect(report.results[0].prompt.user).toContain(raw.body);
+  expect(report.results[0].prompt.user).toContain("Source truncated");
+  expect(blindReview(report)[0].evidence.evidence.mergedPrDetails).toEqual([raw]);
+});
+
+it("requires every factual gate and >=7/8 without zero axes; style cannot compensate for wrong facts", async () => {
+  const report = fresh(); await execute(config, report, vi.fn(), () => {});
+  report.results = report.results.filter((r) => r.variantId === "reference"); report.expectedRows = report.results.length;
+  const reviews = blindReview(report).map((r) => ({ ...r, reviewer: { kind: "agent" as const, id: "independent-reviewer" }, sourceGates: { factual: true, conditions: true, noInventedClaims: true }, copyScores: { action: 2, necessity: 2, korean: 2, noRepetition: 1 } }));
+  expect(qualityReadiness(report, reviews).ready).toBe(true);
+  reviews[0].sourceGates.conditions = false;
+  expect(qualityReadiness(report, reviews).rows.find((r) => r.blindId === reviews[0].blindId)!.status).toBe("source_failed");
+  reviews[0].sourceGates.conditions = true;
+  reviews[0].copyScores.korean = 0;
+  expect(qualityReadiness(report, reviews).rows.find((r) => r.blindId === reviews[0].blindId)!.status).toBe("copy_failed");
+  reviews[0].copyScores.korean = 1;
+  expect(qualityReadiness(report, reviews).ready).toBe(false); // 6/8
+  reviews[0].copyScores.korean = 2;
+  expect(qualityReadiness(report, reviews).ready).toBe(true);
+  expect(qualityReadiness({ ...report, expectedRows: 13 }, reviews).ready).toBe(false);
+  const vetoed = structuredClone(reviews); Object.assign(vetoed[0], { publishable: false });
+  expect(qualityReadiness(report, vetoed).ready).toBe(false);
+  const pending = blindReview(report);
+  expect(qualityReadiness(report, pending).rows.every((r) => r.status === "pending_review")).toBe(true);
+  const noProvenance = reviews.map((r) => ({ ...r, reviewer: { kind: "unspecified" as const, id: "" } }));
+  expect(qualityReadiness(report, noProvenance).ready).toBe(false);
+  const failed = structuredClone(report); failed.results[0].status = "error"; failed.results[0].draft = undefined;
+  // Failed generations do not have review rows, but still count against the frozen denominator.
+  expect(qualityReadiness(failed, reviews.filter((r) => r.blindId !== failed.results[0].blindId)).rows[0].status).toBe("generation_failed");
+  const changed = structuredClone(reviews); changed[0].draft!.body = "changed";
+  expect(() => qualityReadiness(report, changed)).toThrow("changed");
+});
+
+it("rejects duplicate logical outputs with different blind IDs and unrepresented cases", async () => {
+  const report = fresh(); await execute(config, report, vi.fn(), () => {});
+  report.results[1] = { ...structuredClone(report.results[0]), blindId: "different-id" };
+  const reviews = blindReview(report).map((r) => ({ ...r, reviewer: { kind: "agent" as const, id: "peer" }, sourceGates: { factual: true, conditions: true, noInventedClaims: true }, copyScores: { action: 2, necessity: 2, korean: 2, noRepetition: 2 } }));
+  expect(qualityReadiness(report, reviews).ready).toBe(false);
+  const unknown = structuredClone(report); unknown.results[0].caseId = "missing-case";
+  expect(() => qualityReadiness(unknown, reviews)).toThrow();
+  const extraCase = { ...report, cases: [...report.cases, { ...report.cases[0], id: "no-output" }] };
+  expect(qualityReadiness(extraCase, reviews).ready).toBe(false);
+});
+
+it("recomputes hard channel limits rather than accepting empty or falsified recorded checks", async () => {
+  const report = fresh(); await execute(config, report, vi.fn(), () => {});
+  report.results = [report.results[0]]; report.cases = [report.cases[0]]; report.expectedRows = 1;
+  report.results[0].draft = { title: "", body: "x".repeat(600) }; report.results[0].checks = [];
+  const reviews = blindReview(report).map((r) => ({ ...r, reviewer: { kind: "agent" as const, id: "peer" }, sourceGates: { factual: true, conditions: true, noInventedClaims: true }, copyScores: { action: 2, necessity: 2, korean: 2, noRepetition: 2 } }));
+  const verdict = qualityReadiness(report, reviews);
+  expect(verdict.ready).toBe(false);
+  expect(verdict.rows[0].status).toBe("format_failed");
+  expect(verdict.rows[0].formatFailures).toContain("length");
 });
