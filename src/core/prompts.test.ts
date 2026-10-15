@@ -47,6 +47,21 @@ it("does not attach recent conditional change highlights to first introductions"
   expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: false }).user).toContain(candidate.evidence.highlights[0]);
 });
 
+it("leaves backend implementation out of general introductions while preserving source checks, integrations and provider topics", () => {
+  const backend = "Azure OpenAI를 사용하여 코드를 분석하고 관련 질문을 생성합니다.";
+  const profile = { what: "A repository quiz app", audience: "Developers", claims: ["Generates questions from repositories.", backend, "Connects Claude Code through MCP."], limitations: [], stage: "unknown", naming: "tool", avoid: [] };
+  const before = structuredClone(profile);
+  const intro = draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: true });
+  expect(intro.user).not.toContain(backend);
+  expect(intro.user).toContain("Generates questions from repositories.");
+  expect(intro.user).toContain("Connects Claude Code through MCP.");
+  expect(groundingText(candidate, profile)).toContain(backend);
+  expect(profile).toEqual(before);
+  expect(draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: false }).user).toContain(backend);
+  expect(draftPrompt(candidate, "show_hn", "en", [], "Explain the OpenAI backend", { profile, introduction: true }).user).toContain(backend);
+  expect(draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: true, instruction: "Explain the OpenAI backend" }).user).toContain(backend);
+});
+
 describe("draft coverage contract", () => {
   it.each(["show_hn", "show_gn", "linkedin", "blog"] as const)("keeps each supplied change visible to the %s generator", (channel) => {
     const prompt = draftPrompt(candidate, channel, "en", []);

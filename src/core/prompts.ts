@@ -298,6 +298,16 @@ export function withoutFalseFirstClaims(reasoning: string, releaseCount: number 
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = opts.channelSpec ?? channelSpec(channel);
+  // 일반 소개가 오래된 프로필의 구현 제공자를 현재 제품 사실로 재사용하지 않게 한다.
+  // 저장된 프로필과 사실 검사 원문은 보존하고, 제공자 자체가 주제인 글에는 이 필터를 적용하지 않는다.
+  const provider = /\b(?:OpenAI|Anthropic|Gemini|Claude|Bedrock|Vertex AI|Ollama)\b/i;
+  const backendClaim = (claim: string) => provider.test(claim)
+    && /\b(?:uses?|using|powered by|backed by|models?)\b|사용(?:하여|해서|해)|활용(?:하여|해)|모델|기반(?:으로|의)/i.test(claim)
+    && !/\b(?:Claude Code|Gemini CLI|MCP|compatible|compatibility|integration)\b|연동|호환|연결/i.test(claim);
+  const providerIsTopic = [opts.profile?.what, opts.profile?.audience, spec.identity?.purpose, angle, opts.instruction].some((text) => text && provider.test(text));
+  const writingProfile = opts.introduction && opts.profile && !providerIsTopic
+    ? { ...opts.profile, claims: opts.profile.claims.filter((claim) => !backendClaim(claim)) }
+    : opts.profile;
   // Introductions describe capabilities, not how much repository activity produced them.
   const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || c.evidence.readmeExcerpt?.trim());
   const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights } } : c;
@@ -354,7 +364,7 @@ Hard rules:
       opts.disputed?.length ? `\n## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
       "",
       "## Facts",
-      factsBlock(publicCandidate, opts.profile),
+      factsBlock(publicCandidate, writingProfile),
       opts.introduction && !opts.profile && c.evidence.readmeExcerpt ? `## README (project facts)\n${c.evidence.readmeExcerpt.slice(0, 7000)}` : "",
       "",
       exampleText,
