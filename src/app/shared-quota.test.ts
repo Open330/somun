@@ -10,7 +10,7 @@ import { createApp } from "../server/app.js";
 import { loadConfig } from "../server/config.js";
 import { enqueueJob } from "./pipeline.js";
 import { updateSettings } from "./settings.js";
-import { assertSharedQueueCapacity, backgroundReserve, reserveSharedExecution, SharedQuotaError } from "./shared-quota.js";
+import { assertSharedQueueCapacity, backgroundReserve, reserveSharedExecution, sharedUsage, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 
 let ctx: AppContext;
 const now = Date.parse("2026-10-06T12:00:00Z");
@@ -91,4 +91,33 @@ it("keeps the last part of the daily limit for user-started work, scaled to the 
   // 7번째 자동 작업은 남겨 둔 4회를 쓰지 않는다. 사용자가 시작한 작업은 그대로 쓸 수 있다.
   expect(() => reserveSharedExecution(ctx, "local", now, undefined, { background: true })).toThrow(SharedQuotaError);
   expect(() => reserveSharedExecution(ctx, "local", now)).not.toThrow();
+});
+
+it("keeps counting beyond the daily cap only for explicitly configured test owners", () => {
+  ctx.env.sharedModelUnlimitedOwners = ["tester"];
+  for (let i = 0; i < 5; i++) reserveSharedExecution(ctx, "tester", now, undefined, { background: true });
+  expect(sharedUsage(ctx, "tester", now)).toMatchObject({ used: 5, limit: null });
+  expect(hasBackgroundCapacity(ctx, "tester", 100, undefined, now)).toBe(true);
+  reserveSharedExecution(ctx, "tester-other", now);
+  reserveSharedExecution(ctx, "tester-other", now);
+  expect(() => reserveSharedExecution(ctx, "tester-other", now)).toThrow(SharedQuotaError);
+  // Removing the exception preserves real usage; it does not reset or hide earlier calls.
+  ctx.env.sharedModelUnlimitedOwners = [];
+  expect(sharedUsage(ctx, "tester", now)).toMatchObject({ used: 5, limit: 2 });
+  expect(() => reserveSharedExecution(ctx, "tester", now)).toThrow(SharedQuotaError);
+});
+
+it("keeps queue capacity for unlimited test owners without changing admission rules", () => {
+  ctx.env.sharedModelUnlimitedOwners = ["local"];
+  reserveSharedExecution(ctx, "local", now); reserveSharedExecution(ctx, "local", now); reserveSharedExecution(ctx, "local", now);
+  enqueueJob(ctx, "local", "digest", candidate(), undefined, undefined, prompt);
+  enqueueJob(ctx, "local", "digest", candidate(), undefined, undefined, prompt);
+  expect(() => enqueueJob(ctx, "local", "digest", candidate(), undefined, undefined, prompt)).toThrow(SharedQuotaError);
+  expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(2);
+});
+
+it("parses explicit test owners without empty or duplicate exceptions", () => {
+  const config = loadConfig({ SOMUN_ALLOW_ANONYMOUS: "true", SOMUN_SHARED_MODEL_UNLIMITED_OWNERS: " tester, ,tester, other " });
+  expect(config.SOMUN_SHARED_MODEL_UNLIMITED_OWNERS).toEqual(["tester", "other"]);
+  expect(loadConfig({ SOMUN_ALLOW_ANONYMOUS: "true" }).SOMUN_SHARED_MODEL_UNLIMITED_OWNERS).toEqual([]);
 });

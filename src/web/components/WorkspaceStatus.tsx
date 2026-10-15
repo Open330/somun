@@ -290,17 +290,22 @@ export function WorkStatusPanel({ state, candidates }: { state: WorkspaceState; 
             <p className="small muted">{modelExplanation(state.availability.data.mode)}</p>
             {state.availability.data.sharedUsage && (
               <p className="small muted">
-                {t("오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}", {
-                  used: state.availability.data.sharedUsage.used,
-                  limit: state.availability.data.sharedUsage.limit,
-                  pending: state.availability.data.sharedUsage.pendingLimit,
-                  reset: new Date(state.availability.data.sharedUsage.resetAt).toLocaleString(dateLocale(), {
-                    month: "numeric",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                })}
+                {state.availability.data.sharedUsage.limit === null
+                  ? t("테스트 계정 · 일일 한도 없음 · 오늘 {used}회 · 대기·실행 최대 {pending}개", {
+                      used: state.availability.data.sharedUsage.used,
+                      pending: state.availability.data.sharedUsage.pendingLimit,
+                    })
+                  : t("오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}", {
+                      used: state.availability.data.sharedUsage.used,
+                      limit: state.availability.data.sharedUsage.limit,
+                      pending: state.availability.data.sharedUsage.pendingLimit,
+                      reset: new Date(state.availability.data.sharedUsage.resetAt).toLocaleString(dateLocale(), {
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
+                    })}
               </p>
             )}
           </>

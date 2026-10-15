@@ -20,6 +20,8 @@ export type AppContext = {
      */
     trustedOwners?: string[];
     sharedModelDailyLimit?: number; sharedModelPendingLimit?: number;
+    /** 서버 설정으로 지정한 테스트 소유자만 일일 실행 제한을 해제한다. 집계와 대기 제한은 유지한다. */
+    sharedModelUnlimitedOwners?: string[];
     /** DB에 저장하는 비밀값 암호화. 없으면 평문. */
     secrets?: SecretBox;
     /** 영상 서버. 없으면 영상 기능이 꺼진다. */

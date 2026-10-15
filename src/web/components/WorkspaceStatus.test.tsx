@@ -129,3 +129,11 @@ it("never renders cached availability as current after a failed refresh and offe
   fireEvent.click(screen.getByRole("button", { name: "상태 다시 확인" }));
   expect(availability.reload).toHaveBeenCalledOnce();
 });
+
+it("shows the server-configured test exception and still displays real usage and queue limits", () => {
+  availability.data!.sharedUsage = { used: 107, limit: null, pendingLimit: 20, resetAt: Date.now() + 60000 };
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: /작업/ }));
+  expect(screen.getByText("테스트 계정 · 일일 한도 없음 · 오늘 107회 · 대기·실행 최대 20개")).toBeTruthy();
+  expect(screen.queryByText(/107\/null/)).toBeNull();
+});

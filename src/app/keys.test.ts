@@ -97,3 +97,17 @@ it("shows only this account's shared execution usage and stops claiming readines
   } });
   expect(modelAvailability(ctx, "local", now).sharedUsage).toBeUndefined();
 });
+
+it("reports unlimited usage beyond the daily cap while preserving gateway cooldowns", async () => {
+  const { reserveSharedExecution } = await import("./shared-quota.js");
+  ctx.env.sharedModelDailyLimit = 1;
+  ctx.env.sharedModelUnlimitedOwners = ["local"];
+  ctx.env.llmGateway = { url: "http://gateway.test/v1", key: "fixture" };
+  reserveSharedExecution(ctx, "local", now); reserveSharedExecution(ctx, "local", now);
+  const view = modelAvailability(ctx, "local", now);
+  expect(view.sharedUsage).toMatchObject({ used: 2, limit: null });
+  expect(view.models.every((m) => m.state === "ready")).toBe(true);
+  const { llmCallOptions } = await import("./llm-gateway.js");
+  for (const model of ["fast", "quality"]) llmCallOptions(ctx, "local").onGateway!({ ok: false, model, status: 429, retryAt: now + 60000 });
+  expect(modelAvailability(ctx, "local", now).models.every((m) => m.state === "waiting" && m.retryAt === now + 60000)).toBe(true);
+});

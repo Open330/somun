@@ -24,13 +24,13 @@ export function sharedUsage(ctx: AppContext, ownerId: string, now = Date.now()) 
   const row = ctx.db.select().from(schema.appState).where(eq(schema.appState.key, quotaKey(ownerId))).get();
   const saved = row ? JSON.parse(row.value) as { day: string; count: number } : undefined;
   const usage = { day: dayOf(now), count: saved?.day === dayOf(now) ? saved.count : 0 };
-  return { used: usage.count, limit: ctx.env.sharedModelDailyLimit ?? 50, resetAt: nextDay(now), pendingLimit: ctx.env.sharedModelPendingLimit ?? 20 };
+  return { used: usage.count, limit: ctx.env.sharedModelUnlimitedOwners?.includes(ownerId) ? null : ctx.env.sharedModelDailyLimit ?? 50, resetAt: nextDay(now), pendingLimit: ctx.env.sharedModelPendingLimit ?? 20 };
 }
 
 function assertDaily(ctx: AppContext, ownerId: string, now: number): { day: string; count: number } {
   const usage = sharedUsage(ctx, ownerId, now);
   const limit = usage.limit;
-  if (usage.used >= limit) throw new SharedQuotaError(say(localeOf(ctx, ownerId), `오늘 공유 모델 실행 한도(${limit}회)에 도달했습니다. 한도는 매일 00:00 UTC(한국 시간 09:00)에 초기화됩니다. 그 뒤 다시 시도하거나 개인 API 키·로컬 워커를 사용해 주세요.`, `Today's shared model execution limit (${limit}) has been reached. It resets daily at 00:00 UTC (09:00 KST). Try again after that, or use your own API key or local worker.`), usage.resetAt);
+  if (limit !== null && usage.used >= limit) throw new SharedQuotaError(say(localeOf(ctx, ownerId), `오늘 공유 모델 실행 한도(${limit}회)에 도달했습니다. 한도는 매일 00:00 UTC(한국 시간 09:00)에 초기화됩니다. 그 뒤 다시 시도하거나 개인 API 키·로컬 워커를 사용해 주세요.`, `Today's shared model execution limit (${limit}) has been reached. It resets daily at 00:00 UTC (09:00 KST). Try again after that, or use your own API key or local worker.`), usage.resetAt);
   return { day: dayOf(now), count: usage.used };
 }
 
@@ -53,7 +53,7 @@ export const backgroundReserve = (limit: number) => Math.min(20, Math.floor(limi
 export function hasBackgroundCapacity(ctx: AppContext, ownerId: string, runs = 1, llm = getSettings(ctx, ownerId).llm, now = Date.now()): boolean {
   if (!usesSharedModel(ctx, ownerId, llm)) return true;
   const usage = sharedUsage(ctx, ownerId, now);
-  return usage.used + runs <= usage.limit - backgroundReserve(usage.limit);
+  return usage.limit === null || usage.used + runs <= usage.limit - backgroundReserve(usage.limit);
 }
 
 /** Reserve before network I/O; failures still use capacity. Persisted and atomic across processes/restarts. */
@@ -61,9 +61,9 @@ export function reserveSharedExecution(ctx: AppContext, ownerId: string, now = D
   if (!usesSharedModel(ctx, ownerId, config)) return;
   ctx.db.$client.transaction(() => {
     const usage = assertDaily(ctx, ownerId, now);
-    const limit = ctx.env.sharedModelDailyLimit ?? 50;
+    const limit = sharedUsage(ctx, ownerId, now).limit;
     // 호출할 때마다 확인한다(긴 수집 도중 다른 작업이 한도를 써도 남겨 둔 몫을 넘지 않게).
-    if (opts.background && usage.count >= limit - backgroundReserve(limit)) {
+    if (opts.background && limit !== null && usage.count >= limit - backgroundReserve(limit)) {
       throw new SharedQuotaError(say(localeOf(ctx, ownerId), `오늘 공유 모델 한도의 마지막 ${backgroundReserve(limit)}회는 직접 요청한 작업에 남겨 둡니다. 자동 작업은 내일 이어집니다.`, `The last ${backgroundReserve(limit)} shared model runs today are kept for work you start yourself. Automatic work continues tomorrow.`), sharedUsage(ctx, ownerId, now).resetAt);
     }
     ctx.db.insert(schema.appState).values({ key: quotaKey(ownerId), value: JSON.stringify({ ...usage, count: usage.count + 1 }), updatedAt: now }).onConflictDoUpdate({ target: schema.appState.key, set: { value: JSON.stringify({ ...usage, count: usage.count + 1 }), updatedAt: now } }).run();
