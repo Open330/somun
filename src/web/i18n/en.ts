@@ -99,6 +99,8 @@ export const en: Record<string, string> = {
   "영어 문장": "English sentence",
   "근거에서 찾지 못한 최상급·최초 주장: {phrases}. 원문에 있는 사실로 바꾸거나 빼 주세요.":
     'Superlative or "first" claims not found in the evidence: {phrases}. Replace them with sourced facts or remove them.',
+  "테스트 계정 · 일일 한도 없음 · 오늘 {used}회 · 대기·실행 최대 {pending}개":
+    "Test account · No daily limit · {used} runs today · Up to {pending} queued or running jobs",
   "오늘 공유 모델 실행 {used}/{limit}회 · 대기·실행 최대 {pending}개 · 초기화 {reset}":
     "Shared model executions today: {used}/{limit} · Up to {pending} queued/running jobs · Resets {reset}",
   "로그인을 완료하지 못했습니다. 로그인 화면에서 다시 시작해 주세요.": "Sign-in could not be completed. Start again from the sign-in page.",

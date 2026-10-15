@@ -40,7 +40,7 @@ export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.n
     if (ctx.env.llmGateway) {
       // 게이트웨이 경로: 키별 상태는 게이트웨이가 가진다. 최근 게이트웨이 응답(429의 Retry-After, 5xx)과 계정 한도만 본다.
       const s = gatewayState(ctx, gatewayModel(model), now);
-      const retryAt = Math.max(s?.retryAt ?? 0, usage && usage.used >= usage.limit ? usage.resetAt : 0);
+      const retryAt = Math.max(s?.retryAt ?? 0, usage && usage.limit !== null && usage.used >= usage.limit ? usage.resetAt : 0);
       if (retryAt > now) return { purpose, model, state: "waiting", retryAt };
       return s?.status !== undefined && s.status >= 500 ? { purpose, model, state: "degraded", lastStatus: s.status } : { purpose, model, state: "ready" };
     }
@@ -48,7 +48,7 @@ export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.n
       const row = rows.get(`${label}|${model}`);
       return Math.max(row?.cooldownUntil ?? 0, row?.dayKey === ptDayKey(now) && row.dayCount >= RPD_SOFT_CAP ? nextPtMidnight(now) : 0);
     });
-    const retryAt = Math.max(Math.min(...waits), usage && usage.used >= usage.limit ? usage.resetAt : 0);
+    const retryAt = Math.max(Math.min(...waits), usage && usage.limit !== null && usage.used >= usage.limit ? usage.resetAt : 0);
     if (retryAt > now) return { purpose, model, state: "waiting", retryAt };
     const failed = recentUpstreamFailure(ctx, model, now);
     return failed ? { purpose, model, state: "degraded", lastStatus: failed } : { purpose, model, state: "ready" };

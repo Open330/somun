@@ -133,7 +133,7 @@ export type KeyStatus = { label: string; todayCount: number; cap: number; cooldo
 /** 현재 계정의 모델 이용 상태. 공유 키 식별자·사용량은 노출하지 않는다. */
 export type ModelAvailability = {
   mode: "shared" | "user" | "local" | "missing";
-  sharedUsage?: { used: number; limit: number; resetAt: number; pendingLimit: number };
+  sharedUsage?: { used: number; limit: number | null; resetAt: number; pendingLimit: number };
   checkedAt: number;
   models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "degraded" | "unknown" | "local" | "missing"; retryAt?: number; /** degraded: 최근 실패한 HTTP 상태(예: 503). */ lastStatus?: number }[];
 };

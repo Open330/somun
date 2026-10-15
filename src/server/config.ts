@@ -26,6 +26,8 @@ const schema = z.object({
   JIUN_LLM_GATEWAY_URL: z.string().url().optional(),
   JIUN_LLM_GATEWAY_KEY: z.string().min(1).optional(),
   SOMUN_SHARED_MODEL_DAILY_LIMIT: z.coerce.number().int().min(1).max(10000).default(50),
+  /** 일일 실행 한도 없이 품질 검증할 ownerId 목록(쉼표 구분). 일반 계정의 한도와 사용량 집계는 유지한다. */
+  SOMUN_SHARED_MODEL_UNLIMITED_OWNERS: z.string().default("").transform((s) => [...new Set(s.split(",").map((id) => id.trim()).filter(Boolean))]),
   SOMUN_SHARED_MODEL_PENDING_LIMIT: z.coerce.number().int().min(1).max(1000).default(20),
   /** UTC cron. 기본 00:00 UTC = 09:00 KST */
   CRON: z.string().default("0 0 * * *"),

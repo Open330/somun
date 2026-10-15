@@ -34,7 +34,7 @@ export default function Inbox() {
     "jobs",
   ]);
   const usage = availability?.sharedUsage;
-  const quotaFull = Boolean(usage && usage.used >= usage.limit && Date.now() < usage.resetAt);
+  const quotaFull = Boolean(usage && usage.limit !== null && usage.used >= usage.limit && Date.now() < usage.resetAt);
   // 한도가 초기화되는 시각에 다시 받아 "초안 준비"를 켠다(그 사이 다른 이벤트가 없어도).
   useEffect(() => {
     if (!quotaFull || !usage) return;

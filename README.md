@@ -118,7 +118,7 @@ Every draft runs through a **slop lint** before you see it (warnings remain visi
 
 ## Models & keys
 
-The shared Gemini pool allows **50 model executions per account per UTC day** and **20 queued/running server jobs per account** by default. Profiles, analysis, drafts, and automatic repair use execution capacity; failed executions count too. Provider retries within an execution do not use additional account slots, but provider limits still apply. Your own API key and local agent workers are outside these shared-pool limits. The work-status panel shows your usage and reset time, and excess queue requests return `429` with retry guidance. Limits are configurable through `SOMUN_SHARED_MODEL_DAILY_LIMIT` and `SOMUN_SHARED_MODEL_PENDING_LIMIT`.
+The shared Gemini pool allows **50 model executions per account per UTC day** and **20 queued/running server jobs per account** by default. Profiles, analysis, drafts, and automatic repair use execution capacity; failed executions count too. Provider retries within an execution do not use additional account slots, but provider limits still apply. Your own API key and local agent workers are outside these shared-pool limits. The work-status panel shows your usage and reset time, and excess queue requests return `429` with retry guidance. Limits are configurable through `SOMUN_SHARED_MODEL_DAILY_LIMIT` and `SOMUN_SHARED_MODEL_PENDING_LIMIT`. For operator-authorized quality testing, `SOMUN_SHARED_MODEL_UNLIMITED_OWNERS` accepts a comma-separated list of exact `/api/me` owner IDs. These accounts have no daily execution cap (`limit: null`); usage accounting, pending-job limits, and provider cooldowns remain active. The default list is empty.
 
 | Provider | Default model | Key |
 |---|---|---|
