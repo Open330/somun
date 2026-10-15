@@ -1,3 +1,4 @@
+import { digestSourceHash as sourceHash } from "./digest-cache.js";
 import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
@@ -161,8 +162,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
   const anyUnannounced = enabledTargets(settings.channelLangs, settings.customChannels).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
   const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
-  if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision };
+  if (kind === "digest") return { ...digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed }), digestSourceHash: sourceHash(row.evidence) };
+  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision, digestSourceHash: (row.evidence as Evidence).digestSourceHash };
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
@@ -196,6 +197,7 @@ export const SWEEP_MAX_FAILURES = 3;
 export function digestCurrent(c: { updatedAt: number; evidence: unknown }, judgedAt?: number): boolean {
   const ev = c.evidence as Evidence;
   if (!ev.highlightsAt || ev.digestRevision !== DIGEST_REVISION) return false;
+  if (ev.digestSourceHash) return ev.digestSourceHash === sourceHash(ev);
   return c.updatedAt <= ev.highlightsAt || (judgedAt !== undefined && judgedAt >= ev.highlightsAt && c.updatedAt <= judgedAt);
 }
 
@@ -267,7 +269,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
     let quotaError: SharedQuotaError | undefined;
     try { assertSharedQueueCapacity(ctx, ownerId); }
     catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
-    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.digestRevision || prompt.draftPurpose || background ? { ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.digestSourceHash || prompt.digestRevision || prompt.draftPurpose || background ? { ...(prompt.digestSourceHash ? { digestSourceHash: prompt.digestSourceHash } : {}), ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
     emit(ctx, ownerId, { resource: "jobs", id });
     return id;
   }).immediate();
@@ -281,7 +283,7 @@ export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: numb
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestRevision?: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
@@ -301,11 +303,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     if (unverifiedHighlights.length) ctx.log.info({ candidateId: c.id, dropped: unverifiedHighlights.length }, "digest highlights with unsupported numbers");
     const fromReadme = Boolean(ev.limitations?.length);
     const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
-    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, digestRevision: args.digestRevision, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, digestRevision: args.digestRevision, digestSourceHash: args.digestSourceHash, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     // 배포 전에 시작한 작업을 현재 기준으로 인증하거나 후속 생성에 넘기지 않는다.
     // 결과는 보존하고, 작업의 재시도 경로가 현재 프롬프트로 다시 분석하게 한다.
-    if (args.digestRevision !== DIGEST_REVISION) return { kind: "digest", highlights: highlights.length, staleDigest: true };
+    if (!digestCurrent(getCandidateRow(ctx, ownerId, c.id))) return { kind: "digest", highlights: highlights.length, staleDigest: true };
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
       if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction, automatic: true, background: continuation.background });

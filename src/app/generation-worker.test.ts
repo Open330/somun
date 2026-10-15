@@ -33,6 +33,44 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); ctx.db.$client.close(); });
 
+it("reuses the same source digest after draft creation and two more rewrites", async () => {
+  vi.useFakeTimers();
+  const initial = ctx.db.select().from(schema.candidates).get()!;
+  ctx.db.update(schema.candidates).set({ evidence: { ...initial.evidence, digestRevision: undefined, releaseNotes: "Fixes CRLF positions." } }).run();
+  vi.mocked(runLlm).mockImplementation(async (_config, _prompt, kind) => output(kind === "digest" ? { highlights: ["Fixes CRLF positions."], limitations: [] } : draft));
+  for (let i = 0; i < 3; i++) {
+    vi.advanceTimersByTime(1000);
+    const res = await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: false });
+    expect(res.status).toBe(202);
+    const { jobs } = await res.json();
+    expect(row(jobs[0]).kind).toBe(i === 0 ? "digest" : "draft");
+    expect(await processServerJob(ctx)).toBe(true);
+    if (i === 0) {
+      vi.advanceTimersByTime(1000);
+      expect(await processServerJob(ctx)).toBe(true);
+    }
+    expect(await processServerJob(ctx)).toBe(false);
+  }
+  expect(vi.mocked(runLlm).mock.calls.map((args) => args[2])).toEqual(["digest", "draft", "draft", "draft"]);
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(3);
+});
+
+it("holds a digest if its sources changed while the model was running", async () => {
+  const initial = ctx.db.select().from(schema.candidates).get()!;
+  ctx.db.update(schema.candidates).set({ evidence: { ...initial.evidence, digestRevision: undefined, releaseNotes: "Original source" } }).run();
+  vi.mocked(runLlm).mockImplementationOnce(async () => {
+    const current = ctx.db.select().from(schema.candidates).get()!;
+    ctx.db.update(schema.candidates).set({ evidence: { ...current.evidence, releaseNotes: "Changed source with new prerequisites" } }).run();
+    return output({ highlights: ["A summary of the old source."], limitations: [] });
+  });
+  const { jobs } = await (await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: false })).json();
+  expect(await processServerJob(ctx)).toBe(true);
+  expect(row(jobs[0])).toMatchObject({ status: "failed", resultJson: expect.stringContaining("old source") });
+  expect(row(jobs[0]).error).toContain("원자료");
+  expect(await processServerJob(ctx)).toBe(false);
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
+});
+
 it("keeps source condition review visible without spending a repair call to clear it", async () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], mergedPrDetails: [{ number: 42, title: "Editor fix", body: "Fixes CRLF positions. Requires enabling the editor flag.", url: "https://github.com/a/b/pull/42" }] } }).run();
   queueStep(ctx, "local", "draft", cid, "x", "en", { introduction: false });
