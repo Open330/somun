@@ -29,16 +29,12 @@ export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
 
-/** 요약 단계의 작성 소재 선택. 출처 해시는 서버가 붙이며 사실 인증을 뜻하지 않는다. */
-export type WritingBrief = { highlight: string; readerAction: string; sourcePrNumbers: number[]; requiredConditions: { sourcePrNumber: number; quote: string }[]; sourceDigest: string };
-
 export type Evidence = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   /** README가 실험·로컬 전용으로 표시한 기능(절 제목). */ experimental?: string[];
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
-  writingBrief?: WritingBrief;
   /** 이 글감에 연결된 PR 원문. 제목만으로는 기능 조건을 알 수 없다. */
   mergedPrDetails?: { number: number; title: string; body: string; url: string; bodyTruncated?: boolean }[];
   /** 원자료에서 찾지 못한 수치가 있어 highlights에서 뺀 요약. 판단·초안에 들어가지 않는다. */

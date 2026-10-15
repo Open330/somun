@@ -100,7 +100,7 @@ export function ingestSignals(ctx: AppContext, ownerId: string, sourceId: number
       const currentEvidence = current.evidence as Evidence;
       if (JSON.stringify(details) !== JSON.stringify(currentEvidence.mergedPrDetails ?? [])) {
         // 새 조건을 읽지 않은 요약으로 업데이트 초안을 다시 쓰지 않는다. 기존 글은 보존한다.
-        tx.update(schema.candidates).set({ evidence: { ...currentEvidence, mergedPrDetails: details.length ? details : undefined, highlightsAt: undefined, writingBrief: undefined } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
+        tx.update(schema.candidates).set({ evidence: { ...currentEvidence, mergedPrDetails: details.length ? details : undefined, highlightsAt: undefined } as Record<string, unknown> }).where(eq(schema.candidates.id, cand.id)).run();
       }
     }
   });

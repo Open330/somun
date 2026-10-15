@@ -12,9 +12,6 @@ import { saveDraftEdit } from "./review.js";
 import { updateSettings } from "./settings.js";
 import { registerPublication } from "./publications.js";
 import { reserveSharedExecution } from "./shared-quota.js";
-import { digestPrompt } from "../core/prompts.js";
-import { currentWritingBrief } from "../core/writing-brief.js";
-import type { Evidence } from "../shared/types.js";
 
 let ctx: AppContext;
 let id: number;
@@ -23,40 +20,6 @@ beforeEach(() => {
   id = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Dependency maintenance", type: "release", key: "test", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: [], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
 });
 afterEach(() => { ctx.db.$client.close(); vi.resetAllMocks(); });
-
-describe("source-linked writing brief", () => {
-  const ev: Evidence = { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", mergedPrDetails: [{ number: 1, title: "Partial result", body: "Only the last attempt delivers at least 50% of the requested questions.", url: "https://github.com/vitejs/vite/pull/1" }] };
-  const highlight = "On the last attempt, at least 50% of the requested questions can be delivered.";
-  const result = { highlights: [highlight], limitations: [], writingBrief: { highlight, readerAction: highlight, sourcePrNumbers: [1], requiredConditions: [{ sourcePrNumber: 1, quote: "Only the last attempt delivers at least 50% of the requested questions." }] } };
-  const prompt = () => digestPrompt({ title: "Updates", type: "in-progress", evidence: ev }).user;
-  const evidence = () => ctx.db.select().from(schema.candidates).get()!.evidence as Evidence;
-  beforeEach(() => { ctx.db.update(schema.candidates).set({ evidence: ev as Record<string, unknown> }).run(); });
-
-  it("persists the brief in the existing digest result without adding a model stage", () => {
-    applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "fixture", result, promptText: prompt() });
-    expect(currentWritingBrief(evidence())?.readerAction).toBe(highlight);
-    expect(ctx.db.select().from(schema.llmJobs).all().map(j => j.kind)).toEqual(["judge"]);
-    expect(buildPrompt(ctx, "test", "draft", id, "threads", "en", { introduction: false }).user).toContain("## Selected writing brief");
-  });
-
-  it.each(["missing-ref", "unsupported-number", "changed-source", "missing-snapshot"])("preserves highlights but rejects %s brief metadata", (failure) => {
-    const r = structuredClone(result);
-    let text = prompt();
-    if (failure === "missing-ref") r.writingBrief.sourcePrNumbers = [999];
-    if (failure === "unsupported-number") r.writingBrief.readerAction = "Deliver 75% of the questions.";
-    if (failure === "changed-source") ctx.db.update(schema.candidates).set({ evidence: { ...ev, mergedPrDetails: ev.mergedPrDetails!.map(p => ({ ...p, body: p.body + " Default off." })) } }).run();
-    if (failure === "missing-snapshot") text = text.split("\n").slice(1).join("\n");
-    applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "fixture", result: r, promptText: text });
-    expect(evidence().highlights).toEqual([highlight]);
-    expect(evidence().writingBrief).toBeUndefined();
-  });
-
-  it("clears a previous brief when an older worker returns a digest without it", () => {
-    applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "fixture", result, promptText: prompt() });
-    applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "fixture", result: { highlights: [highlight] }, promptText: prompt() });
-    expect(evidence().writingBrief).toBeUndefined();
-  });
-});
 
 it.each(["gemini", "local-agent"] as const)("does not enqueue %s drafts when digest found no evidence", (provider) => {
   updateSettings(ctx, "test", { llm: { provider } });
