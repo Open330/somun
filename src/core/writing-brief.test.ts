@@ -56,6 +56,18 @@ it("rejects incomplete, oversized and changed source snapshots", () => {
   expect(draftPrompt(candidate(changed), "x", "en", []).user).not.toContain("## Selected writing brief");
 });
 
+it("restores omitted inline-code backticks to an exact source quote", () => {
+  const quote = "Limit (`OWNER_LIMIT`, 50) stays closed at 0.";
+  const ev = { ...evidence, mergedPrDetails: [source(1, quote)] };
+  const brief = (text: string) => parseWritingBrief({ ...selection, sourcePrNumbers: [1], requiredConditions: [{ sourcePrNumber: 1, quote: text }] }, ev);
+  expect(brief(quote)?.requiredConditions[0].quote).toBe(quote);
+  expect(brief(quote.replaceAll("`", ""))?.requiredConditions[0].quote).toBe(quote);
+  for (const changed of [quote.replace("50", "75"), quote.replace(", ", ","), quote.replace(".", "!")]) expect(brief(changed)).toBeUndefined();
+  expect(brief("``")).toBeUndefined();
+  expect(parseWritingBrief({ ...selection, sourcePrNumbers: [1], requiredConditions: [{ sourcePrNumber: 1, quote: "``" }] }, { ...ev, mergedPrDetails: [source(1, "Empty `` code")] })).toBeUndefined();
+  expect(parseWritingBrief({ ...selection, sourcePrNumbers: [1], requiredConditions: [{ sourcePrNumber: 1, quote: "OWNER_LIMIT 50" }] }, { ...ev, mergedPrDetails: [source(1, "```OWNER_LIMIT `50` ```")] })).toBeUndefined();
+});
+
 it("keeps legacy, introduction, custom, long-form and explicit editing contexts complete", () => {
   const c = candidate({ ...evidence, writingBrief: parseWritingBrief(selection, evidence) });
   const cases = [draftPrompt(candidate(), "threads", "en", []), draftPrompt(c, "threads", "en", [], undefined, { introduction: true }), draftPrompt(c, "x", "en", [], undefined, { instruction: "Compare all changes" }), draftPrompt(c, "x", "en", [], "Cover the refund change"), draftPrompt(c, "show_hn", "en", []), draftPrompt(c, "custom_news", "en", [])];
