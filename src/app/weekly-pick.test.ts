@@ -1,3 +1,4 @@
+import { DIGEST_REVISION } from "../core/prompts.js";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -25,7 +26,7 @@ type Row = typeof schema.candidates.$inferInsert;
 const add = (over: Partial<Row> & { title: string }, highlights?: string[]) =>
   Number(ctx.db.insert(schema.candidates).values({
     ownerId: "me", repo: "me/tool", type: "release", key: over.title, status: "new", createdAt: MONDAY - DAY, updatedAt: MONDAY - DAY,
-    evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", ...(highlights ? { highlights, highlightsAt: MONDAY - DAY } : {}) },
+    evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", ...(highlights ? { highlights, highlightsAt: MONDAY - DAY, digestRevision: DIGEST_REVISION } : {}) },
     ...over,
   }).run().lastInsertRowid);
 const judge = (candidateId: number, total: number, suggestedChannels: string[] = []) => {
@@ -167,7 +168,7 @@ it("keeps the scheduled continuation draft in the background share and the sweep
   expect(await processNewCandidates(ctx, "me")).toBe(0);
   const digest = ctx.db.select().from(schema.llmJobs).get()!;
   ctx.db.update(schema.llmJobs).set({ status: "done", finishedAt: MONDAY }).run();
-  applyResult(ctx, "me", { kind: "digest", candidateId: c, model: "t", result: { highlights: ["Adds a flag."], limitations: [] } }, digest.continuation ?? undefined);
+  applyResult(ctx, "me", { kind: "digest", digestRevision: DIGEST_REVISION, candidateId: c, model: "t", result: { highlights: ["Adds a flag."], limitations: [] } }, digest.continuation ?? undefined);
   const draft = ctx.db.select().from(schema.llmJobs).all().find((j) => j.kind === "draft")!;
   expect(draft.meta).toMatchObject({ background: true });
   expect(await processNewCandidates(ctx, "me")).toBe(0);

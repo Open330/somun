@@ -31,7 +31,9 @@ export type EvidenceLike = {
 
 export type CandidateLike = { title: string; type: string; evidence: EvidenceLike };
 
-export type PromptSpec = { draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
+/** 요약 생성 계약의 버전. 정확성 인증이 아니라 이전 입력·형식의 캐시 재사용을 막는다. */
+export const DIGEST_REVISION = "pr-source-conditions-v1";
+export type PromptSpec = { digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
 export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
 
@@ -181,6 +183,7 @@ export function digestGroundingFromPrompt(user: string): string {
 
 export function digestPrompt(c: CandidateLike, ctx: DigestContext = {}): PromptSpec {
   return {
+    digestRevision: DIGEST_REVISION,
     schemaName: "digest",
     schema: DIGEST_SCHEMA,
     system: `You read a developer's raw work record (commit subjects, merged PR titles, release notes, agent-session summaries, README) and keep only what an outside reader would care about.

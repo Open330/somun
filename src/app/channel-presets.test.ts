@@ -1,3 +1,4 @@
+import { DIGEST_REVISION } from "../core/prompts.js";
 import { EventEmitter } from 'node:events';
 import pino from 'pino';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -82,7 +83,7 @@ it('prepares the weekly pick when only a personal channel is enabled', async () 
  const settings = getSettings(ctx, 'local');
  expect(primaryTarget(ctx, 'local', settings)).toEqual({ channel: preset.id, lang: 'en' });
  const now = Date.now();
- ctx.db.insert(schema.candidates).values({ ownerId: 'local', repo: 'me/tool', title: 'Update', type: 'release', key: 'weekly', evidence: { highlights: ['Watch mode'], highlightsAt: now }, createdAt: now, updatedAt: now }).run();
+ ctx.db.insert(schema.candidates).values({ ownerId: 'local', repo: 'me/tool', title: 'Update', type: 'release', key: 'weekly', evidence: { highlights: ['Watch mode'], highlightsAt: now, digestRevision: DIGEST_REVISION }, createdAt: now, updatedAt: now }).run();
  expect(pickWeeklyAll(ctx, now)).toBe(1);
  expect(ctx.db.select().from(schema.llmJobs).get()?.channel).toBe(preset.id);
 });

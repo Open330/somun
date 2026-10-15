@@ -3,7 +3,7 @@ import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
 import { channelSpec, knownChannel, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
+import { DIGEST_REVISION, digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { Decision, DraftPurpose, Evidence, GenerationKind, GenerationPlan, JobKind } from "../shared/types.js";
 import { getCandidateRow, recentOverrides, recentPublishedTitles } from "./candidates.js";
@@ -35,7 +35,7 @@ export function rubricTotal(scores: Rubric, weights: Rubric): number {
   return Math.round((raw / (2 * wsum)) * 100) / 10;
 }
 
-export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number };
+export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number; staleDigest?: boolean };
 
 export type ExampleOrigin = "authored" | "accepted" | "seed";
 
@@ -162,7 +162,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const anyUnannounced = enabledTargets(settings.channelLangs, settings.customChannels).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
   const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
   if (kind === "digest") return digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed });
-  if (kind === "judge") return judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) });
+  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision };
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
@@ -193,10 +193,14 @@ export const SWEEP_MAX_FAILURES = 3;
  * 수동 모드에서는 사용자가 고른 것만 judgeCandidates로 태운다.
  */
 /** 지금 요약을 판단·초안에 그대로 쓸 수 있는가: 알릴 변경이 있고, 요약 뒤에 새 신호가 합쳐지지 않았다(판단이 요약 뒤에 바꾼 updatedAt은 새 신호가 아니다). */
-export function digestUsable(c: { updatedAt: number; evidence: unknown }, judgedAt?: number): boolean {
+export function digestCurrent(c: { updatedAt: number; evidence: unknown }, judgedAt?: number): boolean {
   const ev = c.evidence as Evidence;
-  if (!ev.highlightsAt || !ev.highlights?.some((h) => h.trim())) return false;
+  if (!ev.highlightsAt || ev.digestRevision !== DIGEST_REVISION) return false;
   return c.updatedAt <= ev.highlightsAt || (judgedAt !== undefined && judgedAt >= ev.highlightsAt && c.updatedAt <= judgedAt);
+}
+
+export function digestUsable(c: { updatedAt: number; evidence: unknown }, judgedAt?: number): boolean {
+  return digestCurrent(c, judgedAt) && Boolean((c.evidence as Evidence).highlights?.some((h) => h.trim()));
 }
 
 export async function processNewCandidates(ctx: AppContext, ownerId?: string): Promise<number> {
@@ -215,8 +219,7 @@ export async function processNewCandidates(ctx: AppContext, ownerId?: string): P
     if (s.llm.provider === "local-agent" && pendingProfileJob(ctx, c.ownerId, c.repo)) continue;
     if (c.updatedAt < now - s.watch.recentDays * 86400e3) continue;
     // 다이제스트 뒤에 새 신호가 합쳐졌으면(updatedAt이 더 늦음) 요약이 낡았으므로 다이제스트부터 다시 한다.
-    const digestedAt = (c.evidence as Evidence).highlightsAt;
-    const kind: JobKind = digestedAt && c.updatedAt <= digestedAt ? "judge" : "digest";
+    const kind: JobKind = digestCurrent(c) ? "judge" : "digest";
     const all = ctx.db.select({ kind: schema.llmJobs.kind, status: schema.llmJobs.status, finishedAt: schema.llmJobs.finishedAt }).from(schema.llmJobs).where(eq(schema.llmJobs.candidateId, c.id)).all();
     // 어떤 단계든 진행 중이면 기다린다(이번 주 한 편처럼 요약 뒤 초안을 잇는 작업에 판단을 겹쳐 초안을 또 만들지 않게).
     if (all.some((j) => j.status === "pending" || j.status === "claimed")) continue;
@@ -264,7 +267,7 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
     let quotaError: SharedQuotaError | undefined;
     try { assertSharedQueueCapacity(ctx, ownerId); }
     catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
-    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.draftPurpose || background ? { ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.digestRevision || prompt.draftPurpose || background ? { ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
     emit(ctx, ownerId, { resource: "jobs", id });
     return id;
   }).immediate();
@@ -278,7 +281,7 @@ export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: numb
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestRevision?: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
@@ -298,8 +301,11 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     if (unverifiedHighlights.length) ctx.log.info({ candidateId: c.id, dropped: unverifiedHighlights.length }, "digest highlights with unsupported numbers");
     const fromReadme = Boolean(ev.limitations?.length);
     const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
-    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, digestRevision: args.digestRevision, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
+    // 배포 전에 시작한 작업을 현재 기준으로 인증하거나 후속 생성에 넘기지 않는다.
+    // 결과는 보존하고, 작업의 재시도 경로가 현재 프롬프트로 다시 분석하게 한다.
+    if (args.digestRevision !== DIGEST_REVISION) return { kind: "digest", highlights: highlights.length, staleDigest: true };
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
       if (highlights.length) for (const t of continuation.targets) queueStep(ctx, ownerId, "draft", c.id, t.channel, t.lang, { instruction: continuation.instruction, introduction: continuation.introduction, automatic: true, background: continuation.background });
