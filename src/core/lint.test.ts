@@ -4,6 +4,16 @@ import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberToken
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
 
 describe("lintDraft", () => {
+  it("flags the real zero-limit omission for human review, without certifying corrected prose", () => {
+    const candidate = { title: "sai update", type: "in-progress", evidence: { repo: "jiunbae/sai", repoUrl: "https://github.com/jiunbae/sai", mergedPrDetails: [{ number: 42, title: "New account allowance", body: "가입 후 24시간 동안 무료 계정의 텍스트 한도를 150턴으로 올린다. 운영자가 0으로 닫은 한도는 열지 않는다.", url: "https://github.com/jiunbae/sai/pull/42" }] } };
+    for (const purpose of ["introduction", "update"] as const) for (const body of ["sai에서 가입 후 24시간 동안 무료 계정의 텍스트 한도를 150턴으로 올렸어요.", "sai에서 가입 후 24시간 동안 무료 계정의 텍스트 한도를 150턴으로 올렸어요. 운영자가 0으로 닫은 한도는 제외해요."]) {
+      const result = lintDraft("threads", undefined, body, [], draftLintFacts(candidate, undefined, purpose)).find((l) => l.rule === "source_conditions_need_review");
+      expect(result).toMatchObject({ ok: false });
+      expect(result?.detail).toContain("#42");
+      expect(result?.detail).toContain("자동 판정한 결과는 아닙니다");
+    }
+    expect(lintDraft("threads", undefined, "Plain update", [], draftLintFacts({ ...candidate, evidence: { ...candidate.evidence, mergedPrDetails: [] } })).some(l => l.rule === "source_conditions_need_review")).toBe(false);
+  });
   it("passes a plain three-line X post with a number, a limit, and a link", () => {
     const body = "I kept finding my agents stuck 30 minutes after they asked.\n\nmuxa shows which one is waiting.\n\n61 releases, no Windows yet. https://github.com/Open330/muxa";
     expect(lintPassed(lintDraft("x", undefined, body))).toBe(true);

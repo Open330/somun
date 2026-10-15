@@ -173,12 +173,16 @@ export default function DraftPanel({
   const outgoing = track ? trackLinks(full, { channel, homepage }) : full;
   // 복사 전에 확인할 경고: 원자료에서 찾지 못한 수치·주장(서버의 COPY_CONFIRM_RULES). 게시하면 되돌리기 어렵다.
   const unsupported = (lint?: Draft["lint"]) =>
-    lint?.find((item) => (item.rule === "numbers_need_review" || item.rule === "claims_need_review") && !item.ok);
+    lint?.find(
+      (item) =>
+        (item.rule === "numbers_need_review" || item.rule === "claims_need_review" || item.rule === "source_conditions_need_review") &&
+        !item.ok,
+    );
   const warningText = (item: NonNullable<ReturnType<typeof unsupported>>) =>
     lintDetail(item) ??
     (item.rule === "claims_need_review" ? t("원자료에서 찾지 못한 주장이 있습니다.") : t("원자료에서 찾지 못한 수치가 있습니다."));
   const postEdit = (id: number, base: Draft, markCopied: boolean, overwrite: boolean, copyIfClean?: boolean) =>
-    post<Draft>(`/drafts/${id}/edit`, {
+    post<Draft & { copyHeld?: boolean }>(`/drafts/${id}/edit`, {
       title: spec.hasTitle ? title : undefined,
       body,
       markCopied,
@@ -190,31 +194,31 @@ export default function DraftPanel({
     const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
     const check = !bodyChanged ? unsupported(latest.lint) : undefined;
     // 고친 글을 저장하며 경고를 보여줬다면, 이어서 누른 복사는 같은 경고로 다시 묻지 않는다.
-    const acknowledged = warned.current === `${latest.id}\n${latest.body}`;
+    const acknowledged = !bodyChanged && warned.current === `${latest.id}\n${latest.body}`;
     warned.current = null;
     if (copyAfter && check && !acknowledged && !window.confirm(`${warningText(check)}\n\n${t("확인했다면 그대로 복사할까요?")}`)) return;
     setAction(copyAfter ? "copy" : "save");
     setActionError(null);
     setConflict(null);
     let copied = false;
-    let failedAt: "copy" | "save" = "save";
     const keep = (d: Draft) => {
       if (!d?.id) return;
       setSavedDraft(d);
       if (newest && d.id !== newest.id) pinAfterSave.current = d.id;
     };
     try {
-      if (copyAfter && bodyChanged) {
-        // 고친 글: 한 번의 요청으로 저장하고, 수치·주장 경고가 없을 때만 복사로 기록한다.
+      if (copyAfter) {
+        // 수정하지 않은 글도 최신 원문을 서버에서 확인한 뒤 클립보드에 쓴다.
         // 클립보드에는 클릭한 순간 응답을 기다리는 ClipboardItem을 넘긴다(응답 뒤에 쓰면 브라우저가 사용자 동작이 아니라며 막는다).
         const text = outgoing;
-        const request = postEdit(latest.id, latest, true, overwrite, true);
+        const confirmed = !bodyChanged && (acknowledged || Boolean(check));
+        const request = postEdit(latest.id, latest, true, overwrite, !confirmed);
         const clip =
           typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
             ? navigator.clipboard.write([
                 new ClipboardItem({
                   "text/plain": request.then((d) =>
-                    d.status === "copied" ? new Blob([text], { type: "text/plain" }) : Promise.reject(new Error("held")),
+                    !d.copyHeld && d.status === "copied" ? new Blob([text], { type: "text/plain" }) : Promise.reject(new Error("held")),
                   ),
                 }),
               ])
@@ -223,7 +227,7 @@ export default function DraftPanel({
         const saved = await request;
         keep(saved);
         setEditing(false);
-        if (saved.status !== "copied") {
+        if (saved.copyHeld || saved.status !== "copied") {
           const warning = unsupported(saved.lint);
           warned.current = `${saved.id}\n${saved.body}`;
           setActionError(
@@ -240,13 +244,7 @@ export default function DraftPanel({
           return;
         }
       } else {
-        if (copyAfter) {
-          failedAt = "copy";
-          await navigator.clipboard.writeText(outgoing);
-          copied = true;
-          failedAt = "save";
-        }
-        const saved = await postEdit(latest.id, latest, copyAfter, overwrite);
+        const saved = await postEdit(latest.id, latest, false, overwrite);
         keep(saved);
         setEditing(false);
         const after = bodyChanged ? unsupported(saved?.lint) : undefined;
@@ -269,9 +267,7 @@ export default function DraftPanel({
       setActionError(
         copied
           ? t("복사는 완료했지만 저장하지 못했습니다. 내용을 유지한 채 다시 저장해 주세요.")
-          : failedAt === "copy"
-            ? t("복사하지 못했습니다. 브라우저의 클립보드 권한을 확인하거나 수정 화면에서 직접 복사해 주세요.")
-            : `${t("저장하지 못했습니다.")} ${(err as Error).message}`,
+          : `${t("저장하지 못했습니다.")} ${(err as Error).message}`,
       );
     } finally {
       setAction(null);

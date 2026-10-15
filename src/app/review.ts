@@ -34,7 +34,7 @@ export function recordDraftReview(ctx: AppContext, ownerId: string, draftId: num
 /** 채널·언어별로 프롬프트 후보가 되는 내 예시 수. 오래된 것부터 물러난다. */
 export const OWN_EXAMPLE_CAP = 8;
 /** 경고된 근거·표현 오류가 문체 예시로 굳지 않게 한다. 복사 사실과 수정량은 별도로 기록한다. */
-const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms"]);
+const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "source_conditions_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms"]);
 
 /** 사용자 예시가 채널당 5개 쌓이면 시드는 비활성화. 내 예시는 최근 OWN_EXAMPLE_CAP개만 활성. */
 function retireSeeds(ctx: AppContext, ownerId: string, channel: string, lang: string) {
@@ -59,13 +59,13 @@ function upsertOwnExample(ctx: AppContext, ownerId: string, d: { id: number; cha
  * base는 편집을 시작할 때 본 본문이다. 그사이 다른 탭에서 본문이 바뀌었으면 덮어쓰지 않고 충돌로 돌려준다.
  */
 /** 복사 전에 사람이 확인해야 하는 경고: 원자료에서 찾지 못한 수치·주장. */
-export const COPY_CONFIRM_RULES = new Set(["numbers_need_review", "claims_need_review"]);
+export const COPY_CONFIRM_RULES = new Set(["numbers_need_review", "claims_need_review", "source_conditions_need_review"]);
 
 /**
  * 초안 수정 저장. markCopied는 복사로 기록한다.
  * copyIfClean은 저장한 본문에 COPY_CONFIRM_RULES 경고가 없을 때만 복사로 기록한다(고친 글을 확인 없이 복사하지 않게; 클라이언트는 응답 status로 복사 여부를 정한다).
  */
-export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean; copyIfClean?: boolean; base?: { title?: string; body: string } }): Draft {
+export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean; copyIfClean?: boolean; base?: { title?: string; body: string } }): Draft & { copyHeld?: boolean } {
   const d = getDraftRow(ctx, ownerId, id);
   const settings = getSettings(ctx, ownerId);
   if (input.base && (input.base.body !== d.body || (input.base.title ?? "") !== (d.title ?? ""))) throw new GenerationConflictError(say(settings.ui?.locale ?? "ko", "편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다.", "This draft was saved elsewhere while you were editing."));
@@ -73,7 +73,8 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
   const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
-  if (input.markCopied && input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok)) input = { ...input, markCopied: false };
+  const copyHeld = Boolean(input.markCopied && input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok));
+  if (copyHeld) input = { ...input, markCopied: false };
   if (changed) {
     ctx.db.insert(schema.draftEdits).values({ ownerId, draftId: id, channel: d.channel, before: d.body, after: input.body, createdAt: now }).run();
     queueLesson(ctx, ownerId, { draftId: id, candidateId: d.candidateId, channel: d.channel, lang: d.lang, before: d.body, after: input.body });
@@ -87,7 +88,7 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
     emit(ctx, ownerId, { resource: "examples" });
   }
   emit(ctx, ownerId, { resource: "drafts", id });
-  return toDraft(getDraftRow(ctx, ownerId, id));
+  return { ...toDraft(getDraftRow(ctx, ownerId, id)), ...(copyHeld ? { copyHeld: true } : {}) };
 }
 
 export function dropDraft(ctx: AppContext, ownerId: string, id: number, reason: FeedbackReason, note?: string): void {

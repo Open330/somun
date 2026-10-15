@@ -53,7 +53,7 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
       ? ["For endorsement_need_review: remove unsupported praise, recommendations and predictions of convenience or usefulness. State the supported operation instead, or use the channel’s requested workflow question. Do not replace the flagged sentence with another ungrounded benefit or invented author experience."]
       : []),
     ...(issues.some((l) => l.rule === "sentence_count")
-      ? ["For sentence_count: count the closing question within the maximum. Keep the main supported task and operation, remove optional details or limitations, and keep the channel’s requested closing. Facts is evidence, not a checklist of claims to include."]
+      ? ["For sentence_count: count the closing question within the maximum. Keep the main supported task, its prerequisites and exclusions. Remove optional details, unrelated caveats and optional questions first; never remove eligibility conditions to shorten the post. Facts is evidence, not a checklist of claims to include."]
       : []),
     ...(issues.some((l) => l.rule === "numbers_need_review")
       ? ["For numbers_need_review: use the exact figure from Facts, or delete the claim. Never swap the number for vague size words (dramatically, significantly, halved, much faster, 대폭, 크게, 절반)."]

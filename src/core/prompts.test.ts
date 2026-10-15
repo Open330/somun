@@ -4,6 +4,13 @@ import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPromp
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
+it("keeps mandatory exclusions above optional caveats and sentence budgets", () => {
+  const p = draftPrompt(candidate, "threads", "ko", [], "Describe the change");
+  expect(p.system).toContain("MUST stay even when the channel does not request limitations");
+  expect(p.user).toContain("eligibility and exclusions are mandatory regardless of channel");
+  expect(p.user).not.toContain("Do not add a limitation unless");
+});
+
 it("carries conditional PR source data through digest, judge, draft and numeric grounding", () => {
   const c = { ...candidate, evidence: { ...candidate.evidence, mergedPrDetails: [{ number: 111, title: "Deliver partial quiz", body: "Only the last attempt may deliver at least 50% of the requested questions. Default off for GitHub App.", url: "https://github.com/test/tool/pull/111" }] } };
   const digest = digestPrompt(c);

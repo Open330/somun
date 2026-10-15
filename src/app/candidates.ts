@@ -5,7 +5,9 @@ import type { Candidate, CandidateDetail, CandidateListItem, CandidateStatus, Ch
 import { emit, NotFoundError, type AppContext } from "./context.js";
 import { getProfile } from "./profiles.js";
 import { alreadyTold } from "./ledger.js";
-import { crossLangNumberDiff } from "../core/lint.js";
+import { crossLangNumberDiff, sourceConditionReview } from "../core/lint.js";
+import { sourceConditionPrNumbers } from "../core/prompts.js";
+import { localeOf } from "./i18n.js";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -96,7 +98,12 @@ export function listInbox(ctx: AppContext, ownerId: string): CandidateListItem[]
 export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number): CandidateDetail {
   const c = getCandidateRow(ctx, ownerId, id);
   const judgments = ctx.db.select().from(schema.judgments).where(eq(schema.judgments.candidateId, id)).orderBy(desc(schema.judgments.createdAt)).all().map(toJudgment);
-  const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map(toDraft);
+  // 기존 저장 문안을 바꾸지 않고 현재 원문의 조건 확인만 상세 응답에 반영한다.
+  const conditionReview = sourceConditionReview(sourceConditionPrNumbers(c.evidence as Evidence), localeOf(ctx, ownerId));
+  const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map((r) => {
+    const d = toDraft(r);
+    return { ...d, lint: [...d.lint.filter((l) => l.rule !== "source_conditions_need_review"), ...(conditionReview ? [conditionReview] : [])] };
+  });
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));
   return { candidate: { ...toCandidate(c), evidence: c.evidence as Evidence }, unpublishedDraftCount: unpublishedCount(drafts, publications), judgments, drafts, publications, signals, profile: getProfile(ctx, ownerId, c.repo), told: alreadyTold(ctx, ownerId, c.repo, { excludeCandidateId: c.id, limit: 20 }), consistency: crossLangNumberDiff(drafts) };

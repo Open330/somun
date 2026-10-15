@@ -206,6 +206,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     no_invented_limit: t("한계 확인"),
     numbers_need_review: t("수치 확인"),
     claims_need_review: t("주장 확인"),
+    source_conditions_need_review: t("원문 조건 확인"),
     endorsement_need_review: t("평가 근거 확인"),
     author_role_need_review: t("작성자 역할 확인"),
     outline_structure: t("개요 형식"),
