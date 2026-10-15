@@ -1,3 +1,4 @@
+import { DIGEST_REVISION } from "../core/prompts.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -27,7 +28,7 @@ const params = { targets: [{ channel: "x", lang: "en" }] };
 beforeEach(() => {
   ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] };
   app = createApp(ctx, loadConfig({ SOMUN_TOKEN: "test" }));
-  cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", repo: "a/b", title: "Fix", type: "release", key: "test", evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+  cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", repo: "a/b", title: "Fix", type: "release", key: "test", evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], highlightsAt: 1, digestRevision: DIGEST_REVISION }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
   vi.mocked(runLlm).mockResolvedValue(output(draft));
 });
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); ctx.db.$client.close(); });

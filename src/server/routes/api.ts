@@ -22,7 +22,7 @@ import { ingestSessions } from "../../app/sessions.js";
 import { connectorsView, githubAppConfig, issueInstallLink, listInstallationRepos, recordInstallation, setWatchedRepos } from "../../app/connectors.js";
 import type { Config } from "../config.js";
 import { canConfigureGithubApp, startGithubAppSetup } from "./github-app.js";
-import { queueStep, requestedIntroduction } from "../../app/pipeline.js";
+import { digestCurrent, queueStep, requestedIntroduction } from "../../app/pipeline.js";
 import { listPublicationsWithMetrics, performanceSummary, registerPublication, removePublication, setManualStats, updatePublication } from "../../app/publications.js";
 import { addExample, dropDraft, importSeeds, listExamples, recordDraftReview, removeExample, saveDraftEdit, setExampleActive } from "../../app/review.js";
 import { getSettings, getSettingsView, updateSettings } from "../../app/settings.js";
@@ -141,10 +141,11 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.post("/candidates/:id/redraft", async (c) => {
     const { targets, instruction, introduction } = await body(c, z.object({ introduction: z.boolean().optional(), targets: z.array(z.object({ channel, lang })).min(1).max(30), instruction: z.string().max(600).optional() }));
     const ownerId = c.get("ownerId"), cid = id(c.req.param("id"));
-    const cand = getCandidateDetail(ctx, ownerId, cid).candidate;
+    const detail = getCandidateDetail(ctx, ownerId, cid), cand = detail.candidate;
+    const judgedAt = detail.judgments.find((j) => j.id === cand.latestJudgmentId)?.createdAt;
     const unique = targets.filter((t, i) => targets.findIndex((o) => o.channel === t.channel && o.lang === t.lang) === i);
     const jobs = ctx.db.$client.transaction(() => {
-      const direct = unique.filter((t) => cand.evidence.highlightsAt || requestedIntroduction(ctx, ownerId, cid, t.channel, t.lang, introduction));
+      const direct = unique.filter((t) => digestCurrent(cand, judgedAt) || requestedIntroduction(ctx, ownerId, cid, t.channel, t.lang, introduction));
       const pending = unique.filter((t) => !direct.includes(t));
       const jobs = direct.map((t) => queueStep(ctx, ownerId, "draft", cid, t.channel, t.lang, { instruction, introduction }));
       if (pending.length) jobs.push(queueStep(ctx, ownerId, "digest", cid, undefined, undefined, { continuation: { targets: pending, instruction, introduction } }));

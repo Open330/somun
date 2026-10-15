@@ -8,6 +8,7 @@ import type { AppContext } from "../app/context.js";
 import { openDb, schema } from "../infra/db/index.js";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { DIGEST_REVISION } from "../core/prompts.js";
 
 describe("HTTP response boundaries", () => {
   let ctx: AppContext;
@@ -28,6 +29,39 @@ describe("HTTP response boundaries", () => {
   });
 
   const headers = { Authorization: "Bearer test-token", "Content-Type": "application/json" };
+
+  it.each([
+    { revision: undefined, offset: 0, expected: "digest" },
+    { revision: "previous-contract", offset: 0, expected: "digest" },
+    { revision: DIGEST_REVISION, offset: -1000, expected: "digest" },
+    { revision: DIGEST_REVISION, offset: 0, expected: "draft" },
+  ])("redrafts through $expected with revision $revision and source offset $offset", async ({ revision, offset, expected }) => {
+    const now = Date.now();
+    const candidateId = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", type: "release", title: "Update", repo: "me/tool", key: "stale-digest", evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", releaseNotes: "A revised allowance excludes disabled accounts.", highlights: ["An earlier summary without its exclusion."], highlightsAt: now + offset, digestRevision: revision }, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    ctx.db.insert(schema.drafts).values({ ownerId: "local", candidateId, channel: "threads", lang: "ko", version: 1, body: "Existing draft", lint: [], status: "proposed", model: "fixture", createdAt: now, updatedAt: now }).run();
+    const before = ctx.db.select().from(schema.drafts).all();
+    const res = await app.request(`/api/candidates/${candidateId}/redraft`, { method: "POST", headers, body: JSON.stringify({ targets: [{ channel: "threads", lang: "ko" }], introduction: false }) });
+    expect(res.status).toBe(202);
+    const jobs = ctx.db.select().from(schema.llmJobs).all();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].kind).toBe(expected);
+    if (expected === "digest") {
+      expect(jobs[0].meta?.digestRevision).toBe(DIGEST_REVISION);
+      expect(jobs[0].continuation).toMatchObject({ targets: [{ channel: "threads", lang: "ko" }], introduction: false });
+      expect(jobs[0].user).toContain("A revised allowance excludes disabled accounts.");
+      expect(jobs[0].user).not.toContain("An earlier summary without its exclusion.");
+    }
+    expect(ctx.db.select().from(schema.drafts).all()).toEqual(before);
+  });
+
+  it.each([false, true])("preserves an empty digest while applying current-contract hold: %s", async (current) => {
+    const now = Date.now();
+    const candidateId = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", type: "release", title: "Update", repo: "me/tool", key: "empty-digest", evidence: { repo: "me/tool", repoUrl: "https://github.com/me/tool", highlights: [], highlightsAt: now, ...(current ? { digestRevision: DIGEST_REVISION } : {}) }, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const res = await app.request(`/api/candidates/${candidateId}/redraft`, { method: "POST", headers, body: JSON.stringify({ targets: [{ channel: "threads", lang: "ko" }], introduction: false }) });
+    expect(res.status).toBe(current ? 409 : 202);
+    expect(ctx.db.select().from(schema.llmJobs).all().map((j) => j.kind)).toEqual(current ? [] : ["digest"]);
+    expect(ctx.db.select().from(schema.candidates).get()!.evidence.highlights).toEqual([]);
+  });
 
   it("shows current source review on legacy drafts without writes and holds unconfirmed copy and learning", async () => {
     const now = Date.now();

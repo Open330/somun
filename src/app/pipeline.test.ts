@@ -1,3 +1,4 @@
+import { DIGEST_REVISION } from "../core/prompts.js";
 import { EventEmitter } from "node:events";
 import { eq } from "drizzle-orm";
 import pino from "pino";
@@ -37,7 +38,7 @@ it("builds a draft prompt from concrete evidence", () => {
 
 it("keeps digest highlights whose numbers are not in the raw material out of judge and draft", () => {
   ctx.db.update(schema.candidates).set({ status: "new", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", releaseNotes: "Adds --watch. Cold start is now 120 ms." } }).run();
-  applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "test", result: { highlights: ["Adds a --watch flag.", "Cold start is 3x faster.", "Cold start is 120 ms."], limitations: [] } });
+  applyResult(ctx, "test", { kind: "digest", digestRevision: DIGEST_REVISION, candidateId: id, model: "test", result: { highlights: ["Adds a --watch flag.", "Cold start is 3x faster.", "Cold start is 120 ms."], limitations: [] } });
   const ev = ctx.db.select().from(schema.candidates).get()!.evidence as { highlights: string[]; unverifiedHighlights: { text: string; numbers: string[] }[] };
   expect(ev.highlights).toEqual(["Adds a --watch flag.", "Cold start is 120 ms."]);
   expect(ev.unverifiedHighlights).toEqual([{ text: "Cold start is 3x faster.", numbers: ["3x"] }]);
@@ -86,7 +87,7 @@ describe("hourly sweep", () => {
 
   it("continues with judge instead of digesting again once a digest exists", async () => {
     const at = Date.now();
-    ctx.db.update(schema.candidates).set({ updatedAt: at, evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: at } }).run();
+    ctx.db.update(schema.candidates).set({ updatedAt: at, evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: at, digestRevision: DIGEST_REVISION } }).run();
     expect(await processNewCandidates(ctx)).toBe(1);
     expect(queued()).toEqual(["judge"]);
   });
@@ -134,7 +135,7 @@ it("filters unverified highlights before keeping eight, and checks against the t
   ctx.db.update(schema.candidates).set({ status: "new", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", releaseNotes: "New notes after a later collect." } }).run();
   const bad = Array.from({ length: 3 }, (_, i) => `Claim ${i} is 3x faster.`);
   const good = [..."abcdefg"].map((c) => `Change ${c} without numbers.`);
-  applyResult(ctx, "test", { kind: "digest", candidateId: id, model: "t", promptText: "## Release notes\nCold start went from 800ms to 200ms.", result: { highlights: [...bad, ...good, "Cold start went from 800 ms to 200 ms."], limitations: [] } });
+  applyResult(ctx, "test", { kind: "digest", digestRevision: DIGEST_REVISION, candidateId: id, model: "t", promptText: "## Release notes\nCold start went from 800ms to 200ms.", result: { highlights: [...bad, ...good, "Cold start went from 800 ms to 200 ms."], limitations: [] } });
   const ev = ctx.db.select().from(schema.candidates).get()!.evidence as { highlights: string[]; unverifiedHighlights: unknown[] };
   expect(ev.highlights).toHaveLength(8);
   expect(ev.highlights).toContain("Cold start went from 800 ms to 200 ms.");

@@ -6,7 +6,8 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { claimJob, completeJob, generationStatus, holdsClaim, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration } from "./jobs.js";
 import { updateSettings } from "./settings.js";
-import { enqueueJob } from "./pipeline.js";
+import { digestCurrent, enqueueJob } from "./pipeline.js";
+import { DIGEST_REVISION } from "../core/prompts.js";
 
 describe("local worker job lifecycle", () => {
   let ctx: AppContext;
@@ -23,6 +24,63 @@ describe("local worker job lifecycle", () => {
   const valid = JSON.stringify({ body: "A test draft with 1 limitation: beta. https://github.com/a/x" });
   const row = () => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!;
   const claim = () => claimJob(ctx, "a", jobId, "worker").claimToken!;
+
+  it.each([undefined, "previous-contract", DIGEST_REVISION])("retains the actual digest job revision %s on completion", (digestRevision) => {
+    const source = ctx.db.select().from(schema.candidates).get()!;
+    ctx.db.update(schema.candidates).set({ evidence: { ...source.evidence, digestRevision: DIGEST_REVISION } }).run();
+    const id = enqueueJob(ctx, "a", "digest", candidateId, undefined, undefined, { system: "frozen digest", user: "frozen source", schema: {}, schemaName: "digest", digestRevision });
+    const job = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!;
+    expect(job.meta?.digestRevision).toBe(digestRevision);
+    const claimToken = claimJob(ctx, "a", id, "worker").claimToken!;
+    expect(completeJob(ctx, "a", id, { claimToken, resultJson: JSON.stringify({ highlights: ["A source-backed update."], limitations: [] }) }).applied).toBe(true);
+    const candidate = ctx.db.select().from(schema.candidates).get()!;
+    expect(candidate.evidence.digestRevision).toBe(digestRevision);
+    expect(digestCurrent(candidate)).toBe(digestRevision === DIGEST_REVISION);
+    expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!.status).toBe(digestRevision === DIGEST_REVISION ? "done" : "failed");
+  });
+
+  it.each([false, true])("holds a late legacy digest and retries with current sources, continuation %s", (continueDraft) => {
+    ctx.db.delete(schema.llmJobs).run();
+    const continuation = continueDraft ? { targets: [{ channel: "threads" as const, lang: "ko" }], introduction: false } : undefined;
+    const old = enqueueJob(ctx, "a", "digest", candidateId, undefined, undefined, { system: "legacy", user: "legacy source", schema: {}, schemaName: "digest" }, continuation);
+    // 새 요청이 대기 중인 구 작업에 합쳐져도 구 작업을 새 계약으로 바꾸지 않는다.
+    const merged = enqueueJob(ctx, "a", "digest", candidateId, undefined, undefined, { system: "new", user: "new source", schema: {}, schemaName: "digest", digestRevision: DIGEST_REVISION }, continuation);
+    expect(merged).toBe(old);
+    const claimToken = claimJob(ctx, "a", old, "worker").claimToken!;
+    const raw = JSON.stringify({ highlights: ["Legacy summary retained for inspection."], limitations: [] });
+    completeJob(ctx, "a", old, { claimToken, resultJson: raw });
+    const oldRow = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, old)).get()!;
+    expect(oldRow).toMatchObject({ status: "failed", resultJson: raw });
+    expect(oldRow.error).toContain("원자료");
+    expect(pendingJobs(ctx, "a")).toEqual([]);
+    expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
+    expect(ctx.db.select().from(schema.candidates).get()!.evidence.highlights).toEqual(["Legacy summary retained for inspection."]);
+    const retry = retryGeneration(ctx, "a", old);
+    const retried = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()!;
+    expect(retried.meta?.digestRevision).toBe(DIGEST_REVISION);
+    expect(retried.continuation).toEqual(continuation ?? null);
+    completeJob(ctx, "a", retry, { claimToken: claimJob(ctx, "a", retry, "worker").claimToken!, resultJson: JSON.stringify({ highlights: ["Current source-backed summary."], limitations: [] }) });
+    expect(digestCurrent(ctx.db.select().from(schema.candidates).get()!)).toBe(true);
+    expect(pendingJobs(ctx, "a").map((j) => j.kind)).toEqual([continueDraft ? "draft" : "judge"]);
+  });
+
+  it.each([
+    { jobRevision: undefined, evidenceRevision: DIGEST_REVISION, retryKind: "judge" },
+    { jobRevision: DIGEST_REVISION, evidenceRevision: undefined, retryKind: "digest" },
+  ])("holds a judge with stale summary input and retries through $retryKind", ({ jobRevision, evidenceRevision, retryKind }) => {
+    ctx.db.delete(schema.llmJobs).run();
+    const now = Date.now();
+    ctx.db.update(schema.candidates).set({ evidence: { repo: "a/x", repoUrl: "https://github.com/a/x", highlights: ["A retained summary."], highlightsAt: now, digestRevision: evidenceRevision } }).run();
+    const id = enqueueJob(ctx, "a", "judge", candidateId, undefined, undefined, { system: "frozen judge", user: "frozen summary", schema: {}, schemaName: "judgment", digestRevision: jobRevision });
+    const raw = JSON.stringify({ scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "An old recommendation", suggestedChannels: ["x"], angle: "Old summary angle" });
+    completeJob(ctx, "a", id, { claimToken: claimJob(ctx, "a", id, "worker").claimToken!, resultJson: raw });
+    expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()).toMatchObject({ status: "failed", resultJson: raw });
+    expect(ctx.db.select().from(schema.judgments).all()).toEqual([]);
+    expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
+    expect(pendingJobs(ctx, "a")).toEqual([]);
+    const retry = retryGeneration(ctx, "a", id);
+    expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()).toMatchObject({ kind: retryKind, meta: { digestRevision: DIGEST_REVISION } });
+  });
 
   it("lets only the live claim report completion (so local usage is counted once)", () => {
     const token = claim();
@@ -108,7 +166,7 @@ describe("local worker job lifecycle", () => {
   });
 
   it("durably enqueues the next pipeline step before reporting completion", () => {
-    ctx.db.update(schema.llmJobs).set({ kind: "digest", channel: null, lang: null }).where(eq(schema.llmJobs.id, jobId)).run();
+    ctx.db.update(schema.llmJobs).set({ kind: "digest", channel: null, lang: null, meta: { digestRevision: DIGEST_REVISION } }).where(eq(schema.llmJobs.id, jobId)).run();
     const input = { claimToken: claim(), resultJson: JSON.stringify({ highlights: ["Ships an API"], limitations: [] }) };
     expect(completeJob(ctx, "a", jobId, input).applied).toBe(true);
     expect(completeJob(ctx, "a", jobId, input).applied).toBe(false);

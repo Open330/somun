@@ -1,5 +1,5 @@
 import { assertSharedQueueCapacity } from "./shared-quota.js";
-import { draftPurposeOf, instructionOf } from "../core/prompts.js";
+import { DIGEST_REVISION, draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { and, asc, eq, gt, gte, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { schema } from "../infra/db/index.js";
 import { SIDE_JOB_KINDS, type Channel, type ChangeEvent, type GenerationKind, type Job, type JobKind, type JobProgress } from "../shared/types.js";
 import { emit, GenerationConflictError, NotFoundError, type AppContext } from "./context.js";
 import { getCandidateRow } from "./candidates.js";
-import { announcedSince, applyResult, buildPrompt, enqueueJob, processNewCandidates } from "./pipeline.js";
+import { announcedSince, applyResult, buildPrompt, digestCurrent, enqueueJob, processNewCandidates } from "./pipeline.js";
 import { applyLesson } from "./learning.js";
 import { applyProfile, pendingProfileJob } from "./profiles.js";
 import { getSettings } from "./settings.js";
@@ -103,15 +103,17 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       }
       if (j.kind === "profile") profileApplied = true;
       else if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, promptText: j.user, model }, j.continuation ?? undefined);
+      else if (j.kind === "judge" && (j.meta?.digestRevision !== DIGEST_REVISION || !digestCurrent(getCandidateRow(ctx, ownerId, j.candidateId)))) applied = { kind: "judge", staleDigest: true };
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, promptText: j.user, digestRevision: j.meta?.digestRevision, model }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
-      const lc = empty ? localeOf(ctx, ownerId) : "ko";
-      const error = !empty ? null : raw > 0
+      const stale = Boolean(applied?.staleDigest);
+      const lc = empty || stale ? localeOf(ctx, ownerId) : "ko";
+      const error = stale ? say(lc, "요약 작성 기준이 바뀌어 후속 생성을 중단했습니다. 다시 시도하면 원자료를 새로 분석합니다.", "Summary requirements changed, so follow-up generation stopped. Retry to analyze the original sources again.") : !empty ? null : raw > 0
         ? say(lc, "요약에 원자료에서 확인되지 않은 숫자만 있어 초안을 쓰지 않았습니다. 글감의 '원자료에서 확인하지 못해 뺀 요약'을 확인해 주세요.", "No draft was written: every digest line had numbers not found in the raw material. See the digest lines left out on the candidate page.")
         : say(lc, "알릴 만한 변경 근거가 없습니다. 소스를 추가한 뒤 다시 분석해 주세요.", "There is no change worth announcing yet. Add a source and analyze again.");
-      ctx.db.update(schema.llmJobs).set({ status: empty ? "failed" : "done", resultJson: input.resultJson, error, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
+      ctx.db.update(schema.llmJobs).set({ status: empty || stale ? "failed" : "done", resultJson: input.resultJson, error, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
     }
     events.push({ ownerId, resource: "jobs", id });
     return { applied: !input.error && Boolean(input.resultJson) };
@@ -170,6 +172,7 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     }
     const candidate = getCandidateRow(ctx, ownerId, job.candidateId);
     if (candidate.status === "dropped" || (candidate.status === "published" && job.kind !== "draft" && !(job.kind === "digest" && job.continuation))) throw new GenerationConflictError(say(localeOf(ctx, ownerId), "보관되거나 발행된 글감은 다시 생성할 수 없습니다.", "Archived or published candidates cannot be generated again."));
+    if (job.kind === "judge" && !digestCurrent(candidate)) return enqueueJob(ctx, ownerId, "digest", job.candidateId, undefined, undefined, buildPrompt(ctx, ownerId, "digest", job.candidateId), job.continuation ?? undefined);
     // 다이제스트·판단은 지금의 근거와 계정 언어로 다시 만든다. 초안은 요청한 지침이 프롬프트에 들어 있으므로 저장된 것을 그대로 쓴다.
     // 단, 첫 소개로 실패한 초안인데 그 뒤에 저장소를 알렸다면(복사·게시) 낡은 첫 소개 대신 지금 상태로 다시 만든다.
     // 편집 지시는 저장된 프롬프트에서 되찾아 그대로 넘긴다.

@@ -3,7 +3,7 @@ import { enabledTargets, type Channel } from "../core/channels.js";
 import { schema } from "../infra/db/index.js";
 import type { CandidateType, DraftStatus, Evidence, WeeklyPickView } from "../shared/types.js";
 import { GenerationConflictError, type AppContext } from "./context.js";
-import { digestUsable, primaryTarget, queueStep } from "./pipeline.js";
+import { digestCurrent, digestUsable, primaryTarget, queueStep } from "./pipeline.js";
 import { getSettings, updateSettings } from "./settings.js";
 import { hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 
@@ -50,7 +50,8 @@ export function rankForPick(ctx: AppContext, ownerId: string, now = Date.now()):
     .filter((c) => c.type !== "in-progress" || newestInProgress.get(c.repo) === c.updatedAt)
     .filter((c) => {
       const ev = c.evidence as Evidence;
-      return !(ev.highlightsAt && !ev.highlights?.some((h) => h.trim()));
+      const j = c.latestJudgmentId ? judgments.get(c.latestJudgmentId) : undefined;
+      return !(digestCurrent(c, j?.createdAt) && !ev.highlights?.some((h) => h.trim()));
     })
     .map((c) => {
       const j = c.latestJudgmentId ? judgments.get(c.latestJudgmentId) : undefined;

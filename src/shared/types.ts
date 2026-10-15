@@ -24,7 +24,7 @@ export const SIDE_JOB_KINDS = ["lesson", "profile"] as const;
 export type GenerationKind = Exclude<JobKind, (typeof SIDE_JOB_KINDS)[number]>;
 export type DraftPurpose = "introduction" | "update";
 /** llm_jobs.meta. 생성 당시 초안 목적 또는 프로필의 저장소·README 해시. */
-export type JobMeta = { draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
+export type JobMeta = { digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
@@ -35,6 +35,8 @@ export type Evidence = {
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;
   /** README가 실험·로컬 전용으로 표시한 기능(절 제목). */ experimental?: string[];
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[]; highlightsAt?: number;
+  /** 실제 생성 작업이 사용한 요약 계약. 조건 준수·사실 정확성을 인증하지 않는다. */
+  digestRevision?: string;
   /** 이 글감에 연결된 PR 원문. 제목만으로는 기능 조건을 알 수 없다. */
   mergedPrDetails?: { number: number; title: string; body: string; url: string; bodyTruncated?: boolean }[];
   /** 원자료에서 찾지 못한 수치가 있어 highlights에서 뺀 요약. 판단·초안에 들어가지 않는다. */
