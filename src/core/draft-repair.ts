@@ -23,7 +23,8 @@ export function isBetterRepair(before: { rule: string; detail?: string }[], afte
   const haeyo = (text: string) => /(?:아요|어요|예요|해요|돼요|줘요|봐요)[.!。！]/.test(text);
   const formal = (text: string) => /(?:습니다|입니다|합니다|됩니다)[.!。！]/.test(text);
   if (haeyo(texts.before) && !formal(texts.before) && formal(texts.after)) return false;
-  if (formal(texts.before) && !haeyo(texts.before) && haeyo(texts.after)) return false;
+  const correctsRegister = before.some((issue) => issue.rule === "register_mismatch") && !after.some((issue) => issue.rule === "register_mismatch");
+  if (formal(texts.before) && !haeyo(texts.before) && haeyo(texts.after) && !correctsRegister) return false;
   if (!before.some((issue) => issue.rule === "numbers_need_review")) return true;
   const had = vaguePhrases(texts.before);
   return [...vaguePhrases(texts.after)].every((phrase) => had.has(phrase));

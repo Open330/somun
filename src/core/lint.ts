@@ -62,7 +62,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { language?: string; editorInstruction?: string; repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -114,12 +114,31 @@ export function unsupportedNumbers(text: string, source: string): string[] {
 
 const withoutUnit = (token: string) => token.replace(/(?<=\d)(?:ms|s|min|h|kb|mb|gb|tb)$/, "");
 
+/** 명시적인 한국어 해요체 채널만 검사한다. 문체 지시·모호한 커스텀 톤은 자동 해석하지 않는다. */
+function registerCheck(body: string, spec: ChannelSpec, facts: LintFacts, locale: Locale): LintResult | undefined {
+  if (facts.language?.toLowerCase().split("-")[0] !== "ko") return undefined;
+  const tone = spec.identity?.tone ?? "";
+  if (!/해요체(?=$|[.,;·\s])/.test(tone) || /합니다체|하십시오체|반말|해요체\s*(?:금지|아님|아닌|말고|대신|사용하지)/.test(tone)) return undefined;
+  // 명시 지시의 문체 명칭은 채널보다 우선한다. 부정·인용까지 자연어로 추론하지 않고 보수적으로 건너뛴다.
+  if (/해요체|합니다체|하십시오체|합쇼체|하오체|하게체|해라체|반말|존댓말|\b(?:haeyo|formal|informal|register)\b/i.test(facts.editorInstruction ?? "")) return undefined;
+  const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "")
+    .replace(/^\s*>.*$/gm, "").replace(/“[^”]*”|‘[^’]*’|"[^"\n]*"|'[^'\n]*'/g, "");
+  // 받침 ㅂ + 니다/니까인 확실한 격식 종결만 찾는다. URL·코드·인용문 내부는 제외했다.
+  const formal = [...prose.matchAll(/[가-힣]니(?:다|까)(?=\s*(?:[.!?。？！]|$))/g)]
+    .filter((m) => (m[0].charCodeAt(0) - 0xac00) % 28 === 17);
+  return { rule: "register_mismatch", ok: formal.length === 0, detail: formal.length ? sayIn(locale,
+    "선택 채널은 한국어 해요체를 요구합니다. 합니다/됩니다/입니다/습니다 종결을 해요/돼요/예요/있어요로 고치되 사실·수치·조건은 유지하세요.",
+    "This channel requires Korean 해요체. Replace formal 합니다/됩니다/입니다/습니다 endings while preserving facts, numbers and conditions.") : undefined };
+}
+
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const spec = channelPreset ?? channelSpec(channel);
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
+  const register = registerCheck(body, spec, facts, locale);
+  if (register) results.push(register);
   const conditionReview = sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
   if (conditionReview) results.push(conditionReview);
 

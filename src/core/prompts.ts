@@ -33,7 +33,7 @@ export type CandidateLike = { title: string; type: string; evidence: EvidenceLik
 
 /** 요약 생성 계약의 버전. 정확성 인증이 아니라 이전 입력·형식의 캐시 재사용을 막는다. */
 export const DIGEST_REVISION = "pr-source-conditions-v1";
-export type PromptSpec = { digestSourceHash?: string; digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
+export type PromptSpec = { editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
 export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
 
@@ -270,7 +270,8 @@ export function draftPurposeOf(meta: { draftPurpose?: import("../shared/types.js
 }
 
 /** 저장된 초안 프롬프트에서 편집 지시를 되찾는다(다시 만들 때 사용자의 요청을 잃지 않게). */
-export function instructionOf(user: string): string | undefined {
+export function instructionOf(user: string, meta?: { editorInstruction?: string } | null): string | undefined {
+  if (meta?.editorInstruction !== undefined) return meta.editorInstruction;
   const at = user.indexOf(INSTRUCTION_HEADING);
   if (at < 0) return undefined;
   const rest = user.slice(at + INSTRUCTION_HEADING.length);
@@ -327,6 +328,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
   return {
     schemaName: "draft",
     draftPurpose: opts.introduction ? "introduction" : "update",
+    editorInstruction: opts.instruction?.trim() ?? "",
     schema: DRAFT_SCHEMA,
     system: `You write first drafts of public posts for a developer who dislikes self-promotion and dislikes AI-sounding text even more.
 Hard rules:

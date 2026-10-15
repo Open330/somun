@@ -127,13 +127,14 @@ it("persists safe failure text and retries with the original instruction", async
 
 it("waits for fresh digest then queues only explicitly requested targets with rewrite instructions", async () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b" } }).run();
-  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, instruction: "One sentence only" });
+  const instruction = "One sentence only\n\n## Preserve\nKeep the rollback steps together.";
+  const response = await request(`/api/candidates/${cid}/redraft`, { ...params, instruction });
   expect(response.status).toBe(202);
   vi.mocked(runLlm).mockResolvedValueOnce(output({ highlights: ["CRLF is supported."], limitations: [] }));
   await processServerJob(ctx);
   const pending = pendingJobs(ctx, "local", "server");
   expect(pending).toHaveLength(1); expect(pending[0].kind).toBe("draft");
-  expect(pending[0].user).toContain("One sentence only"); expect(pending[0].user).toContain("CRLF is supported.");
+  expect(pending[0].editorInstruction).toBe(instruction); expect(pending[0].user).toContain(instruction); expect(pending[0].user).toContain("CRLF is supported.");
   await processServerJob(ctx); expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(1);
   expect(ctx.db.select().from(schema.judgments).all()).toHaveLength(0);
 });
@@ -513,4 +514,25 @@ it("automatically rewrites a generic Threads trial question into a concrete work
   expect(runLlm).toHaveBeenCalledTimes(2);
   expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("question_specificity");
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(revised.body);
+});
+
+
+it("repairs and adopts the required Korean channel register once, even with a conflicting general voice guide", async () => {
+  updateSettings(ctx, "local", { voice: { preset: "plain", guide: "한국어는 합니다체로 작성합니다.", useExamples: false } });
+  vi.mocked(runLlm).mockResolvedValueOnce(output({ title: "", body: "a/b는 CRLF 위치를 수정합니다." })).mockResolvedValueOnce(output({ title: "", body: "a/b는 CRLF 위치를 수정해요." }));
+  queueStep(ctx, "local", "draft", cid, "threads", "ko", { introduction: false });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("For register_mismatch");
+  expect(ctx.db.select().from(schema.drafts).get()?.body).toBe("a/b는 CRLF 위치를 수정해요.");
+  expect(ctx.db.select().from(schema.drafts).get()?.lint).toContainEqual({ rule: "register_mismatch", ok: true });
+  expect(await processServerJob(ctx)).toBe(false);
+});
+
+it("keeps explicit formal editor instructions above the channel register", async () => {
+  vi.mocked(runLlm).mockResolvedValue(output({ title: "", body: "a/b는 CRLF 위치를 수정합니다." }));
+  queueStep(ctx, "local", "draft", cid, "threads", "ko", { introduction: false, instruction: "합니다체로 써주세요." });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledOnce();
+  expect(ctx.db.select().from(schema.drafts).get()?.lint?.some(l => l.rule === "register_mismatch")).toBe(false);
 });
