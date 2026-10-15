@@ -2,13 +2,13 @@ import { useState } from "react";
 import type { Evidence } from "@shared/types";
 import { t } from "../../i18n";
 
-type Source = { label: string; text: string };
+type Source = { label: string; text: string; url?: string };
 
 /** Show collected material, never generated highlights as source evidence. */
 function sourceMaterial(e: Evidence): Source[] {
   const sources: Source[] = [];
-  const add = (label: string, text?: string) => {
-    if (text?.trim()) sources.push({ label, text });
+  const add = (label: string, text?: string, url?: string) => {
+    if (text?.trim()) sources.push({ label, text, url });
   };
   add(t("프로젝트 설명"), e.description);
   add("README", e.readmeForChecks || e.readmeExcerpt);
@@ -18,7 +18,7 @@ function sourceMaterial(e: Evidence): Source[] {
     add(`${t("릴리스 노트")}${e.version ? ` · ${e.version}` : ""}`, e.releaseNotes);
   }
   for (const title of e.mergedPrTitles ?? []) add(t("머지된 PR"), title);
-  for (const pr of e.mergedPrDetails ?? []) add(`${t("머지된 PR")} #${pr.number} · ${pr.title}`, pr.body);
+  for (const pr of e.mergedPrDetails ?? []) add(`${t("머지된 PR")} #${pr.number} · ${pr.title}`, pr.body, pr.url);
   for (const subject of e.commitSubjects ?? []) add(t("커밋 제목"), subject);
   const metrics: [string, number | undefined][] = [
     [t("스타"), e.stars],
@@ -132,7 +132,15 @@ export default function DraftEvidenceReview({
           <div className="evidence-source-results" role="region" aria-label={t("검색한 원자료")}>
             {visible.map((source, index) => (
               <section key={index} className="evidence-source-card">
-                <h4>{source.label}</h4>
+                <h4>
+                  {source.url && safeSourceUrl(source.url) ? (
+                    <a href={safeSourceUrl(source.url)} target="_blank" rel="noopener noreferrer">
+                      {source.label} ↗
+                    </a>
+                  ) : (
+                    source.label
+                  )}
+                </h4>
                 <pre>{highlight(source.text, query.trim())}</pre>
               </section>
             ))}

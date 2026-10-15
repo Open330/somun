@@ -311,6 +311,7 @@ export const en: Record<string, string> = {
   "길이·금지 표현 등 자동 규칙을 통과했습니다. 사실 확인은 별도로 필요합니다.":
     "Passed automatic rules such as length and banned phrases. Facts still need a separate check.",
   "형식 점검 통과": "Format check passed",
+  "원문 조건 확인": "Review source conditions",
   "질문 구체화": "Make the question specific",
   "제품 사용 여부나 일반 감상 대신, 어떤 입력·채널을 쓰거나 어떻게 검토하는지 구체적인 작업 흐름을 물어 주세요.":
     "Ask about a concrete workflow, such as inputs, channels or review steps, instead of a generic product-trial or opinion question.",

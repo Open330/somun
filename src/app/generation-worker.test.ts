@@ -32,6 +32,15 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); ctx.db.$client.close(); });
 
+it("keeps source condition review visible without spending a repair call to clear it", async () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], mergedPrDetails: [{ number: 42, title: "Editor fix", body: "Fixes CRLF positions. Requires enabling the editor flag.", url: "https://github.com/a/b/pull/42" }] } }).run();
+  queueStep(ctx, "local", "draft", cid, "x", "en", { introduction: false });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledOnce();
+  expect(ctx.db.select().from(schema.drafts).get()?.lint).toContainEqual(expect.objectContaining({ rule: "source_conditions_need_review", ok: false }));
+  expect(await processServerJob(ctx)).toBe(false);
+});
+
 it("acknowledges without calling the model and persists claimed/done states without exposing prompts", async () => {
   const response = await request(`/api/candidates/${cid}/redraft`, params);
   expect(response.status).toBe(202); expect(response.headers.get("Location")).toContain("/api/jobs/status");

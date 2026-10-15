@@ -29,6 +29,31 @@ describe("HTTP response boundaries", () => {
 
   const headers = { Authorization: "Bearer test-token", "Content-Type": "application/json" };
 
+  it("shows current source review on legacy drafts without writes and holds unconfirmed copy and learning", async () => {
+    const now = Date.now();
+    const evidence = { repo: "me/tool", repoUrl: "https://github.com/me/tool", mergedPrDetails: [{ number: 42, title: "Allowance", body: "Free accounts get 150 turns for 24 hours, except operator-disabled accounts.", url: "https://github.com/me/tool/pull/42" }] };
+    const candidateId = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", type: "release", title: "Update", repo: "me/tool", key: "conditions", evidence, createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const body = "tool gives free accounts 150 turns for 24 hours. https://github.com/me/tool";
+    const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId: "local", candidateId, channel: "x", lang: "en", version: 1, body, lint: [{ rule: "length", ok: true }], status: "proposed", model: "fixture", createdAt: now, updatedAt: now }).run().lastInsertRowid);
+    const before = ctx.db.select().from(schema.drafts).get();
+    const detail = await (await app.request(`/api/candidates/${candidateId}`, { headers })).json();
+    expect(detail.drafts[0].lint).toContainEqual(expect.objectContaining({ rule: "source_conditions_need_review", ok: false }));
+    expect(ctx.db.select().from(schema.drafts).get()).toEqual(before);
+    const send = (copyIfClean: boolean) => app.request(`/api/drafts/${draftId}/edit`, { method: "POST", headers, body: JSON.stringify({ body, markCopied: true, copyIfClean }) });
+    const held = await (await send(true)).json();
+    expect(held.status).toBe("proposed");
+    expect(held.copyHeld).toBe(true);
+    expect(ctx.db.select().from(schema.examples).all()).toHaveLength(0);
+    const acknowledged = await (await send(false)).json();
+    expect(acknowledged.status).toBe("copied");
+    expect(acknowledged.lint).toContainEqual(expect.objectContaining({ rule: "source_conditions_need_review", ok: false }));
+    expect(ctx.db.select().from(schema.examples).all()).toHaveLength(0);
+    expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
+    const heldAgain = await (await send(true)).json();
+    expect(heldAgain.status).toBe("copied");
+    expect(heldAgain.copyHeld).toBe(true);
+  });
+
   it("accepts a single selected channel, another selection, and deliberately empty channel settings", async () => {
     for (const channelLangs of [{ x: ["en"] }, { threads: ["ko"] }, {}]) {
       const res = await app.request("/api/settings", { method: "PATCH", headers, body: JSON.stringify({ channelLangs }) });

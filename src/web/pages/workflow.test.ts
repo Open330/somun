@@ -411,6 +411,7 @@ describe("draft to publication", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const linked = { ...draft, body: "Try it: https://somun.jiun.dev/" };
+    post.mockResolvedValue({ ...linked, status: "copied" });
     render(
       wrap(
         createElement(DraftPanel, {
@@ -433,6 +434,7 @@ describe("draft to publication", () => {
     expect(post).toHaveBeenCalledWith("/drafts/1/edit", expect.objectContaining({ body: "Try it: https://somun.jiun.dev/" }));
   });
   it("does not claim copying succeeded when the clipboard is denied", async () => {
+    post.mockResolvedValue({ ...draft, status: "copied" });
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
@@ -440,7 +442,7 @@ describe("draft to publication", () => {
     render(panel());
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "초안 복사" })));
     expect(screen.getByRole("alert").textContent).toContain("복사하지 못했습니다");
-    expect(post).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith("/drafts/1/edit", expect.objectContaining({ copyIfClean: true }));
   });
 });
 
@@ -496,6 +498,62 @@ it("shows actionable evidence warnings without requiring hover", () => {
 });
 
 describe("service introduction", () => {
+  it("rejects a pending ClipboardItem when server review holds an already-copied draft", async () => {
+    class Item {
+      constructor(readonly data: Record<string, Promise<Blob>>) {}
+    }
+    vi.stubGlobal("ClipboardItem", Item);
+    try {
+      const completed: Blob[] = [];
+      const write = vi.fn(async (items: Item[]) => {
+        completed.push(await items[0].data["text/plain"]);
+      });
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write } });
+      post.mockResolvedValue({
+        ...draft,
+        status: "copied",
+        copyHeld: true,
+        lint: [{ rule: "source_conditions_need_review", ok: false, detail: "PR #42 원문 조건을 확인하세요." }],
+      });
+      render(panel([{ ...draft, status: "copied" }]));
+      fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+      await waitFor(() => expect(screen.getByText(/확인했다면 다시 복사를 눌러 주세요/)).toBeTruthy());
+      expect(write).toHaveBeenCalledOnce();
+      expect(completed).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("holds unchanged, already-copied text when the server finds a new source condition", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const old = { ...draft, status: "copied" as const, lint: [{ rule: "length", ok: true }] };
+    post.mockResolvedValue({
+      ...old,
+      copyHeld: true,
+      lint: [{ rule: "source_conditions_need_review", ok: false, detail: "PR #42 원문 조건을 확인하세요." }],
+    });
+    render(panel([old]));
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(expect.stringContaining("/edit"), expect.objectContaining({ copyIfClean: true })),
+    );
+    await waitFor(() => expect(screen.getByText(/확인했다면 다시 복사를 눌러 주세요/)).toBeTruthy());
+    expect(writeText).not.toHaveBeenCalled();
+  });
+  it("requires confirmation before copying a draft with source conditions", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      panel([
+        { ...draft, lint: [{ rule: "source_conditions_need_review", ok: false, detail: "PR #42 원문 조건의 적용 여부를 확인하세요." }] },
+      ]),
+    );
+    expect(screen.getByText("원문 조건 확인")).toBeTruthy();
+    expect(screen.queryByText("형식 점검 통과")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("PR #42"));
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+  });
   it.each([true, false])("requests an introduction with an existing draft: %s", async (existing) => {
     const onRedraft = vi.fn().mockResolvedValue(true);
     render(

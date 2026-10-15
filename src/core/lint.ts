@@ -1,6 +1,6 @@
 import { channelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
-import { groundingText, type CandidateLike, type ProfileLike } from "./prompts.js";
+import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
  * 슬롭 린트. 초안 저장 전에 돌리고 결과를 함께 저장한다.
@@ -62,7 +62,15 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string };
+export type LintFacts = { repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+
+/** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
+export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
+  if (!prNumbers.length) return undefined;
+  const sources = prNumbers.map((n) => `#${n}`).join(", ");
+  return { rule: "source_conditions_need_review", ok: false,
+    detail: sayIn(locale, `PR ${sources} 원문에 적용 조건이 있거나 본문이 잘렸습니다. ‘문장과 원자료 대조’에서 이 글의 주장에 해당하는 전제·제외 조건을 확인하세요. 조건 누락을 자동 판정한 결과는 아닙니다.`, `PR ${sources} contains possible conditions or truncated text. In the source comparison, check which prerequisites and exclusions apply to this post. This is not an automated finding of missing conditions.`) };
+}
 
 /** 한글로 음역한 제품·채널·도구 이름. 이름은 원래 철자로 쓴다(채널 규칙, KO_FLUENCY_RULES). 조사가 붙어도 잡고, 더 긴 낱말(엑스포)은 건너뛴다. */
 const TRANSLITERATED: [RegExp, string][] = ([
@@ -82,7 +90,7 @@ const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^[\t ]*(?:#{1,6}[\t ]+
  */
 export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, purpose?: "introduction" | "update" | null): LintFacts {
   const preferLink = purpose === "introduction" ? candidate.evidence.homepage : undefined;
-  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined };
+  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**
@@ -112,6 +120,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
+  const conditionReview = sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
+  if (conditionReview) results.push(conditionReview);
 
   const hits = banned.filter((p) => normalizeForMatch(p).trim() && normalized.includes(normalizeForMatch(p).trim()));
   results.push({ rule: "banned_phrases", ok: hits.length === 0, detail: hits.length ? hits.join(", ") : undefined });
