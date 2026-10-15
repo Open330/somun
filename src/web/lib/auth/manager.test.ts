@@ -67,3 +67,64 @@ it.each([401, 403])("still returns missing authentication for an authorization r
   mockAuth(async () => new Response(null, { status }));
   expect(await new AuthManager().fetchApiToken()).toBeNull();
 });
+
+function memoryStorage() {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => void map.set(k, v),
+    removeItem: (k: string) => void map.delete(k),
+    map,
+  };
+}
+const calls = (fetchMock: ReturnType<typeof mockAuth>, path: string) => fetchMock.mock.calls.filter(([url]) => url.endsWith(path)).length;
+
+it("reuses a stored API token across page loads and tabs without calling jiun-api", async () => {
+  const storage = memoryStorage();
+  vi.stubGlobal("localStorage", storage);
+  const fetchMock = mockAuth(async () => tokenReply("test-api"));
+  const first = new AuthManager();
+  await first.restore();
+  expect(await first.fetchApiToken()).toBe("test-api");
+  expect([calls(fetchMock, "/auth/refresh"), calls(fetchMock, "/auth/me"), calls(fetchMock, "/auth/token/external")]).toEqual([1, 1, 1]);
+  // 새로고침·새 탭: 저장된 토큰과 계정으로 바로 시작한다.
+  const second = new AuthManager();
+  await second.restore();
+  expect(second.snapshot).toEqual({ status: "signedIn", user: expect.objectContaining({ id: "test-user" }) });
+  expect(await second.fetchApiToken()).toBe("test-api");
+  expect([calls(fetchMock, "/auth/refresh"), calls(fetchMock, "/auth/me"), calls(fetchMock, "/auth/token/external")]).toEqual([1, 1, 1]);
+});
+
+it("ignores a stored token close to expiry, and drops it on a forced refresh and on logout", async () => {
+  const storage = memoryStorage();
+  vi.stubGlobal("localStorage", storage);
+  storage.setItem(
+    "somun.auth.apiToken.v1",
+    JSON.stringify({ token: "old", expiresAt: Date.now() + 60_000, user: { id: "test-user", username: "test" } }),
+  );
+  const fetchMock = mockAuth(async () => tokenReply("fresh"));
+  const manager = new AuthManager();
+  await manager.restore();
+  expect(calls(fetchMock, "/auth/refresh")).toBe(1);
+  expect(await manager.fetchApiToken()).toBe("fresh");
+  expect(JSON.parse(storage.getItem("somun.auth.apiToken.v1")!).token).toBe("fresh");
+  // 401 뒤의 강제 갱신은 저장된 토큰을 쓰지 않는다.
+  expect(await manager.fetchApiToken(true)).toBe("fresh");
+  expect(calls(fetchMock, "/auth/token/external")).toBe(2);
+  await manager.signOut();
+  expect(storage.getItem("somun.auth.apiToken.v1")).toBeNull();
+});
+
+it("does not adopt another account's stored token", async () => {
+  const storage = memoryStorage();
+  vi.stubGlobal("localStorage", storage);
+  const fetchMock = mockAuth(async () => tokenReply("mine"));
+  const manager = new AuthManager();
+  await manager.restore();
+  storage.setItem(
+    "somun.auth.apiToken.v1",
+    JSON.stringify({ token: "theirs", expiresAt: Date.now() + 3600_000, user: { id: "someone-else", username: "x" } }),
+  );
+  expect(await manager.fetchApiToken()).toBe("mine");
+  expect(calls(fetchMock, "/auth/token/external")).toBe(1);
+});

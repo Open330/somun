@@ -3,9 +3,42 @@ import { AUTH_AUDIENCE, AUTH_URL, type AuthProviderName } from "./config";
 /**
  * jiun-api 토큰 관리자 (웹 전용, daily에서 가져옴).
  * accessToken(1h)은 메모리에만, refresh는 httpOnly 쿠키로, 소문 API용 외부 JWT는 만료 5분 전까지 캐시.
+ * 외부 JWT와 표시용 사용자 정보는 localStorage에도 둔다: 새로고침·새 탭마다 refresh → me → 발급을 다시 하면
+ * jiun-api의 발급·감사 기록이 페이지 로드 수만큼 쌓였다(사용자 2명에 나흘 동안 발급 1,438회). 이 토큰은 소문 전용(aud)·1시간짜리라
+ * 저장해도 같은 페이지의 스크립트가 이미 받을 수 있는 것 이상을 노출하지 않는다. 로그아웃·다른 계정 로그인·401이면 지운다.
  */
 const ACCESS_TOKEN_FRESH_MS = 55 * 60 * 1000;
 const API_TOKEN_EARLY_REFRESH_MS = 5 * 60 * 1000;
+const API_TOKEN_STORAGE_KEY = "somun.auth.apiToken.v1";
+type StoredSession = { token: string; expiresAt: number; user: AuthUser | null };
+
+function readStoredSession(now = Date.now()): StoredSession | null {
+  try {
+    const raw = localStorage.getItem(API_TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<StoredSession>;
+    if (typeof value.token !== "string" || typeof value.expiresAt !== "number" || value.expiresAt - API_TOKEN_EARLY_REFRESH_MS <= now)
+      return null;
+    const user = value.user && typeof value.user === "object" && typeof value.user.id === "string" ? value.user : null;
+    return { token: value.token, expiresAt: value.expiresAt, user };
+  } catch {
+    return null;
+  }
+}
+function writeStoredSession(session: StoredSession): void {
+  try {
+    localStorage.setItem(API_TOKEN_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    /* 저장할 수 없으면 메모리 캐시만 쓴다 */
+  }
+}
+function clearStoredSession(): void {
+  try {
+    localStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export type AuthUser = { id: string; username: string; displayName?: string; avatarUrl?: string; provider?: string; email?: string };
 export type AuthSnapshot = { status: "loading" | "signedOut" | "signedIn"; user: AuthUser | null };
@@ -43,6 +76,13 @@ export class AuthManager {
   async restore(): Promise<void> {
     if (this.restored) return;
     this.restored = true;
+    // 다른 탭이나 이전 로드에서 받은 토큰이 아직 쓸 만하면 jiun-api를 부르지 않고 그대로 시작한다.
+    const stored = readStoredSession();
+    if (stored?.user) {
+      this.apiToken = { token: stored.token, expiresAt: stored.expiresAt };
+      this.set({ status: "signedIn", user: stored.user });
+      return;
+    }
     try {
       const token = await this.refreshAccessToken();
       if (token) {
@@ -72,6 +112,7 @@ export class AuthManager {
     const body = (await res.json()) as { accessToken: string };
     this.authEpoch++;
     this.apiToken = null;
+    clearStoredSession();
     this.apiTokenInFlight = null;
     this.accessToken = body.accessToken;
     this.accessTokenFetchedAt = Date.now();
@@ -88,6 +129,7 @@ export class AuthManager {
     this.accessToken = null;
     this.accessTokenFetchedAt = 0;
     this.apiToken = null;
+    clearStoredSession();
     this.authEpoch++;
     this.apiTokenInFlight = null;
     this.set({ status: "signedOut", user: null });
@@ -143,6 +185,13 @@ export class AuthManager {
 
   async fetchApiToken(force = false): Promise<string | null> {
     if (!force && this.apiToken && Date.now() < this.apiToken.expiresAt - API_TOKEN_EARLY_REFRESH_MS) return this.apiToken.token;
+    // 다른 탭이 먼저 새 토큰을 받았으면 그것을 쓴다(탭마다 따로 발급하지 않게).
+    const stored = force ? null : readStoredSession();
+    if (stored && (!this.snapshot.user || stored.user?.id === this.snapshot.user.id)) {
+      this.apiToken = { token: stored.token, expiresAt: stored.expiresAt };
+      return stored.token;
+    }
+    if (force) clearStoredSession();
     if (this.apiTokenInFlight) return this.apiTokenInFlight;
     const epoch = this.authEpoch;
     const pending = (async () => {
@@ -161,6 +210,8 @@ export class AuthManager {
       if (epoch !== this.authEpoch) return null;
       const { token, expiresAt } = body;
       this.apiToken = { token, expiresAt: normalizeExpiresAt(expiresAt) };
+      // 사용자 정보가 있을 때만 저장한다(저장된 세션으로 시작할 때 화면에 보일 계정이 있어야 한다).
+      if (this.snapshot.user) writeStoredSession({ ...this.apiToken, user: this.snapshot.user });
       return body.token;
     })();
     this.apiTokenInFlight = pending;
