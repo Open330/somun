@@ -8,6 +8,7 @@ import { claimJob, completeJob, generationStatus, holdsClaim, JOB_LEASE_MS, MAX_
 import { updateSettings } from "./settings.js";
 import { digestCurrent, enqueueJob } from "./pipeline.js";
 import { DIGEST_REVISION } from "../core/prompts.js";
+import { digestSourceHash } from "./digest-cache.js";
 
 describe("local worker job lifecycle", () => {
   let ctx: AppContext;
@@ -80,6 +81,23 @@ describe("local worker job lifecycle", () => {
     expect(pendingJobs(ctx, "a")).toEqual([]);
     const retry = retryGeneration(ctx, "a", id);
     expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()).toMatchObject({ kind: retryKind, meta: { digestRevision: DIGEST_REVISION } });
+  });
+
+  it("does not apply an old judge to a newer digest with the same contract", () => {
+    ctx.db.delete(schema.llmJobs).run();
+    const now = Date.now();
+    const old = { repo: "a/x", repoUrl: "https://github.com/a/x", releaseNotes: "Original policy", highlights: ["Original summary"], highlightsAt: now, digestRevision: DIGEST_REVISION };
+    ctx.db.update(schema.candidates).set({ evidence: { ...old, digestSourceHash: digestSourceHash(old) } }).run();
+    const id = enqueueJob(ctx, "a", "judge", candidateId, undefined, undefined, { system: "judge", user: "original summary", schema: {}, schemaName: "judgment", digestRevision: DIGEST_REVISION, digestSourceHash: digestSourceHash(old) });
+    const next = { ...old, releaseNotes: "Updated policy", highlights: ["Updated summary"] };
+    ctx.db.update(schema.candidates).set({ evidence: { ...next, digestSourceHash: digestSourceHash(next) } }).run();
+    const current = ctx.db.select().from(schema.candidates).get()!;
+    expect(digestCurrent(current)).toBe(true);
+    completeJob(ctx, "a", id, { claimToken: claimJob(ctx, "a", id, "worker").claimToken!, resultJson: JSON.stringify({ scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "Old recommendation" }) });
+    expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!.status).toBe("failed");
+    expect(ctx.db.select().from(schema.judgments).all()).toEqual([]);
+    expect(pendingJobs(ctx, "a")).toEqual([]);
+    expect(ctx.db.select().from(schema.candidates).get()).toEqual(current);
   });
 
   it("lets only the live claim report completion (so local usage is counted once)", () => {

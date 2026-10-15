@@ -33,7 +33,7 @@ export type CandidateLike = { title: string; type: string; evidence: EvidenceLik
 
 /** 요약 생성 계약의 버전. 정확성 인증이 아니라 이전 입력·형식의 캐시 재사용을 막는다. */
 export const DIGEST_REVISION = "pr-source-conditions-v1";
-export type PromptSpec = { digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
+export type PromptSpec = { digestSourceHash?: string; digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
 export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
 
