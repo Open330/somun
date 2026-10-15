@@ -15,6 +15,7 @@ import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
+import { parseWritingBrief, sourceSnapshot } from "../core/writing-brief.js";
 
 /**
  * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
@@ -286,7 +287,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const next = (kind: JobKind, channel?: Channel, lang?: string) => enqueueJob(ctx, ownerId, kind, c.id, channel, lang, buildPrompt(ctx, ownerId, kind, c.id, channel, lang), undefined, true);
 
   if (args.kind === "digest") {
-    const r = args.result as { highlights?: unknown; limitations?: unknown };
+    const r = args.result as { highlights?: unknown; limitations?: unknown; writingBrief?: unknown };
     const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((h): h is string => typeof h === "string" && h.trim().length > 0).slice(0, n) : []);
     // 요약도 원자료와 맞춰 본다. 원자료에 없는 수치를 담은 요약은 판단·초안에 넘기지 않는다.
     // 기준은 지금의 근거 + 이 다이제스트가 실제로 본 프롬프트. 작업이 대기하는 사이 수집이 근거를 바꿔도 모델이 본 원자료로 맞춰 본다.
@@ -295,10 +296,15 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const checked = strs(r.highlights, 20).map((text) => ({ text, numbers: unsupportedNumbers(text, grounding) }));
     const highlights = checked.filter((h) => h.numbers.length === 0).map((h) => h.text).slice(0, 8);
     const unverifiedHighlights = checked.filter((h) => h.numbers.length > 0);
+    const parsedBrief = parseWritingBrief(r.writingBrief, { ...ev, highlights });
+    const selectedSources = ev.mergedPrDetails?.filter((p) => parsedBrief?.sourcePrNumbers.includes(p.number)) ?? [];
+    const writingBrief = parsedBrief && args.promptText?.includes(sourceSnapshot(ev))
+      && selectedSources.every((p) => args.promptText?.includes(p.body))
+      && unsupportedNumbers(parsedBrief.readerAction, selectedSources.map((p) => p.body).join("\n")).length === 0 ? parsedBrief : undefined;
     if (unverifiedHighlights.length) ctx.log.info({ candidateId: c.id, dropped: unverifiedHighlights.length }, "digest highlights with unsupported numbers");
     const fromReadme = Boolean(ev.limitations?.length);
     const limitations = fromReadme ? ev.limitations : strs(r.limitations, 3);
-    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
+    ctx.db.update(schema.candidates).set({ evidence: { ...ev, highlights, writingBrief, unverifiedHighlights: unverifiedHighlights.length ? unverifiedHighlights : undefined, highlightsAt: now, limitations, limitationsSource: fromReadme ? ev.limitationsSource ?? "readme" : "digest" } as Record<string, unknown>, updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     recordHighlights(ctx, ownerId, c.repo, c.id, highlights, c.key, now);
     if (continuation) {
