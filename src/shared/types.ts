@@ -24,7 +24,7 @@ export const SIDE_JOB_KINDS = ["lesson", "profile"] as const;
 export type GenerationKind = Exclude<JobKind, (typeof SIDE_JOB_KINDS)[number]>;
 export type DraftPurpose = "introduction" | "update";
 /** llm_jobs.meta. 생성 당시 초안 목적 또는 프로필의 저장소·README 해시. */
-export type JobMeta = { digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
+export type JobMeta = { /** 재생성 시 빈 줄·Markdown 제목을 포함한 편집 지시 전체. */ editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
@@ -142,7 +142,7 @@ export type ModelAvailability = {
 export type GenerationPlan = { introduction?: boolean; targets: { channel: Channel; lang: string }[]; instruction?: string; background?: boolean };
 export type JobProgress = { id: number; kind: JobKind; candidateId: number; /** profile 작업의 저장소. */ repo?: string; channel?: Channel; lang?: string; status: JobStatus; executor: "local" | "server"; error?: string; createdAt: number; finishedAt?: number };
 
-export type Job = { continuation?: GenerationPlan; /** 자동 처리가 시작한 작업(공유 한도의 마지막 몫을 쓰지 않는다). */ background?: boolean; id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
+export type Job = { editorInstruction?: string; continuation?: GenerationPlan; /** 자동 처리가 시작한 작업(공유 한도의 마지막 몫을 쓰지 않는다). */ background?: boolean; id: number; kind: JobKind; candidateId: number; channel?: Channel; lang?: string; system: string; user: string; schemaJson: string; status: JobStatus; runner?: string; error?: string; createdAt: number };
 
 /** 저장소 프로필: 정체성의 기준선. 다이제스트·판단·초안이 "이 프로젝트는 이런 것"으로 받는다. */
 export type RepoProfile = {

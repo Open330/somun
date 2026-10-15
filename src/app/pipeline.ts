@@ -269,21 +269,21 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
     let quotaError: SharedQuotaError | undefined;
     try { assertSharedQueueCapacity(ctx, ownerId); }
     catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
-    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.digestSourceHash || prompt.digestRevision || prompt.draftPurpose || background ? { ...(prompt.digestSourceHash ? { digestSourceHash: prompt.digestSourceHash } : {}), ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.editorInstruction !== undefined || prompt.digestSourceHash || prompt.digestRevision || prompt.draftPurpose || background ? { ...(prompt.editorInstruction !== undefined ? { editorInstruction: prompt.editorInstruction } : {}), ...(prompt.digestSourceHash ? { digestSourceHash: prompt.digestSourceHash } : {}), ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
     emit(ctx, ownerId, { resource: "jobs", id });
     return id;
   }).immediate();
 }
 
 /** 초안 하나의 린트. 저장할 때와 생성 직후 보정할 때 같은 기준을 쓴다. */
-export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null) {
+export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null, writing: { language?: string; editorInstruction?: string } = {}) {
   const c = getCandidateRow(ctx, ownerId, candidateId);
   const settings = getSettings(ctx, ownerId);
-  return lintDraft(channel, title, body, settings.bannedPhrases, draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), settings.ui?.locale, channelSpec(channel, settings.customChannels));
+  return lintDraft(channel, title, body, settings.bannedPhrases, { ...draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), ...writing }, settings.ui?.locale, channelSpec(channel, settings.customChannels));
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; promptText?: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; editorInstruction?: string; promptText?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
@@ -347,7 +347,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const body = String(r.body ?? "").trim();
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

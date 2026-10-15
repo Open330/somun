@@ -4,10 +4,10 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { claimJob, completeJob, generationStatus, holdsClaim, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration } from "./jobs.js";
+import { claimJob, completeJob, generationStatus, holdsClaim, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, pendingJobs, retryGeneration, pruneFinishedJobs } from "./jobs.js";
 import { updateSettings } from "./settings.js";
 import { digestCurrent, enqueueJob } from "./pipeline.js";
-import { DIGEST_REVISION } from "../core/prompts.js";
+import { DIGEST_REVISION, draftPrompt, instructionOf } from "../core/prompts.js";
 import { digestSourceHash } from "./digest-cache.js";
 
 describe("local worker job lifecycle", () => {
@@ -25,6 +25,45 @@ describe("local worker job lifecycle", () => {
   const valid = JSON.stringify({ body: "A test draft with 1 limitation: beta. https://github.com/a/x" });
   const row = () => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!;
   const claim = () => claimJob(ctx, "a", jobId, "worker").claimToken!;
+
+  it.each([false, true])("preserves all editor paragraphs across failed draft retry, published=%s", (published) => {
+    ctx.db.delete(schema.llmJobs).run();
+    const instruction = "기능 하나만 설명하세요.\n\n## 예외와 원복\n- 운영자가 0으로 닫은 한도는 유지하세요.\n- 원복은 이전 필드 복원과 URL 제거를 함께 하세요.";
+    const prompt = draftPrompt({ title: "t", type: "release", evidence: { repo: "a/x", repoUrl: "https://github.com/a/x" } }, "threads", "ko", [], undefined, { introduction: true, instruction });
+    jobId = enqueueJob(ctx, "a", "draft", candidateId, "threads", "ko", prompt);
+    expect(pendingJobs(ctx, "a")[0].editorInstruction).toBe(instruction);
+    completeJob(ctx, "a", jobId, { claimToken: claim(), error: "failed" });
+    if (published) {
+      vi.advanceTimersByTime(1000);
+      ctx.db.insert(schema.publications).values({ ownerId: "a", candidateId, channel: "threads", url: "https://example.com/post", publishedAt: Date.now() }).run();
+    }
+    const retry = retryGeneration(ctx, "a", jobId);
+    const next = ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()!;
+    expect(next.meta?.editorInstruction).toBe(instruction);
+    expect(next.user).toContain(instruction);
+    expect(next.meta?.draftPurpose).toBe(published ? "update" : "introduction");
+    if (!published) expect(next.user).toBe(prompt.user);
+    expect(generationStatus(ctx, "a", candidateId)[0]).not.toHaveProperty("editorInstruction");
+  });
+
+  it("uses explicit empty instruction metadata and falls back only for legacy jobs", () => {
+    const user = "prefix\n## Editor instruction for this rewrite\nLegacy sentence\n\n## Facts\nsource";
+    expect(instructionOf(user)).toBe("Legacy sentence");
+    expect(instructionOf(user, { editorInstruction: "" })).toBe("");
+    expect(instructionOf(user, { editorInstruction: "first\n\n## second\nkeep all" })).toBe("first\n\n## second\nkeep all");
+  });
+
+  it("prunes editor instructions with completed prompts while preserving unrelated metadata and failed jobs", () => {
+    ctx.db.update(schema.llmJobs).set({ meta: { editorInstruction: "private", draftPurpose: "update" } }).where(eq(schema.llmJobs.id, jobId)).run();
+    completeJob(ctx, "a", jobId, { claimToken: claim(), resultJson: valid });
+    const failed = enqueueJob(ctx, "a", "draft", candidateId, "x", "en", { system: "s", user: "retry me", schema: {}, schemaName: "draft", editorInstruction: "keep private" });
+    completeJob(ctx, "a", failed, { claimToken: claimJob(ctx, "a", failed, "worker").claimToken!, error: "failed" });
+    vi.advanceTimersByTime(15 * 86_400_000);
+    expect(pruneFinishedJobs(ctx)).toBe(1);
+    expect(row()).toMatchObject({ system: "", user: "", resultJson: null, meta: { draftPurpose: "update" } });
+    expect(row().meta).not.toHaveProperty("editorInstruction");
+    expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, failed)).get()?.meta?.editorInstruction).toBe("keep private");
+  });
 
   it.each([undefined, "previous-contract", DIGEST_REVISION])("retains the actual digest job revision %s on completion", (digestRevision) => {
     const source = ctx.db.select().from(schema.candidates).get()!;

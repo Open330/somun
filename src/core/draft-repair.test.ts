@@ -47,3 +47,11 @@ it("rejects an automatic repair that changes an otherwise consistent Korean regi
   expect(isBetterRepair(issues, [], { before: "somun은 초안을 작성합니다. 정말 유용할 것 같습니다.", after: "somun은 초안을 작성해요." })).toBe(false);
   expect(isBetterRepair(issues, [], { before: "I recommend this tool.", after: "The tool reads logs." })).toBe(true);
 });
+
+
+it("allows register correction only when the selected channel violation is cleared", () => {
+  const texts = { before: "somun은 초안을 작성합니다.", after: "somun은 초안을 작성해요." };
+  expect(isBetterRepair([{ rule: "register_mismatch" }], [], texts)).toBe(true);
+  expect(isBetterRepair([{ rule: "register_mismatch" }, { rule: "length" }], [{ rule: "register_mismatch" }], texts)).toBe(false);
+  expect(isBetterRepair([{ rule: "register_mismatch" }], [{ rule: "numbers_need_review" }], texts)).toBe(false);
+});

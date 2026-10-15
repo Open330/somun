@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { channelSpec, type Channel, type CustomChannel } from "../core/channels.js";
 import type { LintResult } from "../core/lint.js";
-import { draftPurposeOf } from "../core/prompts.js";
+import { draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { NotFoundError } from "./context.js";
@@ -15,9 +15,9 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
-type DraftJob = { id: number; candidateId: number; channel?: Channel | null; user: string };
+type DraftJob = { id: number; candidateId: number; channel?: Channel | null; lang?: string; editorInstruction?: string; user: string };
 
 export function readDraft(channel: Channel, json: unknown, customChannels: CustomChannel[] = []): { title?: string; body: string } {
   const r = (json ?? {}) as { title?: unknown; body?: unknown };
@@ -29,7 +29,7 @@ export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, jso
   const channel = job.channel as Channel;
   const d = readDraft(channel, json, getSettings(ctx, ownerId).customChannels);
   const purpose = draftPurposeOf(null, job.user);
-  return d.body ? lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose).filter((l) => !l.ok && REPAIRABLE.has(l.rule)) : null;
+  return d.body ? lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose, { language: job.lang, editorInstruction: instructionOf(job.user, job) }).filter((l) => !l.ok && REPAIRABLE.has(l.rule)) : null;
 }
 
 /** 보정 요청 프롬프트: 원래 요청 + 직전 초안 + 고칠 점. */
@@ -58,10 +58,15 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
     ...(issues.some((l) => l.rule === "numbers_need_review")
       ? ["For numbers_need_review: use the exact figure from Facts, or delete the claim. Never swap the number for vague size words (dramatically, significantly, halved, much faster, 대폭, 크게, 절반)."]
       : []),
+    ...(issues.some((l) => l.rule === "register_mismatch")
+      ? ["For register_mismatch: this Korean channel explicitly requires 해요체. Change declarative 합니다/됩니다/입니다/습니다 endings to natural 해요/돼요/예요/있어요, without changing facts, numbers, conditions or operations. This channel requirement takes priority over preserving the previous draft's incorrect register."]
+      : []),
     "## Preserve the selected channel during repair",
     spec.identity ? `Use this tone in every sentence: ${spec.identity.tone}.\nKeep this composition and closing: ${spec.identity.structure}.` : "Keep the original draft’s register and the requested channel structure.",
     spec.maxSentences ? `Maximum ${spec.maxSentences} sentences including the closing question.` : "",
-    "Keep the original register. An explicit Editor instruction in the original request still applies. Preserve factual grounding, title/length limits and link placement.",
+    issues.some((l) => l.rule === "register_mismatch")
+      ? "Use the selected channel’s 해요체 rather than the previous draft’s incorrect formal register. Preserve factual grounding, title/length limits and link placement."
+      : "Keep the original register. An explicit Editor instruction in the original request still applies. Preserve factual grounding, title/length limits and link placement.",
   ].join("\n");
 }
 
@@ -83,7 +88,7 @@ export function checkLocalResult(ctx: AppContext, ownerId: string, id: number, i
   if (j.kind !== "draft" || !j.channel || !worthRepairing(ctx, ownerId, j.candidateId)) return { issues: [] };
   let json: unknown;
   try { json = JSON.parse(input.resultJson); } catch { return { issues: [] }; }
-  const job = { id: j.id, candidateId: j.candidateId, channel: j.channel as Channel, user: j.user };
+  const job = { id: j.id, candidateId: j.candidateId, channel: j.channel as Channel, lang: j.lang ?? undefined, editorInstruction: j.meta?.editorInstruction, user: j.user };
   const issues = draftIssues(ctx, ownerId, job, json);
   // 빈 본문은 고칠 대상이 아니라 쓸 수 없는 결과다. 보정본이 비었을 때 "문제 없음"으로 뽑히지 않게 한다.
   if (issues === null) return { issues: [{ rule: "empty_body" }] };

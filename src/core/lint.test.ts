@@ -414,3 +414,16 @@ describe("profile avoid terms in source links", () => {
     }
   });
 });
+
+
+describe("explicit Korean channel register", () => {
+  const result = (body: string, facts: import("./lint.js").LintFacts = { language: "ko" }, tone?: string) => lintDraft("threads", undefined, body, [], facts, "ko", tone === undefined ? undefined : { ...channelSpec("threads"), identity: { ...channelSpec("threads").identity!, tone } }).find(l => l.rule === "register_mismatch");
+  it.each(["수정합니다.", "사용할 수 있습니다.", "이 기능입니까?", "고쳤어요. 사용할 수 있습니다."])("flags formal endings: %s", body => expect(result(body)?.ok).toBe(false));
+  it.each(["수정해요. 사용할 수 있어요.", "‘수정합니다.’라는 문구를 보여줘요.", '> 수정합니다.\n고쳐요.', '```text\n수정합니다.\n```\n고쳐요.', '`수정합니다.`를 표시해요.', '"수정합니다."라고 보여줘요.'])("ignores valid prose or quoted formal endings: %s", body => expect(result(body)?.ok).toBe(true));
+  it("leaves language, custom tone and explicit editor overrides alone", () => {
+    expect(result("수정합니다.", { language: "en" })).toBeUndefined();
+    expect(result("수정합니다.", { language: "ko" }, "차분한 설명")).toBeUndefined();
+    expect(result("수정합니다.", { language: "ko" }, "해요체 대신 합니다체")).toBeUndefined();
+    expect(result("수정합니다.", { language: "ko", editorInstruction: "합니다체로 써주세요." })).toBeUndefined();
+  });
+});
