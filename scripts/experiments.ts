@@ -3,13 +3,14 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { randomUUID } from "node:crypto";
-import { blindReview, casesSchema, compare, configSchema, execute, hash, reportSchema, summary, summarizeReviews, validatePlan, type Report } from "../src/experiments/drafts.js";
+import { blindReview, casesSchema, compare, configSchema, execute, hash, qualityReadiness, reportSchema, summary, summarizeReviews, validatePlan, type Report } from "../src/experiments/drafts.js";
 import { freeGeminiKeys, runLlm } from "../src/infra/llm/providers.js";
 import { openDb, schema } from "../src/infra/db/index.js";
 import { exportHoldout } from "../src/experiments/holdout.js";
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   config: { type: "string" }, out: { type: "string" }, live: { type: "boolean", default: false },
+  "quality-gate": { type: "boolean", default: false },
   "max-calls": { type: "string", default: "0" }, owner: { type: "string" }, max: { type: "string" }, before: { type: "string" }, after: { type: "string" }, run: { type: "string" }, reviews: { type: "string" },
 } });
 const read = (file: string | undefined): unknown => { if (!file) throw new Error("Required file option missing"); return JSON.parse(readFileSync(resolve(file), "utf8")); };
@@ -20,7 +21,12 @@ if (command === "compare") {
   console.log(JSON.stringify(result, null, 2));
   if (result.regressions.length || result.removedChecks.length) process.exitCode = 1;
 } else if (command === "review") {
-  console.log(JSON.stringify(summarizeReviews(reportSchema.parse(read(values.run)), read(values.reviews)), null, 2));
+  const report = reportSchema.parse(read(values.run)), reviews = read(values.reviews);
+  if (values["quality-gate"]) {
+    const result = qualityReadiness(report, reviews);
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.ready) process.exitCode = 1;
+  } else console.log(JSON.stringify(summarizeReviews(report, reviews), null, 2));
 } else if (command === "run") {
   const configPath = resolve(values.config ?? "experiments/replay.json");
   const config = configSchema.parse(read(configPath));

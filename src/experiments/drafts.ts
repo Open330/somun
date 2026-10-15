@@ -10,6 +10,8 @@ const evidenceSchema = z.object({
   repo: z.string().min(1), repoUrl: z.string().url(), description: z.string().optional(),
   version: z.string().optional(), releaseNotes: z.string().optional(), readmeExcerpt: z.string().optional(),
   highlights: z.array(z.string()), limitations: z.array(z.string()).default([]),
+  mergedPrTitles: z.array(z.string()).optional(),
+  mergedPrDetails: z.array(z.object({ number: z.number().int().positive(), title: z.string(), body: z.string(), url: z.string().url(), bodyTruncated: z.boolean().optional() }).strict()).optional(),
   stars: z.number().optional(), forks: z.number().optional(), commitCount: z.number().optional(),
   releaseCount: z.number().optional(), firstReleaseAt: z.string().optional(),
   language: z.string().optional(), license: z.string().optional(), homepage: z.string().optional(),
@@ -153,11 +155,16 @@ export function compare(before: Report, after: Report) {
 export function blindReview(report: Report) {
   return report.results.filter((r) => r.draft).sort((a, b) => a.blindId.localeCompare(b.blindId)).map((row) => {
     const test = report.cases.find((c) => c.id === row.caseId)!;
-    return { blindId: row.blindId, channel: test.channel, lang: test.lang, evidence: test.candidate, reviewNotes: test.reviewNotes, draft: row.draft, ratings: { grounding: null, clarity: null, voice: null }, publishable: null, editSeconds: null, notes: "" };
+    return { blindId: row.blindId, channel: test.channel, lang: test.lang, evidence: test.candidate, reviewNotes: test.reviewNotes, draft: row.draft, reviewer: { kind: "unspecified", id: "" }, sourceGates: { factual: null, conditions: null, noInventedClaims: null }, copyScores: { action: null, necessity: null, korean: null, noRepetition: null }, ratings: { grounding: null, clarity: null, voice: null }, publishable: null, editSeconds: null, notes: "" };
   });
 }
 
+const sourceGatesSchema = z.object({ factual: z.boolean().nullable(), conditions: z.boolean().nullable(), noInventedClaims: z.boolean().nullable() }).strict();
+const copyScore = z.number().int().min(0).max(2).nullable();
+const copyScoresSchema = z.object({ action: copyScore, necessity: copyScore, korean: copyScore, noRepetition: copyScore }).strict();
 const reviewSchema = z.array(z.object({
+  reviewer: z.object({ kind: z.enum(["unspecified", "human", "agent"]), id: z.string() }).strict().optional(),
+  sourceGates: sourceGatesSchema.optional(), copyScores: copyScoresSchema.optional(),
   blindId: z.string(), ratings: z.object({ grounding: z.number().int().min(1).max(5).nullable(), clarity: z.number().int().min(1).max(5).nullable(), voice: z.number().int().min(1).max(5).nullable() }).strict(),
   publishable: z.boolean().nullable(), editSeconds: z.number().nonnegative().nullable(), notes: z.string(),
   // The exported contextual fields are retained for a reviewer editing the JSON file.
@@ -184,4 +191,29 @@ export function summarizeReviews(report: Report, input: unknown) {
       meanVoice: completed.length ? completed.reduce((n, r) => n + r.ratings.voice!, 0) / completed.length : null,
       timed: timed.length, meanEditSeconds: timed.length ? timed.reduce((n, r) => n + r.editSeconds!, 0) / timed.length : null };
   });
+}
+
+/** 기존 문체 점수와 별개인 반영 기준. 필수 사실 게이트 + 4축 7/8, 각 축 0점 없음. */
+export function qualityReadiness(report: Report, input: unknown) {
+  if (report.results.some((r) => !report.cases.some((c) => c.id === r.caseId))) throw new Error("Unknown quality review case");
+  // 원문·출력 변경과 리뷰 ID 누락/중복은 기존 검증을 그대로 따른다.
+  summarizeReviews(report, input);
+  const reviews = reviewSchema.parse(input);
+  const rows = report.results.map((row) => {
+    const review = reviews.find((r) => r.blindId === row.blindId);
+    const gates = review?.sourceGates ? Object.values(review.sourceGates) : [];
+    const scores = review?.copyScores ? Object.values(review.copyScores) : [];
+    const complete = Boolean(review?.reviewer && review.reviewer.kind !== "unspecified" && review.reviewer.id.trim()) && gates.length === 3 && scores.length === 4 && gates.every((v) => v !== null) && scores.every((v) => v !== null);
+    const test = report.cases.find((c) => c.id === row.caseId)!;
+    const formatFailures = row.draft ? evaluate(test, row.draft).filter((c) => ["length", "sentence_count", "title_length"].includes(c.rule) && !c.ok).map((c) => c.rule) : [];
+    const score = complete ? scores.reduce<number>((sum, v) => sum + v!, 0) : null;
+    const status = row.status !== "ok" ? "generation_failed" : !complete ? "pending_review"
+      : formatFailures.length ? "format_failed" : gates.some((v) => !v) ? "source_failed" : review?.publishable === false || scores.some((v) => v === 0) || score! < 7 ? "copy_failed" : "ready";
+    return { blindId: row.blindId, caseId: row.caseId, variantId: row.variantId, status, score, formatFailures, reviewer: review?.reviewer ?? null };
+  });
+  const expected = report.expectedRows;
+  const duplicate = new Set(rows.map((r) => r.blindId)).size !== rows.length
+    || new Set(report.results.map((r) => JSON.stringify([r.caseId, r.variantId, r.sample]))).size !== rows.length;
+  const covered = report.cases.every((c) => rows.some((r) => r.caseId === c.id));
+  return { ready: expected > 0 && rows.length === expected && !duplicate && covered && rows.every((r) => r.status === "ready"), expected, recorded: rows.length, rows };
 }

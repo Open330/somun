@@ -49,7 +49,7 @@ npm run experiment -- run --config experiments/live.json --live --max-calls 2
 
 실험 실행이 끝난 후 평가자에게 **review.json만** 전달한다. report/config에는 변형 정보가 있으므로 같이 전달하면 가림 효과가 없다. 작성된 답변 자체에서 설정을 추측할 가능성도 있다. 같은 양식의 사본을 평가자별로 보관하고 개별 집계한다. 평가자 간 합의도나 다중 평가자 통합은 아직 제공하지 않는다.
 
-`ratings`, `publishable`, `editSeconds`, `notes`만 수정한다. 원문과 초안은 그대로 두고 수정 제안은 notes에 남긴다.
+`ratings`, `publishable`, `editSeconds`, `notes`와 아래 반영 기준의 평가 필드만 수정한다. 원문과 초안은 그대로 두고 수정 제안은 notes에 남긴다.
 
 | 항목 | 1 | 3 | 5 |
 |---|---|---|---|
@@ -64,6 +64,26 @@ npm run experiment -- review --run experiments/runs/RUN/report.json --reviews ex
 ```
 
 세 점수를 단일 총점으로 합치지 않는다. 사실성 결함을 문장 점수로 상쇄하지 않기 위해서다. 시간 절약을 주장하려면 같은 난도의 글을 직접 작성한 대조군 시간도 별도로 측정해야 한다.
+
+## 필수 조건과 8점 반영 기준
+
+PR 원문을 평가하려면 사례의 `candidate.evidence.mergedPrDetails`에 `number`, `title`, `body`, `url`, 선택적인 `bodyTruncated`를 넣는다. 내보낸 holdout에도 이 원문을 보존한다. 생성된 highlights와 원문을 함께 확인해야 하며, 이 내보내기는 생성 당시의 개인 설정·프로필까지 복원하는 기능은 아니다.
+
+`review.json`의 `reviewer.kind`를 `human` 또는 `agent`, `reviewer.id`를 평가자 식별자로 채운다. 에이전트 평가는 사람 검증으로 보고하지 않는다. `sourceGates`의 세 항목은 원문 대조 후 직접 판정한다.
+
+- `factual`: 주체·동작·현재 상태가 원문과 일치한다.
+- `conditions`: 대상·제외·활성화·수치 단위/분모·이상/초과·시도 범위·실행 순서를 보존했다.
+- `noInventedClaims`: 경험·배포·효과 등을 근거 없이 덧붙이지 않았다.
+
+`copyScores`는 각 0~2점으로 `action`(한 행동), `necessity`(필요한 정보), `korean`(자연스러운 한국어/채널 말투), `noRepetition`(반복 없음)을 매긴다. 필수 게이트 전부 true, 합계 7/8 이상, 각 축 0점 없음이 기준이다. `publishable=false`는 반영을 거부한다. 평가자·필수 게이트·점수 중 누락은 미검토이며, 기존 1~5점 평가만으로 이 기준을 통과할 수 없다.
+
+```sh
+npm run experiment -- review --run experiments/runs/RUN/report.json --reviews experiments/runs/RUN/review.json --quality-gate
+```
+
+본문 글자 수·문장 수와 제목 길이의 강제 채널 제한도 현재 검사기로 다시 계산한다. 의미 검토 경고는 평가자가 원문과 대조한다. 한 건이라도 실패·미검토이거나, 고정한 `expectedRows`만큼 결과를 기록하지 못하면 종료 코드 1이다. 보류·생성 오류를 분모에서 빼지 않는다. 이 명령은 입력한 평가를 집계하며 의미적 정확성을 자동 인증하지 않는다. 알려진 회귀 사례에서의 통과는 새로운 글감의 일반 품질을 입증하지 않는다.
+
+`src/experiments/source-brief.ts`는 원문 문단 선택 → 원문 그대로 작성 입력을 만드는 독립 실험이다. 참조 범위·중복·잘린 출처·스냅샷 변경을 거부하지만, 모든 반환값은 `semanticReviewRequired=true`다. 현재 프로덕션 생성 경로에는 연결하지 않는다. 원문을 맞게 인용하더라도 다른 동작의 조건을 옮기거나 원복 관계를 오독할 수 있다.
 
 ## 회귀 비교
 
