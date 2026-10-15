@@ -42,6 +42,7 @@ it("lets readers find activation conditions in the actual PR body", () => {
   const results = screen.getByRole("region", { name: "검색한 원자료" });
   expect(results.textContent).toContain("GITHUB_APP_REPO_ACCESS=true");
   expect(results.textContent).toContain("#113");
+  expect(within(results).getByRole("link", { name: /#113/ }).getAttribute("href")).toBe("https://github.com/me/tool/pull/113");
 });
 const review = (body = "CSV를 별도 파일로 내보내요. 원본을 유지해요.", editing = false, source = evidence) => (
   <DraftEvidenceReview title="변경 소식" body={body} lang="ko" editing={editing} evidence={source} />
@@ -73,6 +74,14 @@ it("distinguishes a missing wording match from absent source text and allows rec
   expect(screen.queryByRole("status")).toBeNull();
   rerender(review("New body.", false, { repo: "me/tool", repoUrl: "javascript:alert(1)", highlights: ["Summary"] }));
   expect(screen.getByRole("status").textContent).toContain("원문이 저장돼 있지 않습니다");
+  expect(screen.queryByRole("link")).toBeNull();
+  rerender(
+    review("New body.", false, {
+      repo: "me/tool",
+      repoUrl: "bad-url",
+      mergedPrDetails: [{ number: 1, title: "Condition", body: "Default off", url: "javascript:alert(1)" }],
+    }),
+  );
   expect(screen.queryByRole("link")).toBeNull();
 });
 
