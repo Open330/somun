@@ -8,7 +8,6 @@
 import { channelSpec, langInstruction, langName, type Channel, type ChannelSpec } from "./channels.js";
 import { KO_FLUENCY_RULES } from "./voice.js";
 import type { Locale } from "../shared/locale.js";
-import { currentWritingBrief, sourceSnapshot } from "./writing-brief.js";
 
 /** 최신 릴리스 노트를 근거·요약에 담는 길이. 3000자에서 잘리면 긴 노트(barshelf v0.6.0, 6159자)의 뒤쪽 변경이 빠졌다. */
 export const RELEASE_NOTES_MAX = 6000;
@@ -18,7 +17,6 @@ export type EvidenceLike = {
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; readmeExcerpt?: string;
   mergedPrTitles?: string[]; ompSummary?: string; commitSubjects?: string[]; highlights?: string[];
-  writingBrief?: import("../shared/types.js").WritingBrief;
   mergedPrDetails?: import("../shared/types.js").Evidence["mergedPrDetails"];
   milestones?: { metric: string; threshold: number; at: number }[];
   /** README가 실험·로컬 전용으로 표시한 기능. 지금 쓸 수 있는 것처럼 쓰지 않는다. */
@@ -151,22 +149,8 @@ export const DIGEST_SCHEMA = {
     highlights: { type: "array", items: { type: "string" }, description: "3-8 facts worth telling the public, each one sentence, each traceable to the raw material" },
     dropped: { type: "string", description: "One sentence on what was left out and why (internal refactors, chores, noise)" },
     limitations: { type: "array", items: { type: "string" }, description: "0-3 honest limitations or caveats stated anywhere in the raw material (beta notices, unsupported platforms, known gaps), each one sentence" },
-    writingBrief: {
-      type: "object", additionalProperties: false,
-      description: "Choose one useful reader action from ONE highlight, with the exact highlight and the PR sources needed to understand it. Do not choose a whole feature inventory. If no complete PR body supports a useful action, return empty strings and empty sourcePrNumbers/requiredConditions arrays.",
-      properties: {
-        highlight: { type: "string", description: "Copy one returned highlights item exactly, including any unreleased marker." },
-        readerAction: { type: "string", maxLength: 400, description: "One concrete action a reader can perform, preserving the operation object. Put its prerequisites and exclusions in requiredConditions, not in a paragraph of extra features. No internal IDs, test counts, predicted benefits or feature list." },
-        sourcePrNumbers: { type: "array", maxItems: 3, items: { type: "integer" }, description: "Existing PR numbers whose full bodies support that action and its conditions; include supporting PRs when needed." },
-        requiredConditions: {
-          type: "array", maxItems: 6, description: "Prerequisites, exclusions, thresholds and activation constraints attached to the selected action. Quote each from a selected PR body exactly, including exceptions; do not substitute unrelated unchanged plans or operational measurements. Empty only when the source gives no conditions for this action.",
-          items: { type: "object", additionalProperties: false, properties: { sourcePrNumber: { type: "integer" }, quote: { type: "string", maxLength: 600 } }, required: ["sourcePrNumber", "quote"] },
-        },
-      },
-      required: ["highlight", "readerAction", "sourcePrNumbers", "requiredConditions"],
-    },
   },
-  required: ["highlights", "dropped", "limitations", "writingBrief"],
+  required: ["highlights", "dropped", "limitations"],
   additionalProperties: false,
 };
 
@@ -183,7 +167,6 @@ export function digestGroundingFromPrompt(user: string): string {
   const out: string[] = [];
   let dropping = false;
   for (const line of user.split("\n")) {
-    if (line.startsWith("PR source snapshot:")) continue;
     if (line.startsWith("#")) dropping = skip.some((h) => line.startsWith(h));
     if (!dropping) out.push(line);
   }
@@ -207,7 +190,6 @@ Drop highlights about features listed under "not generally available": readers c
 A published GitHub release is released, even if its notes still carry an "Unreleased" heading or banner left over from a changelog; never mark its changes as unreleased for that reason.
 If Facts list PRs "merged after …, not in any release yet", start each highlight that comes only from those PRs with "(unreleased) ". This denotes GitHub release history only, never production deployment or feature activation.`,
     user: [
-      sourceSnapshot(c.evidence),
       factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, ctx.profile),
       ctx.alreadyTold?.length ? `\n${DIGEST_HEADINGS.alreadyTold} (do not repeat; only genuinely new changes)\n- ${ctx.alreadyTold.join("\n- ")}` : "",
       ctx.disputed?.length ? `\n${DIGEST_HEADINGS.disputed} (never restate these; if the raw material still suggests them, be more precise)\n- ${ctx.disputed.join("\n- ")}` : "",
@@ -316,9 +298,6 @@ export function withoutFalseFirstClaims(reasoning: string, releaseCount: number 
 
 export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, examples: { source: string; title?: string; body: string }[], angle?: string, opts: DraftOptions = {}): PromptSpec {
   const spec = opts.channelSpec ?? channelSpec(channel);
-  // 명시적 편집/각도와 긴 글·소개·사용자 채널은 기존 전체자료 경로를 유지한다.
-  const brief = !opts.introduction && !opts.instruction?.trim() && !angle?.trim() && (channel === "x" || channel === "threads") ? currentWritingBrief(c.evidence) : undefined;
-  const writingCandidate = brief ? { ...c, evidence: { ...c.evidence, highlights: [brief.highlight], mergedPrDetails: c.evidence.mergedPrDetails?.filter((p) => brief.sourcePrNumbers.includes(p.number)), mergedPrTitles: undefined, unreleasedPrTitles: c.evidence.unreleasedPrTitles?.filter((title) => c.evidence.mergedPrDetails?.some((p) => brief.sourcePrNumbers.includes(p.number) && p.title === title)) } } : c;
   // 일반 소개가 오래된 프로필의 구현 제공자를 현재 제품 사실로 재사용하지 않게 한다.
   // 저장된 프로필과 사실 검사 원문은 보존하고, 제공자 자체가 주제인 글에는 이 필터를 적용하지 않는다.
   const provider = /\b(?:OpenAI|Anthropic|Gemini|Claude|Bedrock|Vertex AI|Ollama)\b/i;
@@ -331,7 +310,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     : opts.profile;
   // Introductions describe capabilities, not how much repository activity produced them.
   const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || c.evidence.readmeExcerpt?.trim());
-  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights } } : writingCandidate;
+  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${EXAMPLE_LABEL[e.source] ?? " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
@@ -395,10 +374,9 @@ Hard rules:
       publicName ? `Keep the project name exactly as ${publicName}, including its original spelling. Never translate or transliterate it.` : "",
       "Before returning JSON, remove any personal endorsement or predicted user benefit that Facts does not establish. Friendly wording must describe the supported operation, not invent an opinion. Keep a capability’s stated prerequisites with that capability, or omit it. Read the result as a post for this audience: can the first sentence alone tell them what they can do? Delete repeated explanations, implementation inventory and unrelated numbers. A closing question must concern the exact task described, not just the project's general domain; omit an optional question if there is nothing specific to ask. Check the body against this channel’s tone, total sentence budget and closing structure. Count the closing question within that budget; remove optional detail rather than append another sentence. Do not add a limitation unless the selected channel explicitly asks for one and it affects the described task. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
       spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : "",
-      brief ? `## Cross-source conditions — conflict checks only\nThe excerpts below retain possible restrictions from ALL PRs. Use them only to constrain or omit the selected claim when they conflict. Do not turn their other features, numbers or caveats into additional post topics. They are not exhaustive and do not certify factual correctness.\n${prConditionsBlock(c.evidence)}` : prConditionsBlock(c.evidence),
+      prConditionsBlock(c.evidence),
       draftCoverageGuide(c, channel, opts.introduction),
       opts.introduction && hasBaseline ? "For this introduction, describe only baseline reader tasks and capabilities from the profile or README. PR bodies are constraints for checking those baseline claims, NOT a menu of recent behaviors to introduce. Do not add a recent behavior that is absent from the baseline, such as a retry, refund or feature-activation policy. Omit backend provider names and unrelated retry or accounting caveats from this general introduction." : "",
-      brief ? `## Selected writing brief (selection aid, not verified facts)\nReader action: ${brief.readerAction}\nSources: ${brief.sourcePrNumbers.map((number) => `PR #${number}`).join(", ")}\nRequired conditions quoted from the selected sources (not an exhaustive or verified checklist):\n${brief.requiredConditions.length ? brief.requiredConditions.map((condition) => `- PR #${condition.sourcePrNumber}: ${condition.quote}`).join("\n") : "(none selected; still check the full source and cross-source constraints)"}\nWrite about this ONE action using the selected full PR bodies. Keep the prerequisites and exclusions with the action, even when shortening the text. The other source excerpts are conflict checks, not extra writing material. If the action cannot be supported accurately, omit the claim rather than broaden it.` : "",
       `## Final output\nWrite the entire title and body in ${langName(lang)}; source text in another language is material to explain, not wording to copy. Keep project names and identifiers as supplied. Follow the selected channel and any explicit Editor instruction. Preserve all prerequisites of each retained claim. Return the requested JSON only.`,
     ].filter((l) => l !== undefined).join("\n"),
   };
