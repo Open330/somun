@@ -49,6 +49,8 @@ export const VOICE_PRESETS: VoicePreset[] = [
     description: "독자가 얻는 것부터. 이제 되는 것과 아직 안 되는 것을 나란히.",
     ko: "독자가 얻는 것을 첫 문장에 씁니다. 그다음 '이제 됩니다'와 '아직 안 됩니다'를 각각 한 문장씩 나란히 씁니다. 마케팅 어휘(혁신, 강력한, 손쉽게)는 쓰지 않고 동작을 그대로 씁니다.",
     en: "Lead with what the reader gets. Then one sentence of 'now works' and one of 'does not yet'. No marketing adjectives (powerful, seamless, effortless); describe the behavior instead.",
+    channelKo: "독자가 할 수 있는 구체적인 변화를 먼저 씁니다. 마케팅 어휘 없이 동작을 그대로 설명합니다. 말투와 문장 수는 선택한 채널을 따릅니다. 관련 있는 필수 조건은 기능과 함께 쓰되, '아직 안 됩니다' 문장이나 별도의 한계 절을 채우려고 덧붙이지 않습니다.",
+    channelEn: "Lead with the concrete task the reader can perform. Describe the behavior without marketing adjectives. Follow the selected channel's register and sentence budget. Keep relevant prerequisites with their operation; do not add a 'does not yet' sentence or a limitations section merely to fill this voice pattern.",
     sample: {
       ko: "이제 터미널에서 한 줄로 이번 주 스타가 붙은 저장소를 볼 수 있습니다.\n\n이제 됩니다: 조직 저장소 집계, 주간 캐시로 두 번째 실행부터 API 호출 없음.\n아직 안 됩니다: GitLab.\n\nrepopulse 0.4.0, 릴리스 3회째. https://github.com/example/repopulse",
       en: "You can now see which of your repos got stars this week with one command in the terminal.\n\nNow works: organization repos, cached weekly counts so the second run makes no API calls.\nNot yet: GitLab.\n\nrepopulse 0.4.0, third release. https://github.com/example/repopulse",
@@ -119,6 +121,7 @@ export const KO_FLUENCY_RULES = `Korean fluency rules (violations make the text 
 - Every sentence ends with a full predicate. Keep subjects and objects explicit: say what was wrong with what, and what you did to it. Not "설정이 꼬여서 다시 잡았습니다" but "기기마다 설정 파일 경로가 달라 동기화가 실패해서, 경로를 한 곳으로 모았습니다".
 - Use plain verbs, not figurative ones: 꼬이다/잡다/박다/때려넣다/터지다 → 맞지 않다/설정하다/명시하다/추가하다/실패하다.
 - Do not stack nouns without particles. Do not chain '~의'. Do not use em dashes.
+- Describe the reader's action in ordinary Korean before naming an internal component. Prefer "서비스를 한곳에서 찾을 수 있습니다" to "단일 탐색 진입점을 제공합니다", and "앞뒤 내용을 함께 불러옵니다" to "문맥을 회수합니다" when those are the operations established by Facts. Public product copy should describe finding a service or opening account management, not expose catalog bookkeeping such as registry entries or authentication IDs, unless that is the selected technical topic. Do not enumerate brand names or preserve a translated implementation phrase when it hides the actual change. This is wording guidance, not permission to add facts.
 - One register throughout. Never mix 합니다체 and 한다체 in one post.
 - Product names, APIs, paths and env vars stay in their original spelling. Repo names are copied exactly (jiunbae/settings, never ja/settings). Never transliterate names into Hangul: X, Threads, LinkedIn, Show HN, GeekNews, GitHub, Gemini, Claude Code, Codex, API, CLI, npm, RSS, TypeScript (never 엑스, 링크드인, 쇼 에이치엔, 긱뉴스, 깃허브, 제미나이, 에이피아이, 씨엘아이, 엔피엠).
 - Translate ordinary technical prose into established Korean: code frame → 코드 프레임, line endings → 줄바꿈, path segments → 경로 구성 요소, dependencies → 의존성, proxy context matchers → 프록시 컨텍스트 매처. Preserve identifiers such as CRLF and node_modules.
