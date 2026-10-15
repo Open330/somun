@@ -30,14 +30,14 @@ export type ChannelSpec = {
 export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
   x: {
     id: "x", label: "X", defaultLangs: ["en", "ko"], maxChars: 280, hasTitle: false,
-    rules: "Exactly three short lines separated by blank lines. Line 1: the concrete change or a problem explicitly supported by Facts, no adjectives. Use first-person experience only if Facts explicitly describes the author having that experience. Line 2: what changed for the user, one sentence. Line 3: a supplied number or limitation if available, then the link. Omit missing evidence rather than inventing it or inserting placeholders. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
+    rules: "Default to ONE short factual sentence followed by the supplied link: name the project and what a reader can do. Use a second sentence only for a prerequisite or workflow step essential to understanding that SAME task. Keep a required threshold, flag or last-attempt condition attached to its operation. Do not append a separate disclaimer, a limitation about a different task, test counts, storage limits or another feature. No fixed paragraph count. Use first-person experience only if Facts explicitly describes the author having that experience. No hashtags, no emoji, no exclamation marks, no 'excited', no 'introducing'.",
     mediaHint: "터미널 GIF 또는 실제 출력 스크린샷 1장 (홈 경로·내부 브랜치명 가리기)",
     composeUrl: "https://x.com/compose/post",
     runbook: ["영어 글은 화~목 미국 동부 오전 9~11시(한국 22~24시), 한국어 글은 평일 오전 8~9시나 저녁 21~22시", "이미지 1장: 터미널 GIF 또는 실제 출력 스크린샷 (홈 경로·내부 브랜치명 가리기)", "링크는 본문 마지막 줄에", "올린 뒤 첫 답글로 저장소 링크나 데모를 한 번 더"],
   },
   threads: {
     id: "threads", label: "Threads", defaultLangs: ["ko"], maxChars: 500, maxSentences: 2, hasTitle: false,
-    rules: "One or two sentences, conversational. Take a position or end with a question rather than informing. No link in the body (it goes in the first reply).",
+    rules: "One or two sentences, conversational. Start with ONE concrete task or change, using an everyday action rather than a feature inventory. A second sentence may add an essential prerequisite or workflow step, or ask one specific question about that SAME task. Do not repeat a threshold or exception in different words. Do not append another change, an unrelated disclaimer or catalog metadata. A question is optional: omit it when it would only ask about general habits or repeat the opening. Do not invent an opinion or experience to sound conversational. No link in the body (it goes in the first reply).",
     mediaHint: "선택. 스크린샷 1장이면 충분",
     composeUrl: "https://www.threads.net/",
     runbook: ["링크는 본문이 아니라 첫 댓글에", "올린 뒤 30~60분은 답글에 바로 반응 (초기 반응이 노출을 결정)"],
@@ -51,7 +51,7 @@ export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
   },
   show_hn: {
     id: "show_hn", label: "Show HN", fixedLang: "en", defaultLangs: ["en"], maxChars: 2000, hasTitle: true, titleMaxChars: 80,
-    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Explain what it does using Facts. Include a mechanism or architecture paragraph only when Facts explicitly describes that mechanism; release bullet points do not establish an architecture. Omit this paragraph otherwise. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. If Facts supplies limitations, add a 'Limitations:' paragraph using only those. Omit it when none are supplied. Last paragraph: one genuine open question for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
+    rules: "Title: 'Show HN: <Name> – <plain one-line description>', no adjectives, no hype, under 80 chars. Body is a suggested first comment. Open with the concrete change. Describe the problem and affected audience only if Facts explicitly supplies them. Explain what it does using Facts. Include a mechanism or architecture paragraph only when Facts explicitly describes that mechanism; release bullet points do not establish an architecture. Omit this paragraph otherwise. Discuss only design choices explicitly supported by Facts; do not infer motivations or new consequences. Add a 'Limitations:' paragraph only for supplied constraints that affect trying or using the capability described in this post. Do not append unrelated retry, accounting or implementation caveats just because they appear in Facts. Omit the paragraph when no relevant limitation is supplied. Last paragraph: one genuine open question about the described task for the reader. Never ask for upvotes. No emoji. No exclamation marks.",
     mediaHint: "링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함",
     composeUrl: "https://news.ycombinator.com/submit",
     runbook: ["화~목 미국 동부 오전 8~10시 (한국 저녁 21~23시), 또는 일요일 저녁", "제출 링크는 GitHub 저장소. README 상단에 데모 GIF가 있어야 함", "제출 직후 위 본문을 첫 댓글로", "48시간 동안 2시간 안에 모든 댓글에 답. 방어적이지 않게", "어디에도 투표 요청 금지. 삭제 후 재등록 금지"],
@@ -76,8 +76,8 @@ export const ALL_CHANNELS = Object.keys(CHANNELS) as BuiltinChannel[];
 
 /** 기본 채널의 편집 정체성. 플랫폼의 자동 게시 규칙이 아닌 초안 프리셋이다. */
 export const CHANNEL_IDENTITIES: Record<BuiltinChannel, ChannelIdentity> = {
-  x: { audience: "빠르게 훑어보는 사용자와 개발자", purpose: "한 가지 변화와 실제로 할 수 있는 일을 짧게 알리기", tone: "직접적이고 간결한 평서문", structure: "변화 또는 독자 과업 → 구체적 기능 → 근거가 있는 수치/한계와 링크" },
-  threads: { audience: "경험과 관점에 반응하는 대화 상대", purpose: "짧은 관점이나 질문으로 대화 시작하기", tone: "편안한 대화체, 한국어는 해요체. 과장 없이", structure: "한두 문장으로 관점 또는 질문. 링크는 첫 답글" },
+  x: { audience: "빠르게 훑어보는 사용자와 개발자", purpose: "한 가지 변화와 실제로 할 수 있는 일을 짧게 알리기", tone: "직접적이고 간결한 평서문", structure: "독자가 할 수 있는 변화 한 문장 → 필요할 때만 같은 과업의 설명 한 문장 → 링크" },
+  threads: { audience: "경험과 관점에 반응하는 대화 상대", purpose: "구체적인 변화나 관점을 편하게 나누기", tone: "편안한 대화체, 한국어는 해요체. 과장 없이", structure: "한두 문장으로 변화 또는 관점. 질문은 같은 과업에 관해 물을 내용이 있을 때만. 링크는 첫 답글" },
   linkedin: { audience: "직무와 업무 맥락을 중시하는 동료", purpose: "업무에서 달라진 점과 근거 있는 경험 공유", tone: "차분하고 구체적인 업무 설명", structure: "짧은 훅 → 사실과 업무 맥락 → 근거 있는 시사점 → 링크" },
   show_hn: { audience: "직접 써 보고 기술적 선택을 논의하는 개발자", purpose: "실행 가능한 제품과 구현 내용을 소개", tone: "사실 중심, 기술적이고 솔직하게", structure: "제목 + 첫 댓글: 기능 → 근거 있는 동작/설계 → 한계 → 열린 질문" },
   show_gn: { audience: "기술 뉴스와 직접 쓸 도구를 찾는 한국어 독자", purpose: "핵심 기능이나 변화를 사실 중심으로 설명", tone: "간결한 한국어, 홍보 어휘 없이", structure: "제목 → 무엇인가/변경 내용 → 근거 있는 한계. 댓글/추천 요청 없이" },

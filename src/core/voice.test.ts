@@ -47,3 +47,15 @@ it("lets the channel supply tone until the author chooses a general voice, prese
   expect(voiceGuideFor({ preset: "plain", guide: "" }, "ko")).toContain("합니다체");
   expect(voiceGuideFor({ preset: "question", guide: "" }, "ko", "threads")).toContain("구체적인 질문");
 });
+
+it("adapts the announcement preset to a short channel without changing explicit author guidance or unscoped writing", () => {
+  const voice = { preset: "announce", chosenAt: 1, guide: "[Threads] Ask about manuscript structure.\n[X] Keep the supplied threshold." };
+  const thread = voiceGuideFor(voice, "en", "threads");
+  expect(thread).not.toContain("Then one sentence of 'now works'");
+  expect(thread).toContain("selected channel's register and sentence budget");
+  expect(thread).toContain("Ask about manuscript structure.");
+  expect(thread).not.toContain("Keep the supplied threshold.");
+  expect(voiceGuideFor(voice, "en", "x")).toContain("Keep the supplied threshold.");
+  expect(voiceGuideFor(voice, "en")).toContain("Then one sentence of 'now works'");
+  expect(voice.preset).toBe("announce");
+});

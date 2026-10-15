@@ -25,7 +25,7 @@ it("bounds PR source context by whole bodies and discloses collection truncation
   expect(block).toContain("Source truncated during collection");
 });
 
-it("repeats verbatim source conditions at the end of digest and draft without laundering them into verified facts", () => {
+it("keeps verbatim source conditions before the final drafting brief without laundering them into verified facts", () => {
   const body = "A title alone says one or two questions short.\n- 마지막 시도는 50% 이상이면 짧은 퀴즈를 반환합니다. 첫 시도는 여전히 전체 수를 요구합니다.\nUnrelated internal rename.";
   const c = { ...candidate, evidence: { ...candidate.evidence, mergedPrDetails: [{ number: 111, title: "Partial result", body, url: "https://github.com/test/tool/pull/111" }] } };
   const excerpts = prConditionsBlock(c.evidence);
@@ -33,7 +33,10 @@ it("repeats verbatim source conditions at the end of digest and draft without la
   expect(excerpts).not.toContain("Unrelated internal rename");
   expect(excerpts).toContain("not an exhaustive list");
   expect(digestPrompt(c).user.endsWith(excerpts)).toBe(true);
-  expect(draftPrompt(c, "threads", "ko", []).user.endsWith(excerpts)).toBe(true);
+  const draft = draftPrompt(c, "threads", "ko", []);
+  expect(draft.user).toContain(excerpts);
+  expect(draft.user.indexOf(excerpts)).toBeLessThan(draft.user.indexOf("## Coverage"));
+  expect(draft.user.indexOf(excerpts)).toBeLessThan(draft.user.indexOf("## Final output"));
   expect(draftPrompt(c, "show_hn", "en", [], undefined, { introduction: true }).system).toContain("Omit backend LLM provider");
 });
 
@@ -42,6 +45,21 @@ it("does not attach recent conditional change highlights to first introductions"
   for (const highlight of candidate.evidence.highlights) expect(intro.user).not.toContain(highlight);
   expect(intro.user).toContain("PR bodies are constraints");
   expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: false }).user).toContain(candidate.evidence.highlights[0]);
+});
+
+it("leaves backend implementation out of general introductions while preserving source checks, integrations and provider topics", () => {
+  const backend = "Azure OpenAI를 사용하여 코드를 분석하고 관련 질문을 생성합니다.";
+  const profile = { what: "A repository quiz app", audience: "Developers", claims: ["Generates questions from repositories.", backend, "Connects Claude Code through MCP."], limitations: [], stage: "unknown", naming: "tool", avoid: [] };
+  const before = structuredClone(profile);
+  const intro = draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: true });
+  expect(intro.user).not.toContain(backend);
+  expect(intro.user).toContain("Generates questions from repositories.");
+  expect(intro.user).toContain("Connects Claude Code through MCP.");
+  expect(groundingText(candidate, profile)).toContain(backend);
+  expect(profile).toEqual(before);
+  expect(draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: false }).user).toContain(backend);
+  expect(draftPrompt(candidate, "show_hn", "en", [], "Explain the OpenAI backend", { profile, introduction: true }).user).toContain(backend);
+  expect(draftPrompt(candidate, "show_hn", "en", [], undefined, { profile, introduction: true, instruction: "Explain the OpenAI backend" }).user).toContain(backend);
 });
 
 describe("draft coverage contract", () => {
