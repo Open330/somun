@@ -147,3 +147,16 @@ npx tsx scripts/user-study.ts experiments/runs/user-study/observations.json
 집계는 난도가 비교 가능하고 양쪽 모두 게시 가능한 최종본·실측 시간이 있는 참가자에 대해서만 개인별 시간 절약률과 중앙값을 계산한다. 직접 작성이 빠르면 음수로 보고한다. 전체 시작·완료·중단·미측정·게시 가능 수와 중요한 사실 수정 수를 별도로 보여줘 성공한 과업만의 시간을 전체 성공률로 오해하지 않게 한다. 빈 양식은 관측 참가자 0명·시간 절약 null로 집계한다.
 
 다음 실제 변경이 생겼는지 `returnUse.opportunity`, 그때 소문을 다시 썼는지 `used`에 기록한다. 기회가 없거나 미확인일 때 used는 null이다. 기회가 있지만 답변을 못 받았을 때도 used는 null이며 미사용 false와 구분한다. 기회 날짜와 사용·미사용 이유는 reason에 남긴다. 참가자를 대신 모집하거나 메시지를 보내는 기능은 없다.
+# 공유 API 한도와 무관한 로컬 10개 검증
+
+ChatGPT 계정으로 로그인한 Codex CLI와 기존 로컬 워커를 사용합니다.
+
+```sh
+npm run dogfood:local -- --cases /absolute/private/cases.json --settings /absolute/private/settings.json --out experiments/runs/local-fixed10
+```
+
+입력은 정확히 10개의 서로 다른 사례이며 각 사례에 `id`, `candidateId`, `repo`, `introduction`, `editorInstruction`, `candidate`, `prompt`가 필요합니다. `prompt`는 저장한 `system`, `user`, `schema`, `schemaName`을 그대로 사용합니다. `profile`은 선택 사항입니다. 선택적인 설정 파일은 `voice`, `bannedPhrases`, `customChannels`, `channelLangs`, `ui`만 허용합니다.
+
+실제 `agent-worker --cli codex --once`가 루프백 API에 접속해 클레임·린트·기존 최대 1회 보정·완료까지 수행합니다. DB는 사례마다 새 메모리 DB이고 게이트웨이 키나 운영 URL을 받지 않습니다. Codex는 빈 작업 디렉터리와 읽기 전용 샌드박스에서 실행합니다. CLI 구독의 사용 한도는 적용됩니다.
+
+실행마다 새 출력 디렉터리를 사용합니다. 입력, 첫 응답과 보정 응답의 검사 요청, 최종 초안, 사용량, 실패를 비공개 파일로 남기며 이전 결과를 덮어쓰지 않습니다. 원문과 결과에 계정 정보가 포함될 수 있으므로 입력·결과 파일을 커밋하지 마세요. 원문 조건과 글의 품질은 별도로 평가해야 하며, 이 결과는 공유 Gemini 경로의 품질을 입증하지 않습니다.
