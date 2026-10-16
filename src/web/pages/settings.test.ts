@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../app/settings";
+import { DEFAULT_MODEL } from "../../core/models";
 import type { SettingsView } from "../../shared/types";
 import Settings from "./Settings";
 
@@ -47,6 +48,25 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 const value = (name: string) => (screen.getByLabelText(name) as HTMLInputElement).value;
+
+it("explains explicit shared Gemini selection without changing or saving the draft model", () => {
+  setup();
+  expect(screen.getByText(/공유 Gemini에서 빠른 모델/).textContent).toContain(DEFAULT_MODEL.gemini);
+  expect(value("초안 모델 (글 생성만)")).toBe("");
+  expect(patch).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText(/API 키/), { target: { value: "user-key" } });
+  expect(screen.queryByText(/공유 Gemini에서 빠른 모델/)).toBeNull();
+});
+
+it("keeps the shared-model hint off BYOK and explains that the local worker requires saving and running", () => {
+  resource.data = { ...initial(), llm: { ...initial().llm, apiKeySet: true } };
+  setup();
+  expect(screen.queryByText(/공유 Gemini에서 빠른 모델/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "로컬 에이전트" }));
+  expect(screen.getByText(/설정을 저장한 뒤 본인 컴퓨터/).textContent).toContain("선택하는 것만으로 작업이 실행되지는 않습니다");
+  expect(screen.getByText(/npm run agent-worker/)).toBeTruthy();
+  expect(patch).not.toHaveBeenCalled();
+});
 
 it("protects settings on navigation and reload, preserving them when navigation is cancelled", async () => {
   const { router } = setup();

@@ -742,6 +742,10 @@ export const en: Record<string, string> = {
   토큰: "Token",
   "분석 모델 (다이제스트·판단)": "Analysis model (digest and judgment)",
   "초안 모델 (글 생성만)": "Draft model (writing only)",
+  "공유 Gemini에서 빠른 모델을 직접 선택하려면 초안 모델에 {model}을 입력하고 저장한 뒤 다시 시도하세요. 생성 후 원문의 조건·예외를 확인해 주세요.":
+    "To explicitly choose the faster shared Gemini model, enter {model} as the draft model, save, then retry. Review the source conditions and exceptions after generation.",
+  "설정을 저장한 뒤 본인 컴퓨터에서 아래 명령으로 워커를 실행해 주세요. 로컬 에이전트를 선택하는 것만으로 작업이 실행되지는 않습니다.":
+    "Save your settings, then run the worker on your own computer using the command below. Selecting a local agent alone does not run jobs.",
   "위와 같음": "Same as above",
   "API 키": "API key",
   "(비우면 서버 키)": "(leave empty to use server key)",
