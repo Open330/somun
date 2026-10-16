@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
+
+it("preserves whole source paragraphs and their context without the prompt excerpt budget", () => {
+  const first = "Setup:\r\n- Set both values.\r\n- Fails if only one is set.";
+  const last = "Minimum: at least 50% of requested items.\nRound up.";
+  expect(sourceConditionParagraphs(`${first}\r\n\r\n${"Ordinary notes. ".repeat(1000)}\r\n\r\n${last}`)).toEqual([first, last]);
+});
 
 it("keeps mandatory exclusions above optional caveats and sentence budgets", () => {
   const p = draftPrompt(candidate, "threads", "ko", [], "Describe the change");

@@ -828,4 +828,10 @@ button.chip { min-height: 28px; }
 .evidence-source-card { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 8px; }
 .evidence-source-card h4 { font-size: 12px; margin: 0 0 6px; }
 .evidence-source-card pre { font: inherit; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.evidence-source-warning { margin-bottom: 10px; padding: 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.evidence-source-warning p { margin-top: 0; }
+.evidence-source-warning ul { margin: 0; padding-left: 18px; }
+.evidence-condition-excerpts { margin: 8px 0 12px; padding-left: 10px; border-left: 2px solid var(--line-strong); }
+.evidence-condition-excerpts > summary { cursor: pointer; font-size: 12px; }
+.evidence-condition-excerpts pre { margin-bottom: 8px; }
 @media (max-width: 700px) { .evidence-review-grid { grid-template-columns: minmax(0, 1fr); } }
