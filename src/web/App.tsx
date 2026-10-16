@@ -12,6 +12,8 @@ import TokenLogin from "./pages/TokenLogin";
 import NotFound from "./pages/NotFound";
 import { Lockup, Mark } from "./components/Mark";
 import { useWorkspaceStatus, WorkStatusButton, WorkStatusPanel } from "./components/WorkspaceStatus";
+import type { AccountWorkspaces } from "@shared/workspaces";
+import { AccountWorkspace, WorkspacePicker } from "./components/AccountWorkspace";
 import { t } from "./i18n";
 
 // 로그인 뒤 화면은 필요할 때 받는다. 첫 화면(랜딩·로그인)이 가벼워진다.
@@ -75,20 +77,25 @@ export default function App() {
     );
   }
   return (
-    <Shell
-      onSignOut={async () => {
-        if (auth.enabled) await auth.signOut();
-        else {
-          await endSession();
-          setTokenState("need");
-        }
-      }}
-      who={auth.enabled ? (auth.user?.displayName ?? auth.user?.username ?? "") : t("토큰 세션")}
-    />
+    <AccountWorkspace key={auth.enabled ? auth.user?.id : "local"}>
+      {(account) => (
+        <Shell
+          account={account}
+          onSignOut={async () => {
+            if (auth.enabled) await auth.signOut();
+            else {
+              await endSession();
+              setTokenState("need");
+            }
+          }}
+          who={auth.enabled ? (auth.user?.displayName ?? auth.user?.username ?? "") : t("토큰 세션")}
+        />
+      )}
+    </AccountWorkspace>
   );
 }
 
-function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who: string }) {
+function Shell({ onSignOut, who, account }: { account: AccountWorkspaces; onSignOut: () => void | Promise<void>; who: string }) {
   const location = useLocation();
   const work = useWorkspaceStatus();
   const [signingOut, setSigningOut] = useState(false);
@@ -167,6 +174,7 @@ function Shell({ onSignOut, who }: { onSignOut: () => void | Promise<void>; who:
         </div>
         <WorkStatusPanel state={work} candidates={rows ?? []} />
         <main className="main" id="main-content" tabIndex={-1}>
+          <WorkspacePicker account={account} />
           {signOutError && (
             <div className="inline-notice is-error" role="alert">
               <span>{t("로그아웃하지 못했습니다. 세션이 유지될 수 있습니다. 다시 시도해 주세요.")}</span>

@@ -3,6 +3,7 @@
  * 사용자의 Claude Code 또는 Codex CLI(본인 구독)로 처리하고 결과를 돌려준다.
  *   npm run agent-worker -- --cli claude   # 또는 --cli codex, --once, --interval 30
  */
+import type { AccountWorkspaces } from "../src/shared/workspaces.js";
 import { isBetterRepair } from "../src/core/draft-repair.js";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -119,7 +120,18 @@ async function repair(job: Job, claimToken: string, first: { json: unknown; mode
   }
 }
 
+let workspaceChecked = false;
 async function tick(): Promise<number> {
+  if (!workspaceChecked || !process.env.SOMUN_WORKSPACE) {
+    // Refuse to silently process only the default queue after account linking.
+    const account = await call<AccountWorkspaces>("/me");
+    if (account.workspaces.length > 1 && !process.env.SOMUN_WORKSPACE) {
+      console.error(`Choose a workspace with SOMUN_WORKSPACE before starting this worker:\n${account.workspaces.map(space => space.ownerId).join("\n")}`);
+      throw new Error("SOMUN_WORKSPACE is required for linked accounts");
+    }
+    if (!workspaceChecked) console.log(`workspace: ${account.ownerId}`);
+    workspaceChecked = true;
+  }
   const jobs = await call<Job[]>("/jobs/pending");
   for (const job of jobs) {
     const { claimed, claimToken } = await call<{ claimed: boolean; claimToken?: string }>(`/jobs/${job.id}/claim`, { runner });

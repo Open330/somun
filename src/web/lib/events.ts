@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "@shared/types";
+import { workspaceHeaders } from "./workspaces";
 import { getAuthManager } from "./auth/manager";
 
 type Listener = (ev: ChangeEvent) => void;
@@ -36,7 +37,10 @@ async function connect() {
     // EventSource는 헤더를 못 붙인다. 토큰 대신 1회용 티켓을 받아 주소에 넣는다(토큰·JWT가 주소·로그에 남지 않게).
     const manager = getAuthManager();
     const token = manager ? await manager.fetchApiToken() : null;
-    const res = await fetch("/api/events/ticket", { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const res = await fetch("/api/events/ticket", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}`, ...workspaceHeaders(token) } : {},
+    });
     if (!res.ok) throw new Error(`ticket ${res.status}`);
     const { ticket } = (await res.json()) as { ticket: string };
     if (current !== generation || !listeners.size) return;

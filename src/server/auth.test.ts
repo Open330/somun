@@ -18,7 +18,7 @@ it("checks JWT expiry, audience and issuer and never accepts credentials in the 
     const app = new Hono<{ Variables: AuthVars }>();
     app.use("/api/*", authMiddleware(loadConfig({ AUTH_ISSUER: issuer, AUTH_JWKS_URL: `${issuer}/jwks`, AUTH_AUDIENCE: "somun" }), undefined, (iss, subject, aliases) => {
       resolved.push({ issuer: iss, subject, aliases });
-      return `${iss}|${aliases.includes("previous-user") ? "previous-user" : subject}`;
+      return { accountId: `${iss}|${subject}`, ownerId: `${iss}|${aliases.includes("previous-user") ? "previous-user" : subject}`, workspaces: [] };
     }));
     app.get("/api/me", (c) => c.json({ ownerId: c.get("ownerId") }));
     app.get("/api/events", (c) => c.json({ ownerId: c.get("ownerId") }));
@@ -76,6 +76,14 @@ describe("browser sessions and SSE tickets", () => {
     expect(await (await app.request(`/api/events?ticket=${ticket}`)).json()).toEqual({ ownerId: "op" });
     expect((await app.request(`/api/events?ticket=${ticket}`)).status).toBe(401);
     expect((await app.request("/api/me?ticket=" + ticket)).status).toBe(401);
+  });
+
+  it("rejects workspace selection for shared-token sessions", async () => {
+    expect((await build().request("/api/me", { headers: { Authorization: "Bearer operator-token-123", "X-Somun-Workspace": "other" } })).status).toBe(400);
+    const app = new Hono<{ Variables: AuthVars }>();
+    app.use("/api/*", authMiddleware(loadConfig({ SOMUN_ALLOW_ANONYMOUS: "true" })));
+    app.get("/api/me", (c) => c.json({ ownerId: c.get("ownerId") }));
+    expect((await app.request("/api/me", { headers: { "X-Somun-Workspace": "other" } })).status).toBe(400);
   });
 
   it("expires tickets after a minute", () => {

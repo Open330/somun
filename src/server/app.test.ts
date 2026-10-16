@@ -158,7 +158,7 @@ describe("HTTP response boundaries", () => {
   it("requires authentication and preserves resource-not-found responses", async () => {
     expect((await app.request("/api/me")).status).toBe(401);
     const me = await app.request("/api/me", { headers });
-    expect(await me.json()).toEqual({ ownerId: "local" });
+    expect(await me.json()).toEqual({ accountId: "local", ownerId: "local", workspaces: [{ ownerId: "local", primary: true, hasData: true }] });
     const missing = await app.request("/api/candidates/999", { headers });
     expect(missing.status).toBe(404);
   });

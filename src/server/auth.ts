@@ -2,6 +2,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import type { AccountWorkspaces } from "../shared/workspaces.js";
 import type { Config } from "./config.js";
 
 /**
@@ -15,7 +16,7 @@ import type { Config } from "./config.js";
  * SSE(EventSource)는 헤더를 못 붙이므로 /api/events 만 1회용 티켓(?ticket=)을 받는다. 토큰·JWT를 주소에 넣지 않는다.
  */
 export type AuthMethod = "token" | "jwt" | "anonymous";
-export type AuthVars = { ownerId: string; authMethod: AuthMethod };
+export type AuthVars = { ownerId: string; authMethod: AuthMethod; accountWorkspaces?: AccountWorkspaces };
 
 export const SESSION_COOKIE = "somun_session";
 const SESSION_TTL_S = 30 * 86_400;
@@ -72,11 +73,11 @@ function sameOrigin(c: Context): boolean {
 
 const secureRequest = (c: Context, config: Config) => c.req.header("x-forwarded-proto") === "https" || new URL(c.req.url).protocol === "https:" || Boolean(config.SOMUN_PUBLIC_URL?.startsWith("https:"));
 
-export function authMiddleware(config: Config, tickets?: TicketStore, resolveOwner?: (issuer: string, subject: string, aliases: readonly string[]) => string): MiddlewareHandler<{ Variables: AuthVars }> {
+export function authMiddleware(config: Config, tickets?: TicketStore, resolveOwner?: (issuer: string, subject: string, aliases: readonly string[], selected?: string, describe?: boolean) => AccountWorkspaces): MiddlewareHandler<{ Variables: AuthVars }> {
   const jwks = config.AUTH_JWKS_URL ? createRemoteJWKSet(new URL(config.AUTH_JWKS_URL)) : null;
   const tokenOwner = config.SOMUN_TOKEN_OWNER_ID || "local";
   return async (c, next) => {
-    const pass = (ownerId: string, method: AuthMethod) => { c.set("ownerId", ownerId); c.set("authMethod", method); return next(); };
+    const pass = (ownerId: string, method: AuthMethod) => { if (method !== "jwt" && c.req.header("X-Somun-Workspace")) return c.json({ error: "Workspace selection requires JWT authentication" }, 400); c.set("ownerId", ownerId); c.set("authMethod", method); return next(); };
     if (c.req.path.endsWith("/api/events") && tickets) {
       const ticket = c.req.query("ticket");
       const t = ticket ? tickets.consume(ticket) : undefined;
@@ -99,7 +100,11 @@ export function authMiddleware(config: Config, tickets?: TicketStore, resolveOwn
       }
       if (identity) {
         const issuer = config.AUTH_ISSUER ?? "jwt";
-        return pass(resolveOwner ? resolveOwner(issuer, identity.subject, identity.aliases) : `${issuer}|${identity.subject}`, "jwt");
+        const selected = c.req.header("X-Somun-Workspace") || undefined;
+        const access = resolveOwner?.(issuer, identity.subject, identity.aliases, selected, c.req.path === "/api/me");
+        if (!access && selected && selected !== `${issuer}|${identity.subject}`) return c.json({ error: "Workspace is not linked to this account" }, 403);
+        if (access) c.set("accountWorkspaces", access);
+        return pass(access?.ownerId ?? `${issuer}|${identity.subject}`, "jwt");
       }
     }
     const session = config.SOMUN_TOKEN ? getCookie(c, SESSION_COOKIE) : undefined;

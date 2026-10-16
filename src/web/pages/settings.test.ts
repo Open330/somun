@@ -172,8 +172,8 @@ it.each(["export", "delete"])("shows recoverable account %s errors", async (acti
   api.mockRejectedValue(new Error("offline"));
   post.mockRejectedValue(new Error("offline"));
   setup("account");
-  if (action === "delete") fireEvent.change(screen.getByLabelText("계정 데이터 삭제 확인"), { target: { value: "삭제" } });
+  if (action === "delete") fireEvent.change(screen.getByLabelText("현재 작업 공간 데이터 삭제 확인"), { target: { value: "삭제" } });
   fireEvent.click(screen.getByRole("button", { name: action === "export" ? "JSON 내려받기" : "모두 삭제" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("작업을 완료하지 못했습니다"));
-  if (action === "delete") expect(value("계정 데이터 삭제 확인")).toBe("삭제");
+  if (action === "delete") expect(value("현재 작업 공간 데이터 삭제 확인")).toBe("삭제");
 });

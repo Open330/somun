@@ -835,3 +835,6 @@ button.chip { min-height: 28px; }
 .evidence-condition-excerpts > summary { cursor: pointer; font-size: 12px; }
 .evidence-condition-excerpts pre { margin-bottom: 8px; }
 @media (max-width: 700px) { .evidence-review-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.workspace-picker { margin-bottom: 24px; }
+.workspace-picker select { max-width: 100%; min-width: 0; }

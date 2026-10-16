@@ -72,7 +72,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
     return parsed;
   };
 
-  app.get("/me", (c) => c.json({ ownerId: c.get("ownerId") }));
+  app.get("/me", (c) => c.json(c.get("accountWorkspaces") ?? { accountId: c.get("ownerId"), ownerId: c.get("ownerId"), workspaces: [{ ownerId: c.get("ownerId"), primary: true, hasData: true }] }));
 
   // settings
   app.get("/settings", (c) => c.json(getSettingsView(ctx, c.get("ownerId"))));

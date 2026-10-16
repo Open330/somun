@@ -421,17 +421,21 @@ export default function Settings() {
           <div className="card stack gap-14 settings-panel">
             <div>
               <h3>{t("내 데이터 내보내기")}</h3>
-              <p className="small muted">{t("글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.")}</p>
+              <p className="small muted">
+                {t("현재 작업 공간의 글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.")}
+              </p>
               <button onClick={() => void accountAction(exportJson)}>{t("JSON 내려받기")}</button>
             </div>
             <div>
-              <h3 className="error-text">{t("계정 데이터 삭제")}</h3>
+              <h3 className="error-text">{t("현재 작업 공간 데이터 삭제")}</h3>
               <p className="small muted">
-                {t("이 계정의 모든 데이터를 지웁니다. 되돌릴 수 없습니다. GitHub App 설치 자체는 GitHub 설정에서 따로 제거해야 합니다.")}
+                {t(
+                  "현재 작업 공간의 모든 데이터를 지웁니다. 다른 공간은 유지됩니다. 되돌릴 수 없습니다. GitHub App 설치는 GitHub 설정에서 따로 제거하세요.",
+                )}
               </p>
               <div className="row">
                 <input
-                  aria-label={t("계정 데이터 삭제 확인")}
+                  aria-label={t("현재 작업 공간 데이터 삭제 확인")}
                   placeholder={t('확인하려면 "{word}"라고 입력', { word: deleteWord })}
                   value={confirmText}
                   onChange={(ev) => setConfirmText(ev.target.value)}

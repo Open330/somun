@@ -9,24 +9,28 @@ let ctx: AppContext;
 const issuer = "https://api.jiun.dev";
 beforeEach(() => { ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: {} as AppContext["usage"] }; });
 afterEach(() => { ctx.db.$client.close(); });
-it("preserves the populated previous workspace without copying settings or changing owner IDs", () => {
+it("preserves legacy content and default after the primary workspace gets data", () => {
   ctx.db.insert(schema.settings).values({ ownerId: `${issuer}|old`, data: { marker: "preserved" }, updatedAt: 1 }).run();
   const resolve = createAccountOwnerResolver(ctx);
-  expect(resolve(issuer, "current", ["old"])).toBe(`${issuer}|old`);
-  expect(resolve(issuer, "current", ["old", "old"])).toBe(`${issuer}|old`);
-  expect(resolve(issuer, "new", [])).toBe(`${issuer}|new`);
-  expect(resolve("https://another-issuer.example", "current", ["old"])).toBe("https://another-issuer.example|current");
-  expect(ctx.db.select().from(schema.settings).all()).toHaveLength(1);
+  expect(resolve(issuer, "current", ["old"]).ownerId).toBe(`${issuer}|old`);
+  ctx.db.insert(schema.settings).values({ ownerId: `${issuer}|current`, data: { marker: "new" }, updatedAt: 1 }).run();
+  expect(resolve(issuer, "current", ["old", "old"]).ownerId).toBe(`${issuer}|old`);
+  expect(resolve(issuer, "new", []).ownerId).toBe(`${issuer}|new`);
+  expect(resolve("https://another-issuer.example", "current", ["old"]).ownerId).toBe("https://another-issuer.example|current");
+  expect(ctx.db.select().from(schema.settings).all().map(row => row.data)).toEqual([{ marker: "preserved" }, { marker: "new" }]);
 });
-it("rejects ambiguous populated workspaces and leaves both unchanged", () => {
-  for (const id of ["current", "old"]) ctx.db.insert(schema.settings).values({ ownerId: `${issuer}|${id}`, data: { marker: id }, updatedAt: 1 }).run();
-  expect(() => createAccountOwnerResolver(ctx)(issuer, "current", ["old"])).toThrow("Both linked accounts");
-  expect(ctx.db.select().from(schema.settings).all()).toHaveLength(2);
-});
-it("detects separate workspaces even when their data is in different tables", () => {
+it("describes and selects separate workspaces whose data live in different tables", () => {
   ctx.db.insert(schema.settings).values({ ownerId: `${issuer}|old`, data: {}, updatedAt: 1 }).run();
   ctx.db.insert(schema.sources).values({ ownerId: `${issuer}|current`, kind: "github", targets: ["example/project"] }).run();
-  expect(() => createAccountOwnerResolver(ctx)(issuer, "current", ["old"])).toThrow("Both linked accounts");
+  const resolve = createAccountOwnerResolver(ctx);
+  expect(resolve(issuer, "current", ["old", "empty"], `${issuer}|current`, true)).toEqual({
+    accountId: `${issuer}|current`, ownerId: `${issuer}|current`, workspaces: [
+      { ownerId: `${issuer}|current`, primary: true, hasData: true },
+      { ownerId: `${issuer}|empty`, primary: false, hasData: false },
+      { ownerId: `${issuer}|old`, primary: false, hasData: true },
+    ],
+  });
+  for (const selected of [`${issuer}|stranger`, "https://evil.example|old", "old"]) expect(() => resolve(issuer, "current", ["old"], selected)).toThrow("not linked");
   expect(ctx.db.select().from(schema.sources).all()).toHaveLength(1);
   expect(ctx.db.select().from(schema.settings).all()).toHaveLength(1);
 });

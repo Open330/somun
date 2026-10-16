@@ -3,6 +3,20 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "기본 계정 공간": "Primary account workspace",
+  "연결된 계정 공간": "Linked account workspace",
+  "비어 있음": "Empty",
+  "작업 공간": "Workspace",
+  "작업 공간 전환": "Switch workspace",
+  "작업 공간을 불러오지 못했습니다.": "Could not load your workspace.",
+  "각 공간의 설정과 초안은 따로 보관됩니다. 전환하면 글감 화면으로 이동합니다.":
+    "Settings and drafts stay in each workspace. Switching opens the inbox.",
+  "현재 작업 공간 데이터 삭제": "Delete current workspace data",
+  "현재 작업 공간 데이터 삭제 확인": "Confirm current workspace deletion",
+  "현재 작업 공간의 모든 데이터를 지웁니다. 다른 공간은 유지됩니다. 되돌릴 수 없습니다. GitHub App 설치는 GitHub 설정에서 따로 제거하세요.":
+    "Deletes all data in the current workspace. Other workspaces are preserved. This cannot be undone. Remove the GitHub App installation separately in GitHub settings.",
+  "현재 작업 공간의 글감, 판단, 초안, 예시, 발행, 지표, 설정(키와 웹훅 제외)을 JSON 하나로 받습니다.":
+    "Download the current workspace’s candidates, judgments, drafts, examples, publications, metrics and settings (excluding keys and webhooks) as JSON.",
   "변경 소식으로 쓰기": "Write an update",
   "수집한 변경 내용을 알리는 새 초안을 씁니다.": "Write a new draft about the collected changes.",
   "커밋 제목": "Commit subject",

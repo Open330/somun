@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { ChangeEvent } from "@shared/types";
 import { getAuthManager } from "./auth/manager";
+import { workspaceHeaders } from "./workspaces";
 import { resetEvents, subscribeEvents } from "./events";
 
 /**
@@ -48,7 +49,7 @@ function forgetLegacyToken(): void {
 async function authHeader(force = false): Promise<Record<string, string>> {
   const m = getAuthManager();
   const token = m ? await m.fetchApiToken(force) : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return token ? { Authorization: `Bearer ${token}`, ...workspaceHeaders(token) } : {};
 }
 
 /** HTTP 오류. 화면은 문구가 아니라 상태 코드로 판단한다(404 → 찾을 수 없음). */

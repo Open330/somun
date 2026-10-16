@@ -7,7 +7,9 @@ import App from "../App";
 
 const { endSession, auth } = vi.hoisted(() => ({ endSession: vi.fn(), auth: { enabled: false } }));
 vi.mock("./api", () => ({
-  api: vi.fn().mockResolvedValue({}),
+  api: vi
+    .fn()
+    .mockResolvedValue({ accountId: "local", ownerId: "local", workspaces: [{ ownerId: "local", primary: true, hasData: true }] }),
   endSession,
   legacyToken: () => null,
   startSession: vi.fn(),

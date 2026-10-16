@@ -40,6 +40,11 @@ export function createApp(ctx: AppContext, config: Config) {
   app.get("/api/github/app/created", githubAppCreated(ctx));
   // 나머지 API의 요청 본문 상한. 세션 요약 업로드·예시 가져오기도 이 안에 든다.
   app.use("/api/*", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: "payload too large" }, 413) }));
+  app.use("/api/*", async (c, next) => {
+    c.header("Cache-Control", "private, no-store");
+    c.header("Vary", "Authorization, Cookie, X-Somun-Workspace");
+    await next();
+  });
   app.route("/api/session", sessionRoutes(config));
   app.use("/api/*", authMiddleware(config, tickets, createAccountOwnerResolver(ctx)));
   app.route("/api", apiRoutes(ctx, config, tickets));

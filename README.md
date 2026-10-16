@@ -249,3 +249,11 @@ The web never touches the database: it reads `/api/*` and subscribes to `/api/ev
 ### Draft quality experiments
 
 Run `npm run experiment` to replay fixed cases without model calls. See the [experiment guide](experiments/README.md) for explicit live runs, repeated prompt comparisons, blinded human review, and paired regression checks. Automatic checks and publishability are reported separately.
+
+### Linked account workspaces
+
+Verified `sub` / `legacy_subs` claims allow the same Jiun account to switch between its existing Somun workspaces. Content, encrypted credentials, settings, jobs and access privileges stay with each workspace; nothing is copied or merged. The workspace picker shows a short identifier and whether a space is empty. Switching opens the inbox in a new document. Selection is per tab and account, and survives reload.
+
+API clients select an accessible full `ownerId` returned by `GET /api/me` using `X-Somun-Workspace`. Values outside the signed identity set return 403. Token and anonymous authentication do not support workspace selection. Without a header, Somun uses the first populated legacy workspace in sorted owner order, then the primary workspace. Browser bootstrap pins that choice before loading content.
+
+For scripts and local-agent workers using a Somun audience JWT, set `SOMUN_WORKSPACE` to the chosen `ownerId` (returned by `/api/me`) alongside `SOMUN_TOKEN`. Run a worker per workspace when both use local-agent generation. This also scopes `push-sessions` uploads. Existing per-workspace limits and trusted-owner privileges remain per workspace.
