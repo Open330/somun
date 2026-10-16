@@ -38,11 +38,14 @@ export function modelAvailability(ctx: AppContext, ownerId: string, now = Date.n
     const model = modelFor(llm, purpose === "draft" ? "draft" : "judge");
     if (mode !== "shared") return { purpose, model, state: mode === "user" ? "unknown" : mode };
     if (ctx.env.llmGateway) {
-      // 게이트웨이 경로: 키별 상태는 게이트웨이가 가진다. 최근 게이트웨이 응답(429의 Retry-After, 5xx)과 계정 한도만 본다.
+      // 키별 상태 대신 최근 응답(대체 모델, Retry-After, 5xx)과 계정 한도를 본다. 관측이 없으면 가용성을 추정하지 않는다.
       const s = gatewayState(ctx, gatewayModel(model), now);
       const retryAt = Math.max(s?.retryAt ?? 0, usage && usage.limit !== null && usage.used >= usage.limit ? usage.resetAt : 0);
-      if (retryAt > now) return { purpose, model, state: "waiting", retryAt };
-      return s?.status !== undefined && s.status >= 500 ? { purpose, model, state: "degraded", lastStatus: s.status } : { purpose, model, state: "ready" };
+      const observation = s ? { observedAt: s.at } : {};
+      if (retryAt > now) return { purpose, model, state: "waiting", retryAt, ...observation };
+      if (s?.code === "model_substituted") return { purpose, model, state: "substituted", answeredBy: s.answeredBy, ...observation };
+      if (s?.status !== undefined && s.status >= 500) return { purpose, model, state: "degraded", lastStatus: s.status, ...observation };
+      return { purpose, model, state: s?.answeredBy ? "ready" : "unknown", ...observation };
     }
     const waits = keys.map(({ label }) => {
       const row = rows.get(`${label}|${model}`);

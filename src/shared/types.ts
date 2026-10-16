@@ -135,7 +135,7 @@ export type ModelAvailability = {
   mode: "shared" | "user" | "local" | "missing";
   sharedUsage?: { used: number; limit: number | null; resetAt: number; pendingLimit: number };
   checkedAt: number;
-  models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "degraded" | "unknown" | "local" | "missing"; retryAt?: number; /** degraded: 최근 실패한 HTTP 상태(예: 503). */ lastStatus?: number }[];
+  models: { purpose: "analysis" | "draft"; model: string; state: "ready" | "waiting" | "degraded" | "substituted" | "unknown" | "local" | "missing"; /** 최근 게이트웨이 응답을 관측한 시각. */ observedAt?: number; /** substituted: 최근 요청에 실제 응답한 모델. */ answeredBy?: string; retryAt?: number; /** degraded: 최근 실패한 HTTP 상태(예: 503). */ lastStatus?: number }[];
 };
 
 /** background: 예약 작업이 이은 계획. 이어지는 초안도 공유 한도의 자동 작업 몫으로 센다. */
