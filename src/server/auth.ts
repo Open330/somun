@@ -72,7 +72,7 @@ function sameOrigin(c: Context): boolean {
 
 const secureRequest = (c: Context, config: Config) => c.req.header("x-forwarded-proto") === "https" || new URL(c.req.url).protocol === "https:" || Boolean(config.SOMUN_PUBLIC_URL?.startsWith("https:"));
 
-export function authMiddleware(config: Config, tickets?: TicketStore): MiddlewareHandler<{ Variables: AuthVars }> {
+export function authMiddleware(config: Config, tickets?: TicketStore, resolveOwner?: (issuer: string, subject: string, aliases: readonly string[]) => string): MiddlewareHandler<{ Variables: AuthVars }> {
   const jwks = config.AUTH_JWKS_URL ? createRemoteJWKSet(new URL(config.AUTH_JWKS_URL)) : null;
   const tokenOwner = config.SOMUN_TOKEN_OWNER_ID || "local";
   return async (c, next) => {
@@ -86,12 +86,20 @@ export function authMiddleware(config: Config, tickets?: TicketStore): Middlewar
     const bearer = header.startsWith("Bearer ") ? header.slice(7) : undefined;
     if (bearer && config.SOMUN_TOKEN && sameSecret(bearer, config.SOMUN_TOKEN)) return pass(tokenOwner, "token");
     if (bearer && jwks) {
+      let identity: { subject: string; aliases: string[] } | undefined;
       try {
         const { payload } = await jwtVerify(bearer, jwks, { issuer: config.AUTH_ISSUER, audience: config.AUTH_AUDIENCE });
-        const id = String(payload.sub ?? "");
-        if (id) return pass(`${config.AUTH_ISSUER ?? "jwt"}|${id}`, "jwt");
+        const id = payload.sub;
+        const aliases = payload.legacy_subs;
+        if (typeof id === "string" && id.length > 0 && id.length <= 256 && (aliases === undefined || (Array.isArray(aliases) && aliases.length <= 100 && aliases.every(value => typeof value === "string" && value.length > 0 && value.length <= 256)))) {
+          identity = { subject: id, aliases: (aliases ?? []) as string[] };
+        }
       } catch {
         /* 아래 판정으로 */
+      }
+      if (identity) {
+        const issuer = config.AUTH_ISSUER ?? "jwt";
+        return pass(resolveOwner ? resolveOwner(issuer, identity.subject, identity.aliases) : `${issuer}|${identity.subject}`, "jwt");
       }
     }
     const session = config.SOMUN_TOKEN ? getCookie(c, SESSION_COOKIE) : undefined;

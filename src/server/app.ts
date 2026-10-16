@@ -8,6 +8,7 @@ import { UnsafeUrlError } from "../infra/net.js";
 import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { authMiddleware, sessionRoutes, TicketStore } from "./auth.js";
+import { createAccountOwnerResolver } from "./account-owner.js";
 import type { Config } from "./config.js";
 import { apiRoutes } from "./routes/api.js";
 import { githubWebhook } from "./routes/webhooks.js";
@@ -40,7 +41,7 @@ export function createApp(ctx: AppContext, config: Config) {
   // 나머지 API의 요청 본문 상한. 세션 요약 업로드·예시 가져오기도 이 안에 든다.
   app.use("/api/*", bodyLimit({ maxSize: 2 * 1024 * 1024, onError: (c) => c.json({ error: "payload too large" }, 413) }));
   app.route("/api/session", sessionRoutes(config));
-  app.use("/api/*", authMiddleware(config, tickets));
+  app.use("/api/*", authMiddleware(config, tickets, createAccountOwnerResolver(ctx)));
   app.route("/api", apiRoutes(ctx, config, tickets));
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
   app.onError((err, c) => {

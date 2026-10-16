@@ -14,16 +14,24 @@ it("checks JWT expiry, audience and issuer and never accepts credentials in the 
   if (!address || typeof address === "string") throw new Error("missing test server address");
   const issuer = `http://127.0.0.1:${address.port}`;
   try {
+    const resolved: { issuer: string; subject: string; aliases: readonly string[] }[] = [];
     const app = new Hono<{ Variables: AuthVars }>();
-    app.use("/api/*", authMiddleware(loadConfig({ AUTH_ISSUER: issuer, AUTH_JWKS_URL: `${issuer}/jwks`, AUTH_AUDIENCE: "somun" })));
+    app.use("/api/*", authMiddleware(loadConfig({ AUTH_ISSUER: issuer, AUTH_JWKS_URL: `${issuer}/jwks`, AUTH_AUDIENCE: "somun" }), undefined, (iss, subject, aliases) => {
+      resolved.push({ issuer: iss, subject, aliases });
+      return `${iss}|${aliases.includes("previous-user") ? "previous-user" : subject}`;
+    }));
     app.get("/api/me", (c) => c.json({ ownerId: c.get("ownerId") }));
     app.get("/api/events", (c) => c.json({ ownerId: c.get("ownerId") }));
-    const sign = (audience = "somun", expires = "5m", iss = issuer) => new SignJWT({}).setProtectedHeader({ alg: "RS256", kid: "test-key" }).setSubject("user").setIssuer(iss).setAudience(audience).setExpirationTime(expires).sign(privateKey);
+    const sign = (audience = "somun", expires = "5m", iss = issuer, claims: Record<string, unknown> = {}) => new SignJWT(claims).setProtectedHeader({ alg: "RS256", kid: "test-key" }).setSubject("user").setIssuer(iss).setAudience(audience).setExpirationTime(expires).sign(privateKey);
     const valid = await sign();
     expect(await (await app.request("/api/me", { headers: { Authorization: `Bearer ${valid}` } })).json()).toEqual({ ownerId: `${issuer}|user` });
+    const merged = await sign("somun", "5m", issuer, { legacy_subs: ["previous-user"] });
+    expect(await (await app.request("/api/me", { headers: { Authorization: `Bearer ${merged}` } })).json()).toEqual({ ownerId: `${issuer}|previous-user` });
+    expect(resolved).toHaveLength(2);
     for (const token of [await sign("other"), await sign("somun", "-1m"), await sign("somun", "5m", "https://wrong.test")]) {
       expect((await app.request("/api/me", { headers: { Authorization: `Bearer ${token}` } })).status).toBe(401);
     }
+    expect(resolved).toHaveLength(2);
     // 토큰·JWT를 주소로 받지 않는다. SSE도 1회용 티켓만.
     expect((await app.request(`/api/me?token=${valid}`)).status).toBe(401);
     expect((await app.request(`/api/events?token=${valid}`)).status).toBe(401);
