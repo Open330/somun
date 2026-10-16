@@ -68,6 +68,17 @@ const mount = () =>
       <App />
     </MemoryRouter>,
   );
+it("shows the recent substitute model and observation time without claiming the configured model is available", () => {
+  availability.data!.models = [
+    { purpose: "draft", model: "gemini-3.7-flash", state: "substituted", answeredBy: "gemini-3.5-flash-lite", observedAt: Date.now() },
+  ];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: /작업/ }));
+  expect(screen.getByText(/최근 요청은 대체 모델로 응답/).textContent).toContain("gemini-3.5-flash-lite");
+  expect(screen.getByText(/최근 요청은 대체 모델로 응답/).textContent).toContain("응답 기준");
+  expect(screen.queryByText("요청 가능")).toBeNull();
+  expect(screen.queryByText(/재시도 가능/)).toBeNull();
+});
 it("keeps running work visible across navigation and remount, grouping stages while retaining failures", () => {
   jobs.data = [
     job,

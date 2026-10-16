@@ -22,7 +22,7 @@ export type LlmResult = { json: unknown; provider: LlmProvider; model: string; k
 /** jiun-api LLM 게이트웨이. OpenAI 호환 /chat/completions, Bearer 키 하나. */
 export type LlmGateway = { url: string; key: string };
 /** 게이트웨이 호출 결과(모델 상태 표시용). ok면 그 모델이 답했고, 아니면 HTTP 상태와 다시 시도할 수 있는 시각. */
-export type GatewayOutcome = { model: string; ok: true; answeredBy: string } | { model: string; ok: false; status?: number; code?: string; retryAt?: number };
+export type GatewayOutcome = { model: string; ok: true; answeredBy?: string } | { model: string; ok: false; status?: number; code?: string; retryAt?: number };
 
 /** 서버 키 풀 상태 접근. 앱 층이 DB 기반으로 만들어 넘긴다. 없으면 무상태 순환. */
 export type KeyPoolOps = {
@@ -265,10 +265,10 @@ async function gatewayCall(gw: LlmGateway, model: string, req: LlmRequest, signa
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw Object.assign(new LlmError("빈 응답"), { reported: true });
   const u = data.usage;
-  const answeredBy = res.headers.get("x-jiun-model") || data.model || model;
+  const answeredBy = res.headers.get("x-jiun-model") || data.model || undefined;
   onGateway?.({ model, ok: true, answeredBy });
   return {
-    json: extractJson(content), provider: "gemini", model: answeredBy, keyLabel: res.headers.get("x-jiun-key-label") || undefined, viaGateway: true, latencyMs: Date.now() - t0,
+    json: extractJson(content), provider: "gemini", model: answeredBy || model, keyLabel: res.headers.get("x-jiun-key-label") || undefined, viaGateway: true, latencyMs: Date.now() - t0,
     usage: u ? { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0, cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? 0, totalTokens: u.total_tokens ?? (u.prompt_tokens ?? 0) + (u.completion_tokens ?? 0) } : undefined,
   };
 }

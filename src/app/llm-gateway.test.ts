@@ -6,6 +6,7 @@ import { runLlm } from "../infra/llm/providers.js";
 import type { AppContext } from "./context.js";
 import { processServerJob } from "./generation-worker.js";
 import { modelAvailability } from "./keys.js";
+import { llmCallOptions } from "./llm-gateway.js";
 import { queueStep } from "./pipeline.js";
 import { getSettingsView, updateSettings } from "./settings.js";
 
@@ -67,6 +68,43 @@ it("honours Retry-After on a gateway 429 without retrying, and shows the model a
 it("treats the gateway as the house model when no free Gemini keys are configured", () => {
   expect(getSettingsView(ctx, OWNER).llm.credentialsConfigured).toBe(true);
   expect(modelAvailability(ctx, OWNER).mode).toBe("shared");
+});
+
+it("distinguishes an observed substitute from recovery and expires observations to unknown", () => {
+  const draft = (at = Date.now()) => modelAvailability(ctx, OWNER, at).models.find((m) => m.purpose === "draft")!;
+  const note = llmCallOptions(ctx, OWNER).onGateway!;
+  expect(draft().state).toBe("unknown");
+  note({ model: "quality", ok: true, answeredBy: "gemini-3.5-flash-lite" });
+  expect(draft()).toMatchObject({ state: "substituted", answeredBy: "gemini-3.5-flash-lite", observedAt: expect.any(Number) });
+  note({ model: "fast", ok: true, answeredBy: "gemini-3.5-flash-lite" });
+  expect(draft().state).toBe("substituted");
+  note({ model: "quality", ok: true, answeredBy: "gemini-3.7-flash" });
+  expect(draft().state).toBe("ready");
+  expect(draft(Date.now() + 10 * 60_000 + 1).state).toBe("unknown");
+  note({ model: "quality", ok: false, status: 503 });
+  expect(draft()).toMatchObject({ state: "degraded", lastStatus: 503 });
+  note({ model: "quality", ok: false, status: 429, retryAt: Date.now() + 60_000 });
+  expect(draft().state).toBe("waiting");
+  expect(draft(Date.now() + 61_000).state).toBe("unknown");
+  note({ model: "quality", ok: true });
+  expect(draft().state).toBe("unknown");
+});
+
+it("does not treat a requested alias as proof of the responding model when response metadata is absent", async () => {
+  const response = JSON.stringify({ choices: [{ message: { content: '{"title":"","body":"A source-backed post."}' } }] });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(response)));
+  await runLlm({ provider: "gemini" }, prompt, "draft", undefined, undefined, new AbortController().signal, llmCallOptions(ctx, OWNER));
+  expect(modelAvailability(ctx, OWNER).models.find((m) => m.purpose === "draft")!.state).toBe("unknown");
+  expect(record).not.toHaveBeenCalled();
+});
+
+it("keeps account quota waiting ahead of a recent substitute without inventing a provider reset time", async () => {
+  const { reserveSharedExecution } = await import("./shared-quota.js");
+  ctx.env.sharedModelDailyLimit = 1;
+  reserveSharedExecution(ctx, OWNER, Date.now());
+  llmCallOptions(ctx, OWNER).onGateway!({ model: "quality", ok: true, answeredBy: "gemini-3.5-flash-lite" });
+  const availability = modelAvailability(ctx, OWNER);
+  expect(availability.models.find((m) => m.purpose === "draft")).toMatchObject({ state: "waiting", retryAt: availability.sharedUsage!.resetAt });
 });
 
 it("refuses a non-Gemini model name on the house path before calling the gateway", async () => {

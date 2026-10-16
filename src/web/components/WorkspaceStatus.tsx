@@ -78,14 +78,15 @@ const modelStateLabel = (state: ModelAvailability["models"][number]["state"], sh
   ({
     ready: t("요청 가능"),
     waiting: t("일시 대기"),
-    degraded: short ? t("불안정") : t("응답 불안정 · 기본 모델로 대체"),
-    unknown: short ? t("제공사 한도") : t("제공사 한도 확인 필요"),
+    degraded: short ? t("불안정") : t("최근 모델 요청 실패"),
+    substituted: short ? t("대체 응답") : t("최근 요청은 대체 모델로 응답"),
+    unknown: short ? t("미확인") : t("요청 가능 여부 미확인"),
     local: short ? t("로컬 워커") : t("로컬 워커 사용"),
     missing: short ? t("연결 필요") : t("모델 연결 필요"),
   })[state];
 const modelExplanation = (mode: ModelAvailability["mode"]) =>
   ({
-    shared: t("공유 모델의 현재 요청 가능 여부와 내 계정의 실행 한도입니다. 제공사 응답에 따라 이용 상태가 달라질 수 있습니다."),
+    shared: t("공유 모델의 최근 응답과 내 계정의 실행 한도입니다. 제공사 상태는 다음 요청에서 달라질 수 있습니다."),
     user: t("개인 API 키의 남은 한도는 제공사에서 확인해 주세요."),
     local: t("로컬 워커 실행 여부와 구독 한도는 이 화면에서 확인할 수 없습니다."),
     missing: t("모델 설정에서 API 키를 등록하거나 로컬 에이전트를 선택해 주세요."),
@@ -279,6 +280,10 @@ export function WorkStatusPanel({ state, candidates }: { state: WorkspaceState; 
                   <p className="small">{model.model}</p>
                   <span className="small">
                     {modelStateLabel(model.state)}
+                    {model.answeredBy ? ` · ${model.answeredBy}` : ""}
+                    {model.observedAt
+                      ? ` · ${t("{time} 응답 기준", { time: new Date(model.observedAt).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" }) })}`
+                      : ""}
                     {model.lastStatus ? ` · HTTP ${model.lastStatus}` : ""}
                     {model.retryAt
                       ? ` · ${t("{when}부터 재시도 가능", { when: new Date(model.retryAt).toLocaleString(dateLocale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) })}`
