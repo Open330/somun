@@ -9,6 +9,15 @@ export const en: Record<string, string> = {
   "수집 당시 수치": "Metrics at collection time",
   "npm 월간 다운로드": "Monthly npm downloads",
   "문장과 원자료 대조": "Compare sentences with sources",
+  "추가 원문 확인 필요": "More source review needed",
+  "본문이 없거나 일부만 수집된 PR이 있습니다. 빠진 조건은 원문에서 확인하세요.":
+    "Some PR bodies are missing or incomplete. Check the original sources for missing conditions.",
+  "본문 일부 수집": "Partial body collected",
+  "본문 없음": "Body missing",
+  "조건·예외로 보이는 원문": "Source passages that may contain conditions or exceptions",
+  "일부 조건 표현을 모은 보조자료입니다. 빠진 내용이 있을 수 있으니 전체 본문도 확인하세요.":
+    "These passages are a review aid and may omit conditions. Also check the full body.",
+  "본문이 수집되지 않았습니다. 원문 링크에서 확인하세요.": "The body was not collected. Open the original source to review it.",
   "문장을 고르고 원문 표현으로 자료를 검색하세요. 검색 결과는 사실 확인 완료를 뜻하지 않습니다.":
     "Choose a sentence and search using words from the source. Search results do not confirm factual accuracy.",
   "수정 중인 문장을 보여줍니다. 자동 점검 결과는 저장 후 갱신됩니다.": "Showing your current edits. Automatic checks update after saving.",

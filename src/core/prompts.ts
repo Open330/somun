@@ -131,6 +131,11 @@ export function prSourceBlock(e: EvidenceLike): string {
 
 const SOURCE_CONDITION = /\bonly\b|\bdefault\b|\bminimum\b|\bat least\b|\bunless\b|\bprovided\b|\b(?:cap|limit|refund|flag|except|excluding|requires?)\b|마지막\s*시도|첫\s*시도|기본값|꺼짐|최소|하한|때만|한정|상한|한도|플래그|제외|경우에만/i;
 
+/** 검토 화면의 보조 발췌. 원문 문단을 보존하며 모든 조건을 찾는다고 보장하지 않는다. */
+export function sourceConditionParagraphs(body: string): string[] {
+  return body.split(/\r?\n[\t ]*\r?\n/).filter((paragraph) => SOURCE_CONDITION.test(paragraph));
+}
+
 /** 조건이 있을 수 있는 출처를 안내할 뿐, 조건의 완전성이나 본문 준수를 판정하지 않는다. */
 export function sourceConditionPrNumbers(e: EvidenceLike): number[] {
   return [...new Set((e.mergedPrDetails ?? []).filter((pr) => pr.bodyTruncated || pr.body.split("\n").some((line) => SOURCE_CONDITION.test(line))).map((pr) => pr.number))];

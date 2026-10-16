@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { Evidence } from "@shared/types";
+import { sourceConditionParagraphs } from "@core/prompts";
 import { t } from "../../i18n";
 
-type Source = { label: string; text: string; url?: string };
+type Source = { label: string; text: string; url?: string; truncated?: boolean; conditions?: string[] };
 
 /** Show collected material, never generated highlights as source evidence. */
 function sourceMaterial(e: Evidence): Source[] {
@@ -18,7 +19,14 @@ function sourceMaterial(e: Evidence): Source[] {
     add(`${t("릴리스 노트")}${e.version ? ` · ${e.version}` : ""}`, e.releaseNotes);
   }
   for (const title of e.mergedPrTitles ?? []) add(t("머지된 PR"), title);
-  for (const pr of e.mergedPrDetails ?? []) add(`${t("머지된 PR")} #${pr.number} · ${pr.title}`, pr.body, pr.url);
+  for (const pr of e.mergedPrDetails ?? [])
+    sources.push({
+      label: `${t("머지된 PR")} #${pr.number} · ${pr.title}`,
+      text: pr.body,
+      url: pr.url,
+      truncated: pr.bodyTruncated,
+      conditions: sourceConditionParagraphs(pr.body),
+    });
   for (const subject of e.commitSubjects ?? []) add(t("커밋 제목"), subject);
   const metrics: [string, number | undefined][] = [
     [t("스타"), e.stars],
@@ -95,6 +103,7 @@ export default function DraftEvidenceReview({
   const sources = sourceMaterial(evidence);
   const search = query.trim().toLocaleLowerCase();
   const visible = sources.filter((source) => !search || source.text.toLocaleLowerCase().includes(search));
+  const incomplete = sources.filter((source) => source.truncated || !source.text.trim());
   const sourceUrl = safeSourceUrl(evidence.repoUrl);
   return (
     <details className="draft-evidence-review">
@@ -114,6 +123,26 @@ export default function DraftEvidenceReview({
         </div>
         <div>
           <h3>{t("글감에 저장된 자료")}</h3>
+          {incomplete.length > 0 && (
+            <aside className="evidence-source-warning" aria-label={t("추가 원문 확인 필요")}>
+              <p className="small">{t("본문이 없거나 일부만 수집된 PR이 있습니다. 빠진 조건은 원문에서 확인하세요.")}</p>
+              <ul>
+                {incomplete.map((source, index) => (
+                  <li key={index}>
+                    {source.url && safeSourceUrl(source.url) ? (
+                      <a href={safeSourceUrl(source.url)} target="_blank" rel="noopener noreferrer">
+                        {source.label} ↗
+                      </a>
+                    ) : (
+                      source.label
+                    )}
+                    {" · "}
+                    {source.truncated ? t("본문 일부 수집") : t("본문 없음")}
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
           {active && <blockquote className="evidence-selected">{active}</blockquote>}
           <label>
             {t("원자료 검색")}
@@ -141,7 +170,24 @@ export default function DraftEvidenceReview({
                     source.label
                   )}
                 </h4>
-                <pre>{highlight(source.text, query.trim())}</pre>
+                {source.conditions && source.conditions.length > 0 && (
+                  <details className="evidence-condition-excerpts">
+                    <summary>
+                      {t("조건·예외로 보이는 원문")} · {source.conditions.length}
+                    </summary>
+                    <p className="small muted">
+                      {t("일부 조건 표현을 모은 보조자료입니다. 빠진 내용이 있을 수 있으니 전체 본문도 확인하세요.")}
+                    </p>
+                    {source.conditions.map((paragraph, at) => (
+                      <pre key={at}>{highlight(paragraph, query.trim())}</pre>
+                    ))}
+                  </details>
+                )}
+                {source.text.trim() ? (
+                  <pre>{highlight(source.text, query.trim())}</pre>
+                ) : (
+                  <p className="small">{t("본문이 수집되지 않았습니다. 원문 링크에서 확인하세요.")}</p>
+                )}
               </section>
             ))}
             {!visible.length && (
