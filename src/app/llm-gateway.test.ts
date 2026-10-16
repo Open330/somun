@@ -136,3 +136,54 @@ it("reads an HTTP-date Retry-After, defaults a bare 429 to a minute, and never s
   const e4 = await runLlm({ provider: "gemini" }, prompt, "judge", undefined, undefined, new AbortController().signal, { gateway: GATEWAY }).catch((e) => e);
   expect(e4.reported).toBe(true);
 });
+
+
+it.each(["ko", "en"])("keeps a previous draft and shows the full retry date on pool exhaustion (%s)", async (locale) => {
+  const retry = "2026-10-18T07:00:00.000Z";
+  updateSettings(ctx, OWNER, { ui: { locale: locale as "ko" | "en" } });
+  const existing = ctx.db.insert(schema.drafts).values({ ownerId: OWNER, candidateId: cid, channel: "x", lang: "en", title: "", body: "Existing draft", version: 1, model: "test", lint: [], createdAt: 1, updatedAt: 1 }).returning().get();
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { code: "pool_exhausted" } }), { status: 429, headers: { "Retry-After": new Date(retry).toUTCString() } }));
+  vi.stubGlobal("fetch", fetchMock);
+  queueStep(ctx, OWNER, "draft", cid, "x", "en");
+  await processServerJob(ctx);
+  const job = ctx.db.select().from(schema.llmJobs).get()!;
+  expect(job.status).toBe("failed");
+  expect(job.error).toContain("2026-10-18 07:00 UTC");
+  expect(job.error).toContain(locale === "ko" ? "선택한 공유 모델" : "selected shared model");
+  expect(job.error).toContain(locale === "ko" ? "로컬 워커" : "local worker");
+  expect(job.error).not.toMatch(/몰려|busy/);
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual([existing]);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(record).not.toHaveBeenCalled();
+});
+
+it.each(["ko", "en"])("explains upstream 503 without blaming credentials or quota (%s)", async (locale) => {
+  updateSettings(ctx, OWNER, { ui: { locale: locale as "ko" | "en" } });
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: { code: "upstream_unavailable" } }), { status: 503 }));
+  vi.stubGlobal("fetch", fetchMock);
+  queueStep(ctx, OWNER, "draft", cid, "x", "en");
+  await processServerJob(ctx);
+  const job = ctx.db.select().from(schema.llmJobs).get()!;
+  expect(job.status).toBe("failed");
+  expect(job.error).toContain("HTTP 503");
+  expect(job.error).toContain(locale === "ko" ? "모델 서버" : "model server");
+  expect(job.error).toContain(locale === "ko" ? "로컬 워커" : "local worker");
+  expect(job.error).not.toMatch(/API 키|사용 한도|usage limits|API key/);
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(0);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(record).not.toHaveBeenCalled();
+});
+
+
+it.each(["ko", "en"])("keeps the upstream cause when a 503 also includes Retry-After (%s)", async (locale) => {
+  updateSettings(ctx, OWNER, { ui: { locale: locale as "ko" | "en" } });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "upstream_unavailable" } }), { status: 503, headers: { "Retry-After": "Sun, 18 Oct 2026 07:00:00 GMT" } })));
+  queueStep(ctx, OWNER, "draft", cid, "x", "en");
+  await processServerJob(ctx);
+  const job = ctx.db.select().from(schema.llmJobs).get()!;
+  expect(job.status).toBe("failed");
+  expect(job.error).toContain(locale === "ko" ? "모델 서버" : "model server");
+  expect(job.error).toContain("2026-10-18 07:00 UTC");
+  expect(job.error).not.toMatch(/요청이 제한|requests are temporarily limited/);
+  expect(record).not.toHaveBeenCalled();
+});

@@ -87,7 +87,16 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
           ? say(lc, `${modelFor(config, modelKind)} 모델이 서버 오류(HTTP ${upstream})로 응답하지 않아 생성 제한 시간을 넘겼습니다. 몇 분 뒤 다시 시도하거나 설정에서 다른 모델을 골라 주세요.`, `${modelFor(config, modelKind)} kept returning a server error (HTTP ${upstream}), so generation timed out. Try again in a few minutes or pick another model in settings.`)
           : say(lc, "생성 제한 시간을 넘겼거나 서버가 종료되었습니다. 다시 시도해 주세요.", "Generation timed out or the server stopped. Please try again.")
         : isBlockedError(err) ? say(lc, "모델 주소(baseUrl)가 사설망·예약 주소를 가리켜 요청하지 않았습니다. 설정에서 공인 주소로 바꿔 주세요.", "The model address (baseUrl) points to a private or reserved network, so no request was sent. Use a public address in settings.")
-        : err instanceof LlmError && err.retryAt ? (() => { const when = new Date(err.retryAt).toISOString().slice(11, 16); return say(lc, `공유 모델 요청이 몰려 있습니다(${err.code ?? `HTTP ${err.status}`}). ${when} UTC 이후 다시 시도해 주세요.`, `Shared model requests are busy (${err.code ?? `HTTP ${err.status}`}). Try again after ${when} UTC.`); })()
+        : err instanceof LlmError && err.retryAt ? (() => {
+          const when = new Date(err.retryAt).toISOString().slice(0, 16).replace("T", " ");
+          const reason = err.code === "pool_exhausted"
+            ? say(lc, "선택한 공유 모델을 지금 사용할 수 없습니다", "The selected shared model is currently unavailable")
+            : err.code === "upstream_unavailable" || (err.status && err.status >= 500 && err.code !== "gateway_busy")
+              ? say(lc, "모델 서버가 응답하지 못했습니다", "The model server could not respond")
+              : say(lc, "공유 모델 요청이 제한되었습니다", "Shared model requests are temporarily limited");
+          return say(lc, `${reason}(${err.code ?? `HTTP ${err.status}`}). ${when} UTC 이후 다시 시도하거나 설정에서 다른 모델 또는 로컬 워커를 선택해 주세요.`, `${reason} (${err.code ?? `HTTP ${err.status}`}). Try again after ${when} UTC, or choose another model or a local worker in settings.`);
+        })()
+        : err instanceof LlmError && err.status && err.status >= 500 ? say(lc, `모델 서버가 응답하지 못했습니다(HTTP ${err.status}). 잠시 뒤 다시 시도하거나 설정에서 다른 모델 또는 로컬 워커를 선택해 주세요.`, `The model server could not respond (HTTP ${err.status}). Try again later, or choose another model or a local worker in settings.`)
         : err instanceof LlmError && err.status ? say(lc, `모델 요청 실패 (HTTP ${err.status}). 모델 설정과 사용 한도를 확인한 뒤 다시 시도해 주세요.`, `Model request failed (HTTP ${err.status}). Check the model settings and usage limits, then try again.`)
         : say(lc, "생성하지 못했습니다. 모델 설정·API 키·응답 형식을 확인한 뒤 다시 시도해 주세요.", "Generation failed. Check the model settings, API key, and response format, then try again.");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, error }, "server");

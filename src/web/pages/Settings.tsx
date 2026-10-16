@@ -491,6 +491,11 @@ export default function Settings() {
                       <option value="codex">codex (Codex CLI)</option>
                     </select>
                   </label>
+                  <p className="small muted">
+                    {t(
+                      "설정을 저장한 뒤 본인 컴퓨터에서 아래 명령으로 워커를 실행해 주세요. 로컬 에이전트를 선택하는 것만으로 작업이 실행되지는 않습니다.",
+                    )}
+                  </p>
                   <pre className="evidence">{`# ${t("내 컴퓨터에서 (본인 구독으로 처리, 키 불필요)")}\nSOMUN_URL=${window.location.origin} SOMUN_TOKEN=<${t("토큰")}> npm run agent-worker -- --cli ${llm.agentCli}`}</pre>
                 </>
               ) : (
@@ -511,6 +516,14 @@ export default function Settings() {
                       onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })}
                     />
                   </label>
+                  {llm.provider === "gemini" && !settings.llm.apiKeySet && !llm.apiKey.trim() && (
+                    <p className="small muted">
+                      {t(
+                        "공유 Gemini에서 빠른 모델을 직접 선택하려면 초안 모델에 {model}을 입력하고 저장한 뒤 다시 시도하세요. 생성 후 원문의 조건·예외를 확인해 주세요.",
+                        { model: DEFAULT_MODEL.gemini },
+                      )}
+                    </p>
+                  )}
                   <label className="field">
                     <span>
                       {t("API 키")} {llm.provider === "gemini" ? t("(비우면 서버 키)") : t("(필수)")}
