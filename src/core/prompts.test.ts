@@ -242,3 +242,37 @@ it("uses extra introduction space for one reader workflow rather than a second c
   expect(prompt.user).toContain("If only two supported sentences explain the task, stop there");
   expect(prompt.user).not.toContain("then add one concrete workflow detail");
 });
+
+
+describe("README-backed introduction facts", () => {
+  const claim = "Private sync across devices";
+  const profile = { what: "A voice recorder", audience: "Meeting participants", claims: [claim], stage: "beta", limitations: ["Requires setup"], naming: "tool", avoid: ["automatic uploads"] };
+  const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Captures speech and creates summaries. Cross-device sync, when enabled, uses personal iCloud." } };
+  it("uses source capabilities instead of generated coarse claims while preserving profile identity and constraints", () => {
+    const before = structuredClone(profile);
+    const prompt = draftPrompt(c, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false });
+    expect(prompt.user).not.toContain(claim);
+    expect(prompt.user).toContain("when enabled");
+    expect(prompt.user).toContain(profile.what);
+    expect(prompt.user).toContain(profile.limitations[0]);
+    expect(prompt.user).toContain(profile.avoid[0]);
+    expect(groundingText(c, profile)).toContain(claim);
+    expect(profile).toEqual(before);
+  });
+  it("keeps updates, edited or unknown-origin claims and README-free introductions byte-identical", () => {
+    for (const [source, introduction, profileClaimsEdited] of [[c, false, false], [c, true, true], [c, true, undefined], [candidate, true, false]] as const) {
+      const preserved = draftPrompt(source, "threads", "ko", [], undefined, { introduction, profile, profileClaimsEdited });
+      const previous = draftPrompt(source, "threads", "ko", [], undefined, { introduction, profile });
+      expect(preserved).toEqual(previous);
+      expect(preserved.user).toContain(claim);
+    }
+  });
+  it("treats blank README as missing and falls back to a meaningful excerpt", () => {
+    const blank = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "  " } };
+    expect(draftPrompt(blank, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false }).user).toContain(claim);
+    const withExcerpt = { ...blank, evidence: { ...blank.evidence, readmeExcerpt: "Sync only when enabled." } };
+    const prompt = draftPrompt(withExcerpt, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false });
+    expect(prompt.user).toContain("Sync only when enabled.");
+    expect(prompt.user).not.toContain(claim);
+  });
+});

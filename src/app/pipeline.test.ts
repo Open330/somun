@@ -365,3 +365,15 @@ it("does not let a late backport on an older line become the unreleased cutoff",
   ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
   expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Main work"]);
 });
+
+
+it("uses stored profile edit provenance for introduction capabilities without changing the profile", () => {
+  const profile = { what: "Recorder", audience: "Developers", why: "", claims: ["Private sync across devices"], stage: "beta", limitations: [], naming: "recorder", avoid: [] };
+  ctx.db.insert(schema.repoProfiles).values({ ownerId: "test", repo: "vitejs/vite", readmeHash: "fixed", profile, model: "test", createdAt: 1, updatedAt: 1 }).run();
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", readmeForChecks: "Records audio. Sync, when enabled, uses personal iCloud." } }).run();
+  const before = ctx.db.select().from(schema.repoProfiles).get();
+  expect(buildPrompt(ctx, "test", "draft", id, "threads", "ko", { introduction: true }).user).not.toContain(profile.claims[0]);
+  expect(ctx.db.select().from(schema.repoProfiles).get()).toEqual(before);
+  ctx.db.update(schema.repoProfiles).set({ edits: { claims: ["An explicitly edited claim"] } }).run();
+  expect(buildPrompt(ctx, "test", "draft", id, "threads", "ko", { introduction: true }).user).toContain("An explicitly edited claim");
+});

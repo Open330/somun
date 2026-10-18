@@ -284,7 +284,7 @@ export function instructionOf(user: string, meta?: { editorInstruction?: string 
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
 }
 
-export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; disputed?: string[]; introduction?: boolean };
+export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; profileClaimsEdited?: boolean; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
@@ -320,8 +320,14 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     && /\b(?:uses?|using|powered by|backed by|models?)\b|사용(?:하여|해서|해)|활용(?:하여|해)|모델|기반(?:으로|의)/i.test(claim)
     && !/\b(?:Claude Code|Gemini CLI|MCP|compatible|compatibility|integration)\b|연동|호환|연결/i.test(claim);
   const providerIsTopic = [opts.profile?.what, opts.profile?.audience, spec.identity?.purpose, angle, opts.instruction].some((text) => text && provider.test(text));
-  const writingProfile = opts.introduction && opts.profile && !providerIsTopic
-    ? { ...opts.profile, claims: opts.profile.claims.filter((claim) => !backendClaim(claim)) }
+  const introductionReadme = opts.introduction
+    ? [c.evidence.readmeForChecks, c.evidence.readmeExcerpt].find((text) => text?.trim())
+    : undefined;
+  // 생성된 기능 요약은 원문에서 한정한 조건을 잃을 수 있다. 사용자 편집 여부를 모르면 기존 입력을 보존한다.
+  // 저장 프로필과 사실 대조 근거는 바꾸지 않고, 소개 작성에만 정체성·제약과 README 원문을 제공한다.
+  const writingProfile = opts.introduction && opts.profile
+    ? { ...opts.profile, claims: introductionReadme && opts.profileClaimsEdited === false
+      ? [] : providerIsTopic ? opts.profile.claims : opts.profile.claims.filter((claim) => !backendClaim(claim)) }
     : opts.profile;
   // Introductions describe capabilities, not how much repository activity produced them.
   const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || c.evidence.readmeExcerpt?.trim());
@@ -381,7 +387,7 @@ Hard rules:
       "",
       "## Facts",
       factsBlock(publicCandidate, writingProfile),
-      opts.introduction && (c.evidence.readmeForChecks || c.evidence.readmeExcerpt) ? `## README (collected excerpt, not the entire README; conditions take priority over profile summaries)\n${(c.evidence.readmeForChecks || c.evidence.readmeExcerpt || "").slice(0, 8000)}\nThis is a bounded collected excerpt. Missing text is not evidence that a condition or limitation does not exist. Repository documentation does not establish current production activation.` : "",
+      introductionReadme ? `## README (collected excerpt, not the entire README; conditions take priority over profile summaries)\n${introductionReadme.slice(0, 8000)}\nThis is a bounded collected excerpt. Missing text is not evidence that a condition or limitation does not exist. Repository documentation does not establish current production activation.` : "",
       "",
       exampleText,
       "## Selected channel contract",
