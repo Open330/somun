@@ -427,3 +427,31 @@ describe("explicit Korean channel register", () => {
     expect(result("수정합니다.", { language: "ko", editorInstruction: "합니다체로 써주세요." })).toBeUndefined();
   });
 });
+
+
+it("checks introduction composition without changing update, legacy or custom limits", () => {
+  const body = "코드를 읽어요. 퀴즈를 만들어요. 답을 골라요. 내용을 확인해요.";
+  const check = (purpose?: "introduction" | "update") => lintDraft("threads", "", body, [], { purpose }).find((r) => r.rule === "sentence_count");
+  expect(check("introduction")?.ok).toBe(true);
+  expect(check("update")?.ok).toBe(false);
+  expect(check()?.ok).toBe(false);
+  const custom = { id: "custom_brief" as const, label: "Brief", defaultLangs: ["ko"], maxChars: 30, maxSentences: 1, hasTitle: false, rules: "One sentence", mediaHint: "", composeUrl: "", runbook: [] };
+  expect(lintDraft(custom.id, "", body, [], { purpose: "introduction" }, "ko", custom).find((r) => r.rule === "sentence_count")?.ok).toBe(false);
+  expect(lintDraft("threads", "", "가".repeat(501), [], { purpose: "introduction" }).find((r) => r.rule === "length")?.ok).toBe(false);
+});
+
+it.each([
+  "코드를 퀴즈로 만들어요. 평소 새로운 저장소는 어떤 방식으로 살펴보시나요?",
+  "음성을 요약해요. 보통 기록은 어떻게 하시나요?",
+  "Tracks agents. How do you usually check their status?",
+])("flags an introduction habit question without imposing it on updates or explicit requests: %s", (body) => {
+  const check = (facts: Parameters<typeof lintDraft>[4]) => lintDraft("threads", "", body, [], facts).find((r) => r.rule === "introduction_habit_question");
+  expect(check({ purpose: "introduction" })?.ok).toBe(false);
+  expect(check({ purpose: "update" })).toBeUndefined();
+  expect(check({ purpose: "introduction", editorInstruction: "질문으로 끝내세요" })).toBeUndefined();
+});
+
+
+it.each(["질문 없이 소개하세요", "질문으로 끝내지 말아주세요", "Do not add a question", "Without questions"])("keeps the introduction habit check for a negative question instruction: %s", (editorInstruction) => {
+  expect(lintDraft("threads", "", "코드를 읽어요. 평소 어떤 방식으로 읽으시나요?", [], { purpose: "introduction", editorInstruction }).find((r) => r.rule === "introduction_habit_question")?.ok).toBe(false);
+});

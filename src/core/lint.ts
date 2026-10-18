@@ -1,4 +1,4 @@
-import { channelSpec, type Channel, type ChannelSpec } from "./channels.js";
+import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
@@ -62,7 +62,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { language?: string; editorInstruction?: string; repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -90,7 +90,7 @@ const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^[\t ]*(?:#{1,6}[\t ]+
  */
 export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, purpose?: "introduction" | "update" | null): LintFacts {
   const preferLink = purpose === "introduction" ? candidate.evidence.homepage : undefined;
-  return { repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**
@@ -131,9 +131,15 @@ function registerCheck(body: string, spec: ChannelSpec, facts: LintFacts, locale
     "This channel requires Korean 해요체. Replace formal 합니다/됩니다/입니다/습니다 endings while preserving facts, numbers and conditions.") : undefined };
 }
 
+/** 명시적인 질문 금지를 우선하는 간단한 편집 지시 검사. 자연어 전체의 의미 판정은 아니다. */
+export function requestsQuestion(instruction = ""): boolean {
+  if (/질문.{0,16}(?:없이|말|금지|빼|제외|삭제|않)|(?:no|without|avoid|omit|remove|do not|don't).{0,25}question/i.test(instruction)) return false;
+  return /질문|question|[?？]/i.test(instruction);
+}
+
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
-  const spec = channelPreset ?? channelSpec(channel);
+  const spec = draftChannelSpec(channelPreset ?? channelSpec(channel), facts.purpose);
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
@@ -244,6 +250,13 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     // 사용 여부·일반 감상만 묻는 끝맺음은 작업 흐름을 묻도록 제안한다. 모든 질문의 의미를 판별하지는 않는다.
     const vague = /[?？]["'”’]*$/.test(closing) && (opinion || (trial && !specific));
     results.push({ rule: "question_specificity", ok: !vague, detail: vague ? say("제품 사용 여부나 일반 감상 대신, 어떤 입력·채널을 쓰거나 어떻게 검토하는지 구체적인 작업 흐름을 물어 주세요.", "Ask about a concrete workflow, such as inputs, channels or review steps, instead of a generic product-trial or opinion question.") : undefined });
+  }
+
+  if (facts.purpose === "introduction" && (channel === "x" || channel === "threads") && !requestsQuestion(facts.editorInstruction)) {
+    // 반복적인 습관 질문의 알려진 표현만 검사한다. 모든 질문의 의미나 소개 품질을 인증하지 않는다.
+    const closing = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(body)].at(-1)?.segment.trim() ?? "";
+    const habit = /[?？]["'”’]*$/.test(closing) && /평소|보통|주로|어떤\s*(?:방식|방법)|\b(?:usually|normally|typically)\b|\bhow\s+do\s+you\b/i.test(closing);
+    results.push({ rule: "introduction_habit_question", ok: !habit, detail: habit ? say("소개 끝의 일반적인 습관 질문을 삭제하세요. 근거가 있는 사용 흐름을 더하거나 간결하게 끝내세요.", "Remove the generic habit question. Add a supported workflow detail or finish concisely.") : undefined });
   }
 
   if (spec.maxSentences !== undefined) {

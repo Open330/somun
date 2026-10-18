@@ -238,7 +238,7 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).toContain("Keep it short");
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
-  expect(prompt.system).toContain("open with what the project is and who it is for");
+  expect(prompt.system).toContain("open with a supported reader task and connect it to what the project does");
 });
 
 it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {

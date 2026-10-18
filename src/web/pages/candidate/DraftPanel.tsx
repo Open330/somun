@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
-import { channelSpec, type Channel, type ChannelSpec } from "@core/channels";
+import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "@core/channels";
 import { trackLinks } from "@core/links";
 import type { Draft, Evidence, Publication } from "@shared/types";
 import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
@@ -101,7 +101,8 @@ export default function DraftPanel({
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
-  const spec = preset ?? channelSpec(channel);
+  const baseSpec = preset ?? channelSpec(channel);
+  const spec = draftChannelSpec(baseSpec, shown?.purpose);
   const [title, setTitle] = useState(latest?.title ?? "");
   const [body, setBody] = useState(latest?.body ?? "");
   const [view, setView] = useState<"preview" | "text">("preview");
@@ -314,7 +315,16 @@ export default function DraftPanel({
       </>
     );
   const updateHint = t("수집한 변경 내용을 알리는 새 초안을 씁니다.");
-  const introductionHint = t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.");
+  const introductionSpec = draftChannelSpec(baseSpec, "introduction");
+  const introductionHint =
+    t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.") +
+    (introductionSpec.maxSentences
+      ? " " +
+        t("최대 {sentences}문장 · {characters}자", {
+          sentences: introductionSpec.maxSentences,
+          characters: introductionSpec.maxChars ?? "∞",
+        })
+      : "");
   const introductionButton = (
     <button disabled={busy} title={introductionHint} onClick={() => void onRedraft(undefined, true)}>
       {t("서비스 처음 소개하기")}

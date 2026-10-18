@@ -94,6 +94,23 @@ export function channelSpec(channel: Channel, customChannels: readonly CustomCha
   // 비활성화된 과거 초안은 이름 없이도 읽을 수 있다. API에서 새 요청은 등록된 채널만 허용한다.
   return { id: channel, label: channel, defaultLangs: ["ko"], maxChars: null, hasTitle: false, rules: "Facts only.", mediaHint: "", composeUrl: "", runbook: [] };
 }
+/** 소개는 변경 알림보다 맥락이 필요하다. 플랫폼 글자 수·링크 위치와 커스텀 프리셋은 보존한다. */
+export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "update" | null): ChannelSpec {
+  if (purpose !== "introduction" || (spec.id !== "threads" && spec.id !== "x")) return spec;
+  const threads = spec.id === "threads";
+  return {
+    ...spec,
+    maxSentences: spec.maxSentences !== undefined && spec.maxSentences !== CHANNELS[spec.id as "threads" | "x"].maxSentences
+      ? Math.min(spec.maxSentences, threads ? 6 : 4) : threads ? 6 : 4,
+    rules: `Introduce the project in ${threads ? "3-5 short sentences in 2-3 short paragraphs when supported facts are available" : "2-4 short sentences within the configured character limit, with a supplied link"}. Start with a supported use situation or reader task, name the project and explain one core capability, then add one concrete workflow detail that makes this project understandable. Each sentence must add information. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
+    identity: spec.identity ? {
+      ...spec.identity,
+      purpose: "처음 보는 독자가 사용 상황과 핵심 기능을 이해할 수 있게 프로젝트 소개",
+      structure: threads ? "근거 있는 사용 상황 → 프로젝트와 핵심 기능 → 구체적인 사용 흐름. 짧은 문단, 습관 질문 없이. 링크는 첫 답글" : "사용 상황 또는 과업 → 프로젝트의 핵심 기능과 구체적인 흐름 → 링크. 글자 수 안에서, 습관 질문 없이",
+    } : undefined,
+  };
+}
+
 export function channelCatalog(customChannels: readonly CustomChannel[] = []): ChannelSpec[] {
   return [...ALL_CHANNELS.map((id) => channelSpec(id)), ...customChannels];
 }

@@ -536,3 +536,37 @@ it("keeps explicit formal editor instructions above the channel register", async
   expect(runLlm).toHaveBeenCalledOnce();
   expect(ctx.db.select().from(schema.drafts).get()?.lint?.some(l => l.rule === "register_mismatch")).toBe(false);
 });
+
+
+it("repairs a repetitive introduction question with the same expanded introduction budget", async () => {
+  const first = { title: "", body: "Reads source code. Fixes CRLF positions. How do you usually read code?" };
+  const repaired = { title: "", body: "Reads source code. Fixes CRLF positions. Shows the source locations." };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
+  const response = await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
+  expect(response.status).toBe(202);
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const repair = vi.mocked(runLlm).mock.calls[1][1].user;
+  expect(repair).toContain("introduction_habit_question");
+  expect(repair).toContain("Maximum 6 sentences");
+  expect(repair).not.toContain("Maximum 2 sentences");
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(repaired.body);
+  expect(saved.purpose).toBe("introduction");
+  expect(saved.lint.find((r) => r.rule === "sentence_count")?.ok).toBe(true);
+  expect(saved.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(true);
+});
+
+
+it.each(["평소 써보셨나요?", "어떻게 생각하시나요?"])("keeps introduction question repairs consistent: %s", async (question) => {
+  const first = { title: "", body: `소스 위치를 표시해요. ${question}` };
+  const repaired = { title: "", body: "소스 위치를 표시해요." };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "ko" }], introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const repair = vi.mocked(runLlm).mock.calls[1][1].user;
+  expect(repair).toContain("For question_specificity: delete the generic closing question");
+  expect(repair).not.toContain("then one concrete question about the reader");
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(repaired.body);
+});

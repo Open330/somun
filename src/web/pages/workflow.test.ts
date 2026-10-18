@@ -577,6 +577,24 @@ describe("service introduction", () => {
     await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, true));
     if (existing) expect(screen.getByRole("button", { name: "다시 쓰기" })).toBeTruthy();
   });
+  it("explains the introduction budget before generating a Threads draft", () => {
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "threads",
+          lang: "ko",
+          langs: ["ko"],
+          onLang: vi.fn(),
+          drafts: [],
+          busy: false,
+          onRedraft: vi.fn(),
+          showToast: vi.fn(),
+        }),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "서비스 처음 소개하기" }).getAttribute("title")).toContain("최대 6문장 · 500자");
+  });
   it("disables introduction while a request is in progress", () => {
     render(
       wrap(
