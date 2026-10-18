@@ -157,7 +157,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const row = getCandidateRow(ctx, ownerId, candidateId);
   const c = { title: row.title, type: row.type, evidence: { ...(row.evidence as Evidence), ...windowFacts(ctx, ownerId, candidateId, row) } };
   const settings = getSettings(ctx, ownerId);
-  const profile = getProfile(ctx, ownerId, row.repo)?.profile;
+  const profileView = getProfile(ctx, ownerId, row.repo);
+  const profile = profileView?.profile;
   const disputed = disputedFor(ctx, ownerId, row.repo);
   const requested = requestedIntroduction(ctx, ownerId, candidateId, channel, lang, opts.introduction);
   const anyUnannounced = enabledTargets(settings.channelLangs, settings.customChannels).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
@@ -177,6 +178,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     channelSpec: channelSpec(channel, settings.customChannels),
     guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
+    profileClaimsEdited: profileView ? profileView.editedFields.includes("claims") : undefined,
     disputed,
     introduction,
     instruction: opts.instruction?.trim() || undefined,

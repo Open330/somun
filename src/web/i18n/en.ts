@@ -3,6 +3,23 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "수집된 README 발췌": "Collected README excerpt",
+  "프로필 제한사항": "Profile constraints",
+  "사용자 확인 완료": "Confirmed by user",
+  "원문 조건 확인 필요": "Source-condition review required",
+  "이 글의 주장에 해당하는 전제와 제외 조건을 원자료와 직접 대조한 뒤 복사하세요.":
+    "Compare the prerequisites and exclusions of this post with the source before copying.",
+  "조건 후보는 일부 표현을 찾은 보조자료이며 빠진 내용이 있을 수 있습니다. 사용자 확인은 자동 정확성 검증이 아닙니다.":
+    "Candidate passages are incomplete review aids. User confirmation is not automated accuracy verification.",
+  "본문이 없거나 일부만 수집됐습니다. 원문에서 빠진 조건을 확인하세요.":
+    "The source is missing or partially collected. Check the original for omitted conditions.",
+  "원문 열기": "Open original source",
+  "본문이나 원자료가 바뀌면 다시 확인해야 합니다.": "Review again when the text or source changes.",
+  "수정 내용을 먼저 저장한 뒤 원문 조건을 확인하세요.": "Save your edits before confirming source conditions.",
+  "원문 조건을 확인했습니다": "I reviewed the source conditions",
+  "원문 조건을 확인한 뒤 복사해 주세요.": "Review the source conditions before copying.",
+  "저장했습니다. 원문 조건을 확인한 뒤 복사해 주세요.": "Saved. Review the source conditions before copying.",
+  "조건 확인을 저장하지 못했습니다.": "Could not save the source-condition confirmation.",
   "기본 계정 공간": "Primary account workspace",
   "연결된 계정 공간": "Linked account workspace",
   "비어 있음": "Empty",
@@ -891,6 +908,7 @@ export const en: Record<string, string> = {
   "서비스 소개": "Service introduction",
   "변경사항 소개": "Update post",
   "서비스 처음 소개하기": "Introduce the service",
+  "최대 {sentences}문장 · {characters}자": "Up to {sentences} sentences · {characters} characters",
   "변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.":
     "Write a new draft introducing the service’s purpose and main features.",
   "다시 쓰기": "Rewrite",

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Evidence } from "@shared/types";
-import { sourceConditionParagraphs } from "@core/prompts";
+import type { ConditionReviewState, Evidence } from "@shared/types";
+import { reviewConditionParagraphs } from "@core/condition-review";
 import { t } from "../../i18n";
 
 type Source = { label: string; text: string; url?: string; truncated?: boolean; conditions?: string[] };
@@ -9,10 +9,10 @@ type Source = { label: string; text: string; url?: string; truncated?: boolean; 
 function sourceMaterial(e: Evidence): Source[] {
   const sources: Source[] = [];
   const add = (label: string, text?: string, url?: string) => {
-    if (text?.trim()) sources.push({ label, text, url });
+    if (text?.trim()) sources.push({ label, text, url, conditions: reviewConditionParagraphs(text) });
   };
   add(t("프로젝트 설명"), e.description);
-  add("README", e.readmeForChecks || e.readmeExcerpt);
+  add(t("수집된 README 발췌"), e.readmeForChecks || e.readmeExcerpt);
   const releases = e.windowReleaseNotes ?? [];
   for (const release of releases) add(`${t("릴리스 노트")} · ${release.tag}`, release.notes);
   if (e.releaseNotes && !releases.some((release) => release.notes === e.releaseNotes)) {
@@ -25,7 +25,7 @@ function sourceMaterial(e: Evidence): Source[] {
       text: pr.body,
       url: pr.url,
       truncated: pr.bodyTruncated,
-      conditions: sourceConditionParagraphs(pr.body),
+      conditions: reviewConditionParagraphs(pr.body),
     });
   for (const subject of e.commitSubjects ?? []) add(t("커밋 제목"), subject);
   const metrics: [string, number | undefined][] = [
@@ -88,12 +88,20 @@ export default function DraftEvidenceReview({
   lang,
   evidence,
   editing,
+  review,
+  dirty = false,
+  busy = false,
+  onConfirm,
 }: {
   title?: string;
   body: string;
   lang: string;
   evidence: Evidence;
   editing: boolean;
+  review?: ConditionReviewState;
+  dirty?: boolean;
+  busy?: boolean;
+  onConfirm?: () => Promise<void>;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -105,9 +113,16 @@ export default function DraftEvidenceReview({
   const visible = sources.filter((source) => !search || source.text.toLocaleLowerCase().includes(search));
   const incomplete = sources.filter((source) => source.truncated || !source.text.trim());
   const sourceUrl = safeSourceUrl(evidence.repoUrl);
+  const confirmed = review?.confirmedAt !== undefined && !dirty;
+  const labels = { readme: t("수집된 README 발췌"), release: t("릴리스 노트"), pr: t("머지된 PR"), profile: t("프로필 제한사항") };
   return (
-    <details className="draft-evidence-review">
-      <summary>{t("문장과 원자료 대조")}</summary>
+    <details className="draft-evidence-review" open={review?.required && !confirmed ? true : undefined}>
+      <summary>
+        {t("문장과 원자료 대조")}
+        {review?.required && (
+          <span className={`badge ${confirmed ? "outline" : "warn"}`}>{confirmed ? t("사용자 확인 완료") : t("원문 조건 확인 필요")}</span>
+        )}
+      </summary>
       <p className="small muted">{t("문장을 고르고 원문 표현으로 자료를 검색하세요. 검색 결과는 사실 확인 완료를 뜻하지 않습니다.")}</p>
       {editing && <p className="small">{t("수정 중인 문장을 보여줍니다. 자동 점검 결과는 저장 후 갱신됩니다.")}</p>}
       <div className="evidence-review-grid">
@@ -123,6 +138,44 @@ export default function DraftEvidenceReview({
         </div>
         <div>
           <h3>{t("글감에 저장된 자료")}</h3>
+          {review?.required && (
+            <section className="condition-review" aria-label={t("원문 조건 확인")}>
+              <p className="small">{t("이 글의 주장에 해당하는 전제와 제외 조건을 원자료와 직접 대조한 뒤 복사하세요.")}</p>
+              <p className="small muted">
+                {t("조건 후보는 일부 표현을 찾은 보조자료이며 빠진 내용이 있을 수 있습니다. 사용자 확인은 자동 정확성 검증이 아닙니다.")}
+              </p>
+              {review.sources.map((source, index) => (
+                <details className="evidence-condition-excerpts" key={index}>
+                  <summary>
+                    {labels[source.kind]} {source.ref}
+                  </summary>
+                  {source.excerpts.map((text, at) => (
+                    <pre key={at}>{text}</pre>
+                  ))}
+                  {source.incomplete && <p className="small">{t("본문이 없거나 일부만 수집됐습니다. 원문에서 빠진 조건을 확인하세요.")}</p>}
+                  {source.url && safeSourceUrl(source.url) && (
+                    <a href={safeSourceUrl(source.url)} target="_blank" rel="noopener noreferrer">
+                      {t("원문 열기")} ↗
+                    </a>
+                  )}
+                </details>
+              ))}
+              {confirmed ? (
+                <p className="small">
+                  {t("사용자 확인 완료")}
+                  {" · "}
+                  {t("본문이나 원자료가 바뀌면 다시 확인해야 합니다.")}
+                </p>
+              ) : (
+                <>
+                  {editing && <p className="small">{t("수정 내용을 먼저 저장한 뒤 원문 조건을 확인하세요.")}</p>}
+                  <button className="primary" disabled={busy || editing || !onConfirm} onClick={() => void onConfirm?.()}>
+                    {t("원문 조건을 확인했습니다")}
+                  </button>
+                </>
+              )}
+            </section>
+          )}
           {incomplete.length > 0 && (
             <aside className="evidence-source-warning" aria-label={t("추가 원문 확인 필요")}>
               <p className="small">{t("본문이 없거나 일부만 수집된 PR이 있습니다. 빠진 조건은 원문에서 확인하세요.")}</p>

@@ -1,4 +1,4 @@
-import { channelSpec, type Channel, type ChannelSpec } from "./channels.js";
+import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
@@ -139,7 +139,7 @@ export function requestsQuestion(instruction = ""): boolean {
 
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
-  const spec = channelPreset ?? channelSpec(channel);
+  const spec = draftChannelSpec(channelPreset ?? channelSpec(channel), facts.purpose);
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];

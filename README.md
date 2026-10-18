@@ -104,7 +104,7 @@ The interface is in English and Korean. It follows your browser language and can
 | Channel | Shape | Language |
 |---|---|---|
 | X | three lines: problem · what it does · one number or limit + link | en, ko |
-| Threads | one or two sentences, ends with a take or a question | ko |
+| Threads | updates: 1–2 sentences; introductions: 3–5 short sentences when supported, maximum 6 / 500 characters; link in first reply | ko |
 | LinkedIn | hook above the fold, 2–5 short paragraphs, ≤ 3 hashtags | ko |
 | Show HN | title + the author's first comment: problem, mechanism, design choices, limitations, one open question | en |
 | Show GN (GeekNews) | what it is or what changed; why / how it differs / decisions / limits only when the evidence supports them; no requests for comments | ko |

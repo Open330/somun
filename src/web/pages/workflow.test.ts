@@ -11,6 +11,7 @@ import DraftPanel from "./candidate/DraftPanel";
 import Candidate from "./Candidate";
 import Connectors from "./Connectors";
 import ProfileBlock from "./candidate/ProfileBlock";
+import type { ConditionReviewState } from "../../shared/types";
 
 const { resources, post, patch } = vi.hoisted(() => ({
   resources: new Map<string, { data?: unknown; error?: string; reload: () => void }>(),
@@ -577,6 +578,24 @@ describe("service introduction", () => {
     await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, true));
     if (existing) expect(screen.getByRole("button", { name: "다시 쓰기" })).toBeTruthy();
   });
+  it("explains the introduction budget before generating a Threads draft", () => {
+    render(
+      wrap(
+        createElement(DraftPanel, {
+          cid: 1,
+          channel: "threads",
+          lang: "ko",
+          langs: ["ko"],
+          onLang: vi.fn(),
+          drafts: [],
+          busy: false,
+          onRedraft: vi.fn(),
+          showToast: vi.fn(),
+        }),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "서비스 처음 소개하기" }).getAttribute("title")).toContain("최대 6문장 · 500자");
+  });
   it("disables introduction while a request is in progress", () => {
     render(
       wrap(
@@ -941,4 +960,74 @@ it("shows an actionable introduction question warning instead of an internal rul
   expect(screen.queryByText("introduction_habit_question")).toBeNull();
   fireEvent.click(screen.getByText("초안에서 확인할 부분"));
   expect(screen.getByText(detail)).toBeTruthy();
+});
+
+describe("explicit source-condition confirmation", () => {
+  const pending: ConditionReviewState = {
+    required: true,
+    revision: "a".repeat(64),
+    sources: [{ kind: "readme", ref: "README", excerpts: ["Cross-device sync, when enabled, uses personal iCloud."] }],
+  };
+  const confirmed = { ...pending, confirmedAt: 100 };
+  const evidence = { repo: "a/b", repoUrl: "https://github.com/a/b", readmeForChecks: pending.sources[0].excerpts[0] };
+  const props = {
+    cid: 1,
+    channel: "x" as const,
+    lang: "en",
+    langs: ["en"],
+    onLang: vi.fn(),
+    busy: false,
+    onRedraft: async () => true,
+    showToast: vi.fn(),
+    evidence,
+  };
+  beforeEach(() => {
+    vi.stubGlobal("ClipboardItem", undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows source and draft together, blocks repeat copy, and copies only after an explicit confirmation", async () => {
+    post.mockImplementation(async (path: string) =>
+      path.endsWith("/conditions/confirm") ? confirmed : { ...draft, status: "copied", conditionReview: confirmed },
+    );
+    render(wrap(createElement(DraftPanel, { ...props, drafts: [{ ...draft, conditionReview: pending }] })));
+    expect(screen.getAllByText("Original draft").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cross-device sync, when enabled, uses personal iCloud.").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    expect(post).not.toHaveBeenCalled();
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "원문 조건을 확인했습니다" }));
+    await waitFor(() => expect(screen.getAllByText("사용자 확인 완료").length).toBeGreaterThan(0));
+    expect(post).toHaveBeenCalledWith("/drafts/1/conditions/confirm", { revision: pending.revision });
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledOnce());
+    expect(screen.queryByText("자동 정확성 검증 완료")).toBeNull();
+  });
+
+  it("does not put a previously copied draft on the clipboard when the server holds a stale view", async () => {
+    post.mockResolvedValue({ ...draft, status: "copied", copyHeld: true, conditionReview: pending });
+    render(wrap(createElement(DraftPanel, { ...props, drafts: [{ ...draft, status: "copied" }] })));
+    fireEvent.click(screen.getByRole("button", { name: "초안 복사" }));
+    await waitFor(() => expect(screen.getByText("저장했습니다. 원문 조건을 확인한 뒤 복사해 주세요.")).toBeTruthy());
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "원문 조건을 확인했습니다" })).toBeTruthy();
+  });
+
+  it("requires a saved edit to be reviewed again and ignores an old local confirmation after source refresh", async () => {
+    post.mockResolvedValue(confirmed);
+    const view = render(wrap(createElement(DraftPanel, { ...props, drafts: [{ ...draft, conditionReview: pending }] })));
+    fireEvent.click(screen.getByRole("button", { name: "원문 조건을 확인했습니다" }));
+    await waitFor(() => expect(screen.getAllByText("사용자 확인 완료").length).toBeGreaterThan(0));
+    view.rerender(
+      wrap(createElement(DraftPanel, { ...props, drafts: [{ ...draft, conditionReview: { ...pending, revision: "b".repeat(64) } }] })),
+    );
+    expect(screen.queryByText("사용자 확인 완료")).toBeNull();
+    expect(screen.getByRole("button", { name: "원문 조건을 확인했습니다" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^수정$/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "초안 본문" }), { target: { value: "Changed draft" } });
+    expect((screen.getByRole("button", { name: "원문 조건을 확인했습니다" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("수정 내용을 먼저 저장한 뒤 원문 조건을 확인하세요.")).toBeTruthy();
+  });
 });

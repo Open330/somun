@@ -10,6 +10,7 @@ import { getProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { say } from "./i18n.js";
 import { disputeCandidateFacts, queueLesson } from "./learning.js";
+import { currentConditionReview } from "./condition-review.js";
 
 /** 검수 루프: 복사/수정/버림이 문체 예시와 피드백을 만든다. */
 
@@ -66,6 +67,10 @@ export const COPY_CONFIRM_RULES = new Set(["numbers_need_review", "claims_need_r
  * copyIfClean은 저장한 본문에 COPY_CONFIRM_RULES 경고가 없을 때만 복사로 기록한다(고친 글을 확인 없이 복사하지 않게; 클라이언트는 응답 status로 복사 여부를 정한다).
  */
 export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean; copyIfClean?: boolean; base?: { title?: string; body: string } }): Draft & { copyHeld?: boolean } {
+  return ctx.db.$client.transaction(() => saveDraftEditInTransaction(ctx, ownerId, id, input)).immediate();
+}
+
+function saveDraftEditInTransaction(ctx: AppContext, ownerId: string, id: number, input: { title?: string; body: string; markCopied: boolean; copyIfClean?: boolean; base?: { title?: string; body: string } }): Draft & { copyHeld?: boolean } {
   const d = getDraftRow(ctx, ownerId, id);
   const settings = getSettings(ctx, ownerId);
   if (input.base && (input.base.body !== d.body || (input.base.title ?? "") !== (d.title ?? ""))) throw new GenerationConflictError(say(settings.ui?.locale ?? "ko", "편집하는 사이 다른 곳에서 이 초안이 먼저 저장되었습니다.", "This draft was saved elsewhere while you were editing."));
@@ -73,22 +78,24 @@ export function saveDraftEdit(ctx: AppContext, ownerId: string, id: number, inpu
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
   const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
-  const copyHeld = Boolean(input.markCopied && input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok));
+  const review = currentConditionReview(ctx, ownerId, { ...d, title: input.title ?? null, body: input.body, conditionReview: changed ? null : d.conditionReview });
+  const needsConditionReview = review.required && review.confirmedAt === undefined;
+  const copyHeld = Boolean(input.markCopied && (needsConditionReview || (input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok && (r.rule !== "source_conditions_need_review" || review.confirmedAt === undefined)))));
   if (copyHeld) input = { ...input, markCopied: false };
   if (changed) {
     ctx.db.insert(schema.draftEdits).values({ ownerId, draftId: id, channel: d.channel, before: d.body, after: input.body, createdAt: now }).run();
-    queueLesson(ctx, ownerId, { draftId: id, candidateId: d.candidateId, channel: d.channel, lang: d.lang, before: d.body, after: input.body });
+    if (!needsConditionReview) queueLesson(ctx, ownerId, { draftId: id, candidateId: d.candidateId, channel: d.channel, lang: d.lang, before: d.body, after: input.body });
   }
   const status = input.markCopied ? "copied" : changed ? "edited" : d.status;
   // 복사할 때 "생성 원문 → 복사본" 수정량을 한 번 재 둔다(학습 효과 지표). 원문은 첫 수정 기록의 before, 없으면 지금 본문.
   const original = input.markCopied ? ctx.db.select({ before: schema.draftEdits.before }).from(schema.draftEdits).where(eq(schema.draftEdits.draftId, id)).orderBy(asc(schema.draftEdits.createdAt), asc(schema.draftEdits.id)).get()?.before ?? d.body : undefined;
-  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint, status, updatedAt: now, ...(original !== undefined ? { editRatio: editRatio(original, input.body), copiedAt: now } : {}) }).where(eq(schema.drafts.id, id)).run();
+  ctx.db.update(schema.drafts).set({ title: input.title ?? null, body: input.body, lint, status, updatedAt: now, ...(changed ? { conditionReview: null } : {}), ...(original !== undefined ? { editRatio: editRatio(original, input.body), copiedAt: now } : {}) }).where(eq(schema.drafts.id, id)).run();
   if (input.markCopied && lint.filter((r) => EXAMPLE_GATE.has(r.rule)).every((r) => r.ok)) {
     upsertOwnExample(ctx, ownerId, d, input, original !== d.body || changed ? "edited" : "approved", now);
     emit(ctx, ownerId, { resource: "examples" });
   }
   emit(ctx, ownerId, { resource: "drafts", id });
-  return { ...toDraft(getDraftRow(ctx, ownerId, id)), ...(copyHeld ? { copyHeld: true } : {}) };
+  return { ...toDraft(getDraftRow(ctx, ownerId, id)), conditionReview: review, ...(copyHeld ? { copyHeld: true } : {}) };
 }
 
 export function dropDraft(ctx: AppContext, ownerId: string, id: number, reason: FeedbackReason, note?: string): void {

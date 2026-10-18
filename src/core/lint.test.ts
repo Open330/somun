@@ -429,6 +429,17 @@ describe("explicit Korean channel register", () => {
 });
 
 
+it("checks introduction composition without changing update, legacy or custom limits", () => {
+  const body = "코드를 읽어요. 퀴즈를 만들어요. 답을 골라요. 내용을 확인해요.";
+  const check = (purpose?: "introduction" | "update") => lintDraft("threads", "", body, [], { purpose }).find((r) => r.rule === "sentence_count");
+  expect(check("introduction")?.ok).toBe(true);
+  expect(check("update")?.ok).toBe(false);
+  expect(check()?.ok).toBe(false);
+  const custom = { id: "custom_brief" as const, label: "Brief", defaultLangs: ["ko"], maxChars: 30, maxSentences: 1, hasTitle: false, rules: "One sentence", mediaHint: "", composeUrl: "", runbook: [] };
+  expect(lintDraft(custom.id, "", body, [], { purpose: "introduction" }, "ko", custom).find((r) => r.rule === "sentence_count")?.ok).toBe(false);
+  expect(lintDraft("threads", "", "가".repeat(501), [], { purpose: "introduction" }).find((r) => r.rule === "length")?.ok).toBe(false);
+});
+
 it.each([
   "코드를 퀴즈로 만들어요. 평소 새로운 저장소는 어떤 방식으로 살펴보시나요?",
   "음성을 요약해요. 보통 기록은 어떻게 하시나요?",

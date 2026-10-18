@@ -238,7 +238,7 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).toContain("Keep it short");
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
-  expect(prompt.system).toContain("open with what the project is and who it is for");
+  expect(prompt.system).toContain("open with a supported reader task and connect it to what the project does");
 });
 
 it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {
@@ -364,4 +364,16 @@ it("does not let a late backport on an older line become the unreleased cutoff",
   sig("pr_merged", "p1", "Main work", 2000, id);
   ctx.db.update(schema.candidates).set({ title: "vitejs/vite (2026-W40)" }).where(eq(schema.candidates.id, id)).run();
   expect(windowFacts(ctx, "test", id).unreleasedPrTitles).toEqual(["Main work"]);
+});
+
+
+it("uses stored profile edit provenance for introduction capabilities without changing the profile", () => {
+  const profile = { what: "Recorder", audience: "Developers", why: "", claims: ["Private sync across devices"], stage: "beta", limitations: [], naming: "recorder", avoid: [] };
+  ctx.db.insert(schema.repoProfiles).values({ ownerId: "test", repo: "vitejs/vite", readmeHash: "fixed", profile, model: "test", createdAt: 1, updatedAt: 1 }).run();
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", readmeForChecks: "Records audio. Sync, when enabled, uses personal iCloud." } }).run();
+  const before = ctx.db.select().from(schema.repoProfiles).get();
+  expect(buildPrompt(ctx, "test", "draft", id, "threads", "ko", { introduction: true }).user).not.toContain(profile.claims[0]);
+  expect(ctx.db.select().from(schema.repoProfiles).get()).toEqual(before);
+  ctx.db.update(schema.repoProfiles).set({ edits: { claims: ["An explicitly edited claim"] } }).run();
+  expect(buildPrompt(ctx, "test", "draft", id, "threads", "ko", { introduction: true }).user).toContain("An explicitly edited claim");
 });

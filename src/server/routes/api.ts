@@ -1,4 +1,5 @@
 import { localeOf, say } from "../../app/i18n.js";
+import { confirmDraftConditions } from "../../app/condition-review.js";
 import { recordLocalUsage } from "../../app/llm-usage.js";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
@@ -178,6 +179,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.post("/drafts/:id/edit", async (c) => c.json(saveDraftEdit(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ title: z.string().optional(), body: z.string().min(1), markCopied: z.boolean(), copyIfClean: z.boolean().optional(), base: z.object({ title: z.string().optional(), body: z.string() }).optional() })))));
   app.post("/drafts/:id/drop", async (c) => { const i = await body(c, z.object({ reason, note: z.string().optional() })); dropDraft(ctx, c.get("ownerId"), id(c.req.param("id")), i.reason, i.note); return c.body(null, 204); });
   app.patch("/drafts/:id/review", async (c) => { recordDraftReview(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ sessionId: z.string().uuid(), activeSeconds: z.number().int().min(0).max(86400) }))); return c.body(null, 204); });
+  app.post("/drafts/:id/conditions/confirm", async (c) => { const input = await body(c, z.object({ revision: z.string().regex(/^[a-f0-9]{64}$/) })); return c.json(confirmDraftConditions(ctx, c.get("ownerId"), id(c.req.param("id")), input.revision, c.get("accountWorkspaces")?.accountId ?? c.get("ownerId"))); });
 
   // repo profiles (정체성 기준선)
   app.get("/profiles", (c) => c.json(listProfiles(ctx, c.get("ownerId"))));

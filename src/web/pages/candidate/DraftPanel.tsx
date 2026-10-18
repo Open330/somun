@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
-import { channelSpec, type Channel, type ChannelSpec } from "@core/channels";
+import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "@core/channels";
 import { trackLinks } from "@core/links";
-import type { Draft, Evidence, Publication } from "@shared/types";
+import type { ConditionReviewState, Draft, Evidence, Publication } from "@shared/types";
 import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
 import { del, patch, post } from "../../lib/api";
@@ -78,7 +78,13 @@ export default function DraftPanel({
   track?: boolean;
 }) {
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
-  const merged = drafts.map((d) => (savedDraft?.id === d.id && savedDraft.updatedAt >= d.updatedAt ? savedDraft : d));
+  const merged = drafts.map((d) => {
+    const sameRevision =
+      !d.conditionReview || !savedDraft?.conditionReview || d.conditionReview.revision === savedDraft.conditionReview.revision;
+    return savedDraft?.id === d.id && (savedDraft.updatedAt > d.updatedAt || (savedDraft.updatedAt === d.updatedAt && sameRevision))
+      ? savedDraft
+      : d;
+  });
   const versions = [...merged].sort((a, b) => b.version - a.version);
   const [editing, setEditing] = useState(false);
   const [editBase, setEditBase] = useState<Draft | null>(null);
@@ -101,7 +107,8 @@ export default function DraftPanel({
   const shown = (viewId !== null ? versions.find((d) => d.id === viewId) : null) ?? latest;
   const auth = useAuth();
   const author = auth.user?.displayName ?? auth.user?.username ?? "you";
-  const spec = preset ?? channelSpec(channel);
+  const baseSpec = preset ?? channelSpec(channel);
+  const spec = draftChannelSpec(baseSpec, shown?.purpose);
   const [title, setTitle] = useState(latest?.title ?? "");
   const [body, setBody] = useState(latest?.body ?? "");
   const [view, setView] = useState<"preview" | "text">("preview");
@@ -175,7 +182,9 @@ export default function DraftPanel({
   const unsupported = (lint?: Draft["lint"]) =>
     lint?.find(
       (item) =>
-        (item.rule === "numbers_need_review" || item.rule === "claims_need_review" || item.rule === "source_conditions_need_review") &&
+        (item.rule === "numbers_need_review" ||
+          item.rule === "claims_need_review" ||
+          (item.rule === "source_conditions_need_review" && !latest?.conditionReview)) &&
         !item.ok,
     );
   const warningText = (item: NonNullable<ReturnType<typeof unsupported>>) =>
@@ -192,6 +201,10 @@ export default function DraftPanel({
   const save = async (copyAfter: boolean, overwrite = false) => {
     if (!latest || action || !body.trim()) return;
     const bodyChanged = latest.body !== body || (latest.title ?? "") !== (title || "");
+    if (copyAfter && !bodyChanged && latest.conditionReview?.required && latest.conditionReview.confirmedAt === undefined) {
+      setActionError(t("원문 조건을 확인한 뒤 복사해 주세요."));
+      return;
+    }
     const check = !bodyChanged ? unsupported(latest.lint) : undefined;
     // 고친 글을 저장하며 경고를 보여줬다면, 이어서 누른 복사는 같은 경고로 다시 묻지 않는다.
     const acknowledged = !bodyChanged && warned.current === `${latest.id}\n${latest.body}`;
@@ -214,7 +227,7 @@ export default function DraftPanel({
         const confirmed = !bodyChanged && (acknowledged || Boolean(check));
         const request = postEdit(latest.id, latest, true, overwrite, !confirmed);
         const clip =
-          typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
+          !(latest.conditionReview?.required && bodyChanged) && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
             ? navigator.clipboard.write([
                 new ClipboardItem({
                   "text/plain": request.then((d) =>
@@ -231,7 +244,11 @@ export default function DraftPanel({
           const warning = unsupported(saved.lint);
           warned.current = `${saved.id}\n${saved.body}`;
           setActionError(
-            [t("저장했습니다."), warning ? warningText(warning) : "", t("확인했다면 다시 복사를 눌러 주세요.")].filter(Boolean).join(" "),
+            saved.conditionReview?.required && saved.conditionReview.confirmedAt === undefined
+              ? t("저장했습니다. 원문 조건을 확인한 뒤 복사해 주세요.")
+              : [t("저장했습니다."), warning ? warningText(warning) : "", t("확인했다면 다시 복사를 눌러 주세요.")]
+                  .filter(Boolean)
+                  .join(" "),
           );
           showToast(t("수정한 내용을 저장했습니다."));
           return;
@@ -314,7 +331,16 @@ export default function DraftPanel({
       </>
     );
   const updateHint = t("수집한 변경 내용을 알리는 새 초안을 씁니다.");
-  const introductionHint = t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.");
+  const introductionSpec = draftChannelSpec(baseSpec, "introduction");
+  const introductionHint =
+    t("변경사항 대신 서비스의 목적과 주요 기능을 소개하는 새 초안을 씁니다.") +
+    (introductionSpec.maxSentences
+      ? " " +
+        t("최대 {sentences}문장 · {characters}자", {
+          sentences: introductionSpec.maxSentences,
+          characters: introductionSpec.maxChars ?? "∞",
+        })
+      : "");
   const introductionButton = (
     <button disabled={busy} title={introductionHint} onClick={() => void onRedraft(undefined, true)}>
       {t("서비스 처음 소개하기")}
@@ -358,6 +384,21 @@ export default function DraftPanel({
   const checks = displayed.lint.filter((item) => !item.ok && item.detail);
   // 설정된 모델을 다시 쓸 수 있을 때까지 남은 시간. 한 시간 안일 때만 배지에 시각을 보이고, 더 멀면 툴팁에만 둔다.
   const resetIn = draftModelResetAt ? draftModelResetAt - Date.now() : 0;
+  const confirmConditions = async () => {
+    if (action || editing || !displayed.conditionReview?.required) return;
+    setAction("confirm");
+    setActionError(null);
+    try {
+      const review = await post<ConditionReviewState>(`/drafts/${displayed.id}/conditions/confirm`, {
+        revision: displayed.conditionReview.revision,
+      });
+      setSavedDraft({ ...displayed, conditionReview: review });
+    } catch (error) {
+      setActionError(`${t("조건 확인을 저장하지 못했습니다.")} ${(error as Error).message}`);
+    } finally {
+      setAction(null);
+    }
+  };
 
   return (
     <div className="card draft-card">
@@ -436,6 +477,10 @@ export default function DraftPanel({
           lang={lang}
           evidence={evidence}
           editing={editing}
+          review={displayed.conditionReview}
+          dirty={unsaved}
+          busy={action !== null}
+          onConfirm={confirmConditions}
         />
       )}
 

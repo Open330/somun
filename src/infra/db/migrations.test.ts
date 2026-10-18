@@ -49,7 +49,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
       try {
         expect(db.select().from(schema.settings).get()?.ownerId).toBe("owner");
         expect(db.select().from(schema.llmJobs).get()).toMatchObject({ status: "pending", runner: null, claimToken: null, attempts: 0, executor: "local", continuation: null });
-        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 17 });
+        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 18 });
         expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
         expect(db.$client.pragma("foreign_key_check")).toEqual([]);
       } finally { db.$client.close(); }
@@ -59,7 +59,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
 
 it("keeps the migration schema aligned with the latest generation snapshot", () => {
   const db = openDb(":memory:");
-  const snapshot = JSON.parse(readFileSync("drizzle/meta/0016_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
+  const snapshot = JSON.parse(readFileSync("drizzle/meta/0017_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
   try {
     for (const [name, table] of Object.entries(snapshot.tables)) {
       const columns = db.$client.prepare("SELECT name FROM pragma_table_info(?)").all(name) as { name: string }[];
@@ -146,6 +146,32 @@ it("recovers retained draft purposes and repairs introduction-only ledger marks 
       try {
         expect(db.select().from(schema.drafts).all().map((d) => d.purpose)).toEqual(["introduction", "update", null, null]);
         expect(db.select().from(schema.changeLedger).all().map((l) => l.publishedAt)).toEqual([null, 10, 10, 10]);
+        expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
+      } finally { db.$client.close(); }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+it("adds an empty condition confirmation without altering existing drafts and reopens idempotently", () => {
+  const dir = mkdtempSync(join(tmpdir(), "somun-condition-review-"));
+  const migrations = join(dir, "old-migrations");
+  mkdirSync(join(migrations, "meta"), { recursive: true });
+  const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8"));
+  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 17);
+  writeFileSync(join(migrations, "meta/_journal.json"), JSON.stringify(journal));
+  for (const entry of journal.entries) copyFileSync(`drizzle/${entry.tag}.sql`, join(migrations, `${entry.tag}.sql`));
+  const file = join(dir, "somun.db");
+  try {
+    const old = openDb(file, migrations);
+    old.$client.prepare("INSERT INTO drafts (id,owner_id,candidate_id,channel,lang,version,title,body,lint,status,model,copied_at,created_at,updated_at) VALUES (1,'o',1,'x','en',1,'Title','Body','[]','copied','test',10,1,2)").run();
+    const before = old.$client.prepare("SELECT * FROM drafts").get();
+    old.$client.close();
+    for (let n = 0; n < 2; n++) {
+      const db = openDb(file);
+      try {
+        const { condition_review, ...retained } = db.$client.prepare("SELECT * FROM drafts").get() as Record<string, unknown>;
+        expect(condition_review).toBeNull();
+        expect(retained).toEqual(before);
         expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
       } finally { db.$client.close(); }
     }

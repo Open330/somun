@@ -1,3 +1,4 @@
+import { channelSpec } from "./channels.js";
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
 import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
@@ -192,5 +193,86 @@ describe("draft purpose on channels with links outside the body", () => {
     expect(prompt.user).toContain("## First introduction");
     expect(prompt.user).not.toContain("## Coverage");
     expect(prompt.user).toContain("Keep supplied URLs out of the body");
+  });
+});
+
+
+describe("project introduction writing brief", () => {
+  it("uses collected README conditions even with a saved coarse profile", () => {
+    const profile = { what: "web app", audience: "developers", claims: ["Learns from copies and edits"], stage: "beta", limitations: [], naming: "tool", avoid: [] };
+    const readmeForChecks = "Drafts you edit before copying become voice examples. Irreversible events need consent before becoming official records.";
+    const prompt = draftPrompt({ ...candidate, evidence: { ...candidate.evidence, readmeExcerpt: "A short summary", readmeForChecks } }, "threads", "ko", [], undefined, { introduction: true, profile });
+    expect(prompt.user).toContain(readmeForChecks);
+    expect(prompt.user).toContain("not the entire README");
+    expect(prompt.user).toContain("Missing text is not evidence");
+    expect(prompt.user).toContain("Maximum 6 sentences");
+    expect(prompt.user).not.toContain("Maximum 2 sentences");
+    expect(prompt.user).not.toContain("Rules: One or two sentences");
+    expect(prompt.user).toContain("Max length: 500 characters");
+    expect(prompt.user).toContain("No URLs in the body");
+  });
+  it("keeps X platform limits without the old 220-character introduction target", () => {
+    const prompt = draftPrompt(candidate, "x", "ko", [], undefined, { introduction: true });
+    expect(prompt.user).toContain("Max length: 280 characters");
+    expect(prompt.user).toContain("2-4 short sentences");
+    expect(prompt.user).not.toContain("220 characters");
+    expect(prompt.user).toContain("Use fewer sentences when evidence is sparse");
+  });
+  it("preserves updates and custom channel limits", () => {
+    expect(draftPrompt(candidate, "threads", "ko", []).user).toContain("Maximum 2 sentences");
+    const spec = { ...channelSpec("threads"), id: "custom_brief" as const, maxSentences: 1, rules: "Exactly one sentence." };
+    const prompt = draftPrompt(candidate, spec.id, "ko", [], undefined, { introduction: true, channelSpec: spec });
+    expect(prompt.user).toContain("Maximum 1 sentences");
+    expect(prompt.user).toContain("Rules: Exactly one sentence.");
+    expect(prompt.user).not.toContain("3-5 short sentences");
+  });
+});
+
+
+it("retains an explicitly stricter builtin sentence budget for introductions", () => {
+  const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true, channelSpec: { ...channelSpec("threads"), maxSentences: 1 } });
+  expect(prompt.user).toContain("Maximum 1 sentences");
+  expect(prompt.user).not.toContain("Maximum 6 sentences");
+});
+
+
+it("uses extra introduction space for one reader workflow rather than a second capability", () => {
+  const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).toContain("input, action and result of that SAME task");
+  expect(prompt.user).toContain("If only two supported sentences explain the task, stop there");
+  expect(prompt.user).not.toContain("then add one concrete workflow detail");
+});
+
+
+describe("README-backed introduction facts", () => {
+  const claim = "Private sync across devices";
+  const profile = { what: "A voice recorder", audience: "Meeting participants", claims: [claim], stage: "beta", limitations: ["Requires setup"], naming: "tool", avoid: ["automatic uploads"] };
+  const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Captures speech and creates summaries. Cross-device sync, when enabled, uses personal iCloud." } };
+  it("uses source capabilities instead of generated coarse claims while preserving profile identity and constraints", () => {
+    const before = structuredClone(profile);
+    const prompt = draftPrompt(c, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false });
+    expect(prompt.user).not.toContain(claim);
+    expect(prompt.user).toContain("when enabled");
+    expect(prompt.user).toContain(profile.what);
+    expect(prompt.user).toContain(profile.limitations[0]);
+    expect(prompt.user).toContain(profile.avoid[0]);
+    expect(groundingText(c, profile)).toContain(claim);
+    expect(profile).toEqual(before);
+  });
+  it("keeps updates, edited or unknown-origin claims and README-free introductions byte-identical", () => {
+    for (const [source, introduction, profileClaimsEdited] of [[c, false, false], [c, true, true], [c, true, undefined], [candidate, true, false]] as const) {
+      const preserved = draftPrompt(source, "threads", "ko", [], undefined, { introduction, profile, profileClaimsEdited });
+      const previous = draftPrompt(source, "threads", "ko", [], undefined, { introduction, profile });
+      expect(preserved).toEqual(previous);
+      expect(preserved.user).toContain(claim);
+    }
+  });
+  it("treats blank README as missing and falls back to a meaningful excerpt", () => {
+    const blank = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "  " } };
+    expect(draftPrompt(blank, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false }).user).toContain(claim);
+    const withExcerpt = { ...blank, evidence: { ...blank.evidence, readmeExcerpt: "Sync only when enabled." } };
+    const prompt = draftPrompt(withExcerpt, "threads", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false });
+    expect(prompt.user).toContain("Sync only when enabled.");
+    expect(prompt.user).not.toContain(claim);
   });
 });
