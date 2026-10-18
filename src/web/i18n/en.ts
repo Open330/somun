@@ -133,6 +133,7 @@ export const en: Record<string, string> = {
   금지어: "Avoided terms",
   "구성 확인": "Check sections",
   "끝맺음 질문": "Closing question",
+  "소개 질문 확인": "Introduction question review",
   "이름 표기": "Name spelling",
   "홈페이지 링크": "Homepage link",
   "초안을 만들 채널과 언어를 먼저 선택해 주세요.": "Choose a channel and language before preparing drafts.",
