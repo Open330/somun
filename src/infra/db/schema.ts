@@ -63,6 +63,7 @@ export const judgments = sqliteTable("judgments", {
 }, (t) => [index("judgments_candidate").on(t.candidateId)]);
 
 export const drafts = sqliteTable("drafts", {
+  conditionReview: json<import("../../shared/types.js").ConditionConfirmation>("condition_review"),
   purpose: text("purpose").$type<import("../../shared/types.js").DraftPurpose>(),
   id: integer("id").primaryKey({ autoIncrement: true }),
   ownerId: text("owner_id").notNull(),

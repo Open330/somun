@@ -79,13 +79,17 @@ describe("HTTP response boundaries", () => {
     expect(held.copyHeld).toBe(true);
     expect(ctx.db.select().from(schema.examples).all()).toHaveLength(0);
     const acknowledged = await (await send(false)).json();
-    expect(acknowledged.status).toBe("copied");
+    expect(acknowledged.status).toBe("proposed");
+    expect(acknowledged.copyHeld).toBe(true);
+    const confirmed = await app.request(`/api/drafts/${draftId}/conditions/confirm`, { method: "POST", headers, body: JSON.stringify({ revision: acknowledged.conditionReview.revision }) });
+    expect(confirmed.status).toBe(200);
+    expect((await (await send(false)).json()).status).toBe("copied");
     expect(acknowledged.lint).toContainEqual(expect.objectContaining({ rule: "source_conditions_need_review", ok: false }));
     expect(ctx.db.select().from(schema.examples).all()).toHaveLength(0);
     expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
     const heldAgain = await (await send(true)).json();
     expect(heldAgain.status).toBe("copied");
-    expect(heldAgain.copyHeld).toBe(true);
+    expect(heldAgain.copyHeld).toBeUndefined();
   });
 
   it("accepts a single selected channel, another selection, and deliberately empty channel settings", async () => {

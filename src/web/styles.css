@@ -838,3 +838,13 @@ button.chip { min-height: 28px; }
 
 .workspace-picker { margin-bottom: 24px; }
 .workspace-picker select { max-width: 100%; min-width: 0; }
+
+.condition-review {
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.condition-review pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-evidence-review > summary .badge { margin-left: 8px; }

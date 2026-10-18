@@ -1,0 +1,1 @@
+ALTER TABLE `drafts` ADD `condition_review` text;
