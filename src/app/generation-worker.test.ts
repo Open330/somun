@@ -538,8 +538,8 @@ it("keeps explicit formal editor instructions above the channel register", async
 });
 
 
-it("repairs a repetitive introduction question with the same expanded introduction budget", async () => {
-  const first = { title: "", body: "Reads source code. Fixes CRLF positions. How do you usually read code?" };
+it("repairs sentence overflow using the same expanded introduction budget", async () => {
+  const first = { title: "", body: "Reads source code. Opens the file. Reads the lines. Finds the positions. Handles CRLF. Shows the output. Lists the locations." };
   const repaired = { title: "", body: "Reads source code. Fixes CRLF positions. Shows the source locations." };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
   const response = await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
@@ -547,7 +547,7 @@ it("repairs a repetitive introduction question with the same expanded introducti
   await processServerJob(ctx);
   expect(runLlm).toHaveBeenCalledTimes(2);
   const repair = vi.mocked(runLlm).mock.calls[1][1].user;
-  expect(repair).toContain("introduction_habit_question");
+  expect(repair).toContain("sentence_count");
   expect(repair).toContain("Maximum 6 sentences");
   expect(repair).not.toContain("Maximum 2 sentences");
   const saved = ctx.db.select().from(schema.drafts).get()!;
@@ -569,4 +569,20 @@ it.each(["평소 써보셨나요?", "어떻게 생각하시나요?"])("keeps int
   expect(repair).toContain("For question_specificity: delete the generic closing question");
   expect(repair).not.toContain("then one concrete question about the reader");
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(repaired.body);
+});
+
+
+it("flags an introduction habit question for review without extra model calls or rewriting the draft", async () => {
+  const first = { title: "", body: "Reads source code. How do you usually read code?" };
+  vi.mocked(runLlm).mockReset().mockResolvedValue(output(first));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(1);
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(first.body);
+  expect(saved.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(false);
+  const edited = await request(`/api/drafts/${saved.id}/edit`, { body: "Reads source code.", markCopied: false });
+  expect(edited.status).toBe(200);
+  expect(ctx.db.select().from(schema.drafts).get()!.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(true);
+  expect(runLlm).toHaveBeenCalledTimes(1);
 });

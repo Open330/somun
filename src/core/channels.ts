@@ -102,11 +102,11 @@ export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "
     ...spec,
     maxSentences: spec.maxSentences !== undefined && spec.maxSentences !== CHANNELS[spec.id as "threads" | "x"].maxSentences
       ? Math.min(spec.maxSentences, threads ? 6 : 4) : threads ? 6 : 4,
-    rules: `Introduce the project in ${threads ? "3-5 short sentences in 2-3 short paragraphs when supported facts are available" : "2-4 short sentences within the configured character limit, with a supplied link"}. Start with a supported use situation or reader task, name the project and explain one core capability, then add one concrete workflow detail that makes this project understandable. Each sentence must add information. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
+    rules: `Introduce the project in ${threads ? "3-5 short sentences in 2-3 short paragraphs when supported facts are available" : "2-4 short sentences within the configured character limit, with a supplied link"}. Start with a supported use situation or reader task, name the project and explain one core capability, then explain the input, action and result of that SAME task as needed. Do not select a separate capability to fill the sentence target. Each sentence must add information about that one workflow. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
     identity: spec.identity ? {
       ...spec.identity,
       purpose: "처음 보는 독자가 사용 상황과 핵심 기능을 이해할 수 있게 프로젝트 소개",
-      structure: threads ? "근거 있는 사용 상황 → 프로젝트와 핵심 기능 → 구체적인 사용 흐름. 짧은 문단, 습관 질문 없이. 링크는 첫 답글" : "사용 상황 또는 과업 → 프로젝트의 핵심 기능과 구체적인 흐름 → 링크. 글자 수 안에서, 습관 질문 없이",
+      structure: threads ? "근거 있는 사용 상황 → 프로젝트의 한 핵심 작업 → 그 작업의 입력·처리·결과. 짧은 문단, 습관 질문 없이. 링크는 첫 답글" : "사용 상황 또는 과업 → 프로젝트의 한 핵심 작업과 입력·처리·결과 → 링크. 글자 수 안에서, 습관 질문 없이",
     } : undefined,
   };
 }

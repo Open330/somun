@@ -234,3 +234,11 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
   expect(prompt.user).toContain("Maximum 1 sentences");
   expect(prompt.user).not.toContain("Maximum 6 sentences");
 });
+
+
+it("uses extra introduction space for one reader workflow rather than a second capability", () => {
+  const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).toContain("input, action and result of that SAME task");
+  expect(prompt.user).toContain("If only two supported sentences explain the task, stop there");
+  expect(prompt.user).not.toContain("then add one concrete workflow detail");
+});

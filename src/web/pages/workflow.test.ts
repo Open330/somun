@@ -951,3 +951,12 @@ it.each([true, false])("lets the editor explicitly choose an update with an exis
   await waitFor(() => expect(onRedraft).toHaveBeenCalledWith(undefined, false));
   expect(post).not.toHaveBeenCalledWith("/publications", expect.anything());
 });
+
+it("shows an actionable introduction question warning instead of an internal rule name", () => {
+  const detail = "소개 끝의 일반적인 습관 질문을 삭제하세요. 근거가 있는 사용 흐름을 더하거나 간결하게 끝내세요.";
+  render(panel([{ ...draft, purpose: "introduction", lint: [{ rule: "introduction_habit_question", ok: false, detail }] }]));
+  expect(screen.getByText("소개 질문 확인").getAttribute("title")).toBe(detail);
+  expect(screen.queryByText("introduction_habit_question")).toBeNull();
+  fireEvent.click(screen.getByText("초안에서 확인할 부분"));
+  expect(screen.getByText(detail)).toBeTruthy();
+});

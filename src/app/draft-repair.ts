@@ -15,7 +15,7 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["introduction_habit_question", "register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 type DraftJob = { id: number; candidateId: number; channel?: Channel | null; lang?: string; editorInstruction?: string; user: string };
 
@@ -48,9 +48,6 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
     "## Fix these problems",
     "Rewrite the previous draft so these checks pass. Preserve the requested main task or change, and keep every retained claim supported by Facts. Remove an unsupported claim or optional detail when needed; do not invent replacements. Keep the configured link placement.",
     ...issues.map((l) => `- ${l.rule}${l.detail ? `: ${l.detail}` : ""}`),
-    ...(issues.some((l) => l.rule === "introduction_habit_question")
-      ? ["For introduction_habit_question: delete the generic closing question. Add a concrete workflow detail from Facts only if it helps explain the project; do not replace it with another question or invent a benefit."]
-      : []),
     ...(issues.some((l) => l.rule === "question_specificity")
       ? [introductionWithoutQuestion
         ? "For question_specificity: delete the generic closing question. Explain a supported workflow detail only when needed. Do not replace the question with another question or invent a benefit."
