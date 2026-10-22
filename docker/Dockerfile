@@ -4,7 +4,12 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm can omit a native optional dependency without failing installation.
+# Verify it in this layer so an incomplete install is never cached as usable.
+RUN npm ci --include=optional \
+    && (node --input-type=module -e "await import('rolldown')" \
+        || (npm ci --include=optional \
+            && node --input-type=module -e "await import('rolldown')"))
 COPY . .
 ARG VITE_AUTH_URL
 ARG VITE_AUTH_AUDIENCE=somun
