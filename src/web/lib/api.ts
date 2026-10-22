@@ -204,7 +204,7 @@ export function useResource<T>(
     if (!known || Date.now() - known.fetchedAt > FRESH_MS) fetchResource(path);
     const wanted = resKey.split(",");
     return subscribeEvents((ev) => {
-      if (wanted.includes(ev.resource)) scheduleRefetch(path);
+      if (ev.resource === "resync" || wanted.includes(ev.resource)) scheduleRefetch(path);
     });
   }, [path, resKey]);
   const reload = useCallback(() => {

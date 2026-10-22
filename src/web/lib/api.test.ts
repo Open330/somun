@@ -85,6 +85,20 @@ it.each(["network", "http"])("keeps session client state when logout fails: %s",
 });
 
 describe("shared resource cache", () => {
+  it("reads missed candidates again after the event stream reconnects, without replaying mutations", async () => {
+    let rows = [{ id: 1 }];
+    const fetchMock = vi.fn(async () => Response.json(rows));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useResource<{ id: number }[]>("/candidates", ["candidates"]));
+    await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]));
+    rows = [{ id: 1 }, { id: 60 }];
+    act(() => {
+      for (const listener of listeners) listener({ resource: "resync" });
+    });
+    await waitFor(() => expect(result.current.data).toEqual(rows));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every((call) => (call as unknown[])[0] === "/api/candidates")).toBe(true);
+  });
   const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 
   it("sends one request when several screens open the same resource", async () => {

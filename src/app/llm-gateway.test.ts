@@ -43,6 +43,8 @@ it("sends one request to the gateway with the service key and user, and reports 
   const h = init.headers as Record<string, string>;
   expect(h.Authorization).toBe("Bearer gw-key");
   expect(h["X-Jiun-User"]).toBe("665f00000000000000000001");
+  expect(h["X-Jiun-Deadline-Ms"]).toBe("150000");
+  expect(h["X-Jiun-Attempt-Timeout-Ms"]).toBe("60000");
   // 기본 초안 모델은 quality 별칭으로 보내고, 답한 실제 모델은 X-Jiun-Model에서 읽는다.
   expect(JSON.parse(String(init.body)).model).toBe("quality");
   expect(ctx.db.select().from(schema.drafts).get()?.model).toContain("gemini-3.5-flash-lite");

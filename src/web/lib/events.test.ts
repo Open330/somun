@@ -40,6 +40,21 @@ const settle = async () => {
 };
 
 describe("shared event stream", () => {
+  it("resynchronizes after opening a replacement stream and ignores stale connections", async () => {
+    const listener = vi.fn();
+    unsubscribe.push(subscribeEvents(listener));
+    await settle();
+    const old = FakeSource.instances[0];
+    old.dispatchEvent(new Event("open"));
+    expect(listener).toHaveBeenLastCalledWith({ resource: "resync" });
+    listener.mockClear();
+    old.dispatchEvent(new Event("error"));
+    await vi.advanceTimersByTimeAsync(1000);
+    old.dispatchEvent(new Event("open"));
+    expect(listener).not.toHaveBeenCalled();
+    FakeSource.instances[1].dispatchEvent(new Event("open"));
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ resource: "resync" });
+  });
   it("shares a connection and closes it when the last subscriber leaves", async () => {
     const a = subscribeEvents(vi.fn()),
       b = subscribeEvents(vi.fn());

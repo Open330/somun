@@ -1045,4 +1045,6 @@ it("explains that a disconnected collection POST may already be running without 
     ).toBeTruthy(),
   );
   expect(post).toHaveBeenCalledTimes(1);
+  expect(resources.get("/candidates")!.reload).toHaveBeenCalledOnce();
+  expect(resources.get("/sources")!.reload).toHaveBeenCalledOnce();
 });

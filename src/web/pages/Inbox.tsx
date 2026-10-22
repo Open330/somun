@@ -116,6 +116,12 @@ export default function Inbox() {
       reload();
       reloadSources();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 0) {
+        // The POST may have been accepted. Read back state without repeating it.
+        reload();
+        reloadSources();
+        reloadPick();
+      }
       setMessage({
         text:
           err instanceof ApiError && err.status === 0
