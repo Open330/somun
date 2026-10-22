@@ -387,6 +387,9 @@ Hard rules:
       "",
       "## Facts",
       factsBlock(publicCandidate, writingProfile),
+      opts.introduction && c.evidence.releaseNotes?.trim()
+        ? `## Current release source (capabilities available in this release; not a required changelog)\n${c.evidence.releaseNotes.slice(0, RELEASE_NOTES_MAX)}${c.evidence.releaseNotes.length > RELEASE_NOTES_MAX ? "\n[Release source truncated: check the original for missing prerequisites and exclusions.]" : ""}\nUse concrete current capabilities when the saved profile is coarse or stale. Preserve the release's prerequisites, platform scope and limitations; do not infer them from PR titles.`
+        : "",
       introductionReadme ? `## README (collected excerpt, not the entire README; conditions take priority over profile summaries)\n${introductionReadme.slice(0, 8000)}\nThis is a bounded collected excerpt. Missing text is not evidence that a condition or limitation does not exist. Repository documentation does not establish current production activation.` : "",
       "",
       exampleText,
