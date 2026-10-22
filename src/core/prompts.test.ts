@@ -246,6 +246,27 @@ it("uses introduction space for distinctive reader value rather than a generic s
 });
 
 
+it.each(["x", "threads"] as const)("keeps the core product task ahead of a narrow release fix for %s introductions", (channel) => {
+  const c = { ...candidate, evidence: { ...candidate.evidence, description: "Remote desktop for Windows and Mac", readmeForChecks: "Control another device's screen. Browse files in a separate window without a screen connection. Files require SSH access.", releaseNotes: "Copied files remain available after closing the source window." } };
+  const intro = draftPrompt(c, channel, "ko", [], undefined, { introduction: true });
+  expect(intro.user).toContain(c.evidence.readmeForChecks);
+  expect(intro.user).toContain(c.evidence.releaseNotes);
+  expect(intro.user).toContain("select the main reader task from the profile or README");
+  expect(intro.user).toContain("Do not lead with maintenance, edge cases or regression fixes");
+  expect(intro.user).toContain("can they identify the product's main use");
+  expect(intro.user).toContain("Each later sentence must add a distinct action, result or necessary condition");
+  expect(intro.user).toContain("Preserve the release's prerequisites, platform scope and limitations");
+  expect(intro.editorInstruction).toBe("");
+  expect(intro.system).toContain("Do not open with the project name followed by a software category definition");
+  expect(intro.system).toContain("end with the supplied link alone");
+  expect(intro.system).toContain("Merely saying it manages or connects things");
+  const update = draftPrompt(c, channel, "ko", [], undefined, { introduction: false });
+  expect(update.system).not.toContain("Do not open with the project name followed by a software category definition");
+  expect(update.user).not.toContain("can they identify the product's main use");
+  expect(update.user).not.toContain("Do not lead with maintenance, edge cases or regression fixes");
+});
+
+
 describe("README-backed introduction facts", () => {
   it("supplies current release behavior and conditions even when the saved profile is generic", () => {
     const c = { ...candidate, evidence: { ...candidate.evidence, releaseNotes: "Copy in device A's file window, close it, then paste into device B's new file window. Drag between Itda file windows on Mac and Windows. Windows executable is unsigned." } };
