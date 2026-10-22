@@ -238,7 +238,9 @@ async function gatewayCall(gw: LlmGateway, model: string, req: LlmRequest, signa
   const t0 = Date.now();
   const res = await fetch(`${gw.url.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST", signal,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${gw.key}`, ...(user ? { "X-Jiun-User": user } : {}) },
+    // One stalled key must leave time for another key of the same model. The
+    // gateway returns its classified error before the worker's 180s deadline.
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${gw.key}`, "X-Jiun-Deadline-Ms": "150000", "X-Jiun-Attempt-Timeout-Ms": "60000", ...(user ? { "X-Jiun-User": user } : {}) },
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: req.system }, { role: "user", content: req.user }],

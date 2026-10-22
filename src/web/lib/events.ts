@@ -2,7 +2,8 @@ import type { ChangeEvent } from "@shared/types";
 import { workspaceHeaders } from "./workspaces";
 import { getAuthManager } from "./auth/manager";
 
-type Listener = (ev: ChangeEvent) => void;
+// Events missed while disconnected are not replayed by the server.
+type Listener = (ev: ChangeEvent | { resource: "resync" }) => void;
 const listeners = new Set<Listener>();
 let source: EventSource | null = null;
 let retry: ReturnType<typeof setTimeout> | undefined;
@@ -47,7 +48,9 @@ async function connect() {
     const stream = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`, { withCredentials: true });
     source = stream;
     stream.addEventListener("open", () => {
-      if (source === stream) retryMs = 1000;
+      if (source !== stream) return;
+      retryMs = 1000;
+      for (const listener of listeners) listener({ resource: "resync" });
     });
     stream.addEventListener("change", (event) => {
       if (source !== stream) return;
