@@ -236,15 +236,25 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
 });
 
 
-it("uses extra introduction space for one reader workflow rather than a second capability", () => {
+it("uses introduction space for distinctive reader value rather than a generic setup summary", () => {
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("input, action and result of that SAME task");
-  expect(prompt.user).toContain("If only two supported sentences explain the task, stop there");
+  expect(prompt.user).toContain("Explain the action and visible result");
+  expect(prompt.user).toContain("Prefer a distinctive workflow in current source material");
+  expect(prompt.user).toContain("A current release can supply evidence of what the product now does");
+  expect(prompt.user).not.toContain("If only two supported sentences");
   expect(prompt.user).not.toContain("then add one concrete workflow detail");
 });
 
 
 describe("README-backed introduction facts", () => {
+  it("supplies current release behavior and conditions even when the saved profile is generic", () => {
+    const c = { ...candidate, evidence: { ...candidate.evidence, releaseNotes: "Copy in device A's file window, close it, then paste into device B's new file window. Drag between Itda file windows on Mac and Windows. Windows executable is unsigned." } };
+    const profile = { what: "Remote desktop", audience: "Computer users", claims: ["Browse via SFTP"], stage: "stable", limitations: [], naming: "tool", avoid: [] };
+    const prompt = draftPrompt(c, "x", "ko", [], undefined, { introduction: true, profile, profileClaimsEdited: false });
+    expect(prompt.user).toContain("## Current release source");
+    expect(prompt.user).toContain(c.evidence.releaseNotes);
+    expect(prompt.user).toContain("Preserve the release's prerequisites, platform scope and limitations");
+  });
   const claim = "Private sync across devices";
   const profile = { what: "A voice recorder", audience: "Meeting participants", claims: [claim], stage: "beta", limitations: ["Requires setup"], naming: "tool", avoid: ["automatic uploads"] };
   const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Captures speech and creates summaries. Cross-device sync, when enabled, uses personal iCloud." } };

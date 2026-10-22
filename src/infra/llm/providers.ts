@@ -40,7 +40,8 @@ import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "../../core/models.js";
 
 export function modelFor(config: LlmConfig, kind: "digest" | "judge" | "draft"): string {
   if (config.provider === "local-agent") return config.agentCli ?? "claude";
-  // 초안만 상위 모델. 판단은 기본 모델로 (무료 티어에서 3.7-flash의 일일 한도가 20 안팎이라 판단까지 쓰면 하루도 못 간다).
+  // Gemini is fixed for every purpose, including stale custom model settings.
+  if (config.provider === "gemini") return DEFAULT_MODEL.gemini;
   if (kind === "draft") return config.draftModel?.trim() || DEFAULT_DRAFT_MODEL[config.provider] || config.model?.trim() || DEFAULT_MODEL[config.provider];
   return config.model?.trim() || DEFAULT_MODEL[config.provider];
 }
@@ -169,18 +170,9 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
   const all = freeGeminiKeys(serverGeminiKeys);
   if (all.length === 0) throw new LlmError("GEMINI_API_KEYS가 서버에 없고 사용자 키도 없습니다");
   const byLabel = new Map(all.map((k) => [k.label, k.key]));
-  const base = config.model?.trim() || DEFAULT_MODEL.gemini;
-  // 상위 모델이 몇 분 전에 503을 냈다면 또 50초를 기다리지 않고 기본 모델로 간다. 기다리다 작업 제한 시간을 넘기는 일이 잦았다.
-  if (model !== base && (await pool?.unavailable?.(model))) return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal, opts);
   let lastErr: unknown;
-  // 바퀴마다 상태를 다시 읽는다: 쿨다운에 들어간 키는 빠지고, LRU 순서로 돈다.
-  // 초안은 뒤에서 도는 작업이라 상위 모델의 일시적 수요 폭주(503)를 조금 더 기다린다(약 50초). 503은 곧바로 돌아오므로 제한 시간 안이다.
-  const waits = kind === "draft" && model !== base ? DRAFT_503_WAITS_MS : DEFAULT_WAITS_MS;
-  const started = Date.now();
-  for (let round = 0; round < waits.length; round++) {
-    // 상위 모델의 503은 응답까지 수십 초가 걸리기도 한다. 기다리는 데 예산을 다 쓰면 기본 모델로 넘어갈 시간도 없이 작업 제한 시간에 걸린다.
-    if (round > 0 && model !== base && Date.now() - started + waits[round] > UPPER_MODEL_BUDGET_MS) break;
-    if (waits[round] > 0) await new Promise((r) => setTimeout(r, waits[round]));
+  for (let round = 0; round < DEFAULT_WAITS_MS.length; round++) {
+    if (DEFAULT_WAITS_MS[round] > 0) await new Promise((r) => setTimeout(r, DEFAULT_WAITS_MS[round]));
     signal.throwIfAborted();
     const labels = pool ? await pool.order(all.map((k) => k.label), model) : rotateStateless(all.map((k) => k.label));
     if (labels.length === 0) {
@@ -215,18 +207,11 @@ export async function runLlm(config: LlmConfig, req: LlmRequest, kind: "digest" 
       }
     }
   }
-  // 상위 모델이 수요 폭주(503)나 일일 상한(429)으로 막히면 기본 모델로 한 번 더. 초안 품질은 조금 떨어져도 아예 멈추는 것보다 낫다.
-  // (3.7-flash 무료 한도는 키당 하루 20회 안팎이라 저녁이면 흔히 닿는다.)
-  if (lastErr instanceof LlmError && (lastErr.status === 503 || lastErr.status === 429) && model !== base) {
-    return await runLlm({ ...config, draftModel: base }, req, kind, pool, serverGeminiKeys, signal, opts);
-  }
   throw lastErr instanceof Error ? lastErr : new LlmError("모든 Gemini 키 실패");
 }
 
-/** 기본 모델은 게이트웨이 별칭으로 보낸다. 초안 모델은 quality(게이트웨이 정책이 fast로 대체), 기본 모델은 fast. 그 밖의 모델은 이름 그대로. */
+/** Pin real model IDs: gateway alias changes must not select another model. */
 export function gatewayModel(model: string): string {
-  if (model === DEFAULT_DRAFT_MODEL.gemini) return "quality";
-  if (model === DEFAULT_MODEL.gemini) return "fast";
   return model;
 }
 
@@ -268,6 +253,10 @@ async function gatewayCall(gw: LlmGateway, model: string, req: LlmRequest, signa
   if (!content) throw Object.assign(new LlmError("빈 응답"), { reported: true });
   const u = data.usage;
   const answeredBy = res.headers.get("x-jiun-model") || data.model || undefined;
+  if (answeredBy && answeredBy !== model) {
+    onGateway?.({ model, ok: false, code: "model_mismatch" });
+    throw Object.assign(new LlmError("Gateway returned a different model than the fixed Gemini model"), { reported: true });
+  }
   onGateway?.({ model, ok: true, answeredBy });
   return {
     json: extractJson(content), provider: "gemini", model: answeredBy || model, keyLabel: res.headers.get("x-jiun-key-label") || undefined, viaGateway: true, latencyMs: Date.now() - t0,
@@ -277,9 +266,6 @@ async function gatewayCall(gw: LlmGateway, model: string, req: LlmRequest, signa
 
 /** 바퀴 사이 대기. 첫 바퀴는 바로. */
 const DEFAULT_WAITS_MS = [0, 4000, 8000];
-export const DRAFT_503_WAITS_MS = [0, 5000, 15000, 30000];
-/** 상위 모델을 붙잡는 최대 시간. 넘기면 기본 모델로 넘어간다(작업 제한 시간 180초 안에 대체 모델이 끝날 여유를 남긴다). */
-export const UPPER_MODEL_BUDGET_MS = 60_000;
 
 function rotateStateless(labels: string[]): string[] {
   const start = Math.floor(Math.random() * labels.length);

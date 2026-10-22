@@ -5,6 +5,15 @@ import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { getSettings, getSettingsView, updateSettings } from "./settings.js";
 
+it("normalizes legacy and newly submitted Gemini model overrides to Flash Lite", () => {
+  const ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: { record() {} } } as unknown as AppContext;
+  try {
+    ctx.db.insert(schema.settings).values({ ownerId: "old", data: { llm: { provider: "gemini", model: "gemini-3.7-flash", draftModel: "gemini-3.7-flash" } }, updatedAt: 1 }).run();
+    expect(getSettings(ctx, "old").llm).toMatchObject({ model: "gemini-3.5-flash-lite", draftModel: "gemini-3.5-flash-lite" });
+    expect(updateSettings(ctx, "old", { llm: { provider: "gemini", model: "gemini-3.7-flash", draftModel: "gemini-3.7-flash" } }).llm).toMatchObject({ model: "gemini-3.5-flash-lite", draftModel: "gemini-3.5-flash-lite" });
+  } finally { ctx.db.$client.close(); }
+});
+
 it("reports model credentials without exposing server keys or confusing providers", () => {
   const ctx: AppContext = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: {} as AppContext["usage"] };
   try {

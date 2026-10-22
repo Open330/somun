@@ -45,9 +45,18 @@ it("sends one request to the gateway with the service key and user, and reports 
   expect(h["X-Jiun-User"]).toBe("665f00000000000000000001");
   expect(h["X-Jiun-Deadline-Ms"]).toBe("150000");
   expect(h["X-Jiun-Attempt-Timeout-Ms"]).toBe("60000");
-  // 기본 초안 모델은 quality 별칭으로 보내고, 답한 실제 모델은 X-Jiun-Model에서 읽는다.
-  expect(JSON.parse(String(init.body)).model).toBe("quality");
+  // 실제 고정 모델 ID를 보내고 응답 모델은 X-Jiun-Model에서 읽는다.
+  expect(JSON.parse(String(init.body)).model).toBe("gemini-3.5-flash-lite");
   expect(ctx.db.select().from(schema.drafts).get()?.model).toContain("gemini-3.5-flash-lite");
+  expect(record).not.toHaveBeenCalled();
+});
+
+it("does not save a draft if the gateway responds with a different model", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => answer("gemini-3.7-flash")));
+  const id = queueStep(ctx, OWNER, "draft", cid, "x", "en");
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(0);
+  expect(ctx.db.select().from(schema.llmJobs).all().find(j => j.id === id)!.status).toBe("failed");
   expect(record).not.toHaveBeenCalled();
 });
 
@@ -76,19 +85,19 @@ it("distinguishes an observed substitute from recovery and expires observations 
   const draft = (at = Date.now()) => modelAvailability(ctx, OWNER, at).models.find((m) => m.purpose === "draft")!;
   const note = llmCallOptions(ctx, OWNER).onGateway!;
   expect(draft().state).toBe("unknown");
-  note({ model: "quality", ok: true, answeredBy: "gemini-3.5-flash-lite" });
-  expect(draft()).toMatchObject({ state: "substituted", answeredBy: "gemini-3.5-flash-lite", observedAt: expect.any(Number) });
-  note({ model: "fast", ok: true, answeredBy: "gemini-3.5-flash-lite" });
+  note({ model: "gemini-3.5-flash-lite", ok: true, answeredBy: "gemini-3.7-flash" });
+  expect(draft()).toMatchObject({ state: "substituted", answeredBy: "gemini-3.7-flash", observedAt: expect.any(Number) });
+  note({ model: "gemini-3.7-flash", ok: true, answeredBy: "gemini-3.5-flash-lite" });
   expect(draft().state).toBe("substituted");
-  note({ model: "quality", ok: true, answeredBy: "gemini-3.7-flash" });
+  note({ model: "gemini-3.5-flash-lite", ok: true, answeredBy: "gemini-3.5-flash-lite" });
   expect(draft().state).toBe("ready");
   expect(draft(Date.now() + 10 * 60_000 + 1).state).toBe("unknown");
-  note({ model: "quality", ok: false, status: 503 });
+  note({ model: "gemini-3.5-flash-lite", ok: false, status: 503 });
   expect(draft()).toMatchObject({ state: "degraded", lastStatus: 503 });
-  note({ model: "quality", ok: false, status: 429, retryAt: Date.now() + 60_000 });
+  note({ model: "gemini-3.5-flash-lite", ok: false, status: 429, retryAt: Date.now() + 60_000 });
   expect(draft().state).toBe("waiting");
   expect(draft(Date.now() + 61_000).state).toBe("unknown");
-  note({ model: "quality", ok: true });
+  note({ model: "gemini-3.5-flash-lite", ok: true });
   expect(draft().state).toBe("unknown");
 });
 
@@ -104,21 +113,19 @@ it("keeps account quota waiting ahead of a recent substitute without inventing a
   const { reserveSharedExecution } = await import("./shared-quota.js");
   ctx.env.sharedModelDailyLimit = 1;
   reserveSharedExecution(ctx, OWNER, Date.now());
-  llmCallOptions(ctx, OWNER).onGateway!({ model: "quality", ok: true, answeredBy: "gemini-3.5-flash-lite" });
+  llmCallOptions(ctx, OWNER).onGateway!({ model: "gemini-3.5-flash-lite", ok: true, answeredBy: "gemini-3.5-flash-lite" });
   const availability = modelAvailability(ctx, OWNER);
   expect(availability.models.find((m) => m.purpose === "draft")).toMatchObject({ state: "waiting", retryAt: availability.sharedUsage!.resetAt });
 });
 
-it("refuses a non-Gemini model name on the house path before calling the gateway", async () => {
-  const fetchMock = vi.fn();
+it("ignores legacy model names on the house path and always sends the fixed real model ID", async () => {
+  const fetchMock = vi.fn(async () => answer("gemini-3.5-flash-lite"));
   vi.stubGlobal("fetch", fetchMock);
-  await expect(runLlm({ provider: "gemini", model: "gpt-5" }, prompt, "judge", undefined, undefined, new AbortController().signal, { gateway: GATEWAY })).rejects.toThrow("gemini-");
-  expect(fetchMock).not.toHaveBeenCalled();
-  // 작업으로 돌려도 요청이 없었으므로 사용량 이벤트를 남기지 않는다.
-  updateSettings(ctx, OWNER, { llm: { provider: "gemini", model: "gpt-5", draftModel: "gpt-5" } });
+  updateSettings(ctx, OWNER, { llm: { provider: "gemini", model: "gpt-5", draftModel: "gemini-3.7-flash" } });
   queueStep(ctx, OWNER, "draft", cid, "x", "en");
   await processServerJob(ctx);
-  expect(fetchMock).not.toHaveBeenCalled();
+  const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+  expect(JSON.parse(String(init.body)).model).toBe("gemini-3.5-flash-lite");
   expect(record).not.toHaveBeenCalled();
 });
 
