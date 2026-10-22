@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { AUTH_AUDIENCE, AUTH_URL, type AuthProviderName } from "./config";
 
 /**
@@ -67,7 +68,13 @@ function normalizeExpiresAt(expiresAt: number): number {
 
 async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   if (!AUTH_URL) throw new Error("auth disabled");
-  return await fetch(`${AUTH_URL}${path}`, { credentials: "include", ...init });
+  try {
+    return await fetch(`${AUTH_URL}${path}`, { credentials: "include", ...init });
+  } catch (error) {
+    if (error instanceof TypeError)
+      throw new Error(t("로그인 서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요."), { cause: error });
+    throw error;
+  }
 }
 
 export class AuthManager {
@@ -210,7 +217,8 @@ export class AuthManager {
     const epoch = this.authEpoch;
     const pending = (async () => {
       const res = await authFetch("/auth/refresh", { method: "POST" });
-      if (!res.ok) return null;
+      if (res.status === 401 || res.status === 403) return null;
+      if (!res.ok) throw new Error(t("로그인 갱신에 실패했습니다(HTTP {status}). 잠시 뒤 다시 시도해 주세요.", { status: res.status }));
       const body = (await res.json()) as { accessToken: string };
       if (epoch !== this.authEpoch) throw new Error("session changed");
       this.accessToken = body.accessToken;

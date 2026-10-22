@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { clearResourceCache, endSession, REFETCH_DEBOUNCE_MS, useResource } from "./api";
+import { post, clearResourceCache, endSession, REFETCH_DEBOUNCE_MS, useResource } from "./api";
 import { resetEvents } from "./events";
 
 const { listeners } = vi.hoisted(() => ({ listeners: new Set<(ev: { resource: string }) => void>() }));
@@ -170,5 +170,15 @@ it("does not refetch on sign-out", async () => {
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   act(() => clearResourceCache());
   await new Promise((r) => setTimeout(r, 20));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("classifies a dropped service POST without automatically retrying it", async () => {
+  const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(post("/collect")).rejects.toMatchObject({
+    status: 0,
+    message: "서비스 서버에 연결하지 못했습니다. 네트워크 상태를 확인해 주세요.",
+  });
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });

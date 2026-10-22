@@ -238,3 +238,51 @@ it("does not overwrite the new account's cache with a late issuance for the old 
   expect(storage.getItem(storageKey)).toBe(replacement);
   expect(manager.snapshot.status).toBe("signedOut");
 });
+
+it.each([429, 503])(
+  "does not send collection anonymously or log out after refresh HTTP %s, and recovers on the next request",
+  async (status) => {
+    const authModule = await import("./manager");
+    const { post, UNAUTHORIZED_EVENT } = await import("../api");
+    const events = new EventTarget();
+    const unauthorized = vi.fn();
+    events.addEventListener(UNAUTHORIZED_EVENT, unauthorized);
+    vi.stubGlobal("window", events);
+    vi.stubGlobal("localStorage", memoryStorage());
+    vi.useFakeTimers();
+    const start = Date.now();
+    let failed = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/auth/refresh")) return failed ? new Response(null, { status }) : Response.json({ accessToken: "access" });
+      if (url.endsWith("/auth/me")) return Response.json({ id: "test-user", username: "test" });
+      if (url.endsWith("/auth/token/external")) return tokenReply(jwt());
+      if (url === "/api/collect") return Response.json({ pending: true });
+      throw new Error("Unexpected request");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const manager = new AuthManager();
+    const spy = vi.spyOn(authModule, "getAuthManager").mockReturnValue(manager);
+    try {
+      await manager.restore();
+      await manager.fetchApiToken();
+      vi.setSystemTime(start + 3600000);
+      failed = true;
+      await expect(post("/collect")).rejects.toThrow(`HTTP ${status}`);
+      expect(fetchMock.mock.calls.filter(([url]) => url === "/api/collect")).toHaveLength(0);
+      expect(unauthorized).not.toHaveBeenCalled();
+      expect(manager.snapshot.status).toBe("signedIn");
+      failed = false;
+      expect(await post("/collect")).toEqual({ pending: true });
+      expect(fetchMock.mock.calls.filter(([url]) => url === "/api/collect")).toHaveLength(1);
+      expect(unauthorized).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  },
+);
+
+it("identifies an auth network failure before attempting the service request", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+  await expect(new AuthManager().fetchApiToken()).rejects.toThrow("로그인 서버에 연결하지 못했습니다");
+});

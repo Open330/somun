@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { ChangeEvent } from "@shared/types";
 import { getAuthManager } from "./auth/manager";
@@ -70,6 +71,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     fetch(`/api${path}`, {
       ...init,
       headers: { "Content-Type": "application/json", ...(await authHeader(force)), ...(init.headers ?? {}) },
+    }).catch((error: unknown) => {
+      if (error instanceof TypeError) throw new ApiError(t("서비스 서버에 연결하지 못했습니다. 네트워크 상태를 확인해 주세요."), 0);
+      throw error;
     });
   let res = await send(false);
   // OAuth 토큰은 만료될 수 있다. 한 번 새로 받아 다시 보내고, 그래도 401이면 세션이 끝난 것이다.
