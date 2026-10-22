@@ -342,3 +342,90 @@ describe("README-backed introduction facts", () => {
     expect(prompt.user).not.toContain(claim);
   });
 });
+
+
+describe("narrow introduction workflow source", () => {
+  const workflow = "Preview playback works independently of exporting. Closing the preview leaves ongoing exports active. Exports require confirmation.";
+  const overview = "A general media management platform.";
+  const readme = `${overview}\n\n## Preview\n\n${workflow}\n\n## Storage\n\nUnrelated storage details.`;
+  const c = { ...candidate, evidence: { ...candidate.evidence, description: overview, readmeForChecks: readme, readmeTruncated: true, releaseNotes: "A separate storage feature.", limitations: ["Local files only"], experimental: ["Cloud export is experimental"] } };
+  const profile = { what: overview, audience: "Media managers", claims: ["A separate broad generated claim"], stage: "beta", limitations: ["Only authorized accounts"], naming: "Studio", avoid: ["internal-node"] };
+  it.each(["x", "threads"] as const)("uses one verbatim workflow for %s while retaining constraints and full grounding", channel => {
+    const original = structuredClone(c);
+    const prompt = draftPrompt(c, channel, "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] });
+    expect(prompt.user).toContain("## Selected source paragraph");
+    expect(prompt.user).toContain(workflow);
+    expect(prompt.user).not.toContain(overview);
+    expect(prompt.user).not.toContain("Unrelated storage details.");
+    expect(prompt.user).not.toContain(c.evidence.releaseNotes);
+    expect(prompt.user).not.toContain(profile.claims[0]);
+    for (const constraint of ["Local files only", "Cloud export is experimental", "Only authorized accounts", "Studio", "internal-node", "beta"]) expect(prompt.user).toContain(constraint);
+    expect(prompt.user).toContain("collected README snapshot is truncated");
+    expect(prompt.user).toContain("does not certify");
+    expect(prompt.user).toContain("at most TWO factual sentences");
+    expect(prompt.user).toContain("Do not combine independent capabilities into a simultaneous behavior");
+    expect(groundingText(c, profile)).toContain(readme);
+    expect(groundingText(c, profile)).toContain(profile.claims[0]);
+    expect(c).toEqual(original);
+  });
+  it("falls back for updates, other channels, explicit instructions, user-edited or unknown-origin profiles and legacy snapshots", () => {
+    for (const options of [{ introduction: false, profileEditedFields: [] }, { introduction: true, instruction: "Use a comparison", profileEditedFields: [] }, { introduction: true, profileEditedFields: ["claims"] as (keyof typeof profile)[] }, { introduction: true, profileEditedFields: ["naming"] as (keyof typeof profile)[] }, { introduction: true }]) {
+      const prompt = draftPrompt(c, "threads", "ko", [], undefined, { ...options, profile });
+      expect(prompt.user).not.toContain("## Selected source paragraph");
+      if (options.introduction) expect(prompt.user).toContain(readme);
+    }
+    for (const source of [{ ...c, evidence: { ...c.evidence, readmeTruncated: undefined } }, { ...c, evidence: { ...c.evidence, readmeForChecks: undefined, readmeExcerpt: readme } }]) {
+      expect(draftPrompt(source, "x", "ko", [], undefined, { introduction: true }).user).not.toContain("## Selected source paragraph");
+    }
+    expect(draftPrompt(c, "linkedin", "ko", [], undefined, { introduction: true }).user).not.toContain("## Selected source paragraph");
+  });
+  it.each([
+    "Preview works without another window.",
+    "Preview is independent of exporting only after setup.",
+    "Preview is independent of exporting but is unsupported.",
+    "License checking works independently of exporting.",
+    "Contributors test whether playback is independent of exporting.",
+    "`Playback is independent of exporting.`",
+    '“Playback is independent of exporting.”',
+  ])("keeps the ordinary README path for excluded or unrelated text: %s", text => {
+    const source = { ...c, evidence: { ...c.evidence, readmeForChecks: `Overview.\n\n${text}\n\nEnd.` } };
+    const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
+    expect(prompt.user).not.toContain("## Selected source paragraph");
+    expect(prompt.user).toContain(text);
+  });
+  it("does not treat a cut final paragraph as a complete workflow", () => {
+    const source = { ...c, evidence: { ...c.evidence, readmeForChecks: `Overview.\n\n${workflow}` } };
+    expect(draftPrompt(source, "x", "ko", [], undefined, { introduction: true }).user).not.toContain("## Selected source paragraph");
+    const complete = { ...source, evidence: { ...source.evidence, readmeTruncated: false } };
+    expect(draftPrompt(complete, "x", "ko", [], undefined, { introduction: true }).user).toContain("complete collected README snapshot");
+  });
+});
+
+
+it("retains separate task and global conditions as source constraints", () => {
+  const readme = "## Requirements\n\nA paid account and macOS 14 are required.\n\n## Preview\n\nPreview works independently of exporting.\n\nPreview requires approval.\n\n### Access\n\nGuests cannot preview private documents.\n\n## License\n\nMIT.";
+  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: false } };
+  const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).toContain("## Selected source paragraph");
+  expect(prompt.user).toContain("A paid account and macOS 14 are required.");
+  expect(prompt.user).toContain("Preview requires approval.");
+  expect(prompt.user).toContain("Guests cannot preview private documents.");
+  expect(prompt.user).toContain("## Source scope and conditions");
+  expect(prompt.user).not.toContain("MIT.");
+});
+
+it.each([
+  "<h2>License</h2>\n\nPreview works independently of exporting.\n\n## End\n\nDone.",
+  "License\n-------\n\nPreview works independently of exporting.\n\n## End\n\nDone.",
+  "## Example\n\n```text\n\nPreview works independently of exporting.\n\n```\n\n## End\n\nDone.",
+  "## Example\n\n~~~text\n\nPreview works independently of exporting.\n\n~~~\n\n## End\n\nDone.",
+  "## License\n\nPreview works independently of exporting.\n\n## End\n\nDone.",
+  "## Contributing\n\n### Example\n\nPreview works independently of exporting.\n\n## End\n\nDone.",
+  "## Preview\n\nPreview works independently of exporting.\n\nPartial condition",
+  "## Preview\n\nPreview works independently of exporting.\n\n## Requirements\n\nPartial global requirement",
+])("falls back for code, excluded sections and cut task/global scope: %s", readme => {
+  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: true } };
+  const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).not.toContain("## Selected source paragraph");
+  expect(prompt.user).toContain(readme);
+});
