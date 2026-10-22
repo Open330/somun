@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { RELEASE_NOTES_MAX } from "../core/prompts.js";
+import { README_SOURCE_MAX, RELEASE_NOTES_MAX } from "../core/prompts.js";
 import { SharedQuotaError } from "./shared-quota.js";
 import { normalizeGithubTarget } from "../core/source-target.js";
 import { schema } from "../infra/db/index.js";
@@ -171,6 +171,12 @@ export function commitBatch(commits: { sha: string; author?: { login?: string; t
 export function firstDemoAsset(readme: string): string | undefined {
   const all = [...readme.matchAll(/!\[[^\]]*\]\(([^)\s]+\.(?:gif|mp4|webm|png|jpe?g))\)/gi), ...readme.matchAll(/<(?:img|source)[^>]+src="([^"]+\.(?:gif|mp4|webm|png|jpe?g))"/gi)].map((m) => m[1]);
   return all.find((u) => /\.(gif|mp4|webm)$/i.test(u)) ?? all.find((u) => !/logo|badge|shields\.io|icon/i.test(u));
+}
+
+/** 조건 문단과 제목 경계를 보존한다. 짧은 UI 발췌와 작성·대조용 원문은 별도로 둔다. */
+export function readmeEvidence(readme: string): Pick<Evidence, "readmeExcerpt" | "readmeForChecks" | "readmeTruncated"> {
+  const text = readme.replace(/\r\n/g, "\n").trim();
+  return { readmeExcerpt: text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 1500), readmeForChecks: text.slice(0, README_SOURCE_MAX), readmeTruncated: text.length > README_SOURCE_MAX };
 }
 
 /** README의 한계: 경고 블록(IMPORTANT/WARNING)과 Limitations 절. */
@@ -352,14 +358,13 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       const batch = mergedInWindow ? null : commitBatch(commits ?? [], since);
       if (batch && !signals.some((s) => s.kind === "release")) signals.push({ kind: "commit_batch", repo: name, ref: `gh:commits:${name}@${batch.head}`, title: `${name}: ${batch.subjects.length} commits`, payload: { count: batch.subjects.length, head: batch.head, subjects: batch.subjects.slice(0, 20) }, occurredAt: batch.at });
 
-      const plainReadme = readme.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
       const evidence: Evidence = {
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
         version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, RELEASE_NOTES_MAX) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
         firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
-        readmeExcerpt: plainReadme.slice(0, 1500), readmeForChecks: plainReadme.slice(0, 8000), commitSubjects,
+        ...readmeEvidence(readme), commitSubjects,
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });

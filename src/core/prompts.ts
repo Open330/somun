@@ -11,6 +11,7 @@ import type { Locale } from "../shared/locale.js";
 
 /** 최신 릴리스 노트를 근거·요약에 담는 길이. 3000자에서 잘리면 긴 노트(barshelf v0.6.0, 6159자)의 뒤쪽 변경이 빠졌다. */
 export const RELEASE_NOTES_MAX = 6000;
+export const README_SOURCE_MAX = 32000;
 
 export type EvidenceLike = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
@@ -25,6 +26,8 @@ export type EvidenceLike = {
   windowReleases?: string[];
   windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
   readmeForChecks?: string;
+  /** 없으면 이전 수집 자료라 완전성은 알 수 없다. */
+  readmeTruncated?: boolean;
   /** 최신 릴리스 뒤에 머지되어 아직 어느 릴리스에도 없는 PR 제목. 프롬프트를 만들 때 채운다. */
   unreleasedPrTitles?: string[];
 };
@@ -41,8 +44,8 @@ export type ProfileLike = { what: string; audience: string; why?: string; claims
 export function profileBlock(p: ProfileLike): string {
   return [
     "## What this project is (profile, the baseline; do not re-announce any of this as a change)",
-    `what: ${p.what}`,
-    `for whom: ${p.audience}`,
+    p.what ? `what: ${p.what}` : "",
+    p.audience ? `for whom: ${p.audience}` : "",
     p.why ? `why it exists (the author's own words; the only allowed motivation): ${p.why}` : "",
     p.claims.length ? `core claims:\n- ${p.claims.join("\n- ")}` : "",
     `stage: ${p.stage}`,
@@ -284,7 +287,7 @@ export function instructionOf(user: string, meta?: { editorInstruction?: string 
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
 }
 
-export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; profileClaimsEdited?: boolean; disputed?: string[]; introduction?: boolean };
+export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; profileClaimsEdited?: boolean; profileEditedFields?: (keyof ProfileLike)[]; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
 export function draftCoverageGuide(c: CandidateLike, channel: Channel, introduction = false): string {
@@ -323,15 +326,24 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
   const introductionReadme = opts.introduction
     ? [c.evidence.readmeForChecks, c.evidence.readmeExcerpt].find((text) => text?.trim())
     : undefined;
+  const completeIntroductionReadme = Boolean(c.evidence.readmeForChecks?.trim() && c.evidence.readmeTruncated === false && c.evidence.readmeForChecks.length <= README_SOURCE_MAX);
   // 생성된 기능 요약은 원문에서 한정한 조건을 잃을 수 있다. 사용자 편집 여부를 모르면 기존 입력을 보존한다.
   // 저장 프로필과 사실 대조 근거는 바꾸지 않고, 소개 작성에만 정체성·제약과 README 원문을 제공한다.
   const writingProfile = opts.introduction && opts.profile
-    ? { ...opts.profile, claims: introductionReadme && opts.profileClaimsEdited === false
+    ? { ...opts.profile,
+      what: introductionReadme && !opts.instruction?.trim() && opts.profileEditedFields && !opts.profileEditedFields.includes("what") ? "" : opts.profile.what,
+      audience: introductionReadme && !opts.instruction?.trim() && opts.profileEditedFields && !opts.profileEditedFields.includes("audience") ? "" : opts.profile.audience,
+      claims: introductionReadme && opts.profileClaimsEdited === false
       ? [] : providerIsTopic ? opts.profile.claims : opts.profile.claims.filter((claim) => !backendClaim(claim)) }
     : opts.profile;
   // Introductions describe capabilities, not how much repository activity produced them.
-  const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || c.evidence.readmeExcerpt?.trim());
-  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights } } : c;
+  const hasBaseline = Boolean(opts.profile || c.evidence.description?.trim() || introductionReadme);
+  // 현재 제품 소개에 과거 PR 변경/설정 목록을 섞지 않는다. 업데이트와 사실 대조 원본은 그대로 둔다.
+  // 명시 재작성 지시가 특정 변경을 요구할 수 있으므로 그 경우에는 원래 자료를 제공한다.
+  const baselineIntroduction = Boolean(opts.introduction && introductionReadme && !opts.instruction?.trim());
+  const completeBaselineIntroduction = baselineIntroduction && completeIntroductionReadme;
+  const publicCandidate = opts.introduction ? { ...c, evidence: { ...c.evidence, commitCount: undefined, releaseCount: undefined, firstReleaseAt: undefined, highlights: hasBaseline ? undefined : c.evidence.highlights,
+    ...(baselineIntroduction ? { mergedPrDetails: undefined, mergedPrTitles: undefined, unreleasedPrTitles: undefined, milestones: undefined, windowReleases: undefined, windowReleaseNotes: undefined } : {}) } } : c;
   const publicName = opts.profile?.naming?.trim() || c.evidence.repo?.split("/").at(-1);
   const exampleText = examples.length
     ? `## Examples of the voice to match (${langName(lang)})\n` + examples.map((e, i) => `### Example ${i + 1}${EXAMPLE_LABEL[e.source] ?? " (author's own)"}\n${e.title ? `Title: ${e.title}\n` : ""}${e.body}`).join("\n\n")
@@ -340,9 +352,13 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     schemaName: "draft",
     draftPurpose: opts.introduction ? "introduction" : "update",
     editorInstruction: opts.instruction?.trim() ?? "",
-    schema: DRAFT_SCHEMA,
+    schema: opts.introduction && (channel === "x" || channel === "threads") ? {
+      ...DRAFT_SCHEMA,
+      properties: { title: { type: "string", enum: [""] }, body: { type: "string", description: `${langInstruction(lang)} ${spec.identity?.tone ?? ""}. Lead with the concrete object and operation, not a use-the-product invitation. Do not start with use/can-use phrasing or merely repeat a category definition. Each later sentence adds a distinct step or necessary condition for the same task. An explicit Editor instruction overrides style and structure, never factual grounding or configured length/link limits. Preserve source scope and conditions. ${spec.maxChars ? `Maximum ${spec.maxChars} characters.` : ""} ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs." : "Supplied link on the final line."}` } },
+    } : DRAFT_SCHEMA,
     system: opts.introduction ? `Write a first introduction for a reader who has never used this product.
 - When no problem statement is supplied, open with a supported reader task and connect it to what the project does. Start with the concrete action or visible result, then name the project in the opening or immediately after. Do not open with the project name followed by a software category definition. Merely saying it manages or connects things is not a reader action. Use one main use situation and at most one directly related supporting capability; do not list features or narrate a minor fix.
+- State the operation directly rather than wrapping it in an invitation to use the product. Do not open with "to do X, use Product", "users who want X can use Product", "Product lets you manage things", "사용하면", "사용하려면", or "사용할 수". Preserve actual platform requirements while naming specific objects and actions. The first sentence must stand on its own as a concrete operation, not a preface to the next sentence. An explicit Editor instruction can override this style.
 - Factual grounding takes priority over style and length. Use only the supplied Facts, README and release sources. Keep every claim's prerequisites, eligibility, exclusions, units and platform scope. If an accurate claim cannot fit, omit it. Do not turn a label into an operation, comparison or measured effect. Never invent facts, numbers, benefits, author experience, ownership or motivation. Repository access does not establish authorship; use neutral attribution unless the source establishes the author's role.
 - Preserve the supplied public project name, technical identifiers and links exactly. Omit backend LLM provider and model names, repository activity counts and implementation details unless they are the explicit topic. Do not turn unreleased into not deployed or infer activation from merge status.
 - The selected channel contract controls language, tone, title, paragraph/sentence and character limits, and link placement. For Korean 해요체, every declarative sentence must use that register. The Voice guide and examples supply style only, never facts, and must not override the channel. An explicit Editor instruction can override style and structure, but never grounding, configured length/title limits or link placement.
@@ -392,10 +408,10 @@ Hard rules:
       "",
       "## Facts",
       factsBlock(publicCandidate, writingProfile),
-      opts.introduction && c.evidence.releaseNotes?.trim()
+      opts.introduction && !completeBaselineIntroduction && c.evidence.releaseNotes?.trim()
         ? `## Current release source (capabilities available in this release; not a required changelog)\n${c.evidence.releaseNotes.slice(0, RELEASE_NOTES_MAX)}${c.evidence.releaseNotes.length > RELEASE_NOTES_MAX ? "\n[Release source truncated: check the original for missing prerequisites and exclusions.]" : ""}\nUse this release as supporting evidence for the core reader task; recency alone does not make a detail the introduction topic. Preserve the release's prerequisites, platform scope and limitations; do not infer them from PR titles.`
         : "",
-      introductionReadme ? `## README (collected excerpt, not the entire README; conditions take priority over profile summaries)\n${introductionReadme.slice(0, 8000)}\nThis is a bounded collected excerpt. Missing text is not evidence that a condition or limitation does not exist. Repository documentation does not establish current production activation.` : "",
+      introductionReadme ? `## README (collected source; conditions take priority over profile summaries)\n${introductionReadme.slice(0, README_SOURCE_MAX)}\n${completeIntroductionReadme ? "Collection retained the complete README snapshot." : "This source is truncated or its collection completeness is unknown. Missing text is not evidence that a condition or limitation does not exist."} Repository documentation does not establish production activation or inclusion in a named release.` : "",
       "",
       exampleText,
       "## Selected channel contract",
@@ -404,9 +420,9 @@ Hard rules:
       publicName ? `Keep the project name exactly as ${publicName}, including its original spelling. Never translate or transliterate it.` : "",
       "Before returning JSON, remove any personal endorsement or predicted user benefit that Facts does not establish. Friendly wording must describe the supported operation, not invent an opinion. Keep a capability’s stated prerequisites AND exclusions with that capability, or omit it. Read the result as a post for this audience: can the first sentence alone tell them what they can do? Delete repeated explanations, implementation inventory and unrelated numbers. A closing question must concern the exact task described, not just the project's general domain; omit an optional question if there is nothing specific to ask. Check the body against this channel’s tone, total sentence budget and closing structure. Count the closing question within that budget; remove optional detail before a mandatory condition. Optional limitations belong only when requested and relevant; eligibility and exclusions are mandatory regardless of channel. Apply an explicit Editor instruction if supplied. Keep every claim supported by Facts; never invent evidence to satisfy the format.",
       spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "Keep supplied URLs out of the body; the UI offers a separate reply link when appropriate." : "",
-      prConditionsBlock(c.evidence),
+      prConditionsBlock(publicCandidate.evidence),
       draftCoverageGuide(c, channel, opts.introduction),
-      opts.introduction && hasBaseline ? "For this introduction, select the main reader task from the profile or README. Current release notes may supply supporting behavior and its conditions for that task. PR bodies are constraints for checking claims, NOT a menu of recent behaviors to introduce. Do not infer a new policy or product capability from PR bodies alone. Omit backend provider names and unrelated retry or accounting caveats from this general introduction." : "",
+      opts.introduction && hasBaseline ? "For this introduction, select the main reader task from the profile or README. Current release notes may supply supporting behavior and its conditions for that task. Historical PR changes belong in updates and source review, not a general introduction. Do not infer a new policy or product capability from PR bodies alone. Omit backend provider names and unrelated retry or accounting caveats from this general introduction." : "",
       `## Final output\nWrite the entire title and body in ${langName(lang)}; source text in another language is material to explain, not wording to copy. Keep project names and identifiers as supplied. Follow the selected channel and any explicit Editor instruction. Preserve all prerequisites of each retained claim. Return the requested JSON only.`,
     ].filter((l) => l !== undefined).join("\n"),
   };

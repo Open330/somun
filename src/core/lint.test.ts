@@ -2,6 +2,7 @@ import { channelSpec } from "./channels.js";
 import { describe, expect, it } from "vitest";
 import { crossLangNumberDiff, draftLintFacts, lintDraft, lintPassed, numberTokens, unsupportedNumbers } from "./lint.js";
 import { clusterKeyFor, crossedThreshold } from "./cluster.js";
+import { prepareIntroduction } from "./introduction-edit.js";
 
 describe("lintDraft", () => {
   it("flags the real zero-limit omission for human review, without certifying corrected prose", () => {
@@ -454,4 +455,56 @@ it.each([
 
 it.each(["질문 없이 소개하세요", "질문으로 끝내지 말아주세요", "Do not add a question", "Without questions"])("keeps the introduction habit check for a negative question instruction: %s", (editorInstruction) => {
   expect(lintDraft("threads", "", "코드를 읽어요. 평소 어떤 방식으로 읽으시나요?", [], { purpose: "introduction", editorInstruction }).find((r) => r.rule === "introduction_habit_question")?.ok).toBe(false);
+});
+
+describe("conservative introduction editing signals", () => {
+  const check = (body: string, facts: import("./lint.js").LintFacts = { purpose: "introduction" }, channel: Parameters<typeof lintDraft>[0] = "x") => lintDraft(channel, "", body, [], facts);
+  it.each(["Windows에서 원격 파일을 관리하려면 Acme를 사용합니다.", "Mac 파일을 복사하려는 사용자는 Acme를 사용할 수 있어요.", "화면과 파일을 연결하려는 사용자는 Acme를 사용하여 기기를 관리할 수 있습니다."])("flags an intention/use preface while leaving explicit edits and updates alone: %s", (body) => {
+    expect(check(body).find(r => r.rule === "introduction_intent_preface")?.ok).toBe(false);
+    expect(check(body, { purpose: "update" }).some(r => r.rule === "introduction_intent_preface")).toBe(false);
+    expect(check(body, { purpose: "introduction", editorInstruction: "이 서두는 유지하세요" }).some(r => r.rule === "introduction_intent_preface")).toBe(false);
+    expect(check("Mac 화면을 Windows에서 열어 조작해요.").find(r => r.rule === "introduction_intent_preface")?.ok).toBe(true);
+  });
+  it.each(["Acme는 원격 기기의 화면과 파일을 연결하는 소프트웨어입니다.", "Acme는 파일을 검색하는 도구예요.", "Acme is a tool for searching local files."])("marks a category-definition opening as an editorial pattern: %s", (body) => {
+    expect(check(body).find(r => r.rule === "introduction_definition_opening")?.ok).toBe(false);
+  });
+  it.each(["Windows에서 Mac 화면을 열어 조작해요.", "Acme에서 SSH 연결을 열어요.", "Acme는 파일 이름으로 검색해요."])("does not ban connection verbs or ordinary action sentences: %s", (body) => {
+    expect(check(body).find(r => r.rule === "introduction_definition_opening")?.ok).toBe(true);
+  });
+  it("finds only complete repeated sentences after case, spacing and punctuation normalization", () => {
+    expect(check("파일을 복사해요.\n\n파일을  복사해요!").find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(false);
+    expect(check("파일을 복사해요. 파일을 이동해요.").find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(true);
+    expect(check("Open a file. OPEN A FILE!").find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(false);
+  });
+  it("leaves updates, legacy drafts, custom channels and explicit editor requests alone", () => {
+    const body = "Acme는 파일 도구입니다. Acme는 파일 도구입니다.";
+    for (const facts of [{}, { purpose: "update" as const }, { purpose: "introduction" as const, editorInstruction: "정의로 시작하고 반복해주세요" }]) {
+      expect(check(body, facts).some(r => r.rule.startsWith("introduction_definition") || r.rule === "introduction_repeated_sentence")).toBe(false);
+    }
+    expect(check(body, { purpose: "introduction" }, "linkedin").some(r => r.rule === "introduction_definition_opening")).toBe(false);
+    const custom = { ...channelSpec("x"), id: "custom_intro" as const };
+    expect(lintDraft(custom.id, "", body, [], { purpose: "introduction" }, "ko", custom).some(r => r.rule === "introduction_definition_opening" || r.rule === "introduction_repeated_sentence")).toBe(false);
+    expect(check(body, { purpose: "introduction" }, "threads").find(r => r.rule === "introduction_definition_opening")?.ok).toBe(false);
+  });
+});
+
+describe("source review for effect wording", () => {
+  it("does not let register normalization hide introduction filler or a convenience claim", () => {
+    const body = prepareIntroduction("Acme를 간편하게 소개합니다.", { channel: "threads", language: "ko", purpose: "introduction", tone: "해요체", bannedPhrases: ["소개합니다"] });
+    const results = lintDraft("threads", "", body, ["소개합니다"], { purpose: "introduction", language: "ko", sourceText: "Copies files over SSH." });
+    expect(results.find(r => r.rule === "banned_phrases")?.ok).toBe(false);
+    expect(results.find(r => r.rule === "endorsement_need_review")?.ok).toBe(false);
+  });
+  const check = (body: string, sourceText = "Files can be copied.") => lintDraft("x", "", body, [], { sourceText }).find(r => r.rule === "endorsement_need_review");
+  it.each(["파일을 안전하게 옮겨요.", "작업을 효율적으로 처리해요.", "파일을 편리하게 관리해요.", "간편하게 파일을 열어요.", "대용량 파일을 끊김 없이 옮겨요.", "쉽고 빠르게 열어요.", "언제 어디서나 접속해요.", "Transfer files safely.", "Work efficiently."])("requests review rather than certifying an unsupported effect: %s", (body) => {
+    expect(check(body)?.ok).toBe(false);
+    expect(check(body, body)?.ok).toBe(true);
+  });
+  it("may flag a legitimate English-to-Korean translation because evidence matching is lexical", () => {
+    expect(check("파일을 안전하게 옮겨요.", "Transfer files safely.")?.ok).toBe(false);
+  });
+  it("keeps actions and security nouns without effect promises", () => {
+    expect(check("SSH로 파일을 복사해요. 보안 설정을 열어요.")?.ok).toBe(true);
+    expect(check("This does not safely transfer files.")?.ok).toBe(true);
+  });
 });

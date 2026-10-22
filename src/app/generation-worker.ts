@@ -13,7 +13,7 @@ import { SIDE_JOB_KINDS } from "../shared/types.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps, recentUpstreamFailure } from "./keys.js";
-import { draftIssues, repairPrompt, worthRepairing } from "./draft-repair.js";
+import { draftIssues, readJobDraft, repairPrompt, worthRepairing } from "./draft-repair.js";
 import type { LlmResult } from "../infra/llm/providers.js";
 import type { Job } from "../shared/types.js";
 
@@ -25,9 +25,10 @@ async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: Ll
   const before = draftIssues(ctx, ownerId, job, first.json);
   if (!before?.length || !worthRepairing(ctx, ownerId, job.candidateId)) return first;
   try {
-    const second = await run(repairPrompt(job, first.json, before, getSettings(ctx, ownerId).customChannels));
+    const settings = getSettings(ctx, ownerId);
+    const second = await run(repairPrompt(job, first.json, before, settings.customChannels, settings.bannedPhrases));
     const after = draftIssues(ctx, ownerId, job, second.json);
-    const better = isBetterRepair(before, after, { before: JSON.stringify(first.json ?? ""), after: JSON.stringify(second.json ?? "") });
+    const better = isBetterRepair(before, after, { before: JSON.stringify(readJobDraft(job, first.json, settings.customChannels, settings.bannedPhrases)), after: JSON.stringify(readJobDraft(job, second.json, settings.customChannels, settings.bannedPhrases)) });
     ctx.log.info({ jobId: job.id, before: before.map((l) => l.rule), after: after?.map((l) => l.rule), kept: better ? "repaired" : "first" }, "draft repair");
     return better ? second : first;
   } catch (err) {

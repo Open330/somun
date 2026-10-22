@@ -98,7 +98,7 @@ async function runAgent(job: Job, usage: LocalUsage[]): Promise<{ json: unknown;
   throw new Error(`unknown cli ${cli}`);
 }
 
-type Check = { issues: { rule: string; detail?: string }[]; repairUser?: string };
+type Check = { issues: { rule: string; detail?: string }[]; repairUser?: string; comparisonText?: string };
 
 /**
  * 서버 작업자와 같은 자동 보정: 서버가 초안을 린트해 고칠 점을 알려 주면 한 번 더 쓰고, 덜 걸리는 쪽을 제출한다.
@@ -111,7 +111,7 @@ async function repair(job: Job, claimToken: string, first: { json: unknown; mode
   try {
     const again = await runAgent({ ...job, user: before.repairUser }, usage);
     const after = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(again.json) });
-    const better = isBetterRepair(before.issues, after.issues, { before: JSON.stringify(first.json ?? ""), after: JSON.stringify(again.json ?? "") });
+    const better = isBetterRepair(before.issues, after.issues, { before: before.comparisonText ?? JSON.stringify(first.json ?? ""), after: after.comparisonText ?? JSON.stringify(again.json ?? "") });
     console.log(`repair #${job.id}: ${before.issues.map((i) => i.rule).join(",")} → ${after.issues.map((i) => i.rule).join(",") || "ok"} (${better ? "repaired" : "kept first"})`);
     return better ? again : first;
   } catch (e) {

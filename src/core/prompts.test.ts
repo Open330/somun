@@ -57,7 +57,7 @@ it("keeps verbatim source conditions before the final drafting brief without lau
 it("does not attach recent conditional change highlights to first introductions", () => {
   const intro = draftPrompt({ ...candidate, evidence: { ...candidate.evidence, description: "Formats source locations." } }, "show_hn", "en", [], undefined, { introduction: true });
   for (const highlight of candidate.evidence.highlights) expect(intro.user).not.toContain(highlight);
-  expect(intro.user).toContain("PR bodies are constraints");
+  expect(intro.user).toContain("Historical PR changes belong in updates and source review");
   expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: false }).user).toContain(candidate.evidence.highlights[0]);
 });
 
@@ -203,7 +203,7 @@ describe("project introduction writing brief", () => {
     const readmeForChecks = "Drafts you edit before copying become voice examples. Irreversible events need consent before becoming official records.";
     const prompt = draftPrompt({ ...candidate, evidence: { ...candidate.evidence, readmeExcerpt: "A short summary", readmeForChecks } }, "threads", "ko", [], undefined, { introduction: true, profile });
     expect(prompt.user).toContain(readmeForChecks);
-    expect(prompt.user).toContain("not the entire README");
+    expect(prompt.user).toContain("collection completeness is unknown");
     expect(prompt.user).toContain("Missing text is not evidence");
     expect(prompt.user).toContain("Maximum 6 sentences");
     expect(prompt.user).not.toContain("Maximum 2 sentences");
@@ -268,6 +268,41 @@ it.each(["x", "threads"] as const)("keeps the core product task ahead of a narro
 
 
 describe("README-backed introduction facts", () => {
+  it("uses collected source instead of generated category cues while respecting user edits and unknown provenance", () => {
+    const profile = { what: "A generic file-management tool", audience: "Remote device managers", claims: [], stage: "stable", limitations: ["SSH required"], naming: "tool", avoid: ["internal-host"] };
+    const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Open remote folders over SSH in separate windows." } };
+    const original = structuredClone(profile);
+    const auto = draftPrompt(c, "threads", "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] });
+    expect(auto.user).not.toContain(profile.what);
+    expect(auto.user).not.toContain(profile.audience);
+    expect(auto.user).toContain("SSH required");
+    expect(auto.user).toContain("internal-host");
+    expect(groundingText(c, profile)).toContain(profile.what);
+    for (const options of [{ introduction: true }, { introduction: true, profileEditedFields: ["what", "audience"] as (keyof typeof profile)[] }, { introduction: false, profileEditedFields: [] }]) {
+      expect(draftPrompt(c, "threads", "ko", [], undefined, { ...options, profile }).user).toContain(profile.what);
+    }
+    expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] }).user).toContain(profile.what);
+    expect(profile).toEqual(original);
+    expect(auto.schema.properties).toMatchObject({ title: { enum: [""] }, body: { description: expect.stringContaining("No URLs") } });
+  });
+  it("keeps historical PR changes in updates and grounding instead of baseline introductions", () => {
+    const body = "New installations default to prompting on every connection.";
+    const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Browse remote files over SSH without opening a remote screen.", readmeTruncated: false, mergedPrDetails: [{ number: 5, title: "Change confirmation defaults", body, url: "https://github.com/test/tool/pull/5" }] } };
+    const intro = draftPrompt(c, "x", "ko", [], undefined, { introduction: true });
+    expect(intro.user).not.toContain(body);
+    expect(intro.user).not.toContain("Change confirmation defaults");
+    expect(intro.user).toContain(c.evidence.readmeForChecks);
+    expect(intro.user).toContain("complete README snapshot");
+    expect(intro.user).toContain("does not establish production activation or inclusion in a named release");
+    expect(groundingText(c)).toContain(body);
+    expect(draftPrompt(c, "x", "ko", [], undefined, { introduction: false }).user).toContain(body);
+    expect(draftPrompt(c, "x", "ko", [], undefined, { introduction: true, instruction: "Explain the confirmation defaults" }).user).toContain(body);
+    const withoutReadme = { ...c, evidence: { ...c.evidence, readmeForChecks: undefined, description: "A remote file tool" } };
+    expect(draftPrompt(withoutReadme, "x", "ko", [], undefined, { introduction: true }).user).toContain(body);
+    const legacy = { ...c, evidence: { ...c.evidence, readmeTruncated: undefined } };
+    expect(draftPrompt(legacy, "x", "ko", [], undefined, { introduction: true }).user).toContain("collection completeness is unknown");
+    expect(draftPrompt(legacy, "x", "ko", [], undefined, { introduction: true }).user).not.toContain("complete README snapshot");
+  });
   it("supplies current release behavior and conditions even when the saved profile is generic", () => {
     const c = { ...candidate, evidence: { ...candidate.evidence, releaseNotes: "Copy in device A's file window, close it, then paste into device B's new file window. Drag between Itda file windows on Mac and Windows. Windows executable is unsigned." } };
     const profile = { what: "Remote desktop", audience: "Computer users", claims: ["Browse via SFTP"], stage: "stable", limitations: [], naming: "tool", avoid: [] };
