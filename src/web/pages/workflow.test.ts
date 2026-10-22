@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Draft, SettingsView } from "../../shared/types";
+import { ApiError } from "../lib/api";
 import { DEFAULT_SETTINGS } from "../../app/settings";
 import Inbox from "./Inbox";
 import Published from "./Published";
@@ -18,7 +19,8 @@ const { resources, post, patch } = vi.hoisted(() => ({
   post: vi.fn(),
   patch: vi.fn(),
 }));
-vi.mock("../lib/api", () => ({
+vi.mock("../lib/api", async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import("../lib/api")>()).ApiError,
   useResource: (path: string) => resources.get(path) ?? { reload() {} },
   post,
   patch,
@@ -1030,4 +1032,17 @@ describe("explicit source-condition confirmation", () => {
     expect((screen.getByRole("button", { name: "원문 조건을 확인했습니다" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("수정 내용을 먼저 저장한 뒤 원문 조건을 확인하세요.")).toBeTruthy();
   });
+});
+
+it("explains that a disconnected collection POST may already be running without resending it", async () => {
+  set("/sources", [{ id: 3, kind: "github", targets: ["me/tool"], enabled: true }]);
+  post.mockRejectedValue(new ApiError("service offline", 0));
+  render(wrap(createElement(Inbox)));
+  fireEvent.click(screen.getAllByRole("button", { name: /(?:새 변경|첫 글감|새 글감).*가져오기/ })[0]);
+  await waitFor(() =>
+    expect(
+      screen.getByText("수집 서버의 응답을 받지 못했습니다. 요청이 이미 접수됐을 수 있으니 잠시 후 글감 목록과 연결 상태를 확인해 주세요."),
+    ).toBeTruthy(),
+  );
+  expect(post).toHaveBeenCalledTimes(1);
 });

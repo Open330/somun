@@ -3,6 +3,13 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  "로그인 서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.":
+    "Could not connect to the sign-in server. Check your connection and try again.",
+  "로그인 갱신에 실패했습니다(HTTP {status}). 잠시 뒤 다시 시도해 주세요.":
+    "Could not refresh your sign-in (HTTP {status}). Please try again shortly.",
+  "서비스 서버에 연결하지 못했습니다. 네트워크 상태를 확인해 주세요.": "Could not connect to the service. Check your connection.",
+  "수집 서버의 응답을 받지 못했습니다. 요청이 이미 접수됐을 수 있으니 잠시 후 글감 목록과 연결 상태를 확인해 주세요.":
+    "Could not receive a response from the collection server. Your request may already have been received. Check your candidates and connections shortly.",
   "수집된 README 발췌": "Collected README excerpt",
   "프로필 제한사항": "Profile constraints",
   "사용자 확인 완료": "Confirmed by user",

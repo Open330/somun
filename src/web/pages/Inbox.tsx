@@ -116,7 +116,13 @@ export default function Inbox() {
       reload();
       reloadSources();
     } catch (err) {
-      setMessage({ text: `${t("변경을 가져오지 못했습니다.")} ${(err as Error).message}`, error: true });
+      setMessage({
+        text:
+          err instanceof ApiError && err.status === 0
+            ? t("수집 서버의 응답을 받지 못했습니다. 요청이 이미 접수됐을 수 있으니 잠시 후 글감 목록과 연결 상태를 확인해 주세요.")
+            : `${t("변경을 가져오지 못했습니다.")} ${(err as Error).message}`,
+        error: true,
+      });
     } finally {
       setBusy(false);
     }
