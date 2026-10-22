@@ -2,6 +2,7 @@ import { digestSourceHash as sourceHash } from "./digest-cache.js";
 import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
+import { prepareIntroduction } from "../core/introduction-edit.js";
 import { channelSpec, knownChannel, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
 import { DIGEST_REVISION, digestGroundingFromPrompt, digestPrompt, draftPrompt, groundingText, judgePrompt, withoutFalseFirstClaims, type PromptSpec } from "../core/prompts.js";
@@ -179,6 +180,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
     profileClaimsEdited: profileView ? profileView.editedFields.includes("claims") : undefined,
+    profileEditedFields: profileView?.editedFields,
     disputed,
     introduction,
     instruction: opts.instruction?.trim() || undefined,
@@ -346,7 +348,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const r = args.result as { title?: string; body?: string };
   const spec = channelSpec(channel, settings.customChannels);
   const title = spec.hasTitle ? String(r.title ?? "").trim() || undefined : undefined;
-  const body = String(r.body ?? "").trim();
+  const body = prepareIntroduction(String(r.body ?? "").trim(), { channel, language: lang, purpose: args.draftPurpose, tone: spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
   const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);

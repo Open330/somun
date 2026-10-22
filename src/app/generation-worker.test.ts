@@ -374,7 +374,7 @@ it("lets a local worker check its draft before submitting, with the same repair 
   const other = await (await request(`/api/jobs/${job.id}/check`, { claimToken: "00000000-0000-4000-8000-000000000000", resultJson: long })).json();
   expect(other).toEqual({ issues: [] });
   const clean = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "Fixes CRLF positions. https://github.com/a/b" }) })).json();
-  expect(clean).toEqual({ issues: [] });
+  expect(clean).toEqual({ issues: [], comparisonText: JSON.stringify({ body: draft.body }) });
   const empty = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "" }) })).json();
   expect(empty.issues).toEqual([{ rule: "empty_body" }]);
 });
@@ -492,7 +492,7 @@ it("keeps the endorsement warning when a bounded automatic repair fails", async 
 });
 
 
-it("retains a review warning when an endorsement repair switches 해요체 to 합니다체", async () => {
+it("preserves required 해요체 when an endorsement repair returns formal endings", async () => {
   const first = { title: "", body: "CRLF 위치를 수정해요. 정말 유용할 것 같아요." };
   const changedTone = { title: "", body: "CRLF 위치를 수정합니다." };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(changedTone));
@@ -500,8 +500,9 @@ it("retains a review warning when an endorsement repair switches 해요체 to �
   await processServerJob(ctx);
   expect(runLlm).toHaveBeenCalledTimes(2);
   const saved = ctx.db.select().from(schema.drafts).get()!;
-  expect(saved.body).toBe(first.body);
-  expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(false);
+  expect(saved.body).toBe("CRLF 위치를 수정해요.");
+  expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(true);
+  expect(JSON.parse(ctx.db.select().from(schema.llmJobs).get()!.resultJson!).body).toBe(changedTone.body);
 });
 
 
@@ -572,17 +573,79 @@ it.each(["평소 써보셨나요?", "어떻게 생각하시나요?"])("keeps int
 });
 
 
-it("flags an introduction habit question for review without extra model calls or rewriting the draft", async () => {
+it("attempts one repair for an introduction habit question and keeps the warning if it fails", async () => {
   const first = { title: "", body: "Reads source code. How do you usually read code?" };
   vi.mocked(runLlm).mockReset().mockResolvedValue(output(first));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(1);
+  expect(runLlm).toHaveBeenCalledTimes(2);
   const saved = ctx.db.select().from(schema.drafts).get()!;
   expect(saved.body).toBe(first.body);
   expect(saved.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(false);
   const edited = await request(`/api/drafts/${saved.id}/edit`, { body: "Reads source code.", markCopied: false });
   expect(edited.status).toBe(200);
   expect(ctx.db.select().from(schema.drafts).get()!.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(true);
-  expect(runLlm).toHaveBeenCalledTimes(1);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+});
+
+it("automatically removes an introduction definition and duplicate sentence without changing the source snapshot", async () => {
+  const first = { title: "", body: "b is a tool. Reads source code. Reads source code." };
+  const repaired = { title: "", body: "Read source code with b to find CRLF positions." };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  const original = vi.mocked(runLlm).mock.calls[0][1].user;
+  const repair = vi.mocked(runLlm).mock.calls[1][1].user;
+  const source = original.slice(original.indexOf("\n## Facts\n"), original.indexOf("\n## Selected channel contract\n"));
+  expect(repair).toContain(source);
+  expect(repair).toContain("introduction_definition_opening");
+  expect(repair).toContain("introduction_repeated_sentence");
+  expect(repair).not.toContain("## First introduction\n");
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(repaired.body);
+});
+
+it.each(["server", "local"] as const)("prepares generated introductions consistently for %s while preserving the original response", async executor => {
+  if (executor === "local") updateSettings(ctx, "local", { llm: { provider: "local-agent" } });
+  const first = "Windows와 Mac에서 파일을 관리하려면 b를 사용합니다.";
+  const next = "파일 창에서 SSH로 원격 폴더를 열고 항목을 복사합니다.";
+  const link = "\nhttps://github.com/a/b";
+  const raw = { title: "", body: `${first} ${next}${link}` };
+  const id = queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true });
+  if (executor === "server") {
+    vi.mocked(runLlm).mockResolvedValueOnce(output(raw));
+    await processServerJob(ctx);
+    expect(runLlm).toHaveBeenCalledOnce();
+  } else {
+    const claim = claimJob(ctx, "local", id, "test-agent");
+    const checked = await (await request(`/api/jobs/${id}/check`, { claimToken: claim.claimToken, resultJson: JSON.stringify(raw) })).json();
+    expect(checked.comparisonText).toBe(JSON.stringify({ body: `${next} ${first}${link}` }));
+    expect(checked.issues).toEqual([]);
+    completeJob(ctx, "local", id, { claimToken: claim.claimToken!, resultJson: JSON.stringify(raw), model: "fixture" });
+  }
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(`${next} ${first}${link}`);
+  expect(JSON.parse(row(id).resultJson!).body).toBe(raw.body);
+  const edited = await request(`/api/drafts/${saved.id}/edit`, { body: raw.body, markCopied: false });
+  expect(edited.status).toBe(200);
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(raw.body);
+});
+
+it.each(["server", "local"] as const)("preserves configured banned phrases through %s introduction preparation", async executor => {
+  updateSettings(ctx, "local", { bannedPhrases: ["소개합니다"], ...(executor === "local" ? { llm: { provider: "local-agent" } } : {}) });
+  const raw = { title: "", body: "파일 창에서 원격 폴더를 여는 b를 소개합니다." };
+  const id = queueStep(ctx, "local", "draft", cid, "threads", "ko", { introduction: true });
+  if (executor === "server") {
+    vi.mocked(runLlm).mockResolvedValue(output(raw));
+    await processServerJob(ctx);
+  } else {
+    const claim = claimJob(ctx, "local", id, "test-agent");
+    const checked = await (await request(`/api/jobs/${id}/check`, { claimToken: claim.claimToken, resultJson: JSON.stringify(raw) })).json();
+    expect(checked.issues).toEqual(expect.arrayContaining([expect.objectContaining({ rule: "banned_phrases", detail: "소개합니다" })]));
+    expect(checked.comparisonText).toBe(JSON.stringify({ body: raw.body }));
+    completeJob(ctx, "local", id, { claimToken: claim.claimToken!, resultJson: JSON.stringify(raw), model: "fixture" });
+  }
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(raw.body);
+  expect(saved.lint).toEqual(expect.arrayContaining([expect.objectContaining({ rule: "banned_phrases", ok: false, detail: "소개합니다" })]));
 });

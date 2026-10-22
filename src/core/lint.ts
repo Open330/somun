@@ -1,6 +1,8 @@
+import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
+import { introductionOpening } from "./introduction-edit.js";
 
 /**
  * 슬롭 린트. 초안 저장 전에 돌리고 결과를 함께 저장한다.
@@ -28,6 +30,7 @@ export const DEFAULT_BANNED_PHRASES = [
   "강력한",
   "손쉽게",
   "소개합니다",
+  "소개해요",
   "공유드립니다",
   "드디어",
 ];
@@ -36,15 +39,15 @@ const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu
 const LINK = /https?:\/\/\S+/;
 const EXCLAMATION = /[!！]/;
 
-/** 금지어 비교용. 전각·호환 문자, 보이지 않는 문자, 여러 칸 띄우기와 줄바꿈, 하이픈 변형으로 피해 가지 못하게 한다. */
-export const normalizeForMatch = (value: string) =>
-  value.normalize("NFKC").replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "").replace(/[\u2010-\u2015\u2212]/g, "-").replace(/\s+/g, " ").toLowerCase();
+export { normalizeForMatch } from "./text-match.js";
 
 /** 숫자 없이 하는 최상급·최초·유일 주장. 원자료에 같은 말이 없으면 근거 없는 주장이다. */
 const SUPERLATIVE_CLAIMS = /\b(?:the (?:fastest|first|only|best|smallest|lightest|simplest)|fastest|world'?s first|first-ever|best-in-class|industry-leading|unmatched|unrivall?ed|blazing(?:ly)?[ -]fast|zero bugs|used by thousands)\b|최초의?|유일한|가장 (?:빠른|가벼운|작은|쉬운|강력한)|업계 최고|세계 최초/gi;
 
 /** 생성 모델이 대화체에 섞는 평가·추천. 모든 의미 오류를 판별하는 규칙은 아니다. */
 const ENDORSEMENT = /(?:정말|매우|아주|엄청(?:나게)?|너무)\s*(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,24}|(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,12}(?:것\s*같(?:아|습)|듯(?:해|합)|거(?:예요|에요)|겁니다)|(?:꼭|강력히|적극)\s*추천(?:해|합)|\b(?:i|we)\s+(?:really\s+)?(?:love|recommend)\b|\b(?:(?:really|extremely|incredibly)\s+(?:useful|convenient|helpful|easy)|(?:would|will|must)\s+(?:be\s+)?(?:really\s+)?(?:useful|convenient|helpful|great|easy))\b/giu;
+// 검토 신호일 뿐 효과의 참/거짓이나 번역의 정당성을 인증하지 않는다.
+const EFFECT_LANGUAGE = /안전하게|효율적으로|편리하게|간편하게|끊김\s*없이|쉽고\s*빠르게|언제\s*어디서나|\b(?:safely|efficiently|without interruptions?|quickly and easily|anytime,? anywhere|anywhere,? anytime)\b/giu;
 
 function unsupportedEndorsements(text: string, source: string): string[] {
   const evidence = normalizeForMatch(source);
@@ -53,7 +56,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
     // 독자에게 묻는 실제 질문은 작성자의 추천이나 감상 진술과 구분한다.
     if (/[?？]["'”’]*$/.test(sentence)) return false;
     const value = normalizeForMatch(sentence);
-    const matches = [...value.matchAll(ENDORSEMENT)].filter((m) => !/않|아니/.test(m[0]) && !/\b(?:not|never)\s*$/.test(value.slice(0, m.index)));
+    const matches = [...value.matchAll(ENDORSEMENT), ...value.matchAll(EFFECT_LANGUAGE)].filter((m) => !/않|아니/.test(m[0]) && !/\b(?:not|never)\s*$/.test(value.slice(0, m.index)));
     // '유용' 같은 낱말만 근거에 있다는 이유로 평가를 통과시키지 않는다. 같은 진술이 있어야 한다.
     return matches.length > 0 && !evidence.includes(value.replace(/[.!。！]+$/, ""));
   }))];
@@ -143,6 +146,19 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
+  // 관찰 가능한 편집 패턴만 검사한다. 연결 동사나 문장의 의미적 유사도를 판정하지 않는다.
+  if (facts.purpose === "introduction" && (channel === "x" || channel === "threads") && !facts.editorInstruction?.trim()) {
+    const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
+    const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(prose)].map((s) => s.segment.trim()).filter(Boolean);
+    const first = sentences[0] ?? "";
+    const definition = introductionOpening(first) === "definition";
+    results.push({ rule: "introduction_definition_opening", ok: !definition, detail: definition ? say("분류 정의로 시작하는 소개입니다. 원문이 뒷받침하는 독자의 대상과 행동을 도입에 보여 주세요. 의미나 사실의 오류를 판정한 결과는 아닙니다.", "The introduction opens with a category definition. Lead with a source-backed reader action and object. This is an editorial pattern, not a finding of a factual or semantic error.") : undefined });
+    const intent = introductionOpening(first) === "intent";
+    results.push({ rule: "introduction_intent_preface", ok: !intent, detail: intent ? say("제품 사용 문구를 앞세운 서두입니다. 다음 문장의 구체적 동작을 앞으로 옮기고, 원래 서두에만 있던 대상·플랫폼·조건과 제품명은 유지하세요.", "The opening uses a product-use preface. Move the next concrete operation forward, preserving the original object, platform, conditions and project name.") : undefined });
+    const normalizedSentences = sentences.map((s) => normalizeForMatch(s).replace(/[.!?。？！]+$/, "").trim()).filter(Boolean);
+    const repeated = normalizedSentences.length !== new Set(normalizedSentences).size;
+    results.push({ rule: "introduction_repeated_sentence", ok: !repeated, detail: repeated ? say("소개에 같은 문장이 반복됩니다. 중복 문장을 삭제하고 원문의 조건은 유지하세요.", "The introduction repeats an identical sentence. Remove the duplicate while preserving source conditions.") : undefined });
+  }
   const register = registerCheck(body, spec, facts, locale);
   if (register) results.push(register);
   const conditionReview = sourceConditionReview(facts.sourceConditionPrs ?? [], locale);

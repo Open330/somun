@@ -4,9 +4,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubClient, GitHubRateLimitError } from "../infra/github/client.js";
 import { reserveSharedExecution } from "./shared-quota.js";
-import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList } from "./collect.js";
+import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList, readmeEvidence } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
+
+it("retains README paragraphs and late feature conditions separately from the short excerpt", () => {
+  const source = "# Product\r\n\r\n" + "overview ".repeat(1100) + "\r\n\r\n## Files\r\nRequires SSH access.\r\n\r\n## Exclusions\r\nNo automatic uploads.";
+  const evidence = readmeEvidence(source);
+  expect(evidence.readmeForChecks).toContain("\n\n## Files\nRequires SSH access.\n\n## Exclusions\nNo automatic uploads.");
+  expect(evidence.readmeExcerpt).not.toContain("Requires SSH");
+  expect(evidence.readmeExcerpt).not.toContain("\n");
+  expect(evidence.readmeTruncated).toBe(false);
+  expect(readmeEvidence("`itda <address> -u <user> -p <password>`\n\n<details>\nSSH is required.\n</details>").readmeForChecks).toBe("`itda <address> -u <user> -p <password>`\n\n<details>\nSSH is required.\n</details>");
+  const truncated = readmeEvidence("x".repeat(32001));
+  expect(truncated.readmeForChecks).toHaveLength(32000);
+  expect(truncated.readmeTruncated).toBe(true);
+});
 
 describe("limitationsFrom", () => {
   it("skips an operational note in an IMPORTANT block", () => {
