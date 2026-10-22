@@ -21,7 +21,7 @@ beforeEach(() => {
     bus: new EventEmitter(),
     usage: { record: vi.fn() } as unknown as AppContext["usage"],
   };
-  updateSettings(ctx, "me", { llm: { provider: "gemini", model: "analysis-model", draftModel: "draft-model" } });
+  updateSettings(ctx, "me", { llm: { provider: "gemini", model: "gemini-3.5-flash-lite", draftModel: "gemini-3.5-flash-lite" } });
 });
 afterEach(() => ctx.db.$client.close());
 const blocked = (label: string, model: string, cooldownUntil: number, count = 0) =>
@@ -30,29 +30,29 @@ const blocked = (label: string, model: string, cooldownUntil: number, count = 0)
     .values({ label: `${label}|${model}`, dayKey: ptDayKey(now), dayCount: count, lastUsedAt: now, cooldownUntil })
     .run();
 it("reports independent model availability and the earliest time any configured key is usable", () => {
-  blocked("free-a", "draft-model", now + 60000);
-  blocked("free-b", "draft-model", now + 120000);
-  blocked("not-configured", "draft-model", 0);
+  blocked("free-a", "gemini-3.5-flash-lite", now + 60000);
+  blocked("free-b", "gemini-3.5-flash-lite", now + 120000);
+  blocked("not-configured", "gemini-3.5-flash-lite", 0);
   const view = modelAvailability(ctx, "me", now);
   expect(view.models).toEqual([
-    { purpose: "analysis", model: "analysis-model", state: "ready" },
-    { purpose: "draft", model: "draft-model", state: "waiting", retryAt: now + 60000 },
+    { purpose: "analysis", model: "gemini-3.5-flash-lite", state: "waiting", retryAt: now + 60000 },
+    { purpose: "draft", model: "gemini-3.5-flash-lite", state: "waiting", retryAt: now + 60000 },
   ]);
   expect(modelAvailability(ctx, "me", now + 60000).models[1].state).toBe("ready");
 });
 it("waits for both daily cap reset and cooldown, but doesn't treat one blocked key as pool exhaustion", () => {
-  blocked("free-a", "draft-model", now + 60000, RPD_SOFT_CAP);
+  blocked("free-a", "gemini-3.5-flash-lite", now + 60000, RPD_SOFT_CAP);
   expect(modelAvailability(ctx, "me", now).models[1].state).toBe("ready");
-  blocked("free-b", "draft-model", nextPtMidnight(now) + 60000, RPD_SOFT_CAP);
+  blocked("free-b", "gemini-3.5-flash-lite", nextPtMidnight(now) + 60000, RPD_SOFT_CAP);
   expect(modelAvailability(ctx, "me", now).models[1].retryAt).toBe(nextPtMidnight(now));
   expect(modelAvailability(ctx, "me", nextPtMidnight(now)).models[1].state).toBe("ready");
 });
 it("shows a model as degraded while its last call failed with a server error, even though 5xx sets no cooldown", () => {
-  ctx.db.insert(schema.llmKeyState).values({ label: "free-a|draft-model", dayKey: ptDayKey(now), dayCount: 3, lastUsedAt: now, lastErrorAt: now, cooldownUntil: now, cooldownReason: "upstream-503" }).run();
-  expect(modelAvailability(ctx, "me", now + 1000).models[1]).toEqual({ purpose: "draft", model: "draft-model", state: "degraded", lastStatus: 503 });
+  ctx.db.insert(schema.llmKeyState).values({ label: "free-a|gemini-3.5-flash-lite", dayKey: ptDayKey(now), dayCount: 3, lastUsedAt: now, lastErrorAt: now, cooldownUntil: now, cooldownReason: "upstream-503" }).run();
+  expect(modelAvailability(ctx, "me", now + 1000).models[1]).toEqual({ purpose: "draft", model: "gemini-3.5-flash-lite", state: "degraded", lastStatus: 503 });
   expect(modelAvailability(ctx, "me", now + UPSTREAM_FAILURE_WINDOW_MS + 1).models[1].state).toBe("ready");
   // 다른 키의 다음 호출이 성공하면 회복으로 본다.
-  ctx.db.insert(schema.llmKeyState).values({ label: "free-b|draft-model", dayKey: ptDayKey(now), dayCount: 1, lastUsedAt: now + 500 }).run();
+  ctx.db.insert(schema.llmKeyState).values({ label: "free-b|gemini-3.5-flash-lite", dayKey: ptDayKey(now), dayCount: 1, lastUsedAt: now + 500 }).run();
   expect(modelAvailability(ctx, "me", now + 1000).models[1].state).toBe("ready");
 });
 it("uses the current account's provider and never claims to know personal key or worker quotas", () => {
@@ -108,6 +108,6 @@ it("reports unlimited usage beyond the daily cap while preserving gateway cooldo
   expect(view.sharedUsage).toMatchObject({ used: 2, limit: null });
   expect(view.models.every((m) => m.state === "unknown")).toBe(true);
   const { llmCallOptions } = await import("./llm-gateway.js");
-  for (const model of ["fast", "quality"]) llmCallOptions(ctx, "local").onGateway!({ ok: false, model, status: 429, retryAt: now + 60000 });
+  for (const model of ["gemini-3.5-flash-lite"]) llmCallOptions(ctx, "local").onGateway!({ ok: false, model, status: 429, retryAt: now + 60000 });
   expect(modelAvailability(ctx, "local", now).models.every((m) => m.state === "waiting" && m.retryAt === now + 60000)).toBe(true);
 });

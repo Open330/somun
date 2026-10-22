@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL } from "../core/models.js";
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { DEFAULT_CHANNEL_LANGS, knownChannel, type Channel } from "../core/channels.js";
@@ -55,7 +56,9 @@ function openSecrets(ctx: AppContext, s: Settings): Settings {
 
 export function getSettings(ctx: AppContext, ownerId: string): Settings {
   const row = ctx.db.select().from(schema.settings).where(eq(schema.settings.ownerId, ownerId)).get();
-  return openSecrets(ctx, migrateRubricScale({ ...DEFAULT_SETTINGS, ...migrateLegacy((row?.data as Partial<Settings>) ?? {}) }));
+  const settings = openSecrets(ctx, migrateRubricScale({ ...DEFAULT_SETTINGS, ...migrateLegacy((row?.data as Partial<Settings>) ?? {}) }));
+  if (settings.llm.provider === "gemini") settings.llm = { ...settings.llm, model: DEFAULT_MODEL.gemini, draftModel: DEFAULT_MODEL.gemini };
+  return settings;
 }
 
 /**
@@ -127,6 +130,7 @@ export function updateSettings(ctx: AppContext, ownerId: string, patch: Partial<
   if (patch.ui) next.ui = { ...current.ui, ...patch.ui };
   if (patch.llm) next.llm = { ...patch.llm, apiKey: patch.llm.apiKey || (keepApiKey ? current.llm.apiKey : undefined) };
   if ((patch.deferThreshold !== undefined || patch.draftThreshold !== undefined) && next.deferThreshold > next.draftThreshold) throw new InvalidInputError(say(current.ui?.locale ?? "ko", "보류 기준은 초안 기준보다 클 수 없습니다.", "The defer threshold can't be higher than the draft threshold."));
+  if (next.llm.provider === "gemini") next.llm = { ...next.llm, model: DEFAULT_MODEL.gemini, draftModel: DEFAULT_MODEL.gemini };
   saveSettings(ctx, ownerId, next);
   emit(ctx, ownerId, { resource: "settings" });
   return getSettingsView(ctx, ownerId);

@@ -3,6 +3,10 @@
  * 라벨 표(CHANNEL_LABEL 등), 채널 안내(core/channels), 문체 프리셋(core/voice), 서버가 저장한 예전 한국어 문장도 여기 있다.
  */
 export const en: Record<string, string> = {
+  'Gemini는 분석과 초안 모두 3.5 Flash Lite를 씁니다. 기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.':
+    "Gemini uses 3.5 Flash Lite for analysis and drafts, with the server key pool by default. To use your own key, select a provider and enter it. For a Claude Code or Codex subscription, choose the local agent and run the worker on your computer.",
+  "Gemini는 요약·판단·초안 모두 3.5 Flash Lite로 고정됩니다. 다른 모델로 자동 전환하지 않습니다.":
+    "Gemini uses 3.5 Flash Lite for summaries, evaluation and drafts. It does not switch to another model.",
   "로그인 서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.":
     "Could not connect to the sign-in server. Check your connection and try again.",
   "로그인 갱신에 실패했습니다(HTTP {status}). 잠시 뒤 다시 시도해 주세요.":

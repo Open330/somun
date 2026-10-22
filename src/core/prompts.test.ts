@@ -236,10 +236,12 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
 });
 
 
-it("uses extra introduction space for one reader workflow rather than a second capability", () => {
+it("uses introduction space for distinctive reader value rather than a generic setup summary", () => {
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("input, action and result of that SAME task");
-  expect(prompt.user).toContain("If only two supported sentences explain the task, stop there");
+  expect(prompt.user).toContain("Explain the action and visible result");
+  expect(prompt.user).toContain("Prefer a distinctive workflow in current source material");
+  expect(prompt.user).toContain("A current release can supply evidence of what the product now does");
+  expect(prompt.user).not.toContain("If only two supported sentences");
   expect(prompt.user).not.toContain("then add one concrete workflow detail");
 });
 

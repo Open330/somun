@@ -49,27 +49,27 @@ beforeEach(() => {
 afterEach(cleanup);
 const value = (name: string) => (screen.getByLabelText(name) as HTMLInputElement).value;
 
-it("explains explicit shared Gemini selection without changing or saving the draft model", () => {
+it("shows one fixed Gemini model for analysis and drafting, including saved legacy overrides", () => {
+  resource.data = { ...initial(), llm: { ...initial().llm, model: "gemini-3.7-flash", draftModel: "gemini-3.7-flash" } };
   setup();
-  expect(screen.getByText(/공유 Gemini에서 빠른 모델/).textContent).toContain(DEFAULT_MODEL.gemini);
-  expect(value("초안 모델 (글 생성만)")).toBe("");
+  for (const label of ["분석 모델 (다이제스트·판단)", "초안 모델 (글 생성만)"]) {
+    expect(value(label)).toBe(DEFAULT_MODEL.gemini);
+    expect((screen.getByLabelText(label) as HTMLInputElement).disabled).toBe(true);
+  }
+  expect(screen.getByText(/Gemini는 요약·판단·초안 모두/)).toBeTruthy();
   expect(patch).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText(/API 키/), { target: { value: "user-key" } });
-  expect(screen.queryByText(/공유 Gemini에서 빠른 모델/)).toBeNull();
 });
 
-it("keeps the shared-model hint off BYOK and explains that the local worker requires saving and running", () => {
-  resource.data = { ...initial(), llm: { ...initial().llm, apiKeySet: true } };
+it("explains that a local worker requires saving and running", () => {
   setup();
-  expect(screen.queryByText(/공유 Gemini에서 빠른 모델/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "로컬 에이전트" }));
-  expect(screen.getByText(/설정을 저장한 뒤 본인 컴퓨터/).textContent).toContain("선택하는 것만으로 작업이 실행되지는 않습니다");
-  expect(screen.getByText(/npm run agent-worker/)).toBeTruthy();
+  expect(screen.getByText(/설정을 저장한 뒤 본인 컴퓨터/)).toBeTruthy();
   expect(patch).not.toHaveBeenCalled();
 });
 
 it("protects settings on navigation and reload, preserving them when navigation is cancelled", async () => {
   const { router } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "my-unsaved-model" } });
   const reload = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(reload);
@@ -89,6 +89,7 @@ it("protects settings on navigation and reload, preserving them when navigation 
 
 it("clears the leave guard after a successful save", async () => {
   const { router } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "saved-model" } });
   fireEvent.click(screen.getByRole("button", { name: "저장" }));
   await screen.findByText("저장했습니다");
@@ -104,6 +105,7 @@ it("clears the leave guard after a successful save", async () => {
 
 it("preserves unsaved model and judgment inputs across background updates and tab changes", async () => {
   const { refresh } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "my-model" } });
   fireEvent.click(screen.getByRole("button", { name: "판단" }));
   fireEvent.change(screen.getByLabelText("금지 표현"), { target: { value: "my phrase" } });
@@ -116,6 +118,7 @@ it("preserves unsaved model and judgment inputs across background updates and ta
 
 it("keeps inputs visible when a background fetch fails", async () => {
   const { refresh } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "keep-me" } });
   resource.error = "offline";
   await refresh();
@@ -133,23 +136,27 @@ it("prevents duplicate saves and applies the response even if SSE arrives before
       }),
   );
   const { refresh } = setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "new-model" } });
-  fireEvent.change(screen.getByLabelText("API 키 (비우면 서버 키)"), { target: { value: "test-input" } });
+  fireEvent.change(screen.getByLabelText(/^API 키/), { target: { value: "test-input" } });
   const save = screen.getByRole("button", { name: "저장" });
   fireEvent.click(save);
   fireEvent.click(save);
   expect(patch).toHaveBeenCalledOnce();
   resource.data = initial();
   await refresh();
-  await act(async () => resolve({ ...initial(), llm: { ...initial().llm, model: "new-model", apiKeySet: true, apiKeyHint: "nput" } }));
+  await act(async () =>
+    resolve({ ...initial(), llm: { ...initial().llm, provider: "openai", model: "new-model", apiKeySet: true, apiKeyHint: "nput" } }),
+  );
   expect(value("분석 모델 (다이제스트·판단)")).toBe("new-model");
-  expect(value("API 키 (비우면 서버 키)")).toBe("");
+  expect((screen.getByLabelText(/^API 키/) as HTMLInputElement).value).toBe("");
   expect(screen.getByText("저장했습니다")).toBeTruthy();
 });
 
 it("retains model input on save failure and allows retry", async () => {
   patch.mockRejectedValueOnce(new Error("offline"));
   setup();
+  fireEvent.click(screen.getByRole("button", { name: "OpenAI 호환" }));
   fireEvent.change(screen.getByLabelText("분석 모델 (다이제스트·판단)"), { target: { value: "retry-model" } });
   fireEvent.click(screen.getByRole("button", { name: "저장" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("offline"));

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useBlocker, useSearchParams } from "react-router-dom";
 import { channelCatalog, LANGS, type ChannelSpec } from "@core/channels";
-import { DEFAULT_DRAFT_MODEL, DEFAULT_MODEL } from "@core/models";
+import { DEFAULT_MODEL } from "@core/models";
 import type { KeyStatus, SettingsView } from "@shared/types";
 import { CRITERIA, ErrorState, Skeleton, Toast, fmtDate, useToast, langLabel } from "../components/ui";
 import { api, patch, post, useResource } from "../lib/api";
@@ -463,7 +463,7 @@ export default function Settings() {
             <div className="card stack gap-12">
               <p className="small muted">
                 {t(
-                  '분석(다이제스트·판단)은 가벼운 모델, 초안 생성만 상위 모델을 씁니다. 무료 쿼터가 모델별로 다르기 때문입니다. 기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.',
+                  'Gemini는 분석과 초안 모두 3.5 Flash Lite를 씁니다. 기본은 서버의 Gemini 키 풀입니다. 내 키를 쓰려면 프로바이더를 고르고 키를 넣으세요. Claude Code·Codex 구독으로 돌리려면 "로컬 에이전트"를 고르고 내 컴퓨터에서 워커를 실행합니다.',
                 )}
                 {settings.llm.apiKeySet && (
                   <>
@@ -508,24 +508,23 @@ export default function Settings() {
                     <span>{t("분석 모델 (다이제스트·판단)")}</span>
                     <input
                       placeholder={DEFAULT_MODEL[llm.provider]}
-                      value={llm.model}
+                      value={llm.provider === "gemini" ? DEFAULT_MODEL.gemini : llm.model}
+                      disabled={llm.provider === "gemini"}
                       onChange={(ev) => setLlm({ ...llm, model: ev.target.value })}
                     />
                   </label>
                   <label className="field">
                     <span>{t("초안 모델 (글 생성만)")}</span>
                     <input
-                      placeholder={llm.provider === "gemini" ? DEFAULT_DRAFT_MODEL.gemini : t("위와 같음")}
-                      value={llm.draftModel}
+                      placeholder={t("위와 같음")}
+                      value={llm.provider === "gemini" ? DEFAULT_MODEL.gemini : llm.draftModel}
+                      disabled={llm.provider === "gemini"}
                       onChange={(ev) => setLlm({ ...llm, draftModel: ev.target.value })}
                     />
                   </label>
-                  {llm.provider === "gemini" && !settings.llm.apiKeySet && !llm.apiKey.trim() && (
+                  {llm.provider === "gemini" && (
                     <p className="small muted">
-                      {t(
-                        "공유 Gemini에서 빠른 모델을 직접 선택하려면 초안 모델에 {model}을 입력하고 저장한 뒤 다시 시도하세요. 생성 후 원문의 조건·예외를 확인해 주세요.",
-                        { model: DEFAULT_MODEL.gemini },
-                      )}
+                      {t("Gemini는 요약·판단·초안 모두 3.5 Flash Lite로 고정됩니다. 다른 모델로 자동 전환하지 않습니다.")}
                     </p>
                   )}
                   <label className="field">
