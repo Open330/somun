@@ -385,6 +385,9 @@ export const en: Record<string, string> = {
   "투표 요청": "Vote request",
   "빈 숫자": "Placeholder number",
   "이름 왜곡": "Wrong repo name",
+  "제품명 없음": "Missing product name",
+  "소개 본문에 제품명 {name}을 써 주세요. 링크나 제목만으로는 제품명을 확인할 수 없습니다.":
+    "Include the product name {name} in the introduction body. A link or title alone does not identify the product.",
   "한계 확인": "Check limitations",
   "수치 확인": "Check numbers",
   "지표 2개 이상 쌓이면 그래프가 보입니다": "The chart appears once there are 2 or more data points",

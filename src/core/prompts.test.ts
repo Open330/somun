@@ -1,9 +1,17 @@
 import { channelSpec } from "./channels.js";
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
+import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, profilePrompt, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
+
+it("requests one public name rather than a compound name and repository identity", () => {
+  const prompt = profilePrompt({ repo: "test/tool", readme: "# Tool", recentReleaseNotes: [] });
+  const naming = prompt.system.split("\n").find(line => line.startsWith("- naming:"));
+  expect(naming).toContain("single exact public project name");
+  expect(naming).toContain("Do not include owner/repo, aliases, a list of names, or a description");
+  expect(naming).not.toContain("and its owner/name form");
+});
 
 it("preserves whole source paragraphs and their context without the prompt excerpt budget", () => {
   const first = "Setup:\r\n- Set both values.\r\n- Fails if only one is set.";

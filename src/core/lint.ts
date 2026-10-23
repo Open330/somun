@@ -65,7 +65,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -93,7 +93,12 @@ const SHOW_GN_SECTIONS: [string, RegExp][] = [["무엇", /^[\t ]*(?:#{1,6}[\t ]+
  */
 export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, purpose?: "introduction" | "update" | null): LintFacts {
   const preferLink = purpose === "introduction" ? candidate.evidence.homepage : undefined;
-  return { purpose, repo: candidate.evidence.repo, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  const naming = profile?.naming?.trim();
+  const repo = candidate.evidence.repo;
+  // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
+  const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
+    ? undefined : naming || repo.split("/").at(-1);
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**
@@ -148,6 +153,14 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const results: LintResult[] = [];
   // 관찰 가능한 편집 패턴만 검사한다. 연결 동사나 문장의 의미적 유사도를 판정하지 않는다.
   if (facts.purpose === "introduction" && (channel === "x" || channel === "threads") && !facts.editorInstruction?.trim()) {
+    const publicName = facts.publicName?.trim();
+    if (publicName) {
+      const escaped = normalizeForMatch(publicName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // Latin names must be whole tokens (ItdaTools is not Itda); Korean particles may attach directly.
+      const name = new RegExp(`(?<![\\p{Script=Latin}\\p{N}_])${escaped}(?![\\p{Script=Latin}\\p{N}_])`, "u");
+      const present = name.test(normalizeForMatch(body.replace(/https?:\/\/\S+/gi, "")));
+      results.push({ rule: "introduction_name_missing", ok: present, detail: present ? undefined : say(`소개 본문에 제품명 ${publicName}을 써 주세요. 링크나 제목만으로는 제품명을 확인할 수 없습니다.`, `Include the product name ${publicName} in the introduction body. A link or title alone does not identify the product.`), args: present ? undefined : { name: publicName } });
+    }
     const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
     const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(prose)].map((s) => s.segment.trim()).filter(Boolean);
     const normalizedSentences = sentences.map((s) => normalizeForMatch(s).replace(/[.!?。？！]+$/, "").trim()).filter(Boolean);

@@ -166,6 +166,8 @@ export function Meter({ scores, compact }: { scores: Judgment["scores"]; compact
  * 인자가 없는 예전 결과는 저장된 설명을 그대로(사전에 있으면 번역해) 보여준다.
  */
 export function lintDetail(l: { rule: string; detail?: string; args?: Record<string, string> }): string | undefined {
+  if (l.rule === "introduction_name_missing" && l.args?.name)
+    return t("소개 본문에 제품명 {name}을 써 주세요. 링크나 제목만으로는 제품명을 확인할 수 없습니다.", { name: l.args.name });
   if (l.rule === "numbers_need_review" && l.args?.numbers)
     return t("제공된 근거에서 찾지 못한 수치: {numbers}. 원문과 단위를 확인해 주세요.", { numbers: l.args.numbers });
   if (l.rule === "claims_need_review" && l.args?.phrases)
@@ -203,6 +205,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     no_vote_request: t("투표 요청"),
     no_placeholder: t("빈 숫자"),
     repo_name: t("이름 왜곡"),
+    introduction_name_missing: t("제품명 없음"),
     no_invented_limit: t("한계 확인"),
     numbers_need_review: t("수치 확인"),
     claims_need_review: t("주장 확인"),

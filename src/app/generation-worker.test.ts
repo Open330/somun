@@ -21,7 +21,7 @@ vi.mock("../infra/llm/providers.js", async (original) => ({ ...await original<ty
 let ctx: AppContext, app: ReturnType<typeof createApp>, cid: number;
 const headers = { Authorization: "Bearer test", "Content-Type": "application/json" };
 const output = (json: unknown): LlmResult => ({ json, provider: "gemini", model: "test", latencyMs: 1 });
-const draft = { title: "", body: "Fixes CRLF positions. https://github.com/a/b" };
+const draft = { title: "", body: "b fixes CRLF positions. https://github.com/a/b" };
 const request = (path: string, body: unknown = {}) => app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
 const row = (id: number) => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!;
 const params = { targets: [{ channel: "x", lang: "en" }] };
@@ -373,7 +373,7 @@ it("lets a local worker check its draft before submitting, with the same repair 
   expect(row(job.id).claimedAt).toBeGreaterThan(Date.now() - 5_000);
   const other = await (await request(`/api/jobs/${job.id}/check`, { claimToken: "00000000-0000-4000-8000-000000000000", resultJson: long })).json();
   expect(other).toEqual({ issues: [] });
-  const clean = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "Fixes CRLF positions. https://github.com/a/b" }) })).json();
+  const clean = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(draft) })).json();
   expect(clean).toEqual({ issues: [], comparisonText: JSON.stringify({ body: draft.body }) });
   const empty = await (await request(`/api/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify({ title: "", body: "" }) })).json();
   expect(empty.issues).toEqual([{ rule: "empty_body" }]);
@@ -664,7 +664,7 @@ it("does not repair or reorder an accurate product category introduction", async
 
 it.each([true, false])("repairs a Korean X body that exceeds the weighted limit (introduction=%s)", async introduction => {
   const id = queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction });
-  const long = { title: "", body: `${"가".repeat(129)} https://github.com/a/b` };
+  const long = { title: "", body: `b ${"가".repeat(128)} https://github.com/a/b` };
   const fixed = { title: "", body: "b는 저장한 로그를 검색하는 CLI입니다. https://github.com/a/b" };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(fixed));
   await processServerJob(ctx);
@@ -677,4 +677,27 @@ it.each([true, false])("repairs a Korean X body that exceeds the weighted limit 
   }
   expect(row(id).status).toBe("done");
   expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(fixed.body);
+});
+
+
+it("repairs a default introduction whose public name appears only in its URL", async () => {
+  const first = { title: "", body: "Fixes CRLF positions. https://github.com/a/b" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(draft));
+  queueStep(ctx, "local", "draft", cid, "x", "en", { introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("introduction_name_missing");
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("제품명 b");
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(draft.body);
+  expect(saved.lint.find(r => r.rule === "introduction_name_missing")?.ok).toBe(true);
+});
+
+it("keeps the missing-name warning when the single repair still omits it", async () => {
+  const first = { title: "", body: "Fixes CRLF positions. https://github.com/a/b" };
+  vi.mocked(runLlm).mockReset().mockResolvedValue(output(first));
+  queueStep(ctx, "local", "draft", cid, "threads", "en", { introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(ctx.db.select().from(schema.drafts).get()!.lint).toContainEqual(expect.objectContaining({ rule: "introduction_name_missing", ok: false }));
 });
