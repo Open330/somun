@@ -1,4 +1,4 @@
-import { assertSourceExcerptBody } from "./source-excerpt.js";
+import { readSourceExcerptResult } from "./source-excerpt.js";
 import type { SourceExcerptOrigin } from "../shared/types.js";
 import { and, eq } from "drizzle-orm";
 import { channelSpec, draftChannelSpec, lengthInstruction, type Channel, type CustomChannel } from "../core/channels.js";
@@ -28,11 +28,7 @@ export function readDraft(channel: Channel, json: unknown, customChannels: Custo
 }
 
 export function readJobDraft(job: DraftJob, json: unknown, customChannels: CustomChannel[] = [], bannedPhrases?: string[]): { title?: string; body: string } {
-  if (job.sourceExcerpt) {
-    const body = (json as { body?: unknown } | null)?.body;
-    assertSourceExcerptBody(body, job.schemaJson);
-    return { body };
-  }
+  if (job.sourceExcerpt) return readSourceExcerptResult(json, job.sourceExcerpt, job.schemaJson);
   const draft = readDraft(job.channel as Channel, json, customChannels);
   return { ...draft, body: prepareIntroduction(draft.body, { channel: job.channel ?? "", language: job.lang, purpose: draftPurposeOf(null, job.user), tone: channelSpec(job.channel as Channel, customChannels).identity?.tone, editorInstruction: instructionOf(job.user, job), bannedPhrases }) };
 }
@@ -49,6 +45,7 @@ export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, jso
 /** 보정 요청 프롬프트: 원래 요청 + 직전 초안 + 고칠 점. */
 export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[], customChannels: CustomChannel[] = [], bannedPhrases?: string[]): string {
   const prev = readJobDraft(job, json, customChannels, bannedPhrases);
+  if (job.sourceExcerpt?.adapted) return [job.user, "## Previous draft", prev.body, "## Preserve this source selection", (json as { sourceBody: string }).sourceBody, "## Fix these problems", ...issues.map(issue => `${issue.rule}: ${issue.detail ?? ""}`), "sourceBody는 한 글자도 바꾸지 마세요. body만 고치세요. 첫 소개이므로 기존 글에 있던 제품의 주된 용도와 선택한 작업의 쓰임을 유지하세요. 부가 기능 하나만 남기지 마세요. 길이를 줄일 때는 나열된 옵션·보기 방식 등 부가 설명부터 빼세요. 남기는 기능의 조건·대상·기술 표기는 보존하고, 모든 문장은 자연스러운 해요체로 쓰세요. title/body/sourceBody JSON만 반환하세요."].join("\n\n");
   if (job.sourceExcerpt) return [job.user, "## Previous selection", prev.body, "## Fix these problems", ...issues.map(issue => `${issue.rule}: ${issue.detail ?? ""}`), "Select another permitted whole body from the same schema enum. Do not rewrite or shorten source wording. Return title/body JSON."].join("\n\n");
   const purpose = draftPurposeOf(null, job.user);
   const spec = draftChannelSpec(channelSpec(job.channel as Channel, customChannels), purpose);
@@ -140,6 +137,10 @@ export function worthRepairing(ctx: AppContext, ownerId: string, candidateId: nu
  * 자기가 가져간(claim) 초안 작업에만 답한다.
  */
 export function checkLocalResult(ctx: AppContext, ownerId: string, id: number, input: { claimToken: string; resultJson: string }): { issues: { rule: string; detail?: string }[]; repairUser?: string; comparisonText?: string } {
+  return ctx.db.$client.transaction(() => checkLocalResultInTransaction(ctx, ownerId, id, input)).immediate();
+}
+
+function checkLocalResultInTransaction(ctx: AppContext, ownerId: string, id: number, input: { claimToken: string; resultJson: string }): { issues: { rule: string; detail?: string }[]; repairUser?: string; comparisonText?: string } {
   const j = ctx.db.select().from(schema.llmJobs).where(and(eq(schema.llmJobs.id, id), eq(schema.llmJobs.ownerId, ownerId))).get();
   if (!j) throw new NotFoundError("job");
   const now = Date.now();
@@ -148,6 +149,11 @@ export function checkLocalResult(ctx: AppContext, ownerId: string, id: number, i
   let json: unknown;
   try { json = JSON.parse(input.resultJson); } catch { return { issues: [] }; }
   const job = { id: j.id, candidateId: j.candidateId, channel: j.channel as Channel, lang: j.lang ?? undefined, editorInstruction: j.meta?.editorInstruction, sourceExcerpt: j.meta?.sourceExcerpt, schemaJson: j.schemaJson, user: j.user };
+  if (job.sourceExcerpt?.adapted && job.sourceExcerpt.sourceBody === undefined) {
+    const selected = readSourceExcerptResult(json, job.sourceExcerpt, job.schemaJson);
+    job.sourceExcerpt = { ...job.sourceExcerpt, sourceBody: selected.sourceBody };
+    ctx.db.update(schema.llmJobs).set({ meta: { ...j.meta, sourceExcerpt: job.sourceExcerpt } }).where(eq(schema.llmJobs.id, j.id)).run();
+  }
   const issues = draftIssues(ctx, ownerId, job, json);
   // 빈 본문은 고칠 대상이 아니라 쓸 수 없는 결과다. 보정본이 비었을 때 "문제 없음"으로 뽑히지 않게 한다.
   if (issues === null) return { issues: [{ rule: "empty_body" }] };

@@ -3,7 +3,7 @@ import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } fr
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
 import { sourceCopyBodies } from "../core/source-copy.js";
-import { assertSourceExcerptBody, sourceExcerptPrompt } from "./source-excerpt.js";
+import { readSourceExcerptResult, adaptedSourcePrompt } from "./source-excerpt.js";
 import { prepareIntroduction } from "../core/introduction-edit.js";
 import { channelSpec, knownChannel, enabledTargets, type Channel } from "../core/channels.js";
 import { draftLintFacts, lintDraft, unsupportedNumbers } from "../core/lint.js";
@@ -196,7 +196,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     const url = c.evidence.homepage ?? "";
     const bodies = sourceCopyBodies(source, facts.publicName, url, lang, spec.maxChars ?? 280).filter(body =>
       lintDraft(channel, undefined, body, settings.bannedPhrases, { ...facts, language: lang }, settings.ui?.locale, spec).every(issue => issue.ok || issue.rule === "source_conditions_need_review"));
-    if (bodies.length) return sourceExcerptPrompt(prompt, bodies, url);
+    if (bodies.length) return adaptedSourcePrompt(prompt, bodies, url, facts.publicName);
   }
   return prompt;
 }
@@ -361,11 +361,12 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const r = args.result as { title?: string; body?: string };
   const spec = channelSpec(channel, settings.customChannels);
   const title = spec.hasTitle ? String(r.title ?? "").trim() || undefined : undefined;
-  if (args.sourceExcerpt) assertSourceExcerptBody(r.body, args.schemaJson);
-  const body = args.sourceExcerpt ? r.body! : prepareIntroduction(String(r.body ?? "").trim(), { channel, language: lang, purpose: args.draftPurpose, tone: spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
+  const excerpt = args.sourceExcerpt ? readSourceExcerptResult(args.result, args.sourceExcerpt, args.schemaJson) : undefined;
+  const origin = args.sourceExcerpt?.adapted ? { ...args.sourceExcerpt, sourceBody: excerpt!.sourceBody } : args.sourceExcerpt;
+  const body = excerpt ? excerpt.body : prepareIntroduction(String(r.body ?? "").trim(), { channel, language: lang, purpose: args.draftPurpose, tone: spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
   if (!body) throw new Error("empty draft body");
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: args.sourceExcerpt ?? null, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

@@ -45,7 +45,7 @@ export { normalizeForMatch } from "./text-match.js";
 const SUPERLATIVE_CLAIMS = /\b(?:the (?:fastest|first|only|best|smallest|lightest|simplest)|fastest|world'?s first|first-ever|best-in-class|industry-leading|unmatched|unrivall?ed|blazing(?:ly)?[ -]fast|zero bugs|used by thousands)\b|최초의?|유일한|가장 (?:빠른|가벼운|작은|쉬운|강력한)|업계 최고|세계 최초/gi;
 
 /** 생성 모델이 대화체에 섞는 평가·추천. 모든 의미 오류를 판별하는 규칙은 아니다. */
-const ENDORSEMENT = /(?:정말|매우|아주|엄청(?:나게)?|너무)\s*(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,24}|(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,12}(?:것\s*같(?:아|습)|듯(?:해|합)|거(?:예요|에요)|겁니다)|(?:꼭|강력히|적극)\s*추천(?:해|합)|\b(?:i|we)\s+(?:really\s+)?(?:love|recommend)\b|\b(?:(?:really|extremely|incredibly)\s+(?:useful|convenient|helpful|easy)|(?:would|will|must)\s+(?:be\s+)?(?:really\s+)?(?:useful|convenient|helpful|great|easy))\b/giu;
+const ENDORSEMENT = /(?:편리|유용)(?:해요|합니다|하죠|하네요)(?=[.!。！？?\s]|$)|(?:정말|매우|아주|엄청(?:나게)?|너무)\s*(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,24}|(?:편(?:하|해|할)|편리|유용|좋|훌륭)[가-힣 ]{0,12}(?:것\s*같(?:아|습)|듯(?:해|합)|거(?:예요|에요)|겁니다)|(?:꼭|강력히|적극)\s*추천(?:해|합)|\b(?:i|we)\s+(?:really\s+)?(?:love|recommend)\b|\b(?:(?:really|extremely|incredibly)\s+(?:useful|convenient|helpful|easy)|(?:would|will|must)\s+(?:be\s+)?(?:really\s+)?(?:useful|convenient|helpful|great|easy))\b/giu;
 // 검토 신호일 뿐 효과의 참/거짓이나 번역의 정당성을 인증하지 않는다.
 const EFFECT_LANGUAGE = /안전하게|효율적으로|편리하게|간편하게|끊김\s*없이|쉽고\s*빠르게|언제\s*어디서나|\b(?:safely|efficiently|without interruptions?|quickly and easily|anytime,? anywhere|anywhere,? anytime)\b/giu;
 

@@ -1,4 +1,4 @@
-import { assertSourceExcerptBody } from "./source-excerpt.js";
+import { readSourceExcerptResult } from "./source-excerpt.js";
 import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { DIGEST_REVISION, draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { randomUUID } from "node:crypto";
@@ -24,7 +24,7 @@ const score = z.number().int().min(0).max(2);
 const results = {
   digest: z.object({ highlights: z.array(z.string()), limitations: z.array(z.string()).optional() }),
   judge: z.object({ scores: z.object({ runnable: score, numbers: score, lesson: score, novelty: score, audience: score }), reasoning: z.string(), suggestedChannels: z.array(z.string()).optional(), angle: z.string().optional() }),
-  draft: z.object({ title: z.string().optional(), body: z.string().trim().min(1) }),
+  draft: z.object({ title: z.string().optional(), sourceBody: z.string().optional(), body: z.string().trim().min(1) }),
   lesson: z.object({ rule: z.string().optional(), category: z.string().optional() }),
   profile: z.record(z.string(), z.unknown()),
 };
@@ -88,7 +88,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       let parsed: unknown;
       try {
         const raw = JSON.parse(input.resultJson);
-        if (j.kind === "draft" && j.meta?.sourceExcerpt) assertSourceExcerptBody(raw?.body, j.schemaJson);
+        if (j.kind === "draft" && j.meta?.sourceExcerpt) readSourceExcerptResult(raw, j.meta.sourceExcerpt, j.schemaJson);
         parsed = results[j.kind as JobKind].parse(raw);
       } catch {
         ctx.db.update(schema.llmJobs).set({ status: "failed", error: "invalid job result", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();

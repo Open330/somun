@@ -594,7 +594,7 @@ export default function DraftPanel({
                 rel="noopener noreferrer"
                 title={t("초안 생성에 사용한 공식 설명입니다. 이후 편집한 내용과 다를 수 있습니다.")}
               >
-                {t("공식 설명 발췌로 생성")}
+                {shown.sourceExcerpt.adapted === true ? t("공식 설명을 바탕으로 작성") : t("공식 설명 발췌로 생성")}
               </a>
             )}
             <span className={spec.maxChars && count > spec.maxChars ? "over" : ""}>
