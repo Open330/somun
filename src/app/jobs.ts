@@ -1,3 +1,4 @@
+import { assertSourceExcerptBody } from "./source-excerpt.js";
 import { assertSharedQueueCapacity } from "./shared-quota.js";
 import { DIGEST_REVISION, draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { randomUUID } from "node:crypto";
@@ -17,7 +18,7 @@ import { localeOf, say } from "./i18n.js";
 // CLI execution is limited to 5 minutes; allow another 5 minutes for delivery.
 export const JOB_LEASE_MS = 10 * 60_000;
 export const MAX_JOB_ATTEMPTS = 3;
-const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ ...(r.meta?.editorInstruction !== undefined ? { editorInstruction: r.meta.editorInstruction } : {}), continuation: r.continuation ?? undefined, ...(r.meta?.background ? { background: true } : {}), id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
+const toJob = (r: typeof schema.llmJobs.$inferSelect): Job => ({ ...(r.meta?.sourceExcerpt ? { sourceExcerpt: r.meta.sourceExcerpt } : {}), ...(r.meta?.editorInstruction !== undefined ? { editorInstruction: r.meta.editorInstruction } : {}), continuation: r.continuation ?? undefined, ...(r.meta?.background ? { background: true } : {}), id: r.id, kind: r.kind as JobKind, candidateId: r.candidateId, channel: (r.channel as Channel | null) ?? undefined, lang: r.lang ?? undefined, system: r.system, user: r.user, schemaJson: r.schemaJson, status: r.status as Job["status"], runner: r.runner ?? undefined, error: r.error ?? undefined, createdAt: r.createdAt });
 
 const score = z.number().int().min(0).max(2);
 const results = {
@@ -86,7 +87,9 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
     } else {
       let parsed: unknown;
       try {
-        parsed = results[j.kind as JobKind].parse(JSON.parse(input.resultJson));
+        const raw = JSON.parse(input.resultJson);
+        if (j.kind === "draft" && j.meta?.sourceExcerpt) assertSourceExcerptBody(raw?.body, j.schemaJson);
+        parsed = results[j.kind as JobKind].parse(raw);
       } catch {
         ctx.db.update(schema.llmJobs).set({ status: "failed", error: "invalid job result", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
         events.push({ ownerId, resource: "jobs", id });
@@ -105,7 +108,7 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       if (j.kind === "profile") profileApplied = true;
       else if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
       else if (j.kind === "judge" && (j.meta?.digestRevision !== DIGEST_REVISION || !digestCurrent(judgedCandidate!) || j.meta?.digestSourceHash !== judgedCandidate!.evidence.digestSourceHash)) applied = { kind: "judge", staleDigest: true };
-      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, editorInstruction: instructionOf(j.user, j.meta), promptText: j.user, digestRevision: j.meta?.digestRevision, digestSourceHash: j.meta?.digestSourceHash, model }, j.continuation ?? undefined);
+      else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, editorInstruction: instructionOf(j.user, j.meta), promptText: j.user, sourceExcerpt: j.meta?.sourceExcerpt, schemaJson: j.schemaJson, digestRevision: j.meta?.digestRevision, digestSourceHash: j.meta?.digestSourceHash, model }, j.continuation ?? undefined);
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
@@ -181,7 +184,7 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     if (job.kind === "draft" && job.channel && job.lang && storedPurpose === "introduction" && announcedSince(ctx, ownerId, job.candidateId, job.createdAt, job.channel as Channel)) {
       return enqueueJob(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, buildPrompt(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, { introduction: false, instruction: instructionOf(job.user, job.meta) }), job.continuation ?? undefined);
     }
-    const prompt = job.kind === "draft" ? { editorInstruction: instructionOf(job.user, job.meta) ?? "", draftPurpose: storedPurpose, system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
+    const prompt = job.kind === "draft" ? { editorInstruction: instructionOf(job.user, job.meta) ?? "", draftPurpose: storedPurpose, sourceExcerpt: job.meta?.sourceExcerpt, system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();
 }
@@ -191,6 +194,6 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
  * 실패한 작업은 "다시 시도"가 같은 프롬프트를 쓰므로 그대로 둔다.
  */
 export function pruneFinishedJobs(ctx: AppContext, olderThanMs = 14 * 86_400_000): number {
-  return ctx.db.update(schema.llmJobs).set({ system: "", user: "", resultJson: null, meta: sql`json_remove(${schema.llmJobs.meta}, '$.editorInstruction')` })
+  return ctx.db.update(schema.llmJobs).set({ system: "", user: "", resultJson: null, schemaJson: "{}", meta: sql`json_remove(${schema.llmJobs.meta}, '$.editorInstruction', '$.sourceExcerpt')` })
     .where(and(eq(schema.llmJobs.status, "done"), lt(schema.llmJobs.finishedAt, Date.now() - olderThanMs), ne(schema.llmJobs.user, ""))).run().changes;
 }

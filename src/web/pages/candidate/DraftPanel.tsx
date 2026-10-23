@@ -587,6 +587,16 @@ export default function DraftPanel({
           )}
           <div className="draft-meta tiny muted">
             {shown?.purpose && <span>{purposeLabel(shown.purpose)}</span>}
+            {shown?.sourceExcerpt && (
+              <a
+                href={shown.sourceExcerpt.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t("초안 생성에 사용한 공식 설명입니다. 이후 편집한 내용과 다를 수 있습니다.")}
+              >
+                {t("공식 설명 발췌로 생성")}
+              </a>
+            )}
             <span className={spec.maxChars && count > spec.maxChars ? "over" : ""}>
               {t("{n}자", { n: `${count}${spec.maxChars ? ` / ${spec.maxChars}` : ""}` })}
             </span>

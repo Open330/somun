@@ -1,3 +1,5 @@
+import { assertSourceExcerptBody } from "./source-excerpt.js";
+import type { SourceExcerptOrigin } from "../shared/types.js";
 import { and, eq } from "drizzle-orm";
 import { channelSpec, draftChannelSpec, lengthInstruction, type Channel, type CustomChannel } from "../core/channels.js";
 import { requestsQuestion, type LintResult } from "../core/lint.js";
@@ -18,7 +20,7 @@ import { lintDraftFor } from "./pipeline.js";
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
 export const REPAIRABLE = new Set(["introduction_name_missing", "introduction_repeated_sentence", "introduction_habit_question", "register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
-type DraftJob = { id: number; candidateId: number; channel?: Channel | null; lang?: string; editorInstruction?: string; user: string };
+type DraftJob = { id: number; candidateId: number; channel?: Channel | null; lang?: string; editorInstruction?: string; user: string; sourceExcerpt?: SourceExcerptOrigin; schemaJson?: string };
 
 export function readDraft(channel: Channel, json: unknown, customChannels: CustomChannel[] = []): { title?: string; body: string } {
   const r = (json ?? {}) as { title?: unknown; body?: unknown };
@@ -26,6 +28,11 @@ export function readDraft(channel: Channel, json: unknown, customChannels: Custo
 }
 
 export function readJobDraft(job: DraftJob, json: unknown, customChannels: CustomChannel[] = [], bannedPhrases?: string[]): { title?: string; body: string } {
+  if (job.sourceExcerpt) {
+    const body = (json as { body?: unknown } | null)?.body;
+    assertSourceExcerptBody(body, job.schemaJson);
+    return { body };
+  }
   const draft = readDraft(job.channel as Channel, json, customChannels);
   return { ...draft, body: prepareIntroduction(draft.body, { channel: job.channel ?? "", language: job.lang, purpose: draftPurposeOf(null, job.user), tone: channelSpec(job.channel as Channel, customChannels).identity?.tone, editorInstruction: instructionOf(job.user, job), bannedPhrases }) };
 }
@@ -42,6 +49,7 @@ export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, jso
 /** 보정 요청 프롬프트: 원래 요청 + 직전 초안 + 고칠 점. */
 export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[], customChannels: CustomChannel[] = [], bannedPhrases?: string[]): string {
   const prev = readJobDraft(job, json, customChannels, bannedPhrases);
+  if (job.sourceExcerpt) return [job.user, "## Previous selection", prev.body, "## Fix these problems", ...issues.map(issue => `${issue.rule}: ${issue.detail ?? ""}`), "Select another permitted whole body from the same schema enum. Do not rewrite or shorten source wording. Return title/body JSON."].join("\n\n");
   const purpose = draftPurposeOf(null, job.user);
   const spec = draftChannelSpec(channelSpec(job.channel as Channel, customChannels), purpose);
   const introductionWithoutQuestion = purpose === "introduction" && !requestsQuestion(instructionOf(job.user, job));
@@ -139,7 +147,7 @@ export function checkLocalResult(ctx: AppContext, ownerId: string, id: number, i
   if (j.kind !== "draft" || !j.channel || !worthRepairing(ctx, ownerId, j.candidateId)) return { issues: [] };
   let json: unknown;
   try { json = JSON.parse(input.resultJson); } catch { return { issues: [] }; }
-  const job = { id: j.id, candidateId: j.candidateId, channel: j.channel as Channel, lang: j.lang ?? undefined, editorInstruction: j.meta?.editorInstruction, user: j.user };
+  const job = { id: j.id, candidateId: j.candidateId, channel: j.channel as Channel, lang: j.lang ?? undefined, editorInstruction: j.meta?.editorInstruction, sourceExcerpt: j.meta?.sourceExcerpt, schemaJson: j.schemaJson, user: j.user };
   const issues = draftIssues(ctx, ownerId, job, json);
   // 빈 본문은 고칠 대상이 아니라 쓸 수 없는 결과다. 보정본이 비었을 때 "문제 없음"으로 뽑히지 않게 한다.
   if (issues === null) return { issues: [{ rule: "empty_body" }] };
