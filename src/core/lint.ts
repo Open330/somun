@@ -223,7 +223,34 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
   if (facts.preferLink && channel !== "blog" && spec.linkPlacement !== "reply" && spec.linkPlacement !== "none" && channel !== "threads") {
     const link = facts.preferLink.replace(/\/+$/, "");
-    results.push({ rule: "preferred_link", ok: text.includes(link), detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
+    const canonical = (value: string): string | undefined => {
+      try {
+        const url = new URL(value);
+        url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+        url.hash = "";
+        return url.href;
+      } catch { return undefined; }
+    };
+    const expected = canonical(facts.preferLink);
+    const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some(token => {
+      // Compare the complete URL; an autolinker may stop at a known TLD inside another hostname.
+      if (canonical(token) === expected) return true;
+      let candidate = token.replace(/[.,;:!?，。；：！？]+$/u, "");
+      const opens: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
+      const balance: Record<string, number> = { "(": 0, "[": 0, "{": 0 };
+      for (const ch of candidate) {
+        if (Object.hasOwn(balance, ch)) balance[ch]++;
+        else if (opens[ch]) balance[opens[ch]]--;
+      }
+      let end = candidate.length;
+      while (end > 0 && opens[candidate[end - 1]] && balance[opens[candidate[end - 1]]] < 0) {
+        balance[opens[candidate[end - 1]]]++;
+        end--;
+      }
+      candidate = candidate.slice(0, end);
+      return canonical(candidate) === expected;
+    });
+    results.push({ rule: "preferred_link", ok: matches, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.
