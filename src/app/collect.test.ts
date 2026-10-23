@@ -1,10 +1,11 @@
 import { EventEmitter } from "node:events";
 import pino from "pino";
+import * as homepage from "../infra/homepage.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubClient, GitHubRateLimitError } from "../infra/github/client.js";
 import { reserveSharedExecution } from "./shared-quota.js";
-import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList, readmeEvidence } from "./collect.js";
+import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList, readmeEvidence, readmeHomepage } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -39,7 +40,7 @@ describe("limitationsFrom", () => {
 describe("collection guards", () => {
   let ctx: AppContext;
   beforeEach(() => { ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "pat" }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] }; });
-  afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); });
+  afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it("normalizes saved URLs and also collects legacy URL targets without requesting a malformed API path", async () => {
     const saved = upsertSource(ctx, "me", { kind: "github", targets: ["https://github.com/me/tool/"], enabled: true });
@@ -75,6 +76,23 @@ describe("collection guards", () => {
     vi.stubGlobal("fetch", fetchMock);
     await Promise.all([collectAll(ctx), collectAll(ctx, "me"), collectAll(ctx, "me")]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([true, false])("collects an explicit homepage with metadata priority (%s)", async (metadata) => {
+    const url = "https://tool.example/";
+    const source = { url, collectedAt: 1, status: "ok" as const, text: "Outside connections require the connector on every device.", truncated: false };
+    const collect = vi.spyOn(homepage, "collectHomepage").mockResolvedValue(source);
+    const saved = upsertSource(ctx, "me", { kind: "github", targets: ["me/tool"], enabled: true });
+    const repo = { full_name: "me/tool", html_url: "https://github.com/me/tool", homepage: metadata ? url : null, stargazers_count: 1, forks_count: 0, created_at: new Date().toISOString(), pushed_at: new Date().toISOString(), fork: false, archived: false, private: false };
+    vi.stubGlobal("fetch", vi.fn(async (address: string) => {
+      if (address.endsWith("/repos/me/tool")) return new Response(JSON.stringify(repo));
+      if (address.endsWith("/readme")) return new Response(JSON.stringify({ content: Buffer.from(`[Website](${metadata ? "https://ignored.example/" : url})`).toString("base64") }));
+      if (address.includes("/releases") || address.includes("/pulls") || address.includes("/commits")) return new Response("[]");
+      return new Response("{}", { status: 404 });
+    }));
+    await collectGithubSource(ctx, saved.id);
+    expect(collect).toHaveBeenCalledExactlyOnceWith(url);
+    expect(ctx.db.select().from(schema.candidates).get()?.evidence).toMatchObject({ homepage: url, homepageSource: source });
   });
 
   it("takes the latest release by publish date, not by the API's list order", async () => {
@@ -338,4 +356,10 @@ it("picks the newest version of the main line as the latest release, not a late 
   // 정식판이 있으면 프리릴리스(v9.0.0-beta.1)는 고르지 않는다.
   expect(latestRelease(releases, Date.parse("2026-10-06T05:30:00Z"))?.tag_name).toBe("v6.4.4");
   expect(latestRelease([r("pkg-a@1.2.0", "2026-10-01T00:00:00Z"), r("pkg-b@0.1.0", "2026-10-02T00:00:00Z")])?.tag_name).toBe("pkg-b@0.1.0");
+});
+
+it("uses only an explicit README website link when GitHub homepage is absent", () => {
+  expect(readmeHomepage("[Download](https://downloads.example/) · [Website](https://tool.example/) · [Getting started](https://tool.example/start.html)")).toBe("https://tool.example/");
+  expect(readmeHomepage("[**공식 홈페이지**](https://tool.example/)")).toBe("https://tool.example/");
+  for (const source of ["[Sponsor](https://sponsor.example/)", "[Website](file:///etc/passwd)", "![Website](https://badge.example/)", "https://tool.example/", "x".repeat(8000) + "[Website](https://late.example/)", "## Examples\n[Website](https://example.example/)", "<!-- [Website](https://comment.example/) -->", "`[Website](https://code.example/)`", "```md\n[Website](https://code.example/)\n```", "```md\n~~~\n[Website](https://mixed.example/)\n```", "``[Website](https://inline.example/)``", "    [Website](https://indent.example/)", "\t[Website](https://indent.example/)", "<p><code>[Website](https://html.example/)</code></p>"]) expect(readmeHomepage(source)).toBeUndefined();
 });

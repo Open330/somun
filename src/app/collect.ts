@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { collectHomepage } from "../infra/homepage.js";
 import { README_SOURCE_MAX, RELEASE_NOTES_MAX } from "../core/prompts.js";
 import { SharedQuotaError } from "./shared-quota.js";
 import { normalizeGithubTarget } from "../core/source-target.js";
@@ -272,6 +273,16 @@ async function backfillRepo(ctx: AppContext, ownerId: string, name: string, publ
   return inserted;
 }
 
+/** Use only an explicitly labelled product website, never an arbitrary README link. */
+export function readmeHomepage(readme: string): string | undefined {
+  const introduction = readme.slice(0, 8000).replace(/<!--[\s\S]*?(?:-->|$)/g, "").split(/(?:^|\n)##\s/)[0];
+  // Ambiguous code blocks are not a trustworthy product-site declaration.
+  if (/(?:^|\n)[ \t]*(?:`{3,}|~{3,})|<(?:pre|code)\b/i.test(introduction)) return undefined;
+  const prose = introduction.split("\n").filter((line) => !/`|^(?: {4}|\t)/.test(line)).join("\n");
+  const link = /(?<!!)\[(?:\*\*)?(?:website|official website|homepage|공식 홈페이지|웹사이트|홈페이지)(?:\*\*)?\]\(\s*(https?:\/\/[^\s)]+)\s*\)/i.exec(prose);
+  return link?.[1];
+}
+
 export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
   const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
   if (!source) return {};
@@ -299,13 +310,19 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         }
         continue;
       }
-      const [readmeRaw, releases, prs, traffic, referrers, pkgRaw] = await Promise.all([
-        gh.get<{ content: string }>(`/repos/${name}/readme`),
+      const readmeRequest = gh.get<{ content: string }>(`/repos/${name}/readme`);
+      const homepageRequest = repo.homepage ? collectHomepage(repo.homepage) : readmeRequest.then((raw) => {
+        const url = raw ? readmeHomepage(Buffer.from(raw.content, "base64").toString("utf8")) : undefined;
+        return url ? collectHomepage(url) : undefined;
+      });
+      const [readmeRaw, releases, prs, traffic, referrers, pkgRaw, homepageSource] = await Promise.all([
+        readmeRequest,
         pagedList<GhRelease>(gh, `/repos/${name}/releases`),
         closedPullsSince(gh, name, since),
         gh.get<{ uniques: number }>(`/repos/${name}/traffic/views`),
         gh.get<{ referrer: string; uniques: number }[]>(`/repos/${name}/traffic/referrers`),
         gh.get<{ content: string }>(`/repos/${name}/contents/package.json`),
+        homepageRequest,
       ]);
       const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
       // 게시되지 않은 초안 릴리스는 published_at이 null이라 날짜 계산을 깨뜨린다.
@@ -362,9 +379,9 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         repo: name, repoUrl: repo.html_url, description: repo.description ?? undefined,
         version: latest?.tag_name, releaseNotes: latest?.body?.slice(0, RELEASE_NOTES_MAX) ?? undefined,
         stars: repo.stargazers_count, forks: repo.forks_count, commitCount: await gh.commitCount(name), releaseCount: allReleases.length,
-        firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined,
+        firstReleaseAt: allReleases.at(-1)?.published_at?.slice(0, 10), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: homepageSource?.url ?? (repo.homepage || undefined),
         npmPackage, npmMonthlyDownloads, demoAsset: firstDemoAsset(readme), limitations: limitationsFrom(readme), limitationsSource: "readme" as const, experimental: experimentalFrom(readme),
-        ...readmeEvidence(readme), commitSubjects,
+        ...readmeEvidence(readme), homepageSource, commitSubjects,
       };
 
       snapshotMetrics(ctx, ownerId, { repo: name, stars: repo.stargazers_count, forks: repo.forks_count, viewsUniques14d: traffic?.uniques, referrers: referrers?.slice(0, 10), npmDownloadsMonth: npmMonthlyDownloads });

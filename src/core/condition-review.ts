@@ -1,6 +1,6 @@
 import { sourceConditionParagraphs, type EvidenceLike, type ProfileLike } from "./prompts.js";
 
-export type ConditionSource = { kind: "readme" | "release" | "pr" | "profile"; ref: string; text: string; url?: string; incomplete?: boolean };
+export type ConditionSource = { kind: "readme" | "homepage" | "release" | "pr" | "profile"; ref: string; text: string; url?: string; incomplete?: boolean };
 
 const REVIEW_ONLY_CONDITION = /\buntil\b|fail[- ]open|\b(?:when|if)\b[^.!?\n]{0,80}\b(?:enabled|configured|disabled|available|purchasable)\b|활성화|설정해야/i;
 
@@ -12,6 +12,8 @@ export function reviewConditionParagraphs(text: string): string[] {
 /** 원자료와 유효 프로필 제약. 생성된 highlights는 확인 근거로 쓰지 않는다. */
 export function conditionSources(e: EvidenceLike & { limitationsSource?: "readme" | "digest" }, profile?: ProfileLike): ConditionSource[] {
   const sources: ConditionSource[] = [];
+  const homepage = e.homepageSource;
+  if (homepage?.status === "ok" && homepage.url === e.homepage && homepage.text?.trim()) sources.push({ kind: "homepage", ref: "Homepage", text: homepage.text, url: homepage.finalUrl ?? homepage.url, incomplete: homepage.truncated });
   const readme = [e.readmeForChecks, e.readmeExcerpt].find((text) => text?.trim());
   if (readme) sources.push({ kind: "readme", ref: "README", text: readme, url: e.repoUrl });
   for (const release of e.windowReleaseNotes ?? []) sources.push({ kind: "release", ref: release.tag, text: release.notes, url: e.repoUrl });

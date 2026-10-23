@@ -24,10 +24,11 @@ function publish(candidateId: number, draftId: number) {
 
 it("keeps complete review sources in the owner detail while excluding large bodies from inbox lists", () => {
   const id = candidate("new", Date.now());
-  const evidence = { repo: "a/repo", repoUrl: "https://github.com/a/repo", readmeExcerpt: "Excerpt", readmeForChecks: "Full source with conditions", mergedPrDetails: [{ number: 1, title: "Change", body: "Default off", url: "https://github.com/a/repo/pull/1" }] };
+  const evidence = { repo: "a/repo", repoUrl: "https://github.com/a/repo", homepage: "https://tool.example/", homepageSource: { url: "https://tool.example/", collectedAt: 1, status: "ok", text: "Homepage source", truncated: false }, readmeExcerpt: "Excerpt", readmeForChecks: "Full source with conditions", mergedPrDetails: [{ number: 1, title: "Change", body: "Default off", url: "https://github.com/a/repo/pull/1" }] };
   ctx.db.update(schema.candidates).set({ evidence }).run();
   expect(listInbox(ctx, "a")[0].evidence.mergedPrDetails).toBeUndefined();
   expect(listInbox(ctx, "a")[0].evidence.readmeForChecks).toBeUndefined();
+  expect(listInbox(ctx, "a")[0].evidence.homepageSource).toBeUndefined();
   expect(getCandidateDetail(ctx, "a", id).candidate.evidence).toEqual(evidence);
   expect(() => getCandidateDetail(ctx, "b", id)).toThrow();
 });
@@ -91,4 +92,15 @@ it("refreshes the current window's version but keeps a past window's own release
   const ev = (id: number) => ctx.db.select().from(schema.candidates).all().find((c) => c.id === id)?.evidence as { version?: string; releaseNotes?: string; stars?: number };
   expect(ev(old)).toMatchObject({ version: "v1.0", releaseNotes: "v1.0 notes", stars: 9 });
   expect(ev(cur)).toMatchObject({ version: "v1.1", releaseNotes: "v1.1 notes" });
+});
+
+it("clears previous homepage bodies when collection fails or the homepage is removed", () => {
+  const id = candidate("new", Date.now());
+  const evidence = { repo: "a/repo", repoUrl: "u", homepage: "https://old.example/", homepageSource: { url: "https://old.example/", collectedAt: 1, status: "ok", text: "Old content", truncated: false } };
+  ctx.db.update(schema.candidates).set({ evidence }).run();
+  refreshEvidence(ctx, "a", "a/repo", { repo: "a/repo", repoUrl: "u", homepage: "https://new.example/", homepageSource: { url: "https://new.example/", collectedAt: 2, status: "failed", truncated: false } });
+  expect(getCandidateDetail(ctx, "a", id).candidate.evidence.homepageSource).toMatchObject({ status: "failed" });
+  refreshEvidence(ctx, "a", "a/repo", { repo: "a/repo", repoUrl: "u" });
+  expect(getCandidateDetail(ctx, "a", id).candidate.evidence.homepageSource).toBeUndefined();
+  expect(getCandidateDetail(ctx, "a", id).candidate.evidence.homepage).toBeUndefined();
 });

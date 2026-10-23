@@ -29,6 +29,12 @@ export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };
 
+export type HomepageSource = {
+  url: string; finalUrl?: string; collectedAt: number;
+  status: "ok" | "failed" | "unsupported" | "too_large" | "empty";
+  text?: string; truncated: boolean; language?: string;
+};
+
 export type Evidence = {
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
@@ -47,6 +53,8 @@ export type Evidence = {
   milestones?: { metric: "stars" | "downloads"; threshold: number; at: number }[];
   /** 이 글감에 묶인 릴리스들의 노트(최신 릴리스 포함). 요약과 수치 대조가 최신 노트 하나만 보지 않게. */
   windowReleaseNotes?: { tag: string; notes: string; at?: number }[];
+  /** 공식 홈페이지에서 수집한 주본문. 실패한 수집은 본문을 재사용하지 않는다. */
+  homepageSource?: HomepageSource;
   /** 소개 작성과 수치·주장 대조에 쓰는 README 원문(새 수집은 최대 32000자). */
   readmeForChecks?: string;
   /** 없으면 이전 수집 자료라 완전성은 알 수 없다. */
@@ -101,7 +109,7 @@ export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: n
 export type LintResult = { rule: string; ok: boolean; detail?: string };
 
 export type ConditionConfirmation = { revision: string; reviewedBy: string; reviewedAt: number };
-export type ConditionReviewState = { required: boolean; revision: string; confirmedAt?: number; sources: { kind: "readme" | "release" | "pr" | "profile"; ref: string; url?: string; incomplete?: boolean; excerpts: string[] }[] };
+export type ConditionReviewState = { required: boolean; revision: string; confirmedAt?: number; sources: { kind: "readme" | "homepage" | "release" | "pr" | "profile"; ref: string; url?: string; incomplete?: boolean; excerpts: string[] }[] };
 export type Draft = { conditionReview?: ConditionReviewState; purpose?: DraftPurpose; id: number; candidateId: number; channel: Channel; lang: string; version: number; title?: string; body: string; mediaHint?: string; lint: LintResult[]; status: DraftStatus; model: string; voice?: string; createdAt: number; updatedAt: number };
 
 /** 지침 제안: 수정·버림에서 배운 한 줄 규칙. */

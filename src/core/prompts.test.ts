@@ -470,3 +470,18 @@ it.each(["x", "threads"] as const)("keeps release truncation and channel audienc
   expect(prompt.user).toContain("Purpose: ");
   expect(instructionOf(prompt.user)).toBe("Explain the current release");
 });
+
+ it("grounds introduction reader tasks in the collected homepage without losing README prerequisites", () => {
+  const homepage = "https://tool.example/";
+  const text = "Outside the local network, install the connector on every device and sign into the same account.";
+  const c = { ...candidate, evidence: { ...candidate.evidence, homepage, homepageSource: { url: homepage, collectedAt: 1, status: "ok" as const, text, truncated: true }, readmeForChecks: "The viewer must be enabled. File access requires SSH.", readmeTruncated: false } };
+  const prompt = draftPrompt(c, "x", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).toContain(text);
+  expect(prompt.user).toContain("Homepage source truncated");
+  expect(prompt.user).toContain(c.evidence.readmeForChecks);
+  expect(groundingText(c)).toContain(text);
+  for (const changed of [{ ...c.evidence, homepage: "https://other.example/" }, { ...c.evidence, homepageSource: { ...c.evidence.homepageSource, status: "failed" as const } }]) {
+    expect(draftPrompt({ ...c, evidence: changed }, "x", "ko", [], undefined, { introduction: true }).user).not.toContain(text);
+    expect(groundingText({ ...c, evidence: changed })).not.toContain(text);
+  }
+});
