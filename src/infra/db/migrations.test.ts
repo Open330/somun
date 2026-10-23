@@ -49,7 +49,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
       try {
         expect(db.select().from(schema.settings).get()?.ownerId).toBe("owner");
         expect(db.select().from(schema.llmJobs).get()).toMatchObject({ status: "pending", runner: null, claimToken: null, attempts: 0, executor: "local", continuation: null });
-        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 18 });
+        expect(db.$client.prepare("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 19 });
         expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
         expect(db.$client.pragma("foreign_key_check")).toEqual([]);
       } finally { db.$client.close(); }
@@ -59,7 +59,7 @@ it("upgrades a pre-lease database without losing data and is safe to rerun", () 
 
 it("keeps the migration schema aligned with the latest generation snapshot", () => {
   const db = openDb(":memory:");
-  const snapshot = JSON.parse(readFileSync("drizzle/meta/0017_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
+  const snapshot = JSON.parse(readFileSync("drizzle/meta/0018_snapshot.json", "utf8")) as { tables: Record<string, { columns: Record<string, unknown> }> };
   try {
     for (const [name, table] of Object.entries(snapshot.tables)) {
       const columns = db.$client.prepare("SELECT name FROM pragma_table_info(?)").all(name) as { name: string }[];
@@ -169,8 +169,9 @@ it("adds an empty condition confirmation without altering existing drafts and re
     for (let n = 0; n < 2; n++) {
       const db = openDb(file);
       try {
-        const { condition_review, ...retained } = db.$client.prepare("SELECT * FROM drafts").get() as Record<string, unknown>;
+        const { condition_review, source_excerpt, ...retained } = db.$client.prepare("SELECT * FROM drafts").get() as Record<string, unknown>;
         expect(condition_review).toBeNull();
+        expect(source_excerpt).toBeNull();
         expect(retained).toEqual(before);
         expect(db.$client.pragma("integrity_check")).toEqual([{ integrity_check: "ok" }]);
       } finally { db.$client.close(); }

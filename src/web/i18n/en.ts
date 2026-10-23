@@ -15,6 +15,9 @@ export const en: Record<string, string> = {
   "수집 서버의 응답을 받지 못했습니다. 요청이 이미 접수됐을 수 있으니 잠시 후 글감 목록과 연결 상태를 확인해 주세요.":
     "Could not receive a response from the collection server. Your request may already have been received. Check your candidates and connections shortly.",
   "공식 홈페이지": "Official homepage",
+  "공식 설명 발췌로 생성": "Created from official copy excerpts",
+  "초안 생성에 사용한 공식 설명입니다. 이후 편집한 내용과 다를 수 있습니다.":
+    "Official copy used to create this draft. Later edits may differ from the source.",
   "수집된 README 발췌": "Collected README excerpt",
   "프로필 제한사항": "Profile constraints",
   "사용자 확인 완료": "Confirmed by user",

@@ -106,9 +106,10 @@ export function lengthInstruction(spec: Pick<ChannelSpec, "id" | "maxChars">): s
 export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "update" | null): ChannelSpec {
   if (purpose !== "introduction" || (spec.id !== "threads" && spec.id !== "x")) return spec;
   const threads = spec.id === "threads";
-  const maxSentences = spec.maxSentences !== undefined && spec.maxSentences !== CHANNELS[spec.id as "threads" | "x"].maxSentences
-    ? Math.min(spec.maxSentences, threads ? 6 : 4) : threads ? 6 : 4;
-  const sentenceGuide = maxSentences < (threads ? 4 : 3) ? `up to ${maxSentences} short sentences` : threads
+  const maxSentences = threads
+    ? spec.maxSentences !== undefined && spec.maxSentences !== CHANNELS.threads.maxSentences ? Math.min(spec.maxSentences, 6) : 6
+    : spec.maxSentences;
+  const sentenceGuide = maxSentences !== undefined && maxSentences < (threads ? 4 : 3) ? `up to ${maxSentences} short sentences` : threads
     ? "4-5 short sentences in 2-3 short paragraphs when supported facts are available"
     : "as few short sentences as needed within the configured character limit, with a supplied link";
   return {
