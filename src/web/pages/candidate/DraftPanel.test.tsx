@@ -84,3 +84,35 @@ it("translates the source provenance and its historical meaning into English", a
   const link = screen.getByRole("link", { name: "Created from official copy excerpts" });
   expect(link.getAttribute("title")).toBe("Official copy used to create this draft. Later edits may differ from the source.");
 });
+
+it.each([
+  ["ko", "공식 설명을 바탕으로 작성", "초안 생성에 사용한 공식 설명입니다. 이후 편집한 내용과 다를 수 있습니다."],
+  ["en", "Written based on official copy", "Official copy used to create this draft. Later edits may differ from the source."],
+] as const)("labels adapted generation separately in %s without guaranteeing the edited body", async (locale, label, tooltip) => {
+  await loadCatalog(locale);
+  setLocale(locale);
+  show([
+    draft({
+      sourceExcerpt: { url: "https://example.com/official/", adapted: true, sourceBody: "생성에 사용한 원문" },
+      body: "생성 후 사용자가 편집한 내용입니다.",
+      status: "edited",
+    }),
+  ]);
+  const link = screen.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe("https://example.com/official/");
+  expect(link.getAttribute("title")).toBe(tooltip);
+  expect(screen.queryByRole("link", { name: "공식 설명 발췌로 생성" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Created from official copy excerpts" })).toBeNull();
+});
+
+it("switches between adapted and legacy excerpt provenance with the shown version", () => {
+  setLocale("ko");
+  show([
+    draft({ sourceExcerpt: { url: "https://example.com/literal/", sourceBody: "원문" } }),
+    draft({ id: 2, version: 2, sourceExcerpt: { url: "https://example.com/adapted/", adapted: true } }),
+  ]);
+  expect(screen.getByRole("link", { name: "공식 설명을 바탕으로 작성" }).getAttribute("href")).toBe("https://example.com/adapted/");
+  fireEvent.change(screen.getByRole("combobox", { name: "버전" }), { target: { value: "1" } });
+  expect(screen.getByRole("link", { name: "공식 설명 발췌로 생성" }).getAttribute("href")).toBe("https://example.com/literal/");
+  expect(screen.queryByRole("link", { name: "공식 설명을 바탕으로 작성" })).toBeNull();
+});

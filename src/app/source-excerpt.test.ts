@@ -5,6 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { homepageText } from "../infra/homepage.js";
 import { openDb, schema } from "../infra/db/index.js";
 import { runLlm, type LlmResult } from "../infra/llm/providers.js";
+import { sourceCopyBodies } from "../core/source-copy.js";
+import { sourceExcerptPrompt } from "./source-excerpt.js";
 import { DIGEST_REVISION } from "../core/prompts.js";
 import type { AppContext } from "./context.js";
 import { applyResult, buildPrompt, enqueueJob } from "./pipeline.js";
@@ -20,7 +22,11 @@ let ctx: AppContext, cid: number;
 const url = "https://example.com/cedar";
 const source = homepageText('<html lang="ko"><head><meta property="og:site_name" content="Cedar"></head><body><main><section><div><h1>기록을 모으고<br>다음 작업으로.</h1><p>프로젝트의 기록과 작업을 한곳에서 관리하세요.</p></div><div><h2>기록에서 바로 작업</h2><p>선택한 기록을 작업 목록으로 옮기고 원문을 다시 여세요.</p></div></section></main></body></html>')!;
 const output = (body: string): LlmResult => ({ json: { title: "", body }, provider: "gemini", model: "gemini-3.5-flash-lite", latencyMs: 1 });
-function prompt() { return buildPrompt(ctx, "me", "draft", cid, "x", "ko", { introduction: true }); }
+function prompt() {
+  const base = buildPrompt(ctx, "me", "draft", cid, "x", "ko", { introduction: true });
+  const bodies = sourceCopyBodies({ url, status: "ok", collectedAt: 1, ...source }, "Cedar", url, "ko");
+  return sourceExcerptPrompt(base, bodies, url);
+}
 function allowed() { return (prompt().schema.properties as { body: { enum: string[] } }).body.enum; }
 function enqueue() { return enqueueJob(ctx, "me", "draft", cid, "x", "ko", prompt()); }
 beforeEach(() => {

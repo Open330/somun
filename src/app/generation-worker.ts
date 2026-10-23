@@ -13,6 +13,7 @@ import { SIDE_JOB_KINDS } from "../shared/types.js";
 import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps, recentUpstreamFailure } from "./keys.js";
+import { readSourceExcerptResult } from "./source-excerpt.js";
 import { draftIssues, readJobDraft, repairPrompt, worthRepairing } from "./draft-repair.js";
 import type { LlmResult } from "../infra/llm/providers.js";
 import type { Job } from "../shared/types.js";
@@ -22,6 +23,10 @@ import type { Job } from "../shared/types.js";
  * 약한(대체) 모델이 채널 형식을 자주 놓친다. 다시 쓴 쪽이 더 나을 때만 바꾸고, 실패하면 처음 초안을 그대로 둔다.
  */
 async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: (user: string) => Promise<LlmResult>): Promise<LlmResult> {
+  if (job.sourceExcerpt?.adapted) {
+    const selected = readSourceExcerptResult(first.json, job.sourceExcerpt, job.schemaJson);
+    job = { ...job, sourceExcerpt: { ...job.sourceExcerpt, sourceBody: selected.sourceBody } };
+  }
   const before = draftIssues(ctx, ownerId, job, first.json);
   if (!before?.length || !worthRepairing(ctx, ownerId, job.candidateId)) return first;
   try {

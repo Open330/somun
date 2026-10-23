@@ -376,6 +376,8 @@ describe("unsupported generated endorsements", () => {
     "somun은 초안을 작성해 주는데, 홍보가 서툰 개발자에게 정말 편할 것 같아요.",
     "이 도구는 개발자에게 유용할 것 같아요.",
     "이 도구가 정말 유용해요.",
+    "파일을 복사할 수 있어서 편리해요.",
+    "기록을 찾을 때 유용합니다.",
     "이 도구를 꼭 추천합니다.",
     "It would be really useful for developers.",
     "I recommend this tool for developers.",
@@ -389,12 +391,14 @@ describe("unsupported generated endorsements", () => {
     "I do not recommend this tool.",
     "This is not really useful.",
     "이 도구는 정말 유용하지 않아요.",
+    "이 도구는 편리하지 않아요.",
   ])("does not treat tasks, questions or negative statements as positive endorsements: %s", (body) => {
     expect(check(body)?.ok).toBe(true);
   });
   it("requires the full statement in evidence rather than an adjective appearing under a different meaning", () => {
     const body = "It would be useful for developers.";
     expect(check(body, body)?.ok).toBe(true);
+    expect(check("파일을 복사할 수 있어서 편리해요.", "파일을 복사할 수 있어서 편리해요.")?.ok).toBe(true);
     expect(check(body, "It would not be useful for developers.")?.ok).toBe(false);
     expect(check("somun은 정말 유용해요.", "유용한 기능을 목표로 하는 도구입니다.")?.ok).toBe(false);
   });

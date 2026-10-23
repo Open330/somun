@@ -23,8 +23,8 @@ export type JobKind = "digest" | "judge" | "draft" | "lesson" | "profile";
 export const SIDE_JOB_KINDS = ["lesson", "profile"] as const;
 export type GenerationKind = Exclude<JobKind, (typeof SIDE_JOB_KINDS)[number]>;
 export type DraftPurpose = "introduction" | "update";
-/** Origin of an extractive draft; this does not certify the current, possibly edited body. */
-export type SourceExcerptOrigin = { url: string };
+/** Official source used for an excerpt or adapted draft; this does not certify the current, possibly edited body. */
+export type SourceExcerptOrigin = { url: string; adapted?: true; sourceBody?: string };
 export type HomepageCopyUnit = { id: string; language: string; heading: string; paragraph: string; parentId?: string };
 /** llm_jobs.meta. 생성 당시 초안 목적 또는 프로필의 저장소·README 해시. */
 export type JobMeta = { sourceExcerpt?: SourceExcerptOrigin; /** 재생성 시 빈 줄·Markdown 제목을 포함한 편집 지시 전체. */ editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
