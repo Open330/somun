@@ -244,6 +244,18 @@ it("asks introductions to link the homepage when the project has one", () => {
   const rule = (body: string, facts = intro) => lintDraft("x", undefined, body, [], facts).find((r) => r.rule === "preferred_link");
   expect(rule("somun drafts posts. https://github.com/Open330/somun")).toMatchObject({ ok: false, detail: expect.stringContaining("https://somun.jiun.dev") });
   expect(rule("somun drafts posts. https://somun.jiun.dev")?.ok).toBe(true);
+  expect(rule("somun drafts posts. https://somun.jiun.dev/.")?.ok).toBe(true);
+  expect(rule("somun drafts posts. https://somun.jiun.dev/#features")?.ok).toBe(true);
+  for (const forged of ["https://somun.jiun.dev/invented-download-path", "https://somun.jiun.dev.evil.example/", "https://somun.jiun.dev@evil.example/", "https://somun.jiun.dev%2eevil.example/", "https://somun.jiun.dev。evil.example"]) {
+    expect(rule(`somun drafts posts. ${forged}`)?.ok).toBe(false);
+  }
+  const nested = draftLintFacts({ ...candidate, evidence: { ...candidate.evidence, homepage: "https://example.com/app/" } }, undefined, "introduction");
+  expect(rule("somun drafts posts. https://example.com/app", nested)?.ok).toBe(true);
+  expect(rule("somun drafts posts. https://example.com/application", nested)?.ok).toBe(false);
+  expect(rule("somun drafts posts. https://example.com/app?invented=1", nested)?.ok).toBe(false);
+  expect(rule("somun drafts posts. (https://somun.jiun.dev/).")?.ok).toBe(true);
+  const withParens = { ...nested, preferLink: "https://example.com/app_(demo)" };
+  expect(rule("somun [website](https://example.com/app_(demo))", withParens)?.ok).toBe(true);
   expect(rule("somun drafts posts. https://github.com/Open330/somun", draftLintFacts(candidate, undefined, "update"))).toBeUndefined();
 });
 
