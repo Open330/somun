@@ -2,7 +2,6 @@ import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
-import { introductionOpening } from "./introduction-edit.js";
 
 /**
  * 슬롭 린트. 초안 저장 전에 돌리고 결과를 함께 저장한다.
@@ -150,11 +149,6 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   if (facts.purpose === "introduction" && (channel === "x" || channel === "threads") && !facts.editorInstruction?.trim()) {
     const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
     const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(prose)].map((s) => s.segment.trim()).filter(Boolean);
-    const first = sentences[0] ?? "";
-    const definition = introductionOpening(first) === "definition";
-    results.push({ rule: "introduction_definition_opening", ok: !definition, detail: definition ? say("분류 정의로 시작하는 소개입니다. 원문이 뒷받침하는 독자의 대상과 행동을 도입에 보여 주세요. 의미나 사실의 오류를 판정한 결과는 아닙니다.", "The introduction opens with a category definition. Lead with a source-backed reader action and object. This is an editorial pattern, not a finding of a factual or semantic error.") : undefined });
-    const intent = introductionOpening(first) === "intent";
-    results.push({ rule: "introduction_intent_preface", ok: !intent, detail: intent ? say("제품 사용 문구를 앞세운 서두입니다. 다음 문장의 구체적 동작을 앞으로 옮기고, 원래 서두에만 있던 대상·플랫폼·조건과 제품명은 유지하세요.", "The opening uses a product-use preface. Move the next concrete operation forward, preserving the original object, platform, conditions and project name.") : undefined });
     const normalizedSentences = sentences.map((s) => normalizeForMatch(s).replace(/[.!?。？！]+$/, "").trim()).filter(Boolean);
     const repeated = normalizedSentences.length !== new Set(normalizedSentences).size;
     results.push({ rule: "introduction_repeated_sentence", ok: !repeated, detail: repeated ? say("소개에 같은 문장이 반복됩니다. 중복 문장을 삭제하고 원문의 조건은 유지하세요.", "The introduction repeats an identical sentence. Remove the duplicate while preserving source conditions.") : undefined });

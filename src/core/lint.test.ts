@@ -459,17 +459,17 @@ it.each(["질문 없이 소개하세요", "질문으로 끝내지 말아주세�
 
 describe("conservative introduction editing signals", () => {
   const check = (body: string, facts: import("./lint.js").LintFacts = { purpose: "introduction" }, channel: Parameters<typeof lintDraft>[0] = "x") => lintDraft(channel, "", body, [], facts);
-  it.each(["Windows에서 원격 파일을 관리하려면 Acme를 사용합니다.", "Mac 파일을 복사하려는 사용자는 Acme를 사용할 수 있어요.", "화면과 파일을 연결하려는 사용자는 Acme를 사용하여 기기를 관리할 수 있습니다."])("flags an intention/use preface while leaving explicit edits and updates alone: %s", (body) => {
-    expect(check(body).find(r => r.rule === "introduction_intent_preface")?.ok).toBe(false);
+  it.each(["Windows에서 원격 파일을 관리하려면 Acme를 사용합니다.", "Mac 파일을 복사하려는 사용자는 Acme를 사용할 수 있어요.", "화면과 파일을 연결하려는 사용자는 Acme를 사용하여 기기를 관리할 수 있습니다."])("does not reject conditional reader-situation framing: %s", (body) => {
+    expect(check(body).some(r => r.rule === "introduction_intent_preface")).toBe(false);
     expect(check(body, { purpose: "update" }).some(r => r.rule === "introduction_intent_preface")).toBe(false);
     expect(check(body, { purpose: "introduction", editorInstruction: "이 서두는 유지하세요" }).some(r => r.rule === "introduction_intent_preface")).toBe(false);
-    expect(check("Mac 화면을 Windows에서 열어 조작해요.").find(r => r.rule === "introduction_intent_preface")?.ok).toBe(true);
+    expect(check("Mac 화면을 Windows에서 열어 조작해요.").some(r => r.rule === "introduction_intent_preface")).toBe(false);
   });
-  it.each(["Acme는 원격 기기의 화면과 파일을 연결하는 소프트웨어입니다.", "Acme는 파일을 검색하는 도구예요.", "Acme is a tool for searching local files."])("marks a category-definition opening as an editorial pattern: %s", (body) => {
-    expect(check(body).find(r => r.rule === "introduction_definition_opening")?.ok).toBe(false);
+  it.each(["Acme는 원격 기기의 화면과 파일을 연결하는 소프트웨어입니다.", "Acme는 파일을 검색하는 도구예요.", "Acme is a tool for searching local files."])("allows a concrete product/category introduction: %s", (body) => {
+    expect(check(body).some(r => r.rule === "introduction_definition_opening")).toBe(false);
   });
   it.each(["Windows에서 Mac 화면을 열어 조작해요.", "Acme에서 SSH 연결을 열어요.", "Acme는 파일 이름으로 검색해요."])("does not ban connection verbs or ordinary action sentences: %s", (body) => {
-    expect(check(body).find(r => r.rule === "introduction_definition_opening")?.ok).toBe(true);
+    expect(check(body).some(r => r.rule === "introduction_definition_opening")).toBe(false);
   });
   it("finds only complete repeated sentences after case, spacing and punctuation normalization", () => {
     expect(check("파일을 복사해요.\n\n파일을  복사해요!").find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(false);
@@ -484,7 +484,7 @@ describe("conservative introduction editing signals", () => {
     expect(check(body, { purpose: "introduction" }, "linkedin").some(r => r.rule === "introduction_definition_opening")).toBe(false);
     const custom = { ...channelSpec("x"), id: "custom_intro" as const };
     expect(lintDraft(custom.id, "", body, [], { purpose: "introduction" }, "ko", custom).some(r => r.rule === "introduction_definition_opening" || r.rule === "introduction_repeated_sentence")).toBe(false);
-    expect(check(body, { purpose: "introduction" }, "threads").find(r => r.rule === "introduction_definition_opening")?.ok).toBe(false);
+    expect(check(body, { purpose: "introduction" }, "threads").find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(false);
   });
 });
 

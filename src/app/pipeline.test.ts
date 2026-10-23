@@ -33,7 +33,7 @@ it("builds a draft prompt from concrete evidence", () => {
   const request = buildPrompt(ctx, "test", "draft", id, "x", "en");
   expect(request.user).toContain("Handles CRLF code frame positions.");
   expect(request.user).not.toContain("first person, past tense");
-  expect(request.system).toContain("Factual grounding takes priority");
+  expect(request.system).toContain("Use only supplied facts");
 });
 
 it("keeps digest highlights whose numbers are not in the raw material out of judge and draft", () => {
@@ -238,7 +238,7 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).toContain("Keep it short");
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
-  expect(prompt.system).toContain("open with a supported reader task and connect it to what the project does");
+  expect(prompt.system).toContain("Explain a concrete reader need");
 });
 
 it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {
