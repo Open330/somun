@@ -1048,3 +1048,10 @@ it("explains that a disconnected collection POST may already be running without 
   expect(resources.get("/candidates")!.reload).toHaveBeenCalledOnce();
   expect(resources.get("/sources")!.reload).toHaveBeenCalledOnce();
 });
+
+it("shows X weighted length consistently while viewing and editing a Korean body", () => {
+  render(panel([{ ...draft, body: `${"가".repeat(130)} https://example.com` }]));
+  expect(screen.getByText("284 / 280자").className).toContain("over");
+  fireEvent.click(screen.getByRole("button", { name: "수정" }));
+  expect(screen.getByText("284/280자")).toBeTruthy();
+});

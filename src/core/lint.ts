@@ -1,3 +1,4 @@
+import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
@@ -277,7 +278,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
 
   if (spec.maxChars !== null) {
-    const len = [...body].length;
+    const len = postLength(channel, body);
     results.push({ rule: "length", ok: len <= spec.maxChars, detail: `${len}/${spec.maxChars}` });
   }
   if (spec.hasTitle && spec.titleMaxChars) {

@@ -5,7 +5,7 @@
  * 첫 소개 초안은 프로필이 없으면 README를 직접 참고한다.
  * 판단과 초안에는 highlights + 기본 사실과 PR 본문을 전달해 요약에서 빠진 조건을 보존한다.
  */
-import { channelSpec, draftChannelSpec, langInstruction, langName, type Channel, type ChannelSpec } from "./channels.js";
+import { channelSpec, draftChannelSpec, lengthInstruction, langInstruction, langName, type Channel, type ChannelSpec } from "./channels.js";
 import { KO_FLUENCY_RULES } from "./voice.js";
 import type { Locale } from "../shared/locale.js";
 
@@ -387,7 +387,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         "## Selected channel contract",
         spec.identity ? `Audience: ${spec.identity.audience}\nPurpose: ${spec.identity.purpose}\nTone: ${spec.identity.tone}\nComposition: ${spec.identity.structure}` : "",
         spec.rules,
-        spec.maxChars ? `Maximum ${spec.maxChars} characters.` : "",
+        lengthInstruction(spec),
         spec.maxSentences ? `Maximum ${spec.maxSentences} sentences.` : "",
         "## First introduction",
         lang === "ko"
@@ -444,7 +444,7 @@ Hard rules:
       publicName ? `Public project name: ${publicName}. Use this exact name in prose; owner/repo belongs only inside URLs.` : "",
       langInstruction(lang),
       `Link placement (takes precedence over conflicting preset rules): ${spec.linkPlacement ?? "body"}. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
-      spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
+      spec.id === "x" ? lengthInstruction(spec) : spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.maxSentences ? `Maximum ${spec.maxSentences} sentences in the entire body, including the closing question.` : "",
       spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
       angle ? `Angle to take: ${angle}` : "",
