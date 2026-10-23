@@ -504,7 +504,7 @@ export function profilePrompt(m: ProfileMaterial): PromptSpec {
 - claims: up to 4 concrete things it does for its users, taken from the README. Preserve the scope of each check: flagging unsupported numbers is not verifying every fact, number appearing in a source is not proof of its context, and suggesting a voice guide is not automatically applying it. Do not turn a design instruction, aspiration, or marketing promise into a guaranteed capability. Prefer what a user sees or gets over how it is built; leave out implementation details (databases, process model, frameworks) unless the project is itself about them. No marketing words.
 - stage: experiment | beta | stable | archived | unknown, from version numbers, badges, "beta"/"WIP" notes, release count.
 - limitations: things the README admits do not work or are not supported. Empty if none.
-- naming: the exact name to use in prose (e.g. "muxa", not "Muxa CLI tool") and its owner/name form.
+- naming: the single exact public project name to use in prose. Do not include owner/repo, aliases, a list of names, or a description.
 - avoid: names, employers, internal hostnames or paths in the README that should never appear in a public post. Empty if none.
 Write in the language of the README (Korean if the README is Korean).`,
     user: [

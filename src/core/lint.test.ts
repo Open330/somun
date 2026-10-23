@@ -520,3 +520,54 @@ describe("source review for effect wording", () => {
     expect(check("This does not safely transfer files.")?.ok).toBe(true);
   });
 });
+
+
+describe("public name in default social introductions", () => {
+  const check = (body: string, publicName = "Itda") => lintDraft("x", "Itda", body, [], { purpose: "introduction", publicName }).find(r => r.rule === "introduction_name_missing");
+  it("does not count the title or a product URL as the public name", () => {
+    expect(check("Windows와 Mac에서 화면과 파일을 연결합니다. https://jiun.dev/itda/")).toMatchObject({ ok: false, args: { name: "Itda" } });
+    expect(check("Connect remote devices. HTTPS://example.com/Itda")).toMatchObject({ ok: false });
+  });
+  it.each(["Itda connects remote screens.", "ITDA connects remote screens.", "Itda는 화면을 연결합니다.", "Itda에서 화면을 엽니다.", "Itda로 기기에 연결합니다.", "[Itda](https://example.com/) connects screens."])("recognizes the name in prose: %s", body => {
+    expect(check(body)?.ok).toBe(true);
+  });
+  it.each(["NotItda connects screens.", "ItdaTools connects screens.", "Itda2 connects screens.", "my_Itda connects screens.", "Ítda connects screens."])("rejects a different Latin name (%s)", body => {
+    expect(check(body)?.ok).toBe(false);
+  });
+  it("matches literal punctuation and Korean names without requiring a space before particles", () => {
+    expect(check("C++로 코드를 작성합니다.", "C++")?.ok).toBe(true);
+    expect(check("fooXbar connects screens.", "foo.bar")?.ok).toBe(false);
+    expect(check("소문으로 글을 작성합니다.", "소문")?.ok).toBe(true);
+  });
+  it("uses a trimmed profile name before the repository leaf, including blank-name fallback", () => {
+    const candidate = { title: "Tool", type: "release", evidence: { repo: "owner/repo-tool", repoUrl: "https://github.com/owner/repo-tool" } };
+    const profile = { what: "Tool", audience: "developers", claims: [], stage: "beta", limitations: [], naming: " Public Tool ", avoid: [] };
+    expect(draftLintFacts(candidate, profile, "introduction").publicName).toBe("Public Tool");
+    expect(draftLintFacts(candidate, { ...profile, naming: "  " }, "introduction").publicName).toBe("repo-tool");
+    expect(draftLintFacts(candidate, undefined, "introduction").publicName).toBe("repo-tool");
+    expect(draftLintFacts(candidate, { ...profile, naming: "AC/DC" }, "introduction").publicName).toBe("AC/DC");
+    expect(check("repo-tool connects screens.", "Public Tool")?.ok).toBe(false);
+  });
+  it.each(["Itda (jiunbae/itda)", "jiunbae/itda", " Itda (JIUNBAE/ITDA) "])("skips only the new name guard for a legacy compound profile: %s", naming => {
+    const candidate = { title: "Itda", type: "release", evidence: { repo: "jiunbae/itda", repoUrl: "https://github.com/jiunbae/itda" } };
+    const profile = { what: "Remote desktop", audience: "developers", claims: [], stage: "beta", limitations: [], naming, avoid: [] };
+    const facts = draftLintFacts(candidate, profile, "introduction");
+    expect(facts.publicName).toBeUndefined();
+    const results = lintDraft("x", "", "Itda connects screens. https://github.com/wrong/itda", [], facts);
+    expect(results.some(r => r.rule === "introduction_name_missing")).toBe(false);
+    expect(results.find(r => r.rule === "repo_name")?.ok).toBe(false);
+    expect(results.find(r => r.rule === "introduction_repeated_sentence")?.ok).toBe(true);
+    expect(facts.repo).toBe("jiunbae/itda");
+  });
+  it("only checks default X and Threads introductions with an available public name", () => {
+    const facts = { purpose: "introduction" as const, publicName: "Itda" };
+    expect(lintDraft("threads", "", "Connect screens.", [], facts).find(r => r.rule === "introduction_name_missing")?.ok).toBe(false);
+    expect(lintDraft("x", "", "Connect screens.", [], { ...facts, editorInstruction: "  " }).find(r => r.rule === "introduction_name_missing")?.ok).toBe(false);
+    for (const overrides of [{ purpose: "update" as const }, { purpose: undefined }, { editorInstruction: "Keep the name out" }, { publicName: undefined }]) {
+      expect(lintDraft("x", "", "Connect screens.", [], { ...facts, ...overrides }).some(r => r.rule === "introduction_name_missing")).toBe(false);
+    }
+    for (const channel of ["linkedin", "custom_intro"] as const) {
+      expect(lintDraft(channel, "", "Connect screens.", [], facts, "ko", { ...channelSpec("x"), id: channel }).some(r => r.rule === "introduction_name_missing")).toBe(false);
+    }
+  });
+});

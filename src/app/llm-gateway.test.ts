@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); ctx.db.$client.close(); });
 
-const answer = (model: string) => new Response(JSON.stringify({ choices: [{ message: { content: '{"title":"","body":"Fixes CRLF positions. https://github.com/a/b"}' } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }), { status: 200, headers: { "X-Jiun-Model": model, "X-Jiun-Key-Label": "free-2" } });
+const answer = (model: string) => new Response(JSON.stringify({ choices: [{ message: { content: '{"title":"","body":"b fixes CRLF positions. https://github.com/a/b"}' } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }), { status: 200, headers: { "X-Jiun-Model": model, "X-Jiun-Key-Label": "free-2" } });
 
 it("leaves the direct Gemini path unchanged when the gateway is not configured", async () => {
   const fetchMock = vi.fn(async () => answer("gemini-3.5-flash-lite"));
