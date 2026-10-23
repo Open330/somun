@@ -13,7 +13,14 @@ function sourceMaterial(e: Evidence): Source[] {
   };
   add(t("프로젝트 설명"), e.description);
   const homepage = e.homepageSource;
-  if (homepage?.status === "ok" && homepage.url === e.homepage && homepage.text?.trim()) sources.push({ label: t("공식 홈페이지"), text: homepage.text, url: homepage.finalUrl ?? homepage.url, truncated: homepage.truncated, conditions: reviewConditionParagraphs(homepage.text) });
+  if (homepage?.status === "ok" && homepage.url === e.homepage && homepage.text?.trim())
+    sources.push({
+      label: t("공식 홈페이지"),
+      text: homepage.text,
+      url: homepage.finalUrl ?? homepage.url,
+      truncated: homepage.truncated,
+      conditions: reviewConditionParagraphs(homepage.text),
+    });
   add(t("수집된 README 발췌"), e.readmeForChecks || e.readmeExcerpt);
   const releases = e.windowReleaseNotes ?? [];
   for (const release of releases) add(`${t("릴리스 노트")} · ${release.tag}`, release.notes);
@@ -116,7 +123,13 @@ export default function DraftEvidenceReview({
   const incomplete = sources.filter((source) => source.truncated || !source.text.trim());
   const sourceUrl = safeSourceUrl(evidence.repoUrl);
   const confirmed = review?.confirmedAt !== undefined && !dirty;
-  const labels = { homepage: t("공식 홈페이지"), readme: t("수집된 README 발췌"), release: t("릴리스 노트"), pr: t("머지된 PR"), profile: t("프로필 제한사항") };
+  const labels = {
+    homepage: t("공식 홈페이지"),
+    readme: t("수집된 README 발췌"),
+    release: t("릴리스 노트"),
+    pr: t("머지된 PR"),
+    profile: t("프로필 제한사항"),
+  };
   return (
     <details className="draft-evidence-review" open={review?.required && !confirmed ? true : undefined}>
       <summary>

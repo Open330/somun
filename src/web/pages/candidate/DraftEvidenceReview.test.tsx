@@ -154,9 +154,30 @@ it("shows collected zero values without inventing missing metrics", () => {
 
 it("shows collected homepage prerequisites and the exact source URL", () => {
   const homepage = "https://tool.example/";
-  render(<DraftEvidenceReview body="Connect outside the local network." editing={false} lang="en" evidence={{ ...evidence, homepage, homepageSource: { url: homepage, collectedAt: 1, status: "ok", text: "Only available when every device uses the same account.", truncated: true } }} />);
+  render(
+    <DraftEvidenceReview
+      body="Connect outside the local network."
+      editing={false}
+      lang="en"
+      evidence={{
+        ...evidence,
+        homepage,
+        homepageSource: {
+          url: homepage,
+          collectedAt: 1,
+          status: "ok",
+          text: "Only available when every device uses the same account.",
+          truncated: true,
+        },
+      }}
+    />,
+  );
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "every device" } });
   const results = screen.getByRole("region", { name: "검색한 원자료" });
   expect(results.textContent).toContain("every device uses the same account");
-  expect(within(results).getByRole("link", { name: /공식 홈페이지/ }).getAttribute("href")).toBe(homepage);
+  expect(
+    within(results)
+      .getByRole("link", { name: /공식 홈페이지/ })
+      .getAttribute("href"),
+  ).toBe(homepage);
 });
