@@ -19,3 +19,12 @@ it("includes all explicit profile constraints even without condition keywords", 
   const sources = conditionSources({ repo: "a/b", repoUrl: "https://github.com/a/b" }, { what: "Tool", audience: "Users", claims: [], stage: "beta", limitations: ["macOS 14+ / Apple Silicon"], naming: "Tool", avoid: [] });
   expect(conditionCandidates(sources)[0]).toMatchObject({ kind: "profile", excerpts: ["macOS 14+ / Apple Silicon"] });
 });
+
+it("reviews homepage conditions with their URL and invalidates stale or failed sources", () => {
+  const homepage = "https://tool.example/";
+  const e = { repo: "a/b", repoUrl: "https://github.com/a/b", homepage, homepageSource: { url: homepage, collectedAt: 1, status: "ok" as const, text: "Only available when enabled.", truncated: true } };
+  expect(conditionSources(e)).toEqual([{ kind: "homepage", ref: "Homepage", text: e.homepageSource.text, url: homepage, incomplete: true }]);
+  expect(conditionCandidates(conditionSources(e))).toHaveLength(1);
+  expect(conditionSources({ ...e, homepage: "https://other.example/" })).toEqual([]);
+  expect(conditionSources({ ...e, homepageSource: { ...e.homepageSource, status: "failed" } })).toEqual([]);
+});

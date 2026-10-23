@@ -13,7 +13,7 @@ import { conditionReviewState } from "./condition-review.js";
 const DAY = 24 * 3600 * 1000;
 
 /** 목록은 큰 원문을 빼서 가볍게 두고, 소유자별 상세 응답은 대조용 원문을 제공한다. */
-const forClient = (e: Evidence): Evidence => { const { readmeForChecks: _checks, mergedPrDetails: _prs, ...rest } = e; void _checks; void _prs; return rest; };
+const forClient = (e: Evidence): Evidence => { const { readmeForChecks: _checks, mergedPrDetails: _prs, homepageSource: _homepage, ...rest } = e; void _checks; void _prs; void _homepage; return rest; };
 export const toCandidate = (r: typeof schema.candidates.$inferSelect): Candidate => ({ id: r.id, type: r.type as Candidate["type"], title: r.title, repo: r.repo, key: r.key, evidence: forClient(r.evidence as Evidence), status: r.status as CandidateStatus, latestJudgmentId: r.latestJudgmentId ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
 export const toJudgment = (r: typeof schema.judgments.$inferSelect): Judgment => ({ id: r.id, candidateId: r.candidateId, scores: r.scores as Judgment["scores"], total: r.total, reasoning: r.reasoning, angle: r.angle ?? undefined, decision: r.decision as Decision, suggestedChannels: r.suggestedChannels as Channel[], model: r.model, overriddenDecision: (r.overriddenDecision as "draft" | "drop" | "defer" | null) ?? undefined, overrideReason: r.overrideReason ?? undefined, createdAt: r.createdAt });
 export const toDraft = (r: typeof schema.drafts.$inferSelect): Draft => ({ purpose: r.purpose ?? undefined, id: r.id, candidateId: r.candidateId, channel: r.channel as Channel, lang: r.lang, version: r.version, title: r.title ?? undefined, body: r.body, mediaHint: r.mediaHint ?? undefined, lint: r.lint, status: r.status as Draft["status"], model: r.model, voice: r.voice ?? undefined, createdAt: r.createdAt, updatedAt: r.updatedAt });
@@ -182,7 +182,7 @@ export function refreshEvidence(ctx: AppContext, ownerId: string, repo: string, 
     const defined = Object.fromEntries(Object.entries(incoming).filter(([, v]) => v !== undefined)) as Partial<Evidence>;
     // 지난 창의 글감은 자기 릴리스를 설명한다. 새 릴리스의 버전·노트로 덮어쓰지 않는다.
     const past = !inWindow(c.createdAt, Date.now());
-    const merged: Evidence = { ...cur, ...defined, ...(past ? { version: cur.version, releaseNotes: cur.releaseNotes, commitSubjects: cur.commitSubjects } : {}), limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary, windowReleaseNotes: cur.windowReleaseNotes };
+    const merged: Evidence = { ...cur, ...defined, homepage: incoming.homepage, homepageSource: incoming.homepageSource, ...(past ? { version: cur.version, releaseNotes: cur.releaseNotes, commitSubjects: cur.commitSubjects } : {}), limitations, limitationsSource, highlights: cur.highlights, highlightsAt: cur.highlightsAt, ompSummary: cur.ompSummary ?? incoming.ompSummary, windowReleaseNotes: cur.windowReleaseNotes };
     ctx.db.update(schema.candidates).set({ evidence: merged as Record<string, unknown> }).where(eq(schema.candidates.id, c.id)).run();
     n++;
   }
