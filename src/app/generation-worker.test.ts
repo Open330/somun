@@ -588,7 +588,7 @@ it("attempts one repair for an introduction habit question and keeps the warning
   expect(runLlm).toHaveBeenCalledTimes(2);
 });
 
-it("automatically removes an introduction definition and duplicate sentence without changing the source snapshot", async () => {
+it("repairs duplicate introduction sentences while preserving the source and product context", async () => {
   const first = { title: "", body: "b is a tool. Reads source code. Reads source code." };
   const repaired = { title: "", body: "Read source code with b to find CRLF positions." };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
@@ -599,7 +599,8 @@ it("automatically removes an introduction definition and duplicate sentence with
   const repair = vi.mocked(runLlm).mock.calls[1][1].user;
   const source = original.slice(original.indexOf("\n## Facts\n"), original.indexOf("\n## Selected channel contract\n"));
   expect(repair).toContain(source);
-  expect(repair).toContain("introduction_definition_opening");
+  expect(repair).not.toContain("introduction_definition_opening");
+  expect(repair).toContain("preserving its source-backed product identity");
   expect(repair).toContain("introduction_repeated_sentence");
   expect(repair).not.toContain("## First introduction\n");
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(repaired.body);
@@ -619,12 +620,12 @@ it.each(["server", "local"] as const)("prepares generated introductions consiste
   } else {
     const claim = claimJob(ctx, "local", id, "test-agent");
     const checked = await (await request(`/api/jobs/${id}/check`, { claimToken: claim.claimToken, resultJson: JSON.stringify(raw) })).json();
-    expect(checked.comparisonText).toBe(JSON.stringify({ body: `${next} ${first}${link}` }));
+    expect(checked.comparisonText).toBe(JSON.stringify({ body: raw.body }));
     expect(checked.issues).toEqual([]);
     completeJob(ctx, "local", id, { claimToken: claim.claimToken!, resultJson: JSON.stringify(raw), model: "fixture" });
   }
   const saved = ctx.db.select().from(schema.drafts).get()!;
-  expect(saved.body).toBe(`${next} ${first}${link}`);
+  expect(saved.body).toBe(raw.body);
   expect(JSON.parse(row(id).resultJson!).body).toBe(raw.body);
   const edited = await request(`/api/drafts/${saved.id}/edit`, { body: raw.body, markCopied: false });
   expect(edited.status).toBe(200);
@@ -648,4 +649,14 @@ it.each(["server", "local"] as const)("preserves configured banned phrases throu
   const saved = ctx.db.select().from(schema.drafts).get()!;
   expect(saved.body).toBe(raw.body);
   expect(saved.lint).toEqual(expect.arrayContaining([expect.objectContaining({ rule: "banned_phrases", ok: false, detail: "소개합니다" })]));
+});
+
+
+it("does not repair or reorder an accurate product category introduction", async () => {
+  const body = "b는 원격 기기의 화면을 조작하고 파일을 복사하는 소프트웨어입니다. 파일 창에서 다른 기기의 폴더를 엽니다. https://github.com/a/b";
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output({ title: "", body }));
+  await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "x", lang: "ko" }], introduction: true });
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledOnce();
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(body);
 });

@@ -14,20 +14,20 @@ it("preserves multiline and unterminated quotes", () => {
   }
 });
 
-it("moves a known use preface behind an independent action without removing any sentence or URL", () => {
+it("preserves reader-situation context, sentence order and URLs", () => {
   const first = "Windows와 Mac에서 파일을 관리하려면 Acme를 사용합니다.";
   const next = "파일 창에서 항목을 복사한 뒤 다른 기기의 폴더에 붙여넣습니다.";
   const body = `${first}\n\n  ${next}\nhttps://example.com`;
   const edited = prepareIntroduction(body, { ...options, channel: "x", tone: "평서문" });
-  expect(edited).toBe(`${next}\n\n  ${first}\nhttps://example.com`);
+  expect(edited).toBe(body);
   expect(prepareIntroduction(edited, { ...options, channel: "x", tone: "평서문" })).toBe(edited);
-  expect(prepareIntroduction(`${first} ${next} https://example.com`, { ...options, channel: "x", tone: "평서문" })).toBe(`${next} ${first} https://example.com`);
+  expect(prepareIntroduction(`${first} ${next} https://example.com`, { ...options, channel: "x", tone: "평서문" })).toBe(`${first} ${next} https://example.com`);
 });
 
-it("moves a conditional-use connection preface but leaves a directly stated operation alone", () => {
+it("preserves conditional reader situations and directly stated operations", () => {
   const first = "Acme를 사용하면 기기의 화면과 파일을 연결할 수 있어요.";
   const next = "파일 창에서 다른 기기의 폴더로 항목을 복사해요.";
-  expect(prepareIntroduction(`${first} ${next}`, options)).toBe(`${next} ${first}`);
+  expect(prepareIntroduction(`${first} ${next}`, options)).toBe(`${first} ${next}`);
   expect(prepareIntroduction("SSH로 원격 기기의 파일을 복사해요. 저장된 계정을 재사용해요.", options)).toBe("SSH로 원격 기기의 파일을 복사해요. 저장된 계정을 재사용해요.");
 });
 
@@ -64,4 +64,10 @@ it.each([
   ["지금 소개합니다", "지금\n소개합니다."],
 ])("preserves normalized banned phrase %s without hiding its warning", (phrase, body) => {
   expect(prepareIntroduction(body, { ...options, bannedPhrases: [phrase] })).toBe(body);
+});
+
+
+it("preserves product identity before its supporting workflow", () => {
+  const body = "Acme는 원격 기기의 화면을 조작하고 파일을 복사하는 소프트웨어입니다. 파일 창에서 다른 기기의 폴더를 엽니다.";
+  expect(prepareIntroduction(body, { ...options, channel: "x", tone: "평서문" })).toBe(body);
 });

@@ -192,7 +192,7 @@ describe("draft purpose on channels with links outside the body", () => {
     expect(prompt.draftPurpose).toBe("introduction");
     expect(prompt.user).toContain("## First introduction");
     expect(prompt.user).not.toContain("## Coverage");
-    expect(prompt.user).toContain("Keep supplied URLs out of the body");
+    expect(prompt.user).toContain("No URLs in the body");
   });
 });
 
@@ -208,13 +208,13 @@ describe("project introduction writing brief", () => {
     expect(prompt.user).toContain("Maximum 6 sentences");
     expect(prompt.user).not.toContain("Maximum 2 sentences");
     expect(prompt.user).not.toContain("Rules: One or two sentences");
-    expect(prompt.user).toContain("Max length: 500 characters");
+    expect(prompt.user).toContain("Maximum 500 characters");
     expect(prompt.user).toContain("No URLs in the body");
   });
   it("keeps X platform limits without the old 220-character introduction target", () => {
     const prompt = draftPrompt(candidate, "x", "ko", [], undefined, { introduction: true });
-    expect(prompt.user).toContain("Max length: 280 characters");
-    expect(prompt.user).toContain("2-4 short sentences");
+    expect(prompt.user).toContain("Maximum 280 characters");
+    expect(prompt.user).toContain("3-4 short sentences");
     expect(prompt.user).not.toContain("220 characters");
     expect(prompt.user).toContain("Use fewer sentences when evidence is sparse");
   });
@@ -233,14 +233,15 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true, channelSpec: { ...channelSpec("threads"), maxSentences: 1 } });
   expect(prompt.user).toContain("Maximum 1 sentences");
   expect(prompt.user).not.toContain("Maximum 6 sentences");
+  expect(prompt.user).not.toContain("4-5 short sentences");
 });
 
 
 it("uses introduction space for distinctive reader value rather than a generic setup summary", () => {
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("Explain the action and visible result");
-  expect(prompt.user).toContain("Prefer a distinctive workflow in current source material");
-  expect(prompt.user).toContain("A current release can supply evidence of what the product now does");
+  expect(prompt.user).toContain("구체적인 사용 상황과 제품명·종류·주용도를 도입에서 연결해 설명");
+  expect(prompt.user).toContain("서로 다른 동작과 보이는 결과");
+  expect(prompt.system).toContain("connected main actions");
   expect(prompt.user).not.toContain("If only two supported sentences");
   expect(prompt.user).not.toContain("then add one concrete workflow detail");
 });
@@ -250,18 +251,18 @@ it.each(["x", "threads"] as const)("keeps the core product task ahead of a narro
   const c = { ...candidate, evidence: { ...candidate.evidence, description: "Remote desktop for Windows and Mac", readmeForChecks: "Control another device's screen. Browse files in a separate window without a screen connection. Files require SSH access.", releaseNotes: "Copied files remain available after closing the source window." } };
   const intro = draftPrompt(c, channel, "ko", [], undefined, { introduction: true });
   expect(intro.user).toContain(c.evidence.readmeForChecks);
-  expect(intro.user).toContain(c.evidence.releaseNotes);
-  expect(intro.user).toContain("select the main reader task from the profile or README");
-  expect(intro.user).toContain("Do not lead with maintenance, edge cases or regression fixes");
-  expect(intro.user).toContain("can they identify the product's main use");
-  expect(intro.user).toContain("Each later sentence must add a distinct action, result or necessary condition");
-  expect(intro.user).toContain("Preserve the release's prerequisites, platform scope and limitations");
+  expect(intro.user).not.toContain(c.evidence.releaseNotes);
+  expect(intro.user).toContain("제품명·종류·주용도를 도입에서 연결해 설명");
+  expect(intro.user).toContain("Historical PR changes belong in updates");
+  expect(intro.user).toContain("what is this product, when would the reader need it");
+  expect(intro.user).toContain("각 문장은 서로 다른 정보를 보태는 완결된 문장");
+  expect(intro.user).toContain("Keep each retained capability's prerequisites and exclusions");
   expect(intro.editorInstruction).toBe("");
-  expect(intro.system).toContain("Do not open with the project name followed by a software category definition");
-  expect(intro.system).toContain("end with the supplied link alone");
-  expect(intro.system).toContain("Merely saying it manages or connects things");
+  expect(intro.system).toContain("what kind of product this is");
+  expect(intro.user).toContain(channel === "x" ? "Use a supplied link in the body" : "No URLs in the body");
+  expect(intro.system).toContain("concrete reader need");
   const update = draftPrompt(c, channel, "ko", [], undefined, { introduction: false });
-  expect(update.system).not.toContain("Do not open with the project name followed by a software category definition");
+  expect(update.system).not.toContain("A concrete product/category description is welcome");
   expect(update.user).not.toContain("can they identify the product's main use");
   expect(update.user).not.toContain("Do not lead with maintenance, edge cases or regression fixes");
 });
@@ -272,7 +273,7 @@ describe("README-backed introduction facts", () => {
     const profile = { what: "A generic file-management tool", audience: "Remote device managers", claims: [], stage: "stable", limitations: ["SSH required"], naming: "tool", avoid: ["internal-host"] };
     const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: "Open remote folders over SSH in separate windows." } };
     const original = structuredClone(profile);
-    const auto = draftPrompt(c, "threads", "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] });
+    const auto = draftPrompt(c, "threads", "ko", [], undefined, { introduction: true, profile, profileEditedFields: [], profileClaimsEdited: false });
     expect(auto.user).not.toContain(profile.what);
     expect(auto.user).not.toContain(profile.audience);
     expect(auto.user).toContain("SSH required");
@@ -283,7 +284,7 @@ describe("README-backed introduction facts", () => {
     }
     expect(draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] }).user).toContain(profile.what);
     expect(profile).toEqual(original);
-    expect(auto.schema.properties).toMatchObject({ title: { enum: [""] }, body: { description: expect.stringContaining("No URLs") } });
+    expect(auto.schema.properties).toMatchObject({ title: { enum: [""] }, body: { type: "string" } });
   });
   it("keeps historical PR changes in updates and grounding instead of baseline introductions", () => {
     const body = "New installations default to prompting on every connection.";
@@ -344,31 +345,34 @@ describe("README-backed introduction facts", () => {
 });
 
 
-describe("narrow introduction workflow source", () => {
+describe("complete introduction source", () => {
   const workflow = "Preview playback works independently of exporting. Closing the preview leaves ongoing exports active. Exports require confirmation.";
-  const overview = "A general media management platform.";
+  const overview = "A desktop app for previewing and exporting media files on Windows and macOS.";
   const readme = `${overview}\n\n## Preview\n\n${workflow}\n\n## Storage\n\nUnrelated storage details.`;
   const c = { ...candidate, evidence: { ...candidate.evidence, description: overview, readmeForChecks: readme, readmeTruncated: true, releaseNotes: "A separate storage feature.", limitations: ["Local files only"], experimental: ["Cloud export is experimental"] } };
   const profile = { what: overview, audience: "Media managers", claims: ["A separate broad generated claim"], stage: "beta", limitations: ["Only authorized accounts"], naming: "Studio", avoid: ["internal-node"] };
-  it.each(["x", "threads"] as const)("uses one verbatim workflow for %s while retaining constraints and full grounding", channel => {
+  it.each(["x", "threads"] as const)("keeps product context and conditions without forcing a small workflow for %s", channel => {
     const original = structuredClone(c);
-    const prompt = draftPrompt(c, channel, "ko", [], undefined, { introduction: true, profile, profileEditedFields: [] });
-    expect(prompt.user).toContain("## Selected source paragraph");
+    const prompt = draftPrompt(c, channel, "ko", [], undefined, { introduction: true, profile, profileEditedFields: [], profileClaimsEdited: false });
+    expect(prompt.user).not.toContain("## Selected source paragraph");
     expect(prompt.user).toContain(workflow);
-    expect(prompt.user).not.toContain(overview);
-    expect(prompt.user).not.toContain("Unrelated storage details.");
+    expect(prompt.user).toContain(overview);
+    expect(prompt.user).toContain(readme);
+    expect(prompt.user).toContain("Unrelated storage details.");
     expect(prompt.user).not.toContain(c.evidence.releaseNotes);
     expect(prompt.user).not.toContain(profile.claims[0]);
     for (const constraint of ["Local files only", "Cloud export is experimental", "Only authorized accounts", "Studio", "internal-node", "beta"]) expect(prompt.user).toContain(constraint);
     expect(prompt.user).toContain("collected README snapshot is truncated");
-    expect(prompt.user).toContain("does not certify");
-    expect(prompt.user).toContain("at most TWO factual sentences");
+    expect(prompt.user).toContain("Missing text is not evidence");
+    expect(prompt.user).not.toContain("at most TWO factual sentences");
+    expect(prompt.user).not.toContain("Only this paragraph supplies the introduction topic");
+    expect(prompt.user).toContain("what is this product, when would the reader need it");
     expect(prompt.user).toContain("Do not combine independent capabilities into a simultaneous behavior");
     expect(groundingText(c, profile)).toContain(readme);
     expect(groundingText(c, profile)).toContain(profile.claims[0]);
     expect(c).toEqual(original);
   });
-  it("falls back for updates, other channels, explicit instructions, user-edited or unknown-origin profiles and legacy snapshots", () => {
+  it("preserves full sources with explicit instructions, edited profiles and legacy snapshots", () => {
     for (const options of [{ introduction: false, profileEditedFields: [] }, { introduction: true, instruction: "Use a comparison", profileEditedFields: [] }, { introduction: true, profileEditedFields: ["claims"] as (keyof typeof profile)[] }, { introduction: true, profileEditedFields: ["naming"] as (keyof typeof profile)[] }, { introduction: true }]) {
       const prompt = draftPrompt(c, "threads", "ko", [], undefined, { ...options, profile });
       expect(prompt.user).not.toContain("## Selected source paragraph");
@@ -387,31 +391,31 @@ describe("narrow introduction workflow source", () => {
     "Contributors test whether playback is independent of exporting.",
     "`Playback is independent of exporting.`",
     '“Playback is independent of exporting.”',
-  ])("keeps the ordinary README path for excluded or unrelated text: %s", text => {
+  ])("preserves documented conditions without forcing an independence phrase into the topic: %s", text => {
     const source = { ...c, evidence: { ...c.evidence, readmeForChecks: `Overview.\n\n${text}\n\nEnd.` } };
     const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
     expect(prompt.user).not.toContain("## Selected source paragraph");
     expect(prompt.user).toContain(text);
   });
-  it("does not treat a cut final paragraph as a complete workflow", () => {
-    const source = { ...c, evidence: { ...c.evidence, readmeForChecks: `Overview.\n\n${workflow}` } };
+  it("marks unknown source coverage instead of certifying a cut workflow", () => {
+    const source = { ...c, evidence: { ...c.evidence, readmeForChecks: `Studio previews local media.\n\n## Preview\n\n${workflow}` } };
     expect(draftPrompt(source, "x", "ko", [], undefined, { introduction: true }).user).not.toContain("## Selected source paragraph");
     const complete = { ...source, evidence: { ...source.evidence, readmeTruncated: false } };
-    expect(draftPrompt(complete, "x", "ko", [], undefined, { introduction: true }).user).toContain("complete collected README snapshot");
+    expect(draftPrompt(complete, "x", "ko", [], undefined, { introduction: true }).user).toContain("complete README snapshot");
   });
 });
 
 
 it("retains separate task and global conditions as source constraints", () => {
-  const readme = "## Requirements\n\nA paid account and macOS 14 are required.\n\n## Preview\n\nPreview works independently of exporting.\n\nPreview requires approval.\n\n### Access\n\nGuests cannot preview private documents.\n\n## License\n\nMIT.";
+  const readme = "Studio previews and exports local media files.\n\n## Requirements\n\nA paid account and macOS 14 are required.\n\n## Preview\n\nPreview works independently of exporting.\n\nPreview requires approval.\n\n### Access\n\nGuests cannot preview private documents.\n\n## License\n\nMIT.";
   const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: false } };
   const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("## Selected source paragraph");
+  expect(prompt.user).not.toContain("## Selected source paragraph");
   expect(prompt.user).toContain("A paid account and macOS 14 are required.");
   expect(prompt.user).toContain("Preview requires approval.");
   expect(prompt.user).toContain("Guests cannot preview private documents.");
-  expect(prompt.user).toContain("## Source scope and conditions");
-  expect(prompt.user).not.toContain("MIT.");
+  expect(prompt.user).toContain(readme);
+  expect(prompt.user).toContain("MIT.");
 });
 
 it.each([
@@ -423,9 +427,46 @@ it.each([
   "## Contributing\n\n### Example\n\nPreview works independently of exporting.\n\n## End\n\nDone.",
   "## Preview\n\nPreview works independently of exporting.\n\nPartial condition",
   "## Preview\n\nPreview works independently of exporting.\n\n## Requirements\n\nPartial global requirement",
-])("falls back for code, excluded sections and cut task/global scope: %s", readme => {
-  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: true } };
+])("keeps source evidence intact across code, licensing and cut conditions: %s", readme => {
+  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: `Studio previews and exports local media files.\n\n${readme}`, readmeTruncated: true } };
   const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
   expect(prompt.user).not.toContain("## Selected source paragraph");
   expect(prompt.user).toContain(readme);
+});
+
+it("keeps the product capability overview with its identity instead of reducing the introduction to a supporting feature", () => {
+  const readme = "Studio previews and exports media files on desktop computers.\n\n## Features\n\nOpen local media in a preview and export selected items. Exporting requires approval.\n\n## Preview workflow\n\nPreview works independently of exporting.\n\n## License\n\nMIT.";
+  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: false } };
+  const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
+  const identity = prompt.user;
+  expect(identity).toContain("Studio previews and exports media files on desktop computers.");
+  expect(identity).toContain("Open local media in a preview and export selected items. Exporting requires approval.");
+  expect(prompt.user).not.toContain("Only this paragraph supplies the introduction topic");
+  expect(prompt.user).not.toContain("at most TWO factual sentences");
+});
+
+it("keeps the full source when the README has no opening product description", () => {
+  const readme = "## Preview\n\nPreview works independently of exporting.\n\n## License\n\nMIT.";
+  const source = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: false } };
+  const prompt = draftPrompt(source, "x", "ko", [], undefined, { introduction: true });
+  expect(prompt.user).toContain(readme);
+  expect(prompt.user).not.toContain("## Product identity and scope");
+});
+
+
+it.each(["x", "threads"] as const)("keeps release truncation and channel audience visible in %s introduction requests", channel => {
+  const releaseNotes = "Source sentence. ".repeat(500) + "Late prerequisite: authorized accounts only.";
+  const source = { ...candidate, evidence: { ...candidate.evidence, releaseNotes, readmeForChecks: "A runnable product." } };
+  const base = channelSpec(channel);
+  const prompt = draftPrompt(source, channel, "ko", [], undefined, {
+    introduction: true,
+    instruction: "Explain the current release",
+    channelSpec: { ...base, identity: { ...base.identity!, audience: "Researchers working with remote devices" } },
+  });
+  expect(prompt.user).toContain("[Release source truncated: check the original for missing prerequisites and exclusions.]");
+  expect(prompt.user).not.toContain("Late prerequisite: authorized accounts only.");
+  expect(source.evidence.releaseNotes).toBe(releaseNotes);
+  expect(prompt.user).toContain("Audience: Researchers working with remote devices");
+  expect(prompt.user).toContain("Purpose: ");
+  expect(instructionOf(prompt.user)).toBe("Explain the current release");
 });
