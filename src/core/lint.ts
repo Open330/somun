@@ -233,7 +233,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     };
     const expected = canonical(facts.preferLink);
     const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some(token => {
-      // Compare the complete token: an autolinker may stop at a known TLD inside another hostname.
+      // Compare the complete URL; an autolinker may stop at a known TLD inside another hostname.
       if (canonical(token) === expected) return true;
       let candidate = token.replace(/[.,;:!?，。；：！？]+$/u, "");
       const opens: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
