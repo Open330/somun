@@ -1,3 +1,4 @@
+import { postLength } from "@core/post-length";
 import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "@core/channels";
@@ -380,7 +381,7 @@ export default function DraftPanel({
       : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
   const displayed = editing ? latest : (shown ?? latest);
-  const count = [...(editing ? body : displayed.body)].length;
+  const count = postLength(channel, editing ? body : displayed.body);
   const checks = displayed.lint.filter((item) => !item.ok && item.detail);
   // 설정된 모델을 다시 쓸 수 있을 때까지 남은 시간. 한 시간 안일 때만 배지에 시각을 보이고, 더 멀면 툴팁에만 둔다.
   const resetIn = draftModelResetAt ? draftModelResetAt - Date.now() : 0;
@@ -541,7 +542,9 @@ export default function DraftPanel({
           )}
           <textarea aria-label={t("초안 본문")} value={body} onChange={(ev) => setBody(ev.target.value)} autoFocus />
           <div className="row between mt-6">
-            <span className="tiny muted">{t("{n}자", { n: `${[...body].length}${spec.maxChars ? `/${spec.maxChars}` : ""}` })}</span>
+            <span className="tiny muted">
+              {t("{n}자", { n: `${postLength(channel, body)}${spec.maxChars ? `/${spec.maxChars}` : ""}` })}
+            </span>
           </div>
           {changed && (
             <>

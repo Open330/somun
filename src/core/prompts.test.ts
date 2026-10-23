@@ -213,8 +213,9 @@ describe("project introduction writing brief", () => {
   });
   it("keeps X platform limits without the old 220-character introduction target", () => {
     const prompt = draftPrompt(candidate, "x", "ko", [], undefined, { introduction: true });
-    expect(prompt.user).toContain("Maximum 280 characters");
-    expect(prompt.user).toContain("3-4 short sentences");
+    expect(prompt.user).toContain("Maximum 280 X weighted characters");
+    expect(draftPrompt(candidate, "x", "ko", []).user).toContain("Maximum 280 X weighted characters");
+    expect(prompt.user).toContain("as few short sentences as needed");
     expect(prompt.user).not.toContain("220 characters");
     expect(prompt.user).toContain("Use fewer sentences when evidence is sparse");
   });

@@ -660,3 +660,21 @@ it("does not repair or reorder an accurate product category introduction", async
   expect(runLlm).toHaveBeenCalledOnce();
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(body);
 });
+
+
+it.each([true, false])("repairs a Korean X body that exceeds the weighted limit (introduction=%s)", async introduction => {
+  const id = queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction });
+  const long = { title: "", body: `${"가".repeat(129)} https://github.com/a/b` };
+  const fixed = { title: "", body: "b는 저장한 로그를 검색하는 CLI입니다. https://github.com/a/b" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(fixed));
+  await processServerJob(ctx);
+  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("282/280");
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("Korean/CJK characters count as 2");
+  if (introduction) {
+    const edit = vi.mocked(runLlm).mock.calls[1][1].user;
+    expect(edit).toContain("Do not choose a different FAQ");
+  }
+  expect(row(id).status).toBe("done");
+  expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(fixed.body);
+});

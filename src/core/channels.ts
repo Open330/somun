@@ -94,6 +94,14 @@ export function channelSpec(channel: Channel, customChannels: readonly CustomCha
   // 비활성화된 과거 초안은 이름 없이도 읽을 수 있다. API에서 새 요청은 등록된 채널만 허용한다.
   return { id: channel, label: channel, defaultLangs: ["ko"], maxChars: null, hasTitle: false, rules: "Facts only.", mediaHint: "", composeUrl: "", runbook: [] };
 }
+/** X limits count Korean/CJK twice and every parsed URL as 23, rather than raw text length. */
+export function lengthInstruction(spec: Pick<ChannelSpec, "id" | "maxChars">): string {
+  if (spec.maxChars === null) return "";
+  return spec.id === "x"
+    ? `Maximum ${spec.maxChars} X weighted characters in the body: Korean/CJK characters count as 2, ASCII as 1, and each URL as 23. With one link this leaves about ${Math.max(0, Math.floor((spec.maxChars - 23) / 2))} CJK characters for the text. Fewer sentences are allowed to fit this budget. Keep the reader reason and necessary conditions; remove optional details first.`
+    : `Maximum ${spec.maxChars} characters.`;
+}
+
 /** 소개는 변경 알림보다 맥락이 필요하다. 플랫폼 글자 수·링크 위치와 커스텀 프리셋은 보존한다. */
 export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "update" | null): ChannelSpec {
   if (purpose !== "introduction" || (spec.id !== "threads" && spec.id !== "x")) return spec;
@@ -102,7 +110,7 @@ export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "
     ? Math.min(spec.maxSentences, threads ? 6 : 4) : threads ? 6 : 4;
   const sentenceGuide = maxSentences < (threads ? 4 : 3) ? `up to ${maxSentences} short sentences` : threads
     ? "4-5 short sentences in 2-3 short paragraphs when supported facts are available"
-    : "3-4 short sentences within the configured character limit, with a supplied link when supported facts are available";
+    : "as few short sentences as needed within the configured character limit, with a supplied link";
   return {
     ...spec,
     maxSentences,
