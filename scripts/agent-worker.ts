@@ -61,7 +61,13 @@ const parseLines = (stdout: string) => stdout.trim().split("\n").map((l) => { tr
 
 /** CLI로 작업 하나를 처리한다. 쓴 호출의 사용량은 usage에 쌓는다(실패한 호출도). */
 async function runAgent(job: Job, usage: LocalUsage[]): Promise<{ json: unknown; model: string }> {
-  const prompt = `${job.system}\n\n---\n${job.user}\n\n---\nRespond with a single JSON object matching this JSON Schema and nothing else (no prose, no code fence):\n${job.schemaJson}`;
+  const requestSchema = JSON.parse(job.schemaJson);
+  const pinned = job.sourceExcerpt?.adapted ? job.sourceExcerpt.sourceBody : undefined;
+  if (pinned !== undefined) {
+    if (!requestSchema.properties?.sourceBody?.enum?.includes(pinned)) throw new Error("Pinned source must belong to the original schema");
+    requestSchema.properties.sourceBody.enum = [pinned];
+  }
+  const prompt = `${job.system}\n\n---\n${job.user}\n\n---\nRespond with a single JSON object matching this JSON Schema and nothing else (no prose, no code fence):\n${JSON.stringify(requestSchema)}`;
   const startedAt = Date.now();
   const failed = (provider: LocalUsage["provider"], model: string) => usage.push({ provider, model, startedAt, latencyMs: Date.now() - startedAt, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 });
   if (cli === "claude") {
@@ -98,7 +104,7 @@ async function runAgent(job: Job, usage: LocalUsage[]): Promise<{ json: unknown;
   throw new Error(`unknown cli ${cli}`);
 }
 
-type Check = { issues: { rule: string; detail?: string }[]; repairUser?: string; comparisonText?: string };
+type Check = { issues: { rule: string; detail?: string }[]; repairUser?: string; repairSystem?: string; repairSchemaJson?: string; comparisonText?: string };
 
 /**
  * 서버 작업자와 같은 자동 보정: 서버가 초안을 린트해 고칠 점을 알려 주면 한 번 더 쓰고, 덜 걸리는 쪽을 제출한다.
@@ -109,7 +115,7 @@ async function repair(job: Job, claimToken: string, first: { json: unknown; mode
   try { before = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(first.json) }); } catch { return first; }
   if (!before.repairUser) return first;
   try {
-    const again = await runAgent({ ...job, user: before.repairUser }, usage);
+    const again = await runAgent({ ...job, user: before.repairUser, system: before.repairSystem ?? job.system, schemaJson: before.repairSchemaJson ?? job.schemaJson }, usage);
     const after = await call<Check>(`/jobs/${job.id}/check`, { claimToken, resultJson: JSON.stringify(again.json) });
     const better = isBetterRepair(before.issues, after.issues, { before: before.comparisonText ?? JSON.stringify(first.json ?? ""), after: after.comparisonText ?? JSON.stringify(again.json ?? "") });
     console.log(`repair #${job.id}: ${before.issues.map((i) => i.rule).join(",")} → ${after.issues.map((i) => i.rule).join(",") || "ok"} (${better ? "repaired" : "kept first"})`);

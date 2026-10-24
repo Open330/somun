@@ -108,3 +108,10 @@ describe("original homepage copy candidates", () => {
     expect(candidates.reduce((sum, candidate) => sum + candidate.length, 0) + body(units[candidates.length]).length).toBeGreaterThan(6000);
   });
 });
+
+it("prefers contextual passages across the full source before the candidate cap without rewriting them", () => {
+  const units = Array.from({ length: 10 }, (_, i) => unit(`id-${i}`, `작업 ${i}`, i === 9 ? "연결 없이 파일을 복사합니다." : "파일을 엽니다."));
+  const input = source(units);
+  expect(sourceCopyBodies(input, "Atlas", url, "ko", 280, true)).toEqual([body(units[9]), ...units.slice(0, 7).map(u => body(u))]);
+  expect(sourceCopyBodies(input, "Atlas", url, "ko")).toEqual(units.slice(0, 8).map(u => body(u)));
+});

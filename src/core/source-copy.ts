@@ -5,7 +5,7 @@ import { normalizeForMatch } from "./text-match.js";
 const whitespace = (text: string) => text.replace(/\s+/g, " ").trim();
 
 /** Mechanical source candidates only; membership does not certify relevance or factual scope. */
-export function sourceCopyBodies(source: HomepageSource, publicName: string, url: string, lang: string, maxChars = 280): string[] {
+export function sourceCopyBodies(source: HomepageSource, publicName: string, url: string, lang: string, maxChars = 280, preferContext = false): string[] {
   const name = publicName.trim();
   if (source.status !== "ok" || source.truncated || !source.text || source.url !== url || !/^https?:\/\/\S+$/i.test(url)
     || !name || !lang || !Number.isFinite(maxChars) || maxChars <= 0 || !source.copyUnits?.length) return [];
@@ -51,7 +51,11 @@ export function sourceCopyBodies(source: HomepageSource, publicName: string, url
   const result: string[] = [];
   const seen = new Set<string>();
   let characters = 0;
-  for (const body of [...pairs, ...singles]) {
+  const candidates = [...pairs, ...singles];
+  // A context cue is a relevance hint, never a semantic or factual verdict.
+  const hasContext = (body: string) => /\b(?:without|when|if)\b|없이|경우|다면|때[는도만, .]/i.test(body);
+  if (preferContext) candidates.sort((a, b) => Number(hasContext(b)) - Number(hasContext(a)));
+  for (const body of candidates) {
     if (seen.has(body) || characters + body.length > 6000) continue;
     result.push(body);
     seen.add(body);

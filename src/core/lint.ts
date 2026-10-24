@@ -123,7 +123,7 @@ export function unsupportedNumbers(text: string, source: string): string[] {
 const withoutUnit = (token: string) => token.replace(/(?<=\d)(?:ms|s|min|h|kb|mb|gb|tb)$/, "");
 
 /** 명시적인 한국어 해요체 채널만 검사한다. 문체 지시·모호한 커스텀 톤은 자동 해석하지 않는다. */
-function registerCheck(body: string, spec: ChannelSpec, facts: LintFacts, locale: Locale): LintResult | undefined {
+export function registerCheck(body: string, spec: ChannelSpec, facts: LintFacts, locale: Locale): LintResult | undefined {
   if (facts.language?.toLowerCase().split("-")[0] !== "ko") return undefined;
   const tone = spec.identity?.tone ?? "";
   if (!/해요체(?=$|[.,;·\s])/.test(tone) || /합니다체|하십시오체|반말|해요체\s*(?:금지|아님|아닌|말고|대신|사용하지)/.test(tone)) return undefined;
