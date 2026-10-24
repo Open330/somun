@@ -39,7 +39,7 @@ export function rubricTotal(scores: Rubric, weights: Rubric): number {
   return Math.round((raw / (2 * wsum)) * 100) / 10;
 }
 
-export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number; staleDigest?: boolean };
+export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number; staleDigest?: boolean; draftRejected?: string[] };
 
 export type ExampleOrigin = "authored" | "accepted" | "seed";
 
@@ -197,7 +197,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     // These are reading sources for a rewrite, not already finished X posts.
     // Keep complete task paragraphs even when their original wording exceeds
     // the post budget; the generated body still has the normal channel limit.
-    const bodies = sourceCopyBodies(source, facts.publicName, url, lang, Math.max(1200, spec.maxChars ?? 280)).filter(body =>
+    const bodies = sourceCopyBodies(source, facts.publicName, url, lang, Math.max(1200, spec.maxChars ?? 280), true).filter(body =>
       lintDraft(channel, undefined, body, settings.bannedPhrases, { ...facts, language: lang }, settings.ui?.locale, spec).every(issue => issue.ok || issue.rule === "source_conditions_need_review" || issue.rule === "length"));
     if (bodies.length) return adaptedSourcePrompt(prompt, bodies, url, facts.publicName, { planTask: settings.llm.provider !== "local-agent" });
   }
@@ -366,10 +366,17 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const title = spec.hasTitle ? String(r.title ?? "").trim() || undefined : undefined;
   const excerpt = args.sourceExcerpt ? readSourceExcerptResult(args.result, args.sourceExcerpt, args.schemaJson) : undefined;
   const origin = args.sourceExcerpt?.adapted ? { ...args.sourceExcerpt, sourceBody: excerpt!.sourceBody } : args.sourceExcerpt;
-  const body = excerpt && !origin?.adapted ? excerpt.body : prepareIntroduction(excerpt?.body ?? String(r.body ?? "").trim(), { channel, language: lang, purpose: origin?.adapted ? "introduction" : args.draftPurpose, tone: origin?.adapted ? "해요체" : spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
+  const body = excerpt && !origin?.adapted ? excerpt.body : prepareIntroduction(excerpt?.body ?? String(r.body ?? "").trim(), { channel, language: lang, purpose: origin?.adapted ? "introduction" : args.draftPurpose, tone: spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
   if (!body) throw new Error("empty draft body");
+  const adaptedIssues = origin?.adapted ? adaptedSourceIssues(body, origin.sourceBody) : [];
+  const lint = [...lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), ...adaptedIssues];
+  // Known mechanical failures must not create a new version. Human-review
+  // warnings about factual scope remain visible and do not veto generation.
+  const required = new Set(["length", "has_link", "preferred_link", "introduction_name_missing"]);
+  const rejected = origin?.adapted ? [...new Set([...lint.filter(issue => !issue.ok && required.has(issue.rule)), ...adaptedIssues].map(issue => issue.rule))] : [];
+  if (rejected.length) return { kind: "draft", draftRejected: rejected };
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint: [...lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), ...(origin?.adapted ? adaptedSourceIssues(body, origin.sourceBody) : [])], status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint, status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

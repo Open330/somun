@@ -118,18 +118,16 @@ it("edits a valid server introduction once with only its pinned source", async (
   expect(ctx.db.select().from(schema.drafts).get()).toMatchObject({ body: prose, sourceExcerpt: { url, adapted: true, sourceBody: sources[0] } });
 });
 
-it("rejects a server repair that changes the selected source, retaining the first result", async () => {
+it("rejects a server repair that changes the selected source, without saving a known-invalid first result", async () => {
   updateSettings(ctx, "me", { llm: { provider: "gemini" } });
   const tooLong = `${"Cedar에서 기록을 작업 목록으로 옮겨요. ".repeat(15)}\n${url}`;
   vi.mocked(runLlm).mockResolvedValueOnce(output(tooLong)).mockResolvedValueOnce(output(alternative, sources[1]));
   const id = enqueue();
   expect(await processServerJob(ctx)).toBe(true);
   expect(runLlm).toHaveBeenCalledTimes(2);
-  expect(row(id).status).toBe("done");
-  const saved = ctx.db.select().from(schema.drafts).get()!;
-  expect(saved.body).toBe(tooLong);
-  expect(saved.sourceExcerpt).toEqual({ url, adapted: true, sourceBody: sources[0] });
-  expect(saved.lint.find(issue => issue.rule === "length")?.ok).toBe(false);
+  expect(row(id).status).toBe("failed");
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
+  expect(row(id).error).toContain("length");
   expect((vi.mocked(runLlm).mock.calls[1][1].schema.properties as { sourceBody: { enum: string[] } }).sourceBody.enum).toEqual([sources[0]]);
 });
 
@@ -193,10 +191,9 @@ it("retains a complete long task source while enforcing the final X post budget"
   vi.mocked(runLlm).mockResolvedValue(output(selected, selected));
   enqueueJob(ctx, "me", "draft", cid, "x", "ko", base);
   expect(await processServerJob(ctx)).toBe(true);
-  const oversized = ctx.db.select().from(schema.drafts).all().at(-1)!;
-  expect(oversized.sourceExcerpt?.sourceBody).toBe(selected);
-  expect(postLength("x", oversized.body)).toBeGreaterThan(280);
-  expect(oversized.lint.find(issue => issue.rule === "length")?.ok).toBe(false);
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(1);
+  expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(body);
+  expect(ctx.db.select().from(schema.llmJobs).all().at(-1)?.status).toBe("failed");
 });
 
 it("keeps the first valid introduction if editing fails or adds a length violation", async () => {
@@ -220,7 +217,7 @@ it("does not use editing completion to accept an unchanged or worse real violati
   enqueue();
   expect(await processServerJob(ctx)).toBe(true);
   expect(runLlm).toHaveBeenCalledTimes(2);
-  expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(tooLong);
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
 });
 
 it("narrows the first server request of a retried source-pinned job without changing its frozen schema", async () => {
@@ -247,46 +244,44 @@ it("leaves exact notation, individual protocol mentions, and URLs alone", () => 
   expect(sourceNotationIssues("https://example.com/SSH와SFTP", "SSH/SFTP로 폴더를 여세요.")).toEqual([]);
 });
 
-it.each([true, false])("checks technical notation through repair and stored lint (fixed=%s)", async fixed => {
+it.each([true, false])("checks technical notation before storing generated drafts (fixed=%s)", async fixed => {
   updateSettings(ctx, "me", { llm: { provider: "gemini" } });
   const source = `Cedar\n원격 폴더\nSSH/SFTP로 폴더를 열고 파일을 복사하세요.\n\n${url}`;
   const bad = `Cedar에서 SSH나 SFTP로 폴더를 열고 파일을 복사해요.\n${url}`;
   const good = `Cedar에서 SSH/SFTP로 폴더를 열고 파일을 복사해요.\n${url}`;
   const base = adaptedSourcePrompt(prompt(), [source], url, "Cedar");
   vi.mocked(runLlm).mockResolvedValueOnce(output(bad, source)).mockResolvedValueOnce(output(fixed ? good : bad, source));
-  enqueueJob(ctx, "me", "draft", cid, "x", "ko", base);
+  const id = enqueueJob(ctx, "me", "draft", cid, "x", "ko", base);
   expect(await processServerJob(ctx)).toBe(true);
   expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(row(id).status).toBe(fixed ? "done" : "failed");
+  expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(fixed ? 1 : 0);
+  if (!fixed) return;
   const saved = ctx.db.select().from(schema.drafts).get()!;
-  expect(saved.body).toBe(fixed ? good : bad);
-  expect(saved.lint.some(issue => !issue.ok && issue.detail?.includes("SSH/SFTP"))).toBe(!fixed);
-  if (!fixed) {
-    const held = saveDraftEdit(ctx, "me", saved.id, { body: bad, markCopied: true, copyIfClean: true });
-    expect(held.copyHeld).toBe(true);
-    expect(held.status).not.toBe("copied");
-    expect(held.lint.some(issue => !issue.ok && issue.detail?.includes("SSH/SFTP"))).toBe(true);
-    const corrected = saveDraftEdit(ctx, "me", saved.id, { body: good, markCopied: true, copyIfClean: true });
-    expect(corrected.lint.some(issue => !issue.ok && issue.detail?.includes("SSH/SFTP"))).toBe(false);
-    expect(corrected.copyHeld).toBeUndefined();
-    expect(corrected.status).toBe("copied");
-  }
+  const held = saveDraftEdit(ctx, "me", saved.id, { body: bad, markCopied: true, copyIfClean: true });
+  expect(held.copyHeld).toBe(true);
+  expect(held.status).not.toBe("copied");
+  expect(held.lint.some(issue => !issue.ok && issue.detail?.includes("SSH/SFTP"))).toBe(true);
+  const corrected = saveDraftEdit(ctx, "me", saved.id, { body: good, markCopied: true, copyIfClean: true });
+  expect(corrected.copyHeld).toBeUndefined();
+  expect(corrected.status).toBe("copied");
 });
 
-it("enforces the adapted mode's explicit register without treating quotations as prose", () => {
-  expect(adaptedSourceIssues("Cedar는 기록을 정리합니다.").map(issue => issue.rule)).toEqual(["register_mismatch"]);
+it("does not impose a register on the neutral X channel", () => {
+  expect(adaptedSourceIssues("Cedar는 기록을 정리합니다.")).toEqual([]);
   expect(adaptedSourceIssues("Cedar는 기록을 정리해요.")).toEqual([]);
   expect(adaptedSourceIssues("Cedar에 ‘작업을 완료했습니다.’라는 기록이 남아요.")).toEqual([]);
 });
 
-it("uses the existing narrow register preparation consistently for adapted local checking and completion", async () => {
+it("preserves a consistent formal register in adapted local checking and completion", async () => {
   const formal = `Cedar에서 기록을 작업 목록으로 옮깁니다. 원문으로 돌아갈 수 있습니다.\n${url}`;
-  const prepared = `Cedar에서 기록을 작업 목록으로 옮깁니다. 원문으로 돌아갈 수 있어요.\n${url}`;
+  const prepared = formal;
   const id = enqueue(), job = pendingJobs(ctx, "me")[0];
   expect(readJobDraft(job, json(formal)).body).toBe(prepared);
   const claimToken = claimJob(ctx, "me", id, "local").claimToken!;
   expect(completeJob(ctx, "me", id, { claimToken, resultJson: JSON.stringify(json(formal)) })).toEqual({ applied: true });
   expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(prepared);
-  expect(ctx.db.select().from(schema.drafts).get()?.lint.some(issue => issue.rule === "register_mismatch" && !issue.ok)).toBe(true);
+  expect(ctx.db.select().from(schema.drafts).get()?.lint.some(issue => issue.rule === "register_mismatch" && !issue.ok)).toBe(false);
 });
 
 it("writes and edits one server introduction with its task quote and original source pinned", async () => {
@@ -326,4 +321,24 @@ it("holds imperative introductions while preserving quoted instructions and sour
   expect(adaptedSourceIssues("Cedar에서 작업을 추가하세요.").map(issue => issue.rule)).toEqual(["register_mismatch"]);
   expect(adaptedSourceIssues("‘추가하세요.’라고 표시해요.")).toEqual([]);
   expect(adaptedSourceIssues("> 추가하세요.\n`열어보세요.`\nCedar는 기록을 정리해요.")).toEqual([]);
+});
+
+it.each(["명령형", "길이", "제품명", "링크"])("preserves existing drafts and edits when local completion fails a required check: %s", variation => {
+  const first = enqueue(), firstClaim = claimJob(ctx, "me", first, "local").claimToken!;
+  completeJob(ctx, "me", first, { claimToken: firstClaim, resultJson: JSON.stringify(json()) });
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  saveDraftEdit(ctx, "me", saved.id, { body: prose, markCopied: false });
+  const drafts = ctx.db.select().from(schema.drafts).all();
+  const edits = ctx.db.select().from(schema.draftEdits).all();
+  const candidate = ctx.db.select().from(schema.candidates).get();
+  const bad = variation === "명령형" ? `Cedar에서 기록을 추가하세요. ${url}`
+    : variation === "길이" ? prose.repeat(20)
+    : variation === "제품명" ? `기록을 작업 목록으로 옮겨요. ${url}` : prose.replace(url, "");
+  const id = enqueue(), claimToken = claimJob(ctx, "me", id, "local").claimToken!;
+  const resultJson = JSON.stringify(json(bad));
+  expect(completeJob(ctx, "me", id, { claimToken, resultJson })).toEqual({ applied: false });
+  expect(row(id)).toMatchObject({ status: "failed", resultJson });
+  expect(ctx.db.select().from(schema.drafts).all()).toEqual(drafts);
+  expect(ctx.db.select().from(schema.draftEdits).all()).toEqual(edits);
+  expect(ctx.db.select().from(schema.candidates).get()).toEqual(candidate);
 });

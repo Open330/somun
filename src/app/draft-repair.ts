@@ -30,7 +30,7 @@ export function readDraft(channel: Channel, json: unknown, customChannels: Custo
 export function readJobDraft(job: DraftJob, json: unknown, customChannels: CustomChannel[] = [], bannedPhrases?: string[]): { title?: string; body: string } {
   if (job.sourceExcerpt) {
     const draft = readSourceExcerptResult(json, job.sourceExcerpt, job.schemaJson);
-    return job.sourceExcerpt.adapted ? { ...draft, body: prepareIntroduction(draft.body, { channel: job.channel ?? "x", language: job.lang ?? "ko", purpose: "introduction", tone: "해요체", bannedPhrases }) } : draft;
+    return job.sourceExcerpt.adapted ? { ...draft, body: prepareIntroduction(draft.body, { channel: job.channel ?? "x", language: job.lang ?? "ko", purpose: "introduction", tone: channelSpec(job.channel ?? "x", customChannels).identity?.tone, bannedPhrases }) } : draft;
   }
   const draft = readDraft(job.channel as Channel, json, customChannels);
   return { ...draft, body: prepareIntroduction(draft.body, { channel: job.channel ?? "", language: job.lang, purpose: draftPurposeOf(null, job.user), tone: channelSpec(job.channel as Channel, customChannels).identity?.tone, editorInstruction: instructionOf(job.user, job), bannedPhrases }) };
@@ -85,7 +85,7 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
       issues.some(issue => issue.rule !== "introduction_edit")
         ? "표시된 오류를 고치는 데 필요한 표현만 수정하세요. 이미 설명된 제품의 주용도, 선택 이유와 실제 작업은 유지하세요. 기술 표기·말투 오류만 있다면 해당 표현만 고치고 나머지 내용과 문장 흐름은 보존하세요."
         : "개요 반복과 작업 설명에 필요 없는 옵션은 덜어내세요. 제품이 무엇을 하며 선택한 작업을 어떤 상황에서 왜 사용하는지 부족한 설명은 자료에 근거해 보완하세요. 이미 구체적인 작업을 설명했다면 이를 지우고 일반적인 제품 설명으로 대체하지 마세요.",
-      "원문의 명령문을 복사하지 말고 제품이 하는 일을 해요체로 설명하세요. 원문에서 구분한 여러 방식이나 동작을 하나로 합치지 마세요. 자료 사이 관계가 불명확하면 추정하지 말고 그 주장은 생략하세요. 대상·조건·기술 이름과 A/B 표기를 보존하고 새 경험·평가·효과는 추가하지 마세요. 제품명과 마지막 줄 링크를 포함해 X 가중 280자 이내로 반환하세요. sourceBody는 선택 원문 그대로, taskExcerpt가 요청되면 그 원문 안의 직접인용으로 반환하세요. 인용은 본문에 게시하지 마세요. title은 빈 문자열이며 요청한 JSON만 반환하세요.",
+      "동작을 ‘작업을 수행’, ‘기능을 제공’, ‘활용 가능’처럼 명사로 돌려 말하지 마세요. 원문의 명령문을 복사하지 말고 제품이 하는 일을 기존 초안의 일관된 말투로 설명하세요. 원문에서 구분한 여러 방식이나 동작을 하나로 합치지 마세요. 자료 사이 관계가 불명확하면 추정하지 말고 그 주장은 생략하세요. 대상·조건·기술 이름과 A/B 표기를 보존하고 새 경험·평가·효과는 추가하지 마세요. 제품명과 마지막 줄 링크를 포함해 X 가중 280자 이내로 반환하세요. sourceBody는 선택 원문 그대로, taskExcerpt가 요청되면 그 원문 안의 직접인용으로 반환하세요. 인용은 본문에 게시하지 마세요. title은 빈 문자열이며 요청한 JSON만 반환하세요.",
     ].join("\n\n");
   }
   if (job.sourceExcerpt) return [job.user, "## Previous selection", prev.body, "## Fix these problems", ...issues.map(issue => `${issue.rule}: ${issue.detail ?? ""}`), "Select another permitted whole body from the same schema enum. Do not rewrite or shorten source wording. Return title/body JSON."].join("\n\n");

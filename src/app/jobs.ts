@@ -109,6 +109,12 @@ export function completeJob(ctx: AppContext, ownerId: string, id: number, input:
       else if (j.kind === "lesson") { if (j.draftId) applyLesson({ ...ctx, bus }, ownerId, j.draftId, j.lessonKind === "drop" ? "drop" : "edit", parsed as { rule?: string; category?: string }); }
       else if (j.kind === "judge" && (j.meta?.digestRevision !== DIGEST_REVISION || !digestCurrent(judgedCandidate!) || j.meta?.digestSourceHash !== judgedCandidate!.evidence.digestSourceHash)) applied = { kind: "judge", staleDigest: true };
       else applied = applyResult({ ...ctx, bus }, ownerId, { kind: j.kind as GenerationKind, candidateId: j.candidateId, channel: (j.channel as Channel | null) ?? undefined, lang: j.lang ?? undefined, result: parsed, draftPurpose: j.kind === "draft" ? draftPurposeOf(j.meta, j.user) : undefined, editorInstruction: instructionOf(j.user, j.meta), promptText: j.user, sourceExcerpt: j.meta?.sourceExcerpt, schemaJson: j.schemaJson, digestRevision: j.meta?.digestRevision, digestSourceHash: j.meta?.digestSourceHash, model }, j.continuation ?? undefined);
+      if (applied?.draftRejected?.length) {
+        const error = say(localeOf(ctx, ownerId), `초안의 필수 검사(${applied.draftRejected.join(", ")})를 통과하지 못해 새 버전을 저장하지 않았습니다. 기존 초안은 유지됩니다.`, `The draft failed required checks (${applied.draftRejected.join(", ")}). No new version was saved; the existing draft is unchanged.`);
+        ctx.db.update(schema.llmJobs).set({ status: "failed", resultJson: input.resultJson, error, finishedAt: Date.now() }).where(eq(schema.llmJobs.id, id)).run();
+        events.push({ ownerId, resource: "jobs", id });
+        return { applied: false };
+      }
       // 초안을 이어 쓰려던 다이제스트가 쓸 요약을 남기지 못했으면(원자료에 없는 숫자로 모두 빠진 경우 포함) 실패로 남겨 이유를 보여준다.
       const raw = j.kind === "digest" ? (parsed as { highlights: string[] }).highlights.filter((text) => text.trim()).length : 0;
       const empty = j.kind === "digest" && j.continuation && applied?.highlights === 0;
