@@ -24,7 +24,7 @@ const score = z.number().int().min(0).max(2);
 const results = {
   digest: z.object({ highlights: z.array(z.string()), limitations: z.array(z.string()).optional() }),
   judge: z.object({ scores: z.object({ runnable: score, numbers: score, lesson: score, novelty: score, audience: score }), reasoning: z.string(), suggestedChannels: z.array(z.string()).optional(), angle: z.string().optional() }),
-  draft: z.object({ title: z.string().optional(), sourceBody: z.string().optional(), body: z.string().trim().min(1) }),
+  draft: z.object({ title: z.string().optional(), sourceBody: z.string().optional(), taskExcerpt: z.string().optional(), body: z.string().trim().min(1) }),
   lesson: z.object({ rule: z.string().optional(), category: z.string().optional() }),
   profile: z.record(z.string(), z.unknown()),
 };

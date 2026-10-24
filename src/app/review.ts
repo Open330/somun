@@ -10,6 +10,7 @@ import { getProfile } from "./profiles.js";
 import { getSettings } from "./settings.js";
 import { say } from "./i18n.js";
 import { disputeCandidateFacts, queueLesson } from "./learning.js";
+import { adaptedSourceIssues } from "./source-excerpt.js";
 import { currentConditionReview } from "./condition-review.js";
 
 /** 검수 루프: 복사/수정/버림이 문체 예시와 피드백을 만든다. */
@@ -78,6 +79,7 @@ function saveDraftEditInTransaction(ctx: AppContext, ownerId: string, id: number
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
   const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
+  if (d.sourceExcerpt?.adapted) lint.push(...adaptedSourceIssues(input.body, d.sourceExcerpt.sourceBody));
   const review = currentConditionReview(ctx, ownerId, { ...d, title: input.title ?? null, body: input.body, conditionReview: changed ? null : d.conditionReview });
   const needsConditionReview = review.required && review.confirmedAt === undefined;
   const copyHeld = Boolean(input.markCopied && (needsConditionReview || (input.copyIfClean && lint.some((r) => COPY_CONFIRM_RULES.has(r.rule) && !r.ok && (r.rule !== "source_conditions_need_review" || review.confirmedAt === undefined)))));

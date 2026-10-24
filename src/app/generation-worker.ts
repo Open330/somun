@@ -14,7 +14,7 @@ import { claimJob, completeJob, pendingJobs } from "./jobs.js";
 import { getSettings } from "./settings.js";
 import { keyPoolOps, recentUpstreamFailure } from "./keys.js";
 import { readSourceExcerptResult } from "./source-excerpt.js";
-import { draftIssues, readJobDraft, repairPrompt, worthRepairing } from "./draft-repair.js";
+import { draftIssues, readJobDraft, repairPrompt, repairSchemaJson, SOURCE_EDIT_SYSTEM, worthRepairing } from "./draft-repair.js";
 import type { LlmResult } from "../infra/llm/providers.js";
 import type { Job } from "../shared/types.js";
 
@@ -22,16 +22,16 @@ import type { Job } from "../shared/types.js";
  * 생성한 초안이 고칠 수 있는 린트에 걸리면, 걸린 내용을 알려 주고 한 번만 다시 쓰게 한다.
  * 약한(대체) 모델이 채널 형식을 자주 놓친다. 다시 쓴 쪽이 더 나을 때만 바꾸고, 실패하면 처음 초안을 그대로 둔다.
  */
-async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: (user: string) => Promise<LlmResult>): Promise<LlmResult> {
+async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: (user: string, schemaJson?: string, system?: string) => Promise<LlmResult>): Promise<LlmResult> {
   if (job.sourceExcerpt?.adapted) {
     const selected = readSourceExcerptResult(first.json, job.sourceExcerpt, job.schemaJson);
     job = { ...job, sourceExcerpt: { ...job.sourceExcerpt, sourceBody: selected.sourceBody } };
   }
-  const before = draftIssues(ctx, ownerId, job, first.json);
+  const before = draftIssues(ctx, ownerId, job, first.json, true);
   if (!before?.length || !worthRepairing(ctx, ownerId, job.candidateId)) return first;
   try {
     const settings = getSettings(ctx, ownerId);
-    const second = await run(repairPrompt(job, first.json, before, settings.customChannels, settings.bannedPhrases));
+    const second = await run(repairPrompt(job, first.json, before, settings.customChannels, settings.bannedPhrases), repairSchemaJson(job, first.json), job.sourceExcerpt?.adapted ? SOURCE_EDIT_SYSTEM : undefined);
     const after = draftIssues(ctx, ownerId, job, second.json);
     const better = isBetterRepair(before, after, { before: JSON.stringify(readJobDraft(job, first.json, settings.customChannels, settings.bannedPhrases)), after: JSON.stringify(readJobDraft(job, second.json, settings.customChannels, settings.bannedPhrases)) });
     ctx.log.info({ jobId: job.id, before: before.map((l) => l.rule), after: after?.map((l) => l.rule), kept: better ? "repaired" : "first" }, "draft repair");
@@ -70,15 +70,15 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     const modelKind = (job.kind === "lesson" ? "digest" : job.kind) as "digest" | "judge" | "draft";
     let mainRecorded = false;
     try {
-      const call = (user: string) => { reserveSharedExecution(ctx, ownerId, Date.now(), config, { background: Boolean(job.background) }); return runLlm(config, { system: job.system, user, schema: JSON.parse(job.schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), ...llmCallOptions(ctx, ownerId) }); };
+      const call = (user: string, schemaJson = job.schemaJson, system = job.system) => { reserveSharedExecution(ctx, ownerId, Date.now(), config, { background: Boolean(job.background) }); return runLlm(config, { system, user, schema: JSON.parse(schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, config), ...llmCallOptions(ctx, ownerId) }); };
       // 본 호출은 끝나는 즉시 기록한다. 뒤의 보정·반영이 실패해도 이미 쓴 호출이 오류로 잘못 남지 않게.
-      let res = await call(job.user);
+      let res = await call(job.user, repairSchemaJson(job));
       mainRecorded = true;
       recordLlmUsage(ctx, ownerId, config, started, { res });
       if (job.kind === "draft" && job.channel && job.lang) {
-        res = await repairDraft(ctx, ownerId, job, res, async (user) => {
+        res = await repairDraft(ctx, ownerId, job, res, async (user, schemaJson, system) => {
           const t = Date.now();
-          try { const r = await call(user); recordLlmUsage(ctx, ownerId, config, t, { res: r }); return r; }
+          try { const r = await call(user, schemaJson, system); recordLlmUsage(ctx, ownerId, config, t, { res: r }); return r; }
           catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, t, { failedModel: modelFor(config, modelKind), error: err }); throw err; }
         });
       }
