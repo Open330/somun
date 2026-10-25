@@ -5,10 +5,11 @@
  * 저장소 매핑: 세션의 cwd에서 `git remote get-url origin`.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { groupSessions, repoFromRemote, type RawPrompt } from "../src/core/sessions.js";
+import { claudePrompts, codexPrompts, walkJsonl } from "../src/infra/session-files.js";
 import { call } from "./_client.js";
 
 const argv = process.argv.slice(2);
@@ -18,49 +19,11 @@ const sources = arg("--sources", "claude,codex,omp").split(",");
 const dryRun = argv.includes("--dry-run");
 const since = Date.now() - days * 86400e3;
 
-function walk(dir: string, out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, e.name);
-    if (e.isDirectory()) walk(p, out);
-    else if (e.name.endsWith(".jsonl") && statSync(p).mtimeMs >= since) out.push(p);
-  }
-  return out;
-}
-const lines = (file: string) => readFileSync(file, "utf8").split("\n").map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter((x): x is Record<string, unknown> => Boolean(x));
-
 const prompts: RawPrompt[] = [];
 
-if (sources.includes("claude")) {
-  for (const f of walk(join(homedir(), ".claude", "projects"))) {
-    for (const d of lines(f)) {
-      if (d.type !== "user" || !d.sessionId) continue;
-      const m = d.message as { content?: unknown } | undefined;
-      const c = m?.content;
-      const text = typeof c === "string" ? c : Array.isArray(c) ? (c.find((x) => (x as { type?: string }).type === "text") as { text?: string } | undefined)?.text ?? "" : "";
-      if (!text || text.startsWith("<")) continue; // 도구 결과·시스템 주입 제외
-      const at = Date.parse(String(d.timestamp ?? ""));
-      if (!at || at < since) continue;
-      prompts.push({ sessionId: String(d.sessionId), source: "claude-code", cwd: (d.cwd as string) ?? null, at, text });
-    }
-  }
-}
-if (sources.includes("codex")) {
-  for (const f of walk(join(homedir(), ".codex", "sessions"))) {
-    let cwd: string | null = null, sessionId = "";
-    for (const d of lines(f)) {
-      const p = (d.payload ?? {}) as Record<string, unknown>;
-      if (d.type === "session_meta") { cwd = (p.cwd as string) ?? null; sessionId = String(p.id ?? p.session_id ?? ""); continue; }
-      let text = "";
-      if (d.type === "event_msg" && p.type === "user_message") text = String(p.message ?? "");
-      else if (d.type === "response_item" && p.type === "message" && p.role === "user") text = ((p.content as { type?: string; text?: string }[]) ?? []).filter((x) => x.type === "input_text").map((x) => x.text ?? "").join(" ");
-      if (!text || !sessionId) continue;
-      const at = Date.parse(String(d.timestamp ?? ""));
-      if (!at || at < since) continue;
-      prompts.push({ sessionId, source: "codex", cwd, at, text });
-    }
-  }
-}
+// 세션 로그는 1GB를 넘기도 해 한 줄씩 읽는다(src/infra/session-files).
+if (sources.includes("claude")) for (const f of walkJsonl(join(homedir(), ".claude", "projects"), since)) for (const p of await claudePrompts(f, since)) prompts.push(p);
+if (sources.includes("codex")) for (const f of walkJsonl(join(homedir(), ".codex", "sessions"), since)) for (const p of await codexPrompts(f, since)) prompts.push(p);
 if (sources.includes("omp")) {
   const dbPath = process.env.OMP_SQLITE_PATH ?? join(homedir(), ".config", "oh-my-prompt", "omp.db");
   if (existsSync(dbPath)) {
