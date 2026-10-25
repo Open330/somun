@@ -20,7 +20,11 @@ export function walkJsonl(dir: string, since: number, out: string[] = []): strin
   return out;
 }
 
-/** 한 줄씩 JSON 객체. keep이 있으면 그 검사를 통과한 줄만 파싱한다. 깨진 줄은 건너뛴다. */
+/**
+ * 한 줄씩 JSON 객체. keep이 있으면 그 검사를 통과한 줄만 파싱한다. 깨진 줄은 건너뛴다.
+ * 한계: readline도 한 줄을 문자열 하나로 만든다. 줄 하나가 512MB를 넘으면 같은 ERR_STRING_TOO_LONG이 나고,
+ * 그 파일은 호출한 쪽(push-sessions의 파일 단위 try/catch)에서 건너뛴다.
+ */
 export async function* jsonLines(file: string, keep?: (line: string) => boolean): AsyncGenerator<Record<string, unknown>> {
   const rl = createInterface({ input: createReadStream(file, { encoding: "utf8" }), crlfDelay: Infinity });
   for await (const line of rl) {

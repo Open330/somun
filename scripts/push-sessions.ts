@@ -22,8 +22,15 @@ const since = Date.now() - days * 86400e3;
 const prompts: RawPrompt[] = [];
 
 // 세션 로그는 1GB를 넘기도 해 한 줄씩 읽는다(src/infra/session-files).
-if (sources.includes("claude")) for (const f of walkJsonl(join(homedir(), ".claude", "projects"), since)) for (const p of await claudePrompts(f, since)) prompts.push(p);
-if (sources.includes("codex")) for (const f of walkJsonl(join(homedir(), ".codex", "sessions"), since)) for (const p of await codexPrompts(f, since)) prompts.push(p);
+// 파일 하나를 못 읽어도(찾고 나서 지워진 세션 등) 나머지는 올린다.
+const readEach = async (files: string[], read: (file: string, since: number) => Promise<RawPrompt[]>) => {
+  for (const f of files) {
+    try { for (const p of await read(f, since)) prompts.push(p); }
+    catch (err) { console.error(`skip ${f}: ${(err as Error).message}`); }
+  }
+};
+if (sources.includes("claude")) await readEach(walkJsonl(join(homedir(), ".claude", "projects"), since), claudePrompts);
+if (sources.includes("codex")) await readEach(walkJsonl(join(homedir(), ".codex", "sessions"), since), codexPrompts);
 if (sources.includes("omp")) {
   const dbPath = process.env.OMP_SQLITE_PATH ?? join(homedir(), ".config", "oh-my-prompt", "omp.db");
   if (existsSync(dbPath)) {
