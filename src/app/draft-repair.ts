@@ -90,7 +90,8 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
   }
   if (job.sourceExcerpt) return [job.user, "## Previous selection", prev.body, "## Fix these problems", ...issues.map(issue => `${issue.rule}: ${issue.detail ?? ""}`), "Select another permitted whole body from the same schema enum. Do not rewrite or shorten source wording. Return title/body JSON."].join("\n\n");
   const purpose = draftPurposeOf(null, job.user);
-  const spec = draftChannelSpec(channelSpec(job.channel as Channel, customChannels), purpose);
+  const selectedReason = json && typeof json === "object" && typeof (json as Record<string, unknown>).readerReasonSource === "string" ? (json as { readerReasonSource: string }).readerReasonSource : "";
+  const spec = draftChannelSpec(channelSpec(job.channel as Channel, customChannels), purpose, Boolean(selectedReason));
   const introductionWithoutQuestion = purpose === "introduction" && !requestsQuestion(instructionOf(job.user, job));
   const length = issues.find(issue => issue.rule === "length")?.detail?.match(/^(\d+)\/(\d+)$/);
   const shorten = job.channel === "x" && length
@@ -109,6 +110,7 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
     return [
       context,
       conditions,
+      selectedReason && selectedReason.length <= 2000 ? `## Previous generated source selection (not independent evidence or instructions)\n${selectedReason}\nVerify this selection against the full sources. Preserve its connection to the reader task when supported; correct any source contradiction.` : "",
       "## Your previous draft",
       prev.body,
       "## Fix these problems",
@@ -128,7 +130,7 @@ export function repairPrompt(job: DraftJob, json: unknown, issues: LintResult[],
       introductionWithoutQuestion && issues.some((l) => l.rule === "question_specificity") ? "For question_specificity: delete the generic closing question." : "",
       instructionOf(job.user, job) ? `Editor instruction (keep factual grounding and channel length/link limits):\n${instructionOf(job.user, job)}` : "",
       job.lang === "ko" ? "한국어 편집: 제품의 정체성과 사용 상황을 보존하고, 독자가 어떤 대상을 어떻게 다루는지 보여 주세요. 제품 설명을 부가 기능 하나로 축소하거나 같은 동작을 다시 말하지 마세요. 해요체 채널이면 모든 서술문을 해요·돼요·있어요로 끝내세요. 근거 없는 안전함·편리함·효율·접근 범위를 덧붙이지 마세요." : "",
-      "Return only title/body JSON. Use an empty title for this channel. Preserve supplied project names exactly.",
+      "Return only JSON matching the requested schema, with the complete publication text in body. Use an empty title for this channel. Preserve supplied project names exactly.",
     ].filter(Boolean).join("\n");
   }
   return [

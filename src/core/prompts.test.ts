@@ -494,3 +494,29 @@ it.each(["x", "threads"] as const)("keeps release truncation and channel audienc
     expect(groundingText({ ...c, evidence: changed })).not.toContain(text);
   }
 });
+
+
+it("uses real overview choices only for default Korean X introductions and keeps source conditions", () => {
+  const homepage = "https://example.com/";
+  const readme = "# Tool\n\n## Why Tool\n\nSearch saved logs without a live connection.\n\n## Setup\nOnly local uncompressed JSON files are supported.";
+  const c = { ...candidate, evidence: { ...candidate.evidence, readmeForChecks: readme, readmeTruncated: false, homepage, homepageSource: { url: homepage, status: "ok" as const, collectedAt: 1, truncated: false, text: "Input\nOnly saved local JSON files are supported.\nSearch by time and severity." } } };
+  const intro = draftPrompt(c, "x", "ko", [], undefined, { introduction: true });
+  expect(intro.schema.properties).toHaveProperty("readerReasonSource");
+  expect(intro.schema.properties).toMatchObject({ readerReasonSource: { enum: ["# Tool\n## Why Tool\nSearch saved logs without a live connection."] } });
+  expect(intro.user).toContain(readme);
+  expect(intro.user).toContain("## Homepage scope reference excerpts");
+  expect(intro.user).toContain("Only saved local JSON files are supported.");
+  expect(intro.user.indexOf("## Homepage scope reference excerpts")).toBeLessThan(intro.user.indexOf("## Selected channel contract"));
+  expect(intro.system).toContain("JSON matching the requested schema");
+  for (const p of [
+    draftPrompt(c, "x", "en", [], undefined, { introduction: true }),
+    draftPrompt(c, "threads", "ko", [], undefined, { introduction: true }),
+    draftPrompt(c, "x", "ko", []),
+    draftPrompt(candidate, "x", "ko", [], undefined, { introduction: true }),
+    draftPrompt(c, "x", "ko", [], undefined, { introduction: true, instruction: "Use one sentence." }),
+  ]) {
+    expect(p.schema.properties).not.toHaveProperty("readerReasonSource");
+    expect(p.user).not.toContain("## Homepage scope reference excerpts");
+  }
+  expect(groundingText(c)).not.toContain("## Homepage scope reference excerpts");
+});
