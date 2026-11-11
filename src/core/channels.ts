@@ -103,7 +103,7 @@ export function lengthInstruction(spec: Pick<ChannelSpec, "id" | "maxChars">): s
 }
 
 /** 소개는 변경 알림보다 맥락이 필요하다. 플랫폼 글자 수·링크 위치와 커스텀 프리셋은 보존한다. */
-export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "update" | null): ChannelSpec {
+export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "update" | null, reasonLed = false): ChannelSpec {
   if (purpose !== "introduction" || (spec.id !== "threads" && spec.id !== "x")) return spec;
   const threads = spec.id === "threads";
   const maxSentences = threads
@@ -115,11 +115,11 @@ export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "
   return {
     ...spec,
     maxSentences,
-    rules: `Introduce the project in ${sentenceGuide}. Make the product's main use and the intended reader's action understandable in the opening. Combine a concrete reader need, product name/kind and main purpose in the opening, then explain distinct user actions and visible results. Do not spend a separate sentence merely labelling it a tool. A category label alone is insufficient. Do not lead with a minor fix that requires knowing an earlier version or a setup tutorial. Add at most one closely related supporting capability that gives a new reason to use the product. Do not repeat the opening or list unrelated features. Each sentence must add source-backed information. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
+    rules: `Introduce the project in ${sentenceGuide}. ${reasonLed && !threads ? "Prefer a documented difference in how the reader can do the selected task as the opening: a source-backed alternative, constraint addressed or task that no longer requires a separate step. Then show the actual reader operation. If the source establishes no such difference, lead with the supported task instead; never invent one. Product name/kind and main purpose must be clear across the body; do not pack all identity elements into the first sentence. A generic need to use the product is not a reason to choose it." : "Make the product's main use and the intended reader's action understandable in the opening. Combine a concrete reader need, product name/kind and main purpose in the opening, then explain distinct user actions and visible results."} Do not spend a separate sentence merely labelling it a tool. A category label alone is insufficient. Do not lead with a minor fix that requires knowing an earlier version or a setup tutorial. Add at most one closely related supporting capability that gives a new reason to use the product. Do not repeat the opening or list unrelated features. Each sentence must add source-backed information. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
     identity: spec.identity ? {
       ...spec.identity,
       purpose: "처음 보는 독자가 사용 상황과 핵심 기능을 이해할 수 있게 프로젝트 소개",
-      structure: threads ? "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건. 같은 설명 반복 없이 짧은 문단. 링크는 첫 답글" : "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건 → 링크. 같은 설명 반복 없이 글자 수 안에서",
+      structure: threads ? "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건. 같은 설명 반복 없이 짧은 문단. 링크는 첫 답글" : reasonLed ? "선택한 작업과 직접 관련된 원문의 제약·대안·작업 방식의 차이로 시작해도 됩니다. 제품명·종류·주용도는 본문 전체에서 명확히. 실제 동작과 조건 → 링크" : "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건 → 링크. 같은 설명 반복 없이 글자 수 안에서",
     } : undefined,
   };
 }

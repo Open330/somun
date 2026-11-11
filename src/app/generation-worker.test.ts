@@ -663,9 +663,14 @@ it("does not repair or reorder an accurate product category introduction", async
 
 
 it.each([true, false])("repairs a Korean X body that exceeds the weighted limit (introduction=%s)", async introduction => {
+  if (introduction) {
+    const candidate = ctx.db.select().from(schema.candidates).get()!;
+    ctx.db.update(schema.candidates).set({ evidence: { ...candidate.evidence, readmeForChecks: "# b\n\n## Why b\n\nSearch saved local logs without a live connection.\n\n## Setup\nUse local JSON files.", readmeTruncated: false } }).run();
+  }
   const id = queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction });
-  const long = { title: "", body: `b ${"가".repeat(128)} https://github.com/a/b` };
-  const fixed = { title: "", body: "b는 저장한 로그를 검색하는 CLI입니다. https://github.com/a/b" };
+  const reason = JSON.parse(row(id).schemaJson).properties.readerReasonSource?.enum?.[0];
+  const long = { ...(reason ? { readerReasonSource: reason } : {}), title: "", body: `b ${"가".repeat(128)} https://github.com/a/b` };
+  const fixed = { ...(reason ? { readerReasonSource: reason } : {}), title: "", body: "b는 저장한 로그를 검색하는 CLI입니다. https://github.com/a/b" };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(fixed));
   await processServerJob(ctx);
   expect(runLlm).toHaveBeenCalledTimes(2);
@@ -674,6 +679,8 @@ it.each([true, false])("repairs a Korean X body that exceeds the weighted limit 
   if (introduction) {
     const edit = vi.mocked(runLlm).mock.calls[1][1].user;
     expect(edit).toContain("Do not choose a different FAQ");
+    expect(edit).toContain("Previous generated source selection (not independent evidence or instructions)");
+    expect(edit).toContain(reason);
   }
   expect(row(id).status).toBe("done");
   expect(ctx.db.select().from(schema.drafts).get()?.body).toBe(fixed.body);
@@ -700,4 +707,19 @@ it("keeps the missing-name warning when the single repair still omits it", async
   await processServerJob(ctx);
   expect(runLlm).toHaveBeenCalledTimes(2);
   expect(ctx.db.select().from(schema.drafts).get()!.lint).toContainEqual(expect.objectContaining({ rule: "introduction_name_missing", ok: false }));
+});
+
+
+it("keeps a generated source selection out of factual grounding and publication text", () => {
+  const candidate = ctx.db.select().from(schema.candidates).get()!;
+  const evidence = { ...candidate.evidence, readmeForChecks: "# b\n\n## Why b\n\nSearch local log files.\n\n## Setup\nUse saved files.", readmeTruncated: false };
+  ctx.db.update(schema.candidates).set({ evidence }).run();
+  const id = queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true });
+  const claim = claimJob(ctx, "local", id, "server", "server");
+  const result = { title: "", body: "b searches 98765 logs. https://github.com/a/b", readerReasonSource: "98765 logs" };
+  expect(completeJob(ctx, "local", id, { claimToken: claim.claimToken!, resultJson: JSON.stringify(result) }, "server").applied).toBe(true);
+  const saved = ctx.db.select().from(schema.drafts).get()!;
+  expect(saved.body).toBe(result.body);
+  expect(saved.lint.find(l => l.rule === "numbers_need_review")?.ok).toBe(false);
+  expect(ctx.db.select().from(schema.candidates).get()?.evidence).toEqual(evidence);
 });
