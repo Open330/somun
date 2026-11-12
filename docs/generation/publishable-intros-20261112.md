@@ -100,3 +100,21 @@ Opus 검토는 같은 계열의 생성본(9회차)에 Codex보다 오히려 엄�
 **권장:** 첫 소개 초안만 로컬 워커(Opus 5.5)로 돌리는 구성은 품질 근거가 있습니다. 다만 Opus 판정 기준 8/10에는 아직 못 미칩니다. 채택하려면 두 가지가 필요합니다. 하나는 단계별 실행 위치 설정(소개 초안만 로컬)이고, 다른 하나는 로컬 경로에도 서버와 같은 비평→수정 루프를 붙이는 것입니다(9회차 탈락 4건은 모두 문장 단위로 고칠 수 있는 유형). 그 뒤 같은 방법으로 다시 재는 것을 제안합니다. 운영 기본값 변경은 사용자가 정합니다.
 
 이 회차들의 판정 자료는 `intro-eval-20261112/round7|round8|round9/verdicts.json`(Opus)과 `verdicts-codex.json`(Codex)입니다.
+
+## 운영 c/82: 사람 수정판과 배포 후 생성본 비교
+
+배포(`331440c`, 2026-11-12 19:40 KST) 뒤 운영 사용자 계정에서 같은 글감(Open330/tend v0.10.11)의 X 소개를 다시 생성했습니다. 서버 기본 모델 `gemini-3.5-flash-lite`로 생성·보정·비평 루프를 거쳤고, 사람은 고치지 않았습니다. https://somun.jiun.dev/c/82 에서 판(v1·v2)을 바꿔 가며 볼 수 있습니다.
+
+| | v1: 사람 수정판 (오늘 오후) | v2: 배포 후 생성본 (수정 없음) |
+|---|---|---|
+| 한국어 | tmux에 Claude Code, Codex, Gemini CLI를 여러 개 띄워 두면 어느 창이 내 답을 기다리는지 놓치기 쉽습니다. Tend는 이미 쓰고 있는 세션을 그대로 지켜보다가 입력·선택·오류로 멈춘 창을 알려 주고, tend attend로 가장 오래 기다린 창에 바로 데려다줍니다. | 에이전트를 여러 창에 띄워 두면 어느 창이 답을 기다리는지 놓치기 쉽습니다. Tend는 입력이나 선택을 기다리는 에이전트를 알려 줍니다. |
+| 영어 | Running several Claude Code, Codex or Gemini CLI sessions in tmux? Tend watches the ones you already have, tells you when one stops for input, a choice or an error, and `tend attend` jumps to the pane that has waited longest. No wrapper, no new terminal. | Running several coding agents in tmux? Tend watches your Claude Code, Codex, and Antigravity CLI sessions, tells you when one stops for input, and uses tend attend to jump straight to its pane. |
+| lint | 통과(원문 조건 확인만 남음) | 통과 |
+| 원문 조건 확인 대상 | 29개 (README 1·릴리스 8·PR 20) | 1개 (README) |
+
+두 판 모두 링크는 홈페이지(https://open330.github.io/tend/)입니다.
+
+읽은 결과는 이렇습니다(제 판단이며 독립 검토는 받지 않았습니다).
+- **v2 한국어:** 형식은 맞지만 정보가 적습니다. tmux를 빼고 "여러 창"이라고 써서, 9회차 검토자가 탈락시킨 것과 같은 일반화 문제가 있습니다. 창으로 데려다주는 동작도 빠졌습니다.
+- **v2 영어:** 사실 관계는 맞지만 "uses tend attend"는 Tend가 명령을 쓰는 것처럼 읽히고, 명령에 백틱이 없습니다.
+- **결론:** 형식 결함(권유·요구 사항·분류어·명령 나열·저장소 링크·길이)은 사라졌지만, 사람 수정판 수준의 구체성에는 못 미칩니다. 위 측정의 결론과 같습니다.
