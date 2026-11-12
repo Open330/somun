@@ -17,7 +17,7 @@ const isPost = (channel: string) => POST_CHANNELS.has(channel) || channel.starts
 const URL = /https?:\/\/\S+/g;
 const segment = (text: string) => [...new Intl.Segmenter("ko", { granularity: "sentence" }).segment(text)].map((s) => s.segment.trim()).filter(Boolean);
 /** 인용·코드는 작성자의 서술이 아니다. */
-const narration = (body: string) => body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "").replace(/^\s*>.*$/gm, "").replace(/“[^”]*”|‘[^’]*’|"[^"\n]*"|「[^」]*」|(?<![A-Za-z])'[^'\n]*[가-힣][^'\n]*'/g, "").replace(URL, "");
+export const narration = (body: string) => body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "").replace(/^\s*>.*$/gm, "").replace(/“[^”]*”|‘[^’]*’|"[^"\n]*"|「[^」]*」|(?<![A-Za-z])'[^'\n]*[가-힣][^'\n]*'/g, "").replace(URL, "");
 
 /** 첫 줄이 콜론으로 시작하거나, 세 낱말 이하의 머리말 뒤 콜론으로 시작한다("Tend: …", "소개: …"). 시각(10:30)·URL은 아니다. */
 // 낱말 안의 마침표(0.4.0)는 허용하되, 마침표로 끝난 낱말(이미 끝난 문장) 뒤로는 넘어가지 않는다.

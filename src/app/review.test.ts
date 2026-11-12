@@ -385,3 +385,13 @@ it("splits legacy untagged format suggestions by the channels of their source dr
   expect(rules).toEqual([["[LinkedIn] Use bullet headings.", 1], ["[X] Use bullet headings.", 3]]);
   expect(tagLegacySuggestions(ctx)).toBe(0);
 });
+
+it("withholds a mixed-register Korean Threads post from voice examples now that save-time lint knows the language (Codex on #94)", () => {
+  const unsafe = "tool은 창을 묶습니다. 알림도 와요.";
+  const id = draft(unsafe, "threads", "ko");
+  const copied = saveDraftEdit(ctx, OWNER, id, { body: unsafe, markCopied: true });
+  expect(copied.lint.find((r) => r.rule === "register_mismatch")?.ok).toBe(false);
+  expect(examples()).toHaveLength(0);
+  saveDraftEdit(ctx, OWNER, id, { body: "tool은 창을 묶어요. 알림도 와요.", markCopied: true });
+  expect(examples()).toHaveLength(1);
+});

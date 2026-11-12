@@ -153,3 +153,11 @@ describe("wrong_language", () => {
     expect(rule("Tend는 기다리는 창을 알려 줍니다. https://a.dev", "ko")).toBeUndefined();
   });
 });
+
+describe("review regressions (Codex on #94)", () => {
+  it("does not flag single-quoted Korean UI text in an English draft", () => {
+    for (const body of ["The Korean UI says ‘에이전트가 기다립니다’. https://a.dev", "The Korean UI says '에이전트가 기다립니다'. https://a.dev"]) {
+      expect(lintDraft("x", undefined, body, [], { language: "en" }).find((r) => r.rule === "wrong_language")?.ok).toBe(true);
+    }
+  });
+});

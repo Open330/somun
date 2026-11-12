@@ -2,7 +2,7 @@ import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
-import { humanVoiceChecks } from "./human-voice.js";
+import { humanVoiceChecks, narration } from "./human-voice.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -197,7 +197,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   // 인용·코드 안의 한국어(예: 제품의 한국어 명령 예시)는 본문 언어가 아니다.
   const target = facts.language?.toLowerCase().split("-")[0];
   if (target && target !== "ko") {
-    const korean = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "").replace(/“[^”]*”|"[^"\n]*"/g, "").replace(/https?:\/\/\S+/g, ""))]
+    const korean = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(narration(body))]
       .map((s) => s.segment.trim()).filter((s) => (s.match(/[가-힣]/g) ?? []).length >= 4);
     results.push({ rule: "wrong_language", ok: korean.length === 0, detail: korean.length ? say(`선택한 언어(${facts.language})가 아닌 한국어 문장이 있습니다: ${korean.slice(0, 2).join(" / ")}`, `Sentences are in Korean, not the selected language (${facts.language}): ${korean.slice(0, 2).join(" / ")}`) : undefined, args: korean.length ? { language: facts.language!, sentences: korean.slice(0, 2).join(" / ") } : undefined });
   }
