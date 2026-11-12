@@ -268,7 +268,7 @@ export const INTRODUCTION_JUDGE_HEADING = "## Introducing the project to new rea
 const INTRODUCTION_JUDGE = `${INTRODUCTION_JUDGE_HEADING}
 The editor has not confirmed a publication for this repository on at least one enabled channel through this tool yet. Copied drafts are not publications. This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
-- novelty: the project itself is new to readers.
+- novelty: the project itself is new to these readers. Score novelty on whether this project was introduced in the last 30 days of publications, not on its age, release count or how mature it is. A long release history does not lower novelty here.
 - audience: who it is for, from the profile.
 The angle should introduce the project: what it is, who it is for, how it works. Recent changes are supporting detail at most.`;
 

@@ -440,3 +440,9 @@ describe("never-announced projects are judged as introductions", () => {
     expect(buildPrompt(ctx, "test", "judge", id).user).toContain("you said draft (6.7/10 on the introduction rubric (runnable, novelty, audience only);");
   });
 });
+
+it("tells the introduction judge not to lower novelty for a long release history", () => {
+  const user = buildPrompt(ctx, "test", "judge", id).user;
+  expect(user).toContain("## Introducing the project to new readers");
+  expect(user).toContain("A long release history does not lower novelty here.");
+});
