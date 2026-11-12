@@ -236,5 +236,9 @@ describe("posting accounts", () => {
     // 링크에서 읽은 계정은 링크를 바꾸면 새 링크로 다시 읽는다(Codex on #98).
     updatePublication(ctx, "me", a, { url: "https://x.com/second/status/456" });
     expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === a)!.account).toBe("@second");
+    // 직접 적은 계정이 옛 링크의 핸들과 같아도 직접 적은 값이다(링크를 바꿔도 둔다).
+    const c = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/first/status/5", account: "first" });
+    updatePublication(ctx, "me", c, { url: "https://x.com/second/status/6" });
+    expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === c)!.account).toBe("@first");
   });
 });

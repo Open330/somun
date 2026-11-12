@@ -145,6 +145,8 @@ export const publications = sqliteTable("publications", {
   autoStatsAt: integer("auto_stats_at"),
   /** 게시한 계정(@open330dev 등). 사용자가 적거나 X·Threads 링크에서 읽는다. 없으면 null(미기록). */
   account: text("account"),
+  /** "manual": 사용자가 적은 계정(링크를 바꿔도 둔다), "link": 링크에서 읽은 계정. */
+  accountSource: text("account_source"),
 }, (t) => [index("publications_candidate").on(t.candidateId), index("publications_owner_time").on(t.ownerId, t.publishedAt)]);
 
 export const metricSnapshots = sqliteTable("metric_snapshots", {

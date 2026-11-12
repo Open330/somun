@@ -74,7 +74,7 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
     if (d.channel !== input.channel || (input.lang && d.lang !== input.lang)) throw new InvalidInputError(say(localeOf(ctx, ownerId), "초안과 게시 채널·언어가 다릅니다.", "The publication channel or language does not match the draft."));
   }
   const id = ctx.db.$client.transaction(() => {
-    const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url, publishedAt, account: cleanAccount(input.account) ?? accountFromUrl(input.channel, url) ?? null }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url, publishedAt, account: cleanAccount(input.account) ?? accountFromUrl(input.channel, url) ?? null, accountSource: cleanAccount(input.account) ? "manual" : accountFromUrl(input.channel, url) ? "link" : null }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
     syncPublishedChanges(ctx, ownerId, input.candidateId);
     return id;
@@ -102,9 +102,12 @@ export function updatePublication(ctx: AppContext, ownerId: string, id: number, 
   ctx.db.$client.transaction(() => {
     // 계정을 적으면 그 값, 링크만 바꾸면 새 링크에서 다시 읽는다(직접 적어 둔 계정은 링크가 바뀌어도 둔다).
     // 이전 링크에서 읽은 계정이면(직접 적은 값이 아님) 새 링크로 다시 읽는다. 직접 적은 계정은 둔다.
-    const inferred = !publication.account || publication.account === accountFromUrl(publication.channel, publication.url);
-    const account = input.account !== undefined ? cleanAccount(input.account) ?? null : inferred ? accountFromUrl(publication.channel, url) ?? null : publication.account;
-    const r = ctx.db.update(schema.publications).set({ url, account, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
+    // 출처를 기록하지 않은 예전 행은 이전 링크의 핸들과 같을 때만 링크에서 읽은 것으로 본다.
+    const manual = publication.accountSource === "manual" || (publication.accountSource === null && Boolean(publication.account) && publication.account !== accountFromUrl(publication.channel, publication.url));
+    const typed = input.account !== undefined ? cleanAccount(input.account) : undefined;
+    const account = input.account !== undefined ? typed ?? null : manual ? publication.account : accountFromUrl(publication.channel, url) ?? null;
+    const accountSource = input.account !== undefined ? (typed ? "manual" : null) : manual ? "manual" : account ? "link" : null;
+    const r = ctx.db.update(schema.publications).set({ url, account, accountSource, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
     if (r.changes === 0) throw new NotFoundError("publication");
     if (input.publishedAt !== undefined) syncPublishedChanges(ctx, ownerId, publication.candidateId);
   })();
