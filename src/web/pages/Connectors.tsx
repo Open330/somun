@@ -225,6 +225,43 @@ export default function Connectors() {
                   )}
                 </div>
                 <div className="toolbar">
+                  {source.enabled && (
+                    <button
+                      className="sm"
+                      disabled={busy !== null}
+                      onClick={() =>
+                        void run(
+                          `collect-${source.id}`,
+                          () => post("/collect", { sourceId: source.id }),
+                          t("이 소스의 새 변경을 가져왔습니다."),
+                        )
+                      }
+                    >
+                      {t("이 소스만 가져오기")}
+                    </button>
+                  )}
+                  {source.enabled &&
+                    source.kind === "github" &&
+                    source.targets.length > 1 &&
+                    source.targets.length <= 10 &&
+                    source.targets
+                      .filter((target) => target.includes("/"))
+                      .map((target) => (
+                        <button
+                          key={target}
+                          className="ghost sm"
+                          disabled={busy !== null}
+                          onClick={() =>
+                            void run(
+                              `collect-${source.id}-${target}`,
+                              () => post("/collect", { sourceId: source.id, repo: target }),
+                              t("{repo}의 새 변경을 가져왔습니다.", { repo: target }),
+                            )
+                          }
+                        >
+                          {t("{repo}만", { repo: target.split("/").at(-1) ?? target })}
+                        </button>
+                      ))}
                   <button
                     className="sm"
                     disabled={busy !== null}

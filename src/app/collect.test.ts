@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import { GitHubClient, GitHubRateLimitError } from "../infra/github/client.js";
 import { reserveSharedExecution } from "./shared-quota.js";
-import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList, readmeEvidence, readmeHomepage } from "./collect.js";
+import { backfillStarTrend, collectAll, expandTargets, latestRelease, collectGithubSource, collectSource, closedPullsSince, commitBatch, COMMIT_BATCH_MIN, experimentalFrom, limitationsFrom, missingReads, pagedList, readmeEvidence, readmeHomepage } from "./collect.js";
 import type { AppContext } from "./context.js";
 import { upsertSource } from "./sources.js";
 
@@ -402,3 +402,23 @@ describe("introduction candidates for never-announced repositories", () => {
   });
 });
 
+describe("collecting one source or one repository", () => {
+  let ctx: AppContext;
+  beforeEach(() => { ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "pat" }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] }; });
+  afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("reads only the requested repository of a multi-repository source", async () => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/a", "me/b"], enabled: true }).run().lastInsertRowid);
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const m = /\/repos\/(me\/[ab])$/.exec(url);
+      if (m) { seen.push(m[1]); return new Response(JSON.stringify({ full_name: m[1], html_url: `https://github.com/${m[1]}`, description: null, homepage: null, stargazers_count: 1, forks_count: 0, language: null, license: null, created_at: "2020-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false }), { status: 200 }); }
+      if (url.includes("/releases") || url.includes("/pulls") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    await collectSource(ctx, "me", id, "me/b");
+    expect(seen).toEqual(["me/b"]);
+    await expect(collectSource(ctx, "me", id, "other/c")).rejects.toThrow();
+    await expect(collectSource(ctx, "someone-else", id)).rejects.toThrow();
+  });
+});
