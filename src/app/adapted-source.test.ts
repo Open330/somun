@@ -342,3 +342,12 @@ it.each(["명령형", "길이", "제품명", "링크"])("preserves existing draf
   expect(ctx.db.select().from(schema.draftEdits).all()).toEqual(edits);
   expect(ctx.db.select().from(schema.candidates).get()).toEqual(candidate);
 });
+
+it("keeps a homepage source whose wording only fails a human-voice style rule (Codex on #93)", () => {
+  const paragraph = "기록을 작업 목록으로 옮깁니다. 지금 바로 작업 목록을 여세요.";
+  const collected = homepageText(`<html lang="ko"><head><meta property="og:site_name" content="Cedar"></head><body><main><article><h2>기록에서 다음 작업으로</h2><p>${paragraph}</p></article></main></body></html>`)!;
+  const candidate = ctx.db.select().from(schema.candidates).where(eq(schema.candidates.id, cid)).get()!;
+  ctx.db.update(schema.candidates).set({ evidence: { ...candidate.evidence, homepageSource: { url, status: "ok", collectedAt: 1, ...collected } } }).where(eq(schema.candidates.id, cid)).run();
+  const base = buildPrompt(ctx, "me", "draft", cid, "x", "ko", { introduction: true });
+  expect(base.sourceExcerpt?.adapted).toBe(true);
+});

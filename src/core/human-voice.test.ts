@@ -117,3 +117,25 @@ it("catches all five issues of the hand-edited 2026-11-12 Threads launch post an
 it("lets automatic repair fix every human-voice rule", () => {
   for (const name of ["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "unreleased_feature"]) expect(REPAIRABLE.has(name)).toBe(true);
 });
+
+describe("review regressions (Codex on #93)", () => {
+  const failing = (body: string, facts: Parameters<typeof lintDraft>[4] = {}) => lintDraft("x", undefined, body, [], { sourceText: "", ...facts }).filter((r) => !r.ok).map((r) => r.rule);
+  it("does not treat a reader capability as the author's experience", () => {
+    expect(failing("Tend에서 사용자가 직접 사용할 도구를 고릅니다. https://a.dev")).not.toContain("first_person_need_review");
+    expect(failing("서버를 직접 운영할 수 있습니다. https://a.dev")).not.toContain("first_person_need_review");
+  });
+  it("keeps checking experience when the editor forbids it", () => {
+    expect(failing("I have been using Tend for a year. https://a.dev", { editorInstruction: "Do not invent personal experience." })).toContain("first_person_need_review");
+    expect(failing("직접 써 보니 편했습니다. https://a.dev", { editorInstruction: "개인 경험은 넣지 마세요" })).toContain("first_person_need_review");
+  });
+  it("ignores ASCII single-quoted Korean quotations, but not English contractions", () => {
+    expect(failing("확인했습니다. README에는 '바로 써요.'라고 적혀 있습니다. https://a.dev")).not.toContain("register_mixed");
+  });
+  it("does not read past a finished sentence for a colon heading", () => {
+    expect(failing("It works. Example: open a file. https://a.dev")).not.toContain("colon_opening");
+    expect(failing("v1.2.3: Fixes offline mode. https://a.dev")).toContain("colon_opening");
+  });
+  it("does not count common nouns ending in 요 as polite endings", () => {
+    expect(failing("설정 파일을 읽습니다. 지원 장르: 가요. https://a.dev")).not.toContain("register_mixed");
+  });
+});

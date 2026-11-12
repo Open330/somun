@@ -17,10 +17,11 @@ const isPost = (channel: string) => POST_CHANNELS.has(channel) || channel.starts
 const URL = /https?:\/\/\S+/g;
 const segment = (text: string) => [...new Intl.Segmenter("ko", { granularity: "sentence" }).segment(text)].map((s) => s.segment.trim()).filter(Boolean);
 /** 인용·코드는 작성자의 서술이 아니다. */
-const narration = (body: string) => body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "").replace(/^\s*>.*$/gm, "").replace(/“[^”]*”|‘[^’]*’|"[^"\n]*"|「[^」]*」/g, "").replace(URL, "");
+const narration = (body: string) => body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/`[^`]*`/g, "").replace(/^\s*>.*$/gm, "").replace(/“[^”]*”|‘[^’]*’|"[^"\n]*"|「[^」]*」|(?<![A-Za-z])'[^'\n]*[가-힣][^'\n]*'/g, "").replace(URL, "");
 
 /** 첫 줄이 콜론으로 시작하거나, 세 낱말 이하의 머리말 뒤 콜론으로 시작한다("Tend: …", "소개: …"). 시각(10:30)·URL은 아니다. */
-const COLON_OPENING = /^(?:[:：]|[^\s:：!?。]{1,20}(?:\s[^\s:：!?。]{1,20}){0,2}\s*[:：](?:\s|$))/u;
+// 낱말 안의 마침표(0.4.0)는 허용하되, 마침표로 끝난 낱말(이미 끝난 문장) 뒤로는 넘어가지 않는다.
+const COLON_OPENING = /^(?:[:：]|[^\s:：!?。]{0,19}[^\s:：!?。.](?:\s[^\s:：!?。]{0,19}[^\s:：!?。.]){0,2}\s*[:：](?:\s|$))/u;
 
 /** 기능을 글머리 목록으로 나열한 줄. 번호 목록은 순서가 있는 절차일 수 있어 보지 않는다. */
 const BULLET = /^\s*[-*•·▪◦‣]\s+\S/;
@@ -32,16 +33,21 @@ const BULLET = /^\s*[-*•·▪◦‣]\s+\S/;
 const SELF_PROMOTION = /지금\s?바로|(?:꼭|한번|한\s번|지금)\s?(?:써|사용해|설치해|확인해|경험해)\s?보세요|놓치지\s?마세요|(?:많은\s?)?관심\s?(?:부탁|바랍니다)|기대해\s?주세요|강력\s?추천|게임\s?체인저|역대급|완벽한\s?(?:도구|해결|솔루션)|놀라운\s?(?:기능|도구)|\bcheck\s+it\s+out\b|\bgive\s+it\s+a\s+(?:try|spin|shot)\b|\bdon'?t\s+miss\b|\bmust[- ]have\b|\byou'?ll\s+love\b|\btry\s+it\s+(?:now|today)\b|\bgo\s+check\b/giu;
 
 /** 겪지 않으면 쓸 수 없는 1인칭 경험. "써 보니", "팔다 보니", "써 봤더니", "직접 써", "I've been using". */
-const FIRST_PERSON = /[가-힣]\s?보니(?:까)?(?=[\s,.!?]|$)|[가-힣]\s?봤(?:더니|는데|어요|습니다|다)|직접\s?(?:써|쓰|사용|운영|팔)|제\s?경험|경험상|(?:매일|요즘|늘)\s?(?:쓰고|써요|씁니다|사용하고)|\bI(?:'ve|\s+have)?\s+(?:been\s+)?(?:using|tried|used|running)\b|\bin\s+my\s+experience\b|\bafter\s+(?:using|trying)\s+it\b|\bwe(?:'ve|\s+have)\s+been\s+using\b|\bI\s+found\s+(?:that|it)\b/giu;
+// "직접 사용할 수 있습니다"처럼 독자가 할 수 있는 일을 말하는 문장은 경험이 아니다. 겪은 일을 전하는 활용형만 본다.
+const FIRST_PERSON = /[가-힣]\s?보니(?:까)?(?=[\s,.!?]|$)|[가-힣]\s?봤(?:더니|는데|어요|습니다|다)|제\s?경험|경험상|\bI(?:'ve|\s+have)?\s+(?:been\s+)?(?:using|tried|used|running)\b|\bin\s+my\s+experience\b|\bafter\s+(?:using|trying)\s+it\b|\bwe(?:'ve|\s+have)\s+been\s+using\b|\bI\s+found\s+(?:that|it)\b/giu;
 /** 편집 지시가 작성자의 경험을 직접 요청하면 그 경험은 작성자가 준 것이다. */
 const ASKS_EXPERIENCE = /경험|겪은|1인칭|일인칭|\bfirst[- ]person\b|\bexperience\b|\bmy story\b/i;
+/** "경험은 넣지 마세요", "Do not invent personal experience"는 요청이 아니라 금지다. */
+const FORBIDS_EXPERIENCE = /(?:경험|겪은|1인칭|일인칭).{0,16}(?:없이|말고|말아|마세요|금지|빼|제외|삭제|않|넣지|쓰지|지어내지)|\b(?:no|not|don'?t|do not|without|avoid|never|invent(?:ed)?)\b.{0,30}(?:experience|first[- ]person|my story)/i;
+const asksExperience = (instruction = "") => ASKS_EXPERIENCE.test(instruction) && !FORBIDS_EXPERIENCE.test(instruction);
 
 /** 문장 끝 종결. 받침 ㅂ + 니다/니까(합니다체)와 요(해요체)만 센다. 문장 부호가 없는 줄 끝도 끝으로 본다. */
 const END = String.raw`(?=\s*(?:[.!?。？！…]|$))`;
 const FORMAL = new RegExp(`[가-힣]니(?:다|까)${END}`, "gmu");
 // 서술문만 센다. 필요·중요·주요·수요처럼 '요'로 끝나는 명사는 종결이 아니고, '-세요'는 합니다체 글에서도 흔한 권유·명령이다.
 // 질문(-나요?)은 따로 빼고 본다(아래 narrationStatements).
-const POLITE = new RegExp(`(?![필중주수개강세]요)[가-힣]요${END}|[가-힣]죠${END}`, "gmu");
+// 가요·동요·민요·담요·개요처럼 흔한 '-요' 명사도 뺀다. 놓치는 혼용이 있어도 바른 글을 고치게 하지 않는 쪽을 택했다.
+const POLITE = new RegExp(`(?![필중주수개강세가동민담]요)[가-힣]요${END}|[가-힣]죠${END}`, "gmu");
 const REGISTER_INSTRUCTION = /해요체|합니다체|하십시오체|합쇼체|반말|존댓말|\b(?:haeyo|formal|informal|register)\b/i;
 
 function formalEndings(text: string): string[] {
@@ -75,7 +81,7 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
     results.push({ rule: "register_mixed", ok: !mixed, detail: mixed ? say(`합니다체와 해요체가 섞였습니다(${sample}). 한 문체로 맞춰 주세요.`, `Formal and polite Korean endings are mixed (${sample}). Use one register throughout.`) : undefined, args: mixed ? { sample } : undefined });
   }
 
-  if (!ASKS_EXPERIENCE.test(facts.editorInstruction ?? "")) {
+  if (!asksExperience(facts.editorInstruction)) {
     const evidence = normalizeForMatch(`${facts.sourceText ?? ""}\n${facts.why ?? ""}`);
     const claims = segment(narration(body)).filter((sentence) => {
       const value = normalizeForMatch(sentence);
@@ -89,3 +95,6 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
   }
   return results;
 }
+
+/** 사람 말투 규칙. 생성 결과의 문장을 고치게 하는 규칙이라, 다시 쓸 원자료(홈페이지 단락)를 고르는 데는 쓰지 않는다. */
+export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review"]);
