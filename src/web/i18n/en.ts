@@ -997,6 +997,12 @@ export const en: Record<string, string> = {
   "공개하지 않은 기능": "Features not public yet",
   "비공개 기능": "Unreleased feature",
   "콜론 첫 줄": "Colon opening",
+  "요구 사항 문장": "Requirements sentence",
+  "권유 문장": "Invitation",
+  "이름 번역투": "Name as predicate",
+  "명령 나열": "Command list",
+  "주어 없는 첫 문장": "Subjectless opener",
+  "미완성 문장": "Sentence fragment",
   조회수: "Views",
   "언어 불일치": "Wrong language",
   "선택한 언어({language})가 아닌 한국어 문장이 있습니다: {sentences}":

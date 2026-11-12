@@ -2,6 +2,7 @@ import { reserveSharedExecution } from "./shared-quota.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { profilePrompt, type ProfileMaterial } from "../core/prompts.js";
+import { preferredPublicName } from "../core/public-name.js";
 import { schema } from "../infra/db/index.js";
 import { modelFor, runLlm } from "../infra/llm/providers.js";
 import { recordLlmUsage } from "./llm-usage.js";
@@ -150,5 +151,8 @@ async function generate(ctx: AppContext, ownerId: string, material: ProfileMater
   try { res = await runLlm({ ...cfg }, profilePrompt(material), "digest", keyPoolOps(ctx), ctx.env.geminiKeys, undefined, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg), ...llmCallOptions(ctx, ownerId) }); }
   catch (err) { recordLlmUsage(ctx, ownerId, cfg, startedAt, { failedModel: modelFor(cfg, "digest"), error: err }); throw err; }
   recordLlmUsage(ctx, ownerId, cfg, startedAt, { res });
-  return { profile: normalize(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` };
+  const profile = normalize(res.json);
+  // 생성 모델이 고른 CLI 표기(tend)보다 제품 제목의 표기(Tend)를 쓴다.
+  profile.naming = preferredPublicName(profile.naming, { siteName: material.siteName, readme: material.readme });
+  return { profile, model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` };
 }

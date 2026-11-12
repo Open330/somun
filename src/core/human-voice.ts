@@ -8,7 +8,7 @@ import { say as sayIn, type Locale } from "../shared/locale.js";
  */
 
 type Result = { rule: string; ok: boolean; detail?: string; args?: Record<string, string> };
-export type HumanVoiceFacts = { language?: string; editorInstruction?: string; sourceText?: string; why?: string };
+export type HumanVoiceFacts = { language?: string; editorInstruction?: string; sourceText?: string; why?: string; purpose?: "introduction" | "update" | null; publicName?: string; repo?: string };
 
 /** 짧은 게시글 채널. 긴 글(Show HN·GN·블로그 개요)은 절과 목록이 형식의 일부다. */
 const POST_CHANNELS = new Set(["x", "threads", "linkedin"]);
@@ -54,6 +54,20 @@ function formalEndings(text: string): string[] {
   return [...text.matchAll(FORMAL)].filter((m) => (m[0].charCodeAt(0) - 0xac00) % 28 === 17).map((m) => m[0]);
 }
 
+/**
+ * 첫 소개에서 사람이 지운 문장 유형(2026-11-12 Tend·haejo·aas·barshelf 실측). 모두 생성 결과를 고치게 하는 규칙이다.
+ * - 요구 사항: 설치 조건·지원 OS·버전·하드웨어·가격은 링크한 페이지의 몫이다.
+ * - 권유: "사용해 보세요", "~하세요", "use X to", "try X".
+ */
+const REQUIREMENT = /\b(?:requires?|required|prerequisites?|supports? (?:macOS|Linux|Windows))\b|(?:macOS|iOS|Windows|Linux|Node(?:\.js)?|Rust|Python|tmux)\s?\d+(?:\.\d+|\.x)*\+?|Apple Silicon|Unix-like|유닉스 계열|이상(?:의|에서|이 필요|을 지원)|필요합니다|무료로|\bfor free\b|\bfree of charge\b/iu;
+const INVITATION_KO = /[가-힣](?:해|어|아|여|워|써|봐)\s?보세요|만나\s?보세요|보시기\s?바랍니다|[가-힣]하세요(?=\s*(?:[.!]|$))|[가-힣](?:어|아|여)\s?주세요(?=\s*(?:[.!]|$))/u;
+const INVITATION_EN = /(?:^|[,;:]\s*)(?:try|use|check out|install|get started with|meet)\b|\bgive it a (?:try|spin)\b|\bcheck it out\b/iu;
+/** 주어 없이 여는 첫 문장. 질문(“Running several agents?”)은 독자에게 묻는 말이라 허용한다. */
+const DANGLING_EN = /^(?:(?:When|While|After|Before|By|If|Once)\s+\w+ing\b|To\s+\w+\b[^,]*,|\w+ing\b[^,?]*,)/u;
+/** 서술어 없이 끝난 한국어 문장("…상호작용할 때.", "…를 위해."). 2026-11-12 실측 3회차. */
+const FRAGMENT_KO = /(?:때|위해|통해|경우|위한|면서|으며|하며|하고|에서|으로|에게)\s*[.。]?\s*$/u;
+const DANGLING_KO = /^[^.?!]{0,80}(?:하려는 분을 위해|하려는 분들을 위해|하려면|하고 싶다면|하고 싶을 때)/u;
+
 export function humanVoiceChecks(channel: string, body: string, facts: HumanVoiceFacts, locale: Locale, opts: { registerChecked: boolean }): Result[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const results: Result[] = [];
@@ -66,6 +80,38 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
 
     const bullets = body.split("\n").filter((line) => BULLET.test(line)).length;
     results.push({ rule: "feature_list", ok: bullets < 2, detail: bullets >= 2 ? say(`기능을 목록 ${bullets}줄로 나열했습니다. 가장 중요한 하나를 문장으로 풀고 나머지는 빼 주세요.`, `The post lists features in ${bullets} bullet lines. Explain the most important one in a sentence and drop the rest.`) : undefined, args: bullets >= 2 ? { count: String(bullets) } : undefined });
+  }
+
+  // 문장마다 보는 규칙은 인용·코드를 뺀 서술문으로 본다.
+  const statements = segment(narration(body));
+  const introduction = facts.purpose === "introduction" && isPost(channel);
+  if (introduction) {
+    const requirement = statements.filter((sentence) => REQUIREMENT.test(sentence));
+    results.push({ rule: "introduction_requirements", ok: requirement.length === 0, detail: requirement.length ? say(`첫 소개에 설치 요구 사항·지원 환경·가격 문장이 있습니다: ${requirement.map((x) => `“${x}”`).join(" ")} 이 내용은 링크한 페이지에 맡기고 빼 주세요.`, `The introduction states requirements, supported environments or pricing: ${requirement.map((x) => `“${x}”`).join(" ")} Leave this to the linked page.`) : undefined, args: requirement.length ? { phrases: requirement.join(" / ") } : undefined });
+    const invitation = statements.filter((sentence) => !/[?？]["'”’)]*$/.test(sentence) && (INVITATION_KO.test(sentence) || INVITATION_EN.test(sentence)));
+    results.push({ rule: "introduction_invitation", ok: invitation.length === 0, detail: invitation.length ? say(`독자에게 써 보라고 권하는 문장입니다: ${invitation.map((x) => `“${x}”`).join(" ")} 제품이 하는 일을 평서문으로 써 주세요.`, `This invites the reader to try or use it: ${invitation.map((x) => `“${x}”`).join(" ")} State what the product does instead.`) : undefined, args: invitation.length ? { phrases: invitation.join(" / ") } : undefined });
+  }
+  if (isPost(channel)) {
+    const name = facts.publicName?.trim() || facts.repo?.split("/").at(-1);
+    if (name) {
+      const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // "~할 수 있는 tend입니다", "CLI 도구 aas를", "도구인 BarShelf를": 이름으로 끝나거나 분류어가 이름을 꾸미는 번역투.
+      const predicate = new RegExp(`(?:[가-힣]\\s|^)${n}(?:입니다|이에요|예요)(?=\\s*(?:[.!]|$))|(?:도구|툴|플랫폼|앱|CLI|서비스)인?\\s+${n}(?![A-Za-z])`, "iu");
+      const labelled = statements.filter((sentence) => predicate.test(sentence));
+      results.push({ rule: "name_predicate", ok: labelled.length === 0, detail: labelled.length ? say(`이름으로 끝나거나 분류어가 이름을 꾸미는 문장입니다: ${labelled.map((x) => `“${x}”`).join(" ")} "${name}는/은 …합니다"처럼 이름을 주어로 써 주세요.`, `The sentence ends on the name or labels it with a category: ${labelled.map((x) => `“${x}”`).join(" ")} Make ${name} the subject.`) : undefined, args: labelled.length ? { phrases: labelled.join(" / "), name } : undefined });
+      // 같은 제품의 명령을 둘 이상 늘어놓으면 하는 일이 아니라 명령 목록이 된다.
+      const cli = (facts.repo?.split("/").at(-1) ?? name).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // 명령으로 보는 것: 백틱 안의 `cli sub`, 또는 소문자 cli 뒤 하위 명령에 한국어 조사가 바로 붙은 것(tend watch로). "Tend watches"는 문장이다.
+      const commands = [...new Set([...body.replace(URL, "").matchAll(new RegExp(`\`${cli}\\s+([a-z][a-z-]*)[^\`]*\`|(?<![\\w-])${cli}\\s+([a-z][a-z-]*)(?=[가-힣])`, "gu"))].map((m) => (m[1] ?? m[2]).toLowerCase()))];
+      results.push({ rule: "command_list", ok: commands.length < 2, detail: commands.length >= 2 ? say(`명령어를 ${commands.length}개 나열했습니다(${commands.join(", ")}). 하는 일을 설명하고 명령은 하나만 남겨 주세요.`, `The post lists ${commands.length} commands (${commands.join(", ")}). Describe what it does and keep at most one command.`) : undefined, args: commands.length >= 2 ? { commands: commands.join(", ") } : undefined });
+    }
+    if (korean) {
+      const fragments = statements.filter((sentence) => /[가-힣]/.test(sentence) && !/[?？]["'”’)]*$/.test(sentence) && FRAGMENT_KO.test(sentence));
+      results.push({ rule: "sentence_fragment", ok: fragments.length === 0, detail: fragments.length ? say(`서술어 없이 끝난 문장입니다: ${fragments.map((x) => `“${x}”`).join(" ")} 완결된 문장으로 써 주세요.`, `A sentence ends without a predicate: ${fragments.map((x) => `“${x}”`).join(" ")} Write a complete sentence.`) : undefined, args: fragments.length ? { phrases: fragments.join(" / ") } : undefined });
+    }
+    const first = statements[0] ?? "";
+    const dangling = !/[?？]["'”’)]*$/.test(first) && (DANGLING_EN.test(first) || DANGLING_KO.test(first));
+    results.push({ rule: "dangling_opener", ok: !dangling, detail: dangling ? say(`첫 문장이 주어 없는 조건절로 시작합니다: “${first}” 제품 이름을 주어로 하거나 상황을 평서문으로 써 주세요.`, `The first sentence opens with a clause that has no subject: “${first}” Make the product the subject or state the situation plainly.`) : undefined, args: dangling ? { sentence: first } : undefined });
   }
 
   const promo = [...new Set([...normalizeForMatch(body.replace(URL, "")).matchAll(SELF_PROMOTION)].map((m) => m[0].trim()))];
@@ -97,4 +143,4 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
 }
 
 /** 사람 말투 규칙. 생성 결과의 문장을 고치게 하는 규칙이라, 다시 쓸 원자료(홈페이지 단락)를 고르는 데는 쓰지 않는다. */
-export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review"]);
+export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment"]);

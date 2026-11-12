@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { collectHomepage } from "../infra/homepage.js";
 import { README_SOURCE_MAX, RELEASE_NOTES_MAX } from "../core/prompts.js";
 import { SharedQuotaError } from "./shared-quota.js";
@@ -18,7 +18,7 @@ import { lastDigestAt } from "./ledger.js";
 import { collectBlogSource } from "./collect-blog.js";
 import { emit, isTrusted, NotFoundError, type AppContext } from "./context.js";
 import { processNewCandidates } from "./pipeline.js";
-import { lastSnapshot, snapshotMetrics } from "./publications.js";
+import { hasAnnounced, lastSnapshot, snapshotMetrics } from "./publications.js";
 import { ingestSignals, latestForRepo, type IncomingSignal } from "./signals.js";
 import { representative } from "../core/releases.js";
 import { listEnabledSources, markPolled } from "./sources.js";
@@ -70,6 +70,11 @@ export async function expandTargets(gh: GitHubClient, targets: string[], publicO
   const seen = new Set<string>();
   const repos = [...explicit, ...active].filter((r) => !seen.has(r.full_name) && seen.add(r.full_name)).sort((a, b) => (Date.parse(b.pushed_at ?? "") || 0) - (Date.parse(a.pushed_at ?? "") || 0));
   return { repos, quiet, skipped };
+}
+
+/** 이 저장소의 글감이 하나라도 있었는가(상태 무관). */
+function hasAnyCandidate(ctx: AppContext, ownerId: string, repo: string): boolean {
+  return Boolean(ctx.db.select({ id: schema.candidates.id }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repo))).get());
 }
 
 /** 이 저장소에 아직 버리거나 발행하지 않은 글감이 있는가. */
@@ -230,7 +235,9 @@ export async function profileMaterialFor(ctx: AppContext, ownerId: string, repoN
   if (!repo || (publicOnly && repo.private !== false)) throw new NotFoundError("repository");
   const [readmeRaw, releases] = await Promise.all([gh.get<{ content: string }>(`/repos/${repoName}/readme`), gh.get<GhRelease[]>(`/repos/${repoName}/releases?per_page=3`)]);
   const readme = readmeRaw ? Buffer.from(readmeRaw.content, "base64").toString("utf8") : "";
-  return { repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
+  // 다시 만들 때도 수집해 둔 홈페이지의 사이트 이름을 쓴다(홈페이지를 다시 받지 않는다).
+  const siteName = ctx.db.select({ evidence: schema.candidates.evidence }).from(schema.candidates).where(and(eq(schema.candidates.ownerId, ownerId), eq(schema.candidates.repo, repoName))).orderBy(desc(schema.candidates.updatedAt)).get()?.evidence as { homepageSource?: { siteName?: string } } | undefined;
+  return { siteName: siteName?.homepageSource?.siteName, repo: repoName, description: repo.description ?? undefined, readme, recentReleaseNotes: (releases ?? []).map((r) => r.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count };
 }
 
 /**
@@ -395,11 +402,21 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
         const r = ingestSignals(ctx, ownerId, sourceId, signals, { latestReleaseAt: Number.isFinite(latestReleaseAt) ? latestReleaseAt : undefined, repoCreatedAt: createdAt, recentPrCount }, evidence);
         summary[name] = r.inserted;
       }
+      // 아직 어디에도 알린 적 없고 글감도 한 번도 없는 저장소: 최근 활동이 약해도 소개할 수 있게 소개용 글감을 하나 만든다.
+      // 최신 릴리스(오래됐어도)가 있으면 그 릴리스로, 없으면 저장소 자체로. 같은 ref라 다음 수집에서 겹치지 않는다(2026-11-12 oh-my-prompt).
+      // 직접 지정한 저장소만(App 설치로 고른 수백 개 저장소에 한꺼번에 만들지 않게), 소개 근거가 될 README가 있을 때만.
+      if (!source.options?.installationId && readme.trim() && !hasAnyCandidate(ctx, ownerId, name) && !hasAnnounced(ctx, ownerId, name)) {
+        const newest = allReleases[0];
+        const seed: IncomingSignal = newest
+          ? { kind: "release", repo: name, ref: `gh:release:${name}@${newest.tag_name}`, title: `${name} ${newest.tag_name}`, payload: { tag: newest.tag_name, name: newest.name, body: newest.body?.slice(0, RELEASE_NOTES_MAX), url: newest.html_url }, occurredAt: Date.parse(newest.published_at) }
+          : { kind: "repo_created", repo: name, ref: `gh:repo:${name}`, title: name, payload: { description: repo.description }, occurredAt: createdAt };
+        summary[name] = (summary[name] ?? 0) + ingestSignals(ctx, ownerId, sourceId, [seed], { repoCreatedAt: createdAt }, evidence).inserted;
+      }
       // 프로필: 이번 수집에서 새 신호가 저장됐거나 열린 글감이 있는 저장소만(초안의 근거가 되는 곳). ensureProfile은 없거나 README가
       // 바뀐 경우에만 모델을 부른다. 활동 없는 저장소까지 만들면 webhook마다 공유 모델 쿼터를 프로필에 다 쓴다. 수집 한 번에 최대 PROFILE_BUDGET개.
       if (profileBudget > 0 && ((summary[name] ?? 0) > 0 || hasOpenCandidate(ctx, ownerId, name))) {
         try {
-          const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count });
+          const r = await ensureProfile(ctx, ownerId, { repo: name, description: repo.description ?? undefined, readme, recentReleaseNotes: allReleases.slice(0, 3).map((x) => x.body ?? "").filter(Boolean), language: repo.language ?? undefined, license: repo.license?.spdx_id, homepage: repo.homepage || undefined, stars: repo.stargazers_count, siteName: homepageSource?.siteName });
           if (r !== "kept") { profileBudget--; ctx.log.info({ repo: name, r }, "repo profile"); }
         } catch (e) {
           // 한도에 닿으면 이번 수집의 나머지 프로필은 시도하지 않는다(저장소마다 같은 실패 로그가 쌓이지 않게).

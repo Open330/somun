@@ -230,7 +230,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   // 저장소를 알리기 전에 내린 판단의 각도는 첫 소개용이다("…를 소개합니다"). 그 뒤의 업데이트 초안에는 쓰지 않는다.
   // 채널이 섞이면 판단의 각도는 새 독자용 소개다. 이미 알린 채널의 업데이트에 재사용하지 않는다.
   const staleAngle = !introduction && judgment !== null && judgment !== undefined && (anyUnannounced || prev?.purpose === "introduction" || announcedSince(ctx, ownerId, candidateId, judgment.createdAt, channel));
-  const angle = requested || staleAngle ? undefined : judgment?.angle ?? undefined;
+  // 첫 소개는 README·프로필을 근거로 쓴다. 판단의 각도는 그 창의 변경(버그 수정 PR 등)에 끌려가 소개를 변경 알림으로 바꿨다(2026-11-12 oh-my-prompt).
+  const angle = requested || staleAngle || introduction ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
   const prompt = draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
     channelSpec: channelSpec(channel, settings.customChannels),

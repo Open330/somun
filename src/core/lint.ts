@@ -3,6 +3,7 @@ import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { humanVoiceChecks, narration } from "./human-voice.js";
+import { readmeBased } from "./condition-review.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -80,7 +81,7 @@ export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"
 const TRANSLITERATED: [RegExp, string][] = ([
   ["엑스", "X"], ["링크드인", "LinkedIn"], ["쇼 ?(?:에이치엔|에이치 엔|핸|에이낸)", "Show HN"], ["쇼 ?지엔", "Show GN"], ["긱 ?뉴스", "GeekNews"],
   ["깃 ?허브", "GitHub"], ["제미나이", "Gemini"], ["에이피아이", "API"], ["씨엘아이", "CLI"], ["엔피엠", "npm"], ["알에스에스", "RSS"],
-  ["클로드 ?코드", "Claude Code"], ["코덱스", "Codex"], ["타입스크립트", "TypeScript"],
+  ["클로드 ?코드", "Claude Code"], ["클로드", "Claude"], ["코덱스", "Codex"], ["타입스크립트", "TypeScript"],
 ] as const).map(([ko, en]) => [new RegExp(`(?<![가-힣])${ko}(?=(?:에서|으로|에게|까지|처럼|보다|[와과는은이가를을에의도로만])?(?![가-힣]))`, "g"), en]);
 /**
  * Show GN 본문에 있어야 할 절(채널 규칙). 무엇을 했는지는 항상, 왜는 프로필에 만든 이유가 있을 때만, 한계는 근거에 한계가 있을 때만 요구한다.
@@ -99,7 +100,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: purpose === "introduction" && readmeBased(candidate.evidence) ? [] : sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**

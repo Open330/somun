@@ -17,7 +17,7 @@ let ctx: AppContext, cid: number, record: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   record = vi.fn();
-  ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { llmGateway: GATEWAY }, bus: new EventEmitter(), usage: { record } as unknown as AppContext["usage"] };
+  ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { llmGateway: GATEWAY, introductionEditor: false }, bus: new EventEmitter(), usage: { record } as unknown as AppContext["usage"] };
   cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: OWNER, repo: "a/b", title: "Fix", type: "release", key: "k", evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
 });
 afterEach(() => { vi.unstubAllGlobals(); ctx.db.$client.close(); });

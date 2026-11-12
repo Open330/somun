@@ -150,6 +150,7 @@ it("filters unverified highlights before keeping eight, and checks against the t
 });
 
 it("stores the judge's angle separately from its reasoning", () => {
+  announced();
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Plain verdict.", angle: "The flag nobody asked for" } });
   expect(ctx.db.select().from(schema.judgments).get()).toMatchObject({ reasoning: "Plain verdict.", angle: "The flag nobody asked for" });
@@ -245,7 +246,7 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).toContain("Keep it short");
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
-  expect(prompt.system).toContain("Explain a concrete reader need");
+  expect(prompt.system).toContain("leave installation requirements, supported OS or versions, hardware and pricing to the linked page");
 });
 
 it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {
@@ -276,7 +277,8 @@ it("tells drafts which releases a window spans and which PRs are not released ye
 it("drops an introduction-era angle from update drafts and marks unreleased highlights", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag.", "(unreleased) Mac app tab dragging."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "r", angle: "Introduce vite to new readers" } });
-  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("Introduce vite to new readers");
+  // 첫 소개 초안은 판단의 각도를 쓰지 않는다(README·프로필이 근거다).
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).not.toContain("Introduce vite to new readers");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
   registerPublication(ctx, "test", { candidateId: id, channel: "x" });
   const update = buildPrompt(ctx, "test", "draft", id, "x", "en").user;

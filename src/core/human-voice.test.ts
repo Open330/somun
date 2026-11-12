@@ -161,3 +161,35 @@ describe("review regressions (Codex on #94)", () => {
     }
   });
 });
+
+describe("publishable first introductions (2026-11-12 five-project baseline)", () => {
+  const fails = (body: string, lang: string, name: string, repo: string) =>
+    lintDraft("x", undefined, body, [], { language: lang, purpose: "introduction", publicName: name, repo }).filter((r) => !r.ok).map((r) => r.rule);
+  it("flags each pattern a person removed from the generated drafts", () => {
+    expect(fails("여러 코딩 에이전트 계정을 전환하는 CLI 도구 aas를 사용해 보세요. aas switch로 계정을 바꾸거나 aas usage로 사용량을 확인할 수 있습니다. https://github.com/Open330/aas", "ko", "aas", "Open330/aas"))
+      .toEqual(expect.arrayContaining(["introduction_invitation", "name_predicate", "command_list"]));
+    expect(fails("macOS 14 이상과 Apple Silicon 환경에서 무료로 사용할 수 있습니다. https://barshelf.jiun.dev", "ko", "BarShelf", "Open330/barshelf")).toContain("introduction_requirements");
+    expect(fails("반복되는 앱 작업을 자동화하려는 분을 위해, Haejo가 화면을 읽고 클릭합니다. https://open330.github.io/haejo/", "ko", "Haejo", "Open330/haejo")).toContain("dangling_opener");
+    expect(fails("대기 중인 세션을 파악하는 tend입니다. https://open330.github.io/tend", "ko", "tend", "Open330/tend")).toContain("name_predicate");
+    expect(fails("When managing multiple coding agent sessions in tmux, use tend to see which agent is waiting. Requires tmux 3.x or herdr and a Unix-like OS. https://github.com/Open330/tend", "en", "tend", "Open330/tend"))
+      .toEqual(expect.arrayContaining(["dangling_opener", "introduction_invitation", "introduction_requirements"]));
+  });
+  it("passes the human-edited Tend introductions and plain statements (false-positive guards)", () => {
+    expect(fails("tmux에 Claude Code, Codex, Gemini CLI를 여러 개 띄워 두면 어느 창이 내 답을 기다리는지 놓치기 쉽습니다. Tend는 이미 쓰고 있는 세션을 그대로 지켜보다가 입력·선택·오류로 멈춘 창을 알려 주고, tend attend로 가장 오래 기다린 창에 바로 데려다줍니다.\nhttps://open330.github.io/tend/", "ko", "Tend", "Open330/tend")).toEqual([]);
+    expect(fails("Running several Claude Code, Codex or Gemini CLI sessions in tmux? Tend watches the ones you already have, tells you when one stops for input, a choice or an error, and `tend attend` jumps to the pane that has waited longest. No wrapper, no new terminal.\nhttps://open330.github.io/tend/", "en", "Tend", "Open330/tend")).toEqual([]);
+    // 제품 이름이 문장 주어인 "Tend watches"는 명령이 아니다. 대문자 제품명과 소문자 CLI가 같아도 마찬가지다.
+    expect(fails("Tend watches agents and Tend attends to nothing. https://a.dev", "en", "Tend", "Open330/tend")).not.toContain("command_list");
+    // 사용하는 사람이 주어인 서술은 권유가 아니다. 질문으로 여는 것은 허용한다.
+    expect(fails("Haejo는 앱을 열고 클릭한 뒤 결과를 확인합니다. https://a.dev", "ko", "Haejo", "Open330/haejo")).toEqual([]);
+    expect(fails("Need Claude to use your Mac apps? Haejo opens apps, clicks and checks results. https://a.dev", "en", "Haejo", "Open330/haejo")).toEqual([]);
+    // 업데이트 글에는 소개 전용 규칙(요구 사항·권유)을 걸지 않는다.
+    expect(lintDraft("x", undefined, "v2 requires Node 22. https://a.dev", [], { language: "en", purpose: "update", publicName: "Tool", repo: "o/tool" }).find((r) => r.rule === "introduction_requirements")).toBeUndefined();
+  });
+});
+
+it("flags Korean sentence fragments and transliterated Claude (round 3)", () => {
+  const rules = (body: string) => lintDraft("x", undefined, body, [], { language: "ko", purpose: "introduction", publicName: "Oh My Prompt", repo: "jiunbae/oh-my-prompt" }).filter((r) => !r.ok).map((r) => r.rule);
+  expect(rules("AI 코딩 에이전트와 상호작용할 때. Oh My Prompt는 대화를 기록합니다. https://a.dev")).toContain("sentence_fragment");
+  expect(rules("클로드가 앱을 조작합니다. https://a.dev")).toContain("no_transliterated_names");
+  expect(rules("Oh My Prompt는 에이전트와 나눈 대화를 기록하고 통계를 보여 줍니다. https://a.dev")).toEqual([]);
+});
