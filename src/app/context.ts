@@ -14,6 +14,8 @@ export type AppContext = {
     githubToken?: string; geminiKeys?: string; publicUrl?: string;
     /** 첫 소개 초안의 편집 단계(모델 호출 1회 추가). 기본 켜짐. SOMUN_INTRODUCTION_EDITOR=false로 끈다. */
     introductionEditor?: boolean;
+    /** 첫 소개를 사실 추출 → 조립 파이프라인으로 만든다(app/intro-pipeline). 기본 켜짐. SOMUN_INTRO_PIPELINE=false로 끈다. */
+    introPipeline?: boolean;
     /** jiun-api LLM 게이트웨이. 있으면 서버 키 Gemini 호출이 게이트웨이로 간다(GEMINI_API_KEYS 대신). */
     llmGateway?: import("../infra/llm/providers.js").LlmGateway;
     /**

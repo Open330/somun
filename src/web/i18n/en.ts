@@ -1010,6 +1010,9 @@ export const en: Record<string, string> = {
   "명령 나열": "Command list",
   "주어 없는 첫 문장": "Subjectless opener",
   "미완성 문장": "Sentence fragment",
+  "전제 누락": "Missing prerequisite",
+  "근거 없는 수량": "Unsupported quantity",
+  번역투: "Translationese",
   조회수: "Views",
   "언어 불일치": "Wrong language",
   "선택한 언어({language})가 아닌 한국어 문장이 있습니다: {sentences}":

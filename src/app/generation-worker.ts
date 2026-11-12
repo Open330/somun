@@ -1,8 +1,9 @@
 import { reserveSharedExecution, SharedQuotaError } from "./shared-quota.js";
 import { isBetterRepair } from "../core/draft-repair.js";
 import { judgmentTextIssues } from "../core/judgment-text.js";
-import { INTRODUCTION_CRITIC_SCHEMA, INTRODUCTION_CRITIC_SYSTEM, INTRODUCTION_EDITOR_SYSTEM, introductionCritiquePrompt, introductionEditPrompt } from "../core/introduction-editor.js";
+import { INTRODUCTION_CRITIC_SCHEMA, INTRODUCTION_CRITIC_SYSTEM, INTRODUCTION_EDITOR_SYSTEM, introductionCritiquePrompt, introductionEditPrompt, KOREAN_CRITIC_SCHEMA, KOREAN_CRITIC_SYSTEM, koreanCritiquePrompt } from "../core/introduction-editor.js";
 import { draftPurposeOf, koreanRegister } from "../core/prompts.js";
+import { introFactsEligible, introFactsHint } from "./intro-pipeline.js";
 import { channelSpec, type Channel } from "../core/channels.js";
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
@@ -77,6 +78,18 @@ async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, curr
       const body = readJobDraft(job, current.json, settings.customChannels, settings.bannedPhrases).body;
       const critique = (await run(introductionCritiquePrompt(job.user, body, job.lang ?? "ko"), JSON.stringify(INTRODUCTION_CRITIC_SCHEMA), INTRODUCTION_CRITIC_SYSTEM)).json as { publishable?: unknown; problems?: unknown };
       const problems = (Array.isArray(critique?.problems) ? critique.problems : []).filter((p): p is string => typeof p === "string" && p.trim().length > 0).slice(0, 8);
+      if ((job.lang ?? "ko").toLowerCase().startsWith("ko")) {
+        // 한국어 표현만 따로 본다. 실패해도 일반 비평 결과로 계속한다.
+        try {
+          const ko = (await run(koreanCritiquePrompt(body), JSON.stringify(KOREAN_CRITIC_SCHEMA), KOREAN_CRITIC_SYSTEM)).json as { problems?: unknown };
+          for (const p of Array.isArray(ko?.problems) ? ko.problems.slice(0, 6) : []) {
+            const { quote, why, fix } = (p ?? {}) as { quote?: unknown; why?: unknown; fix?: unknown };
+            if (typeof quote === "string" && quote.trim() && body.includes(quote.trim())) problems.push(`“${quote.trim()}”: ${typeof why === "string" ? why : ""}${typeof fix === "string" && fix.trim() ? ` → ${fix.trim()}` : ""}`);
+          }
+        } catch (err) {
+          ctx.log.warn({ jobId: job.id, round, err: err instanceof Error ? err.message : String(err) }, "korean critique failed");
+        }
+      }
       const remaining = before.map((issue) => `${issue.rule}${issue.detail ? `: ${issue.detail}` : ""}`);
       ctx.log.info({ jobId: job.id, round, publishable: critique?.publishable === true, problems, lint: before.map((l) => l.rule) }, "introduction critique");
       if (critique?.publishable === true && !problems.length && !before.length) break;
@@ -108,7 +121,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
   const start = last === undefined ? 0 : owners.findIndex((o) => o > last);
   const rotated = start <= 0 ? owners : [...owners.slice(start), ...owners.slice(0, start)];
   for (const ownerId of rotated) {
-    const job = pendingJobs(ctx, ownerId, "server")[0];
+    let job = pendingJobs(ctx, ownerId, "server")[0];
     if (!job) continue;
     const claim = claimJob(ctx, ownerId, job.id, "server", "server");
     if (!claim.claimToken) continue;
@@ -127,7 +140,15 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
     try {
       const call = (user: string, schemaJson = job.schemaJson, system = job.system, cfg = config) => { reserveSharedExecution(ctx, ownerId, Date.now(), cfg, { background: Boolean(job.background) }); return runLlm(cfg, { system, user, schema: JSON.parse(schemaJson), schemaName: job.kind === "judge" ? "judgment" : job.kind === "lesson" ? "edit_lesson" : job.kind }, modelKind, keyPoolOps(ctx), ctx.env.geminiKeys, signal, { guardBaseUrl: guardsModelEndpoint(ctx, ownerId, cfg), ...llmCallOptions(ctx, ownerId) }); };
       // 본 호출은 끝나는 즉시 기록한다. 뒤의 보정·반영이 실패해도 이미 쓴 호출이 오류로 잘못 남지 않게.
-      let res = await call(job.user, repairSchemaJson(job));
+      // 모델 호출 수를 작업마다 센다(첫 소개 호출 예산 확인용). 보정·재시도까지 포함한다.
+      let calls = 0;
+      const counted = (user: string, schemaJson?: string, system?: string) => { calls++; return call(user, schemaJson, system); };
+      // 서버에서 도는 X·Threads 첫 소개는 원문에서 검증한 사실(필수 전제어·핵심 동작)을 프롬프트에 덧붙인다. 보정·비평도 같은 프롬프트를 본다.
+      if (introFactsEligible(ctx, ownerId, job)) {
+        try { job = { ...job, user: job.user + await introFactsHint(ctx, ownerId, job, counted) }; }
+        catch (err) { ctx.log.warn({ jobId: job.id, err: err instanceof Error ? err.message : String(err) }, "introduction facts failed; drafting without them"); }
+      }
+      let res = await counted(job.user, repairSchemaJson(job));
       mainRecorded = true;
       recordLlmUsage(ctx, ownerId, config, started, { res });
       // 판단 이유·각도의 글자 깨짐(가나·한자 혼입, 음차)과 각도의 금지어는 다시 생성한다. 횟수를 묶어 비용을 제한한다.
@@ -138,7 +159,7 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
           if (!issues.length) break;
           ctx.log.info({ jobId: job.id, attempt, issues }, "judgment text retry");
           const t = Date.now();
-          try { const retry = await call(`${job.user}\n\n## Fix before returning\nYour previous answer had these problems in reasoning or angle:\n- ${issues.join("\n- ")}\nReturn the full JSON again with the same judgment and clean wording.`); recordLlmUsage(ctx, ownerId, config, t, { res: retry }); res = retry; }
+          try { const retry = await counted(`${job.user}\n\n## Fix before returning\nYour previous answer had these problems in reasoning or angle:\n- ${issues.join("\n- ")}\nReturn the full JSON again with the same judgment and clean wording.`); recordLlmUsage(ctx, ownerId, config, t, { res: retry }); res = retry; }
           catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, config, t, { failedModel: modelFor(config, modelKind), error: err }); break; }
         }
       }
@@ -149,9 +170,10 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
           catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, cfg, t, { failedModel: modelFor(cfg, modelKind), error: err }); throw err; }
         };
         // 보정·편집도 같은 모델(~/.agents/AI_API.md: 문장 생성처럼 품질이 값어치를 하는 단계만 3.7-flash). 개인 키·다른 제공사는 사용자가 고른 모델 그대로.
-        res = await repairDraft(ctx, ownerId, job, res, extra);
-        res = await editIntroduction(ctx, ownerId, job, res, extra);
+        res = await repairDraft(ctx, ownerId, job, res, (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); });
+        res = await editIntroduction(ctx, ownerId, job, res, (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); });
       }
+      ctx.log.info({ jobId: job.id, kind: job.kind, calls }, "generation calls");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
     } catch (err) {
       // Upstream error bodies may echo credentials; persist only a bounded diagnostic.

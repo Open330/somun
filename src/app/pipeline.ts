@@ -248,7 +248,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   // 원문 범위는 프롬프트를 만드는 지금 정한다. 작업이 기다리는 사이 README가 생겨도 모델이 본 범위(PR 포함)를 그대로 남긴다.
   if (readmeOnlyIntroduction(introduction ? "introduction" : "update", channel, opts.instruction, c.evidence)) prompt.sourceScope = "readme";
   const source = c.evidence.homepageSource;
-  if (introduction && channel === "x" && lang === "ko" && !opts.instruction?.trim() && !disputed.length && !settings.voice.useExamples && !settings.voice.guide.trim() && ["plain", "announce"].includes(settings.voice.preset) && source) {
+  // 서버 경로의 첫 소개는 사실 추출 → 조립 파이프라인이 맡는다(app/intro-pipeline). 홈페이지 문구 각색 경로는 로컬 워커에만 남긴다.
+  if (introduction && channel === "x" && lang === "ko" && (settings.llm.provider === "local-agent" || ctx.env.introPipeline === false) && !opts.instruction?.trim() && !disputed.length && !settings.voice.useExamples && !settings.voice.guide.trim() && ["plain", "announce"].includes(settings.voice.preset) && source) {
     const facts = draftLintFacts(c, profile, "introduction");
     if (!facts.publicName) return prompt;
     const spec = channelSpec(channel, settings.customChannels);

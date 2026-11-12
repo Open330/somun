@@ -14,6 +14,7 @@ export const RELEASE_NOTES_MAX = 6000;
 export const README_SOURCE_MAX = 32000;
 
 export type EvidenceLike = {
+  introFacts?: { hash: string; facts: import("./intro-facts.js").IntroFacts };
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; readmeExcerpt?: string;
@@ -312,10 +313,13 @@ export function angleLine(angle: string, lang: string): string {
  * 이름이 주어인 평서문, 하는 일과 보이는 결과, 링크. 요구 사항·권유·분류어·명령 나열·"~하려면"으로 여는 문장은 쓰지 않는다.
  */
 export const INTRODUCTION_SHAPE_KO = [
-  "모양: 문장 두 개와 링크 한 줄.",
-  "1) 선택: 독자가 겪는 상황 한 문장. 원문에 있는 상황만, 평서문으로 씁니다(예: \"에이전트를 여러 창에 띄워 두면 어느 창이 답을 기다리는지 놓치기 쉽습니다.\").",
-  "2) 제품 이름을 주어로 한 문장: 이 제품이 무엇을 하고 독자에게 무엇이 보이는지 씁니다(예: \"Tend는 … 알려 주고, … 데려다줍니다.\"). 명령어는 꼭 필요할 때 하나만, 백틱으로 감싸 씁니다(`tend attend`).",
+  "모양: 문장 한두 개와 링크 한 줄.",
+  "1) 첫 문장은 제품 이름을 주어로 시작합니다: 이 제품이 어디에서 무엇을 하고 독자에게 무엇이 보이는지 씁니다(예: \"Tend는 tmux에서 돌리는 … 알려 주고, … 데려다줍니다.\"). 상황이나 질문만 까는 도입 문장은 쓰지 않습니다. 명령어와 백틱은 쓰지 않습니다(X는 Markdown을 보여 주지 않습니다).",
+  "2) 선택: 첫 문장에 없는 정보를 더하는 한 문장(원문의 차별점이나 함께 쓰는 기능 하나). 첫 문장의 낱말이나 내용을 되풀이하지 않습니다.",
   "쓰지 않는 것: \"~하려면\", \"~하려는 분을 위해\"로 여는 문장 / \"~할 수 있는 X입니다\"처럼 이름으로 끝나는 문장 / \"CLI 도구 X\" 같은 분류어 / \"사용해 보세요\", \"활용해 보세요\", \"~하세요\" 같은 권유 / 설치 요구 사항·지원 OS·버전·하드웨어·가격 / 명령어 여러 개 나열 / 원문에 없는 경험·감정·효과.",
+  "원문의 영어 제품·기술 이름은 영어 그대로 씁니다(tmux, pane, Flow, Claude Code). 음역하거나 다른 낱말(패널)로 바꾸지 않습니다. 독자에게 말하듯 씁니다(\"알려 주고\"; \"사용자에게\"라고 쓰지 않음).",
+  "원문의 관계를 그대로 지킵니다: 누가 무엇을 하는지, 어디에 있는 것인지 바꾸지 않습니다. 구현 세부(언어·프레임워크·바이너리)는 쓰지 않습니다.",
+  "번역투(상호작용, ~를 통해, ~로서, 이동시키다, 명사만 나열)와 정보 없는 문장(\"~할 때가 있습니다\")은 쓰지 않습니다.",
   "모든 서술문을 채널이 정한 한 가지 문체로 끝냅니다. 번역투 대신 사람이 말하듯 씁니다.",
 ].join("\n");
 
@@ -324,9 +328,10 @@ export function koreanRegister(tone?: string): "해요체" | "합니다체" {
   return /해요체(?=$|[.,;·\s])/.test(tone ?? "") && !/합니다체|하십시오체|해요체\s*(?:금지|아님|아닌|말고|대신|사용하지)/.test(tone ?? "") ? "해요체" : "합니다체";
 }
 export const INTRODUCTION_SHAPE_EN = [
-  "Shape: two sentences and the link line.",
-  "1) Optional: one sentence about the reader's situation, taken from the sources (a question is fine, e.g. \"Running several coding agents in tmux?\").",
-  "2) One sentence with the product name as the subject saying what it does and what the reader sees (e.g. \"Tend watches … and jumps to …\"). Name at most one command, in backticks.",
+  "Shape: one or two sentences and the link line.",
+  "1) The first sentence starts with the product name as the subject and says where it works, what it does and what the reader sees (e.g. \"Tend watches the … sessions you run in tmux and …\"). No setup sentence or question before it. Do not name commands or use backticks (X does not render Markdown).",
+  "2) Optional: one sentence adding information the first does not have (the source's difference or one related capability). Do not repeat a word or idea from the first sentence.",
+  "Address the reader (\"tells you\", not \"notifies the user\"). Keep the source's relations exactly: who does what and where. No implementation details (language, framework, binary).",
   "Do not write: an opening participle or 'When/If/To …' clause without the product as subject / 'use X to …', 'try X', 'check it out' or other invitations / installation requirements, supported OS or versions, hardware or pricing / a list of commands / a category label such as 'the X CLI tool' / experience, feelings or effects the sources do not state.",
 ].join("\n");
 
@@ -409,7 +414,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         baselineIntroduction ? [
           `repo: ${c.evidence.repo} — ${c.evidence.repoUrl}`,
           c.evidence.homepage ? `homepage: ${c.evidence.homepage}` : "",
-          c.evidence.description ? `Repository description: ${c.evidence.description}` : "",
+          c.evidence.description ? `Repository description (may be outdated; the README and homepage win on conflict): ${c.evidence.description}` : "",
           writingProfile ? profileBlock(writingProfile) : "",
           c.evidence.limitations?.length ? `limitations (from README):\n- ${c.evidence.limitations.join("\n- ")}` : "",
           c.evidence.experimental?.length ? `not generally available (never present as available):\n- ${c.evidence.experimental.join("\n- ")}` : "",
@@ -441,7 +446,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
     editorInstruction: opts.instruction?.trim() ?? "",
     schema: DRAFT_SCHEMA,
     system: opts.introduction ? `Write a first introduction for a reader who has never used this product.
-- When no problem statement is supplied, open with a supported reader task and connect it to what the project does. Start with the concrete action or visible result, then name the project in the opening or immediately after. Do not open with the project name followed by a software category definition. Merely saying it manages or connects things is not a reader action. Use one main use situation and at most one directly related supporting capability; do not list features or narrate a minor fix.
+- Tie the project to one supported reader task. Make the project name the subject of the first sentence, stating its concrete action or visible result. Do not open with the project name followed by a software category definition. Merely saying it manages or connects things is not a reader action. Use one main use situation and at most one directly related supporting capability; do not list features or narrate a minor fix.
 - State the operation directly rather than wrapping it in an invitation to use the product. Do not open with "to do X, use Product", "users who want X can use Product", "Product lets you manage things", "사용하면", "사용하려면", or "사용할 수". Preserve actual platform requirements while naming specific objects and actions. The first sentence must stand on its own as a concrete operation, not a preface to the next sentence. An explicit Editor instruction can override this style.
 - Factual grounding takes priority over style and length. Use only the supplied Facts, README and release sources. Keep every claim's prerequisites, eligibility, exclusions, units and platform scope. If an accurate claim cannot fit, omit it. Do not turn a label into an operation, comparison or measured effect. Never invent facts, numbers, benefits, author experience, ownership or motivation. Repository access does not establish authorship; use neutral attribution unless the source establishes the author's role.
 - Preserve the supplied public project name, technical identifiers and links exactly. Omit backend LLM provider and model names, repository activity counts and implementation details unless they are the explicit topic. Do not turn unreleased into not deployed or infer activation from merge status.
