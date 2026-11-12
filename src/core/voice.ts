@@ -39,7 +39,7 @@ export const VOICE_PRESETS: VoicePreset[] = [
     ko: "두세 문장으로 무엇을 만들었는지 말하고, 마지막 문장은 독자에게 묻는 구체적인 질문 하나로 끝냅니다. 질문은 '어떻게 생각하세요'가 아니라 답할 수 있는 것이어야 합니다(예: 어떤 환경에서 쓰시나요).",
     en: "Two or three sentences on what you built, then end with one specific question a reader can actually answer (not 'what do you think?'). Written to get feedback, not applause.",
     sample: {
-      ko: "repopulse 0.4.0: 이번 주 스타가 붙은 저장소를 터미널에서 보여줍니다. 조직 저장소도 읽고, 주간 집계는 캐시합니다.\n\n아직 GitHub만 됩니다.\n\n저장소가 열 개 넘는 분들은 스타 말고 무엇을 먼저 보시나요? https://github.com/example/repopulse",
+      ko: "repopulse 0.4.0은 이번 주 스타가 붙은 저장소를 터미널에서 보여줍니다. 조직 저장소도 읽고, 주간 집계는 캐시합니다.\n\n아직 GitHub만 됩니다.\n\n저장소가 열 개 넘는 분들은 스타 말고 무엇을 먼저 보시나요? https://github.com/example/repopulse",
       en: "repopulse 0.4.0 shows which repos got stars this week, in the terminal. Org repos are in, weekly counts are cached.\n\nGitHub only so far.\n\nIf you maintain more than ten repos, what do you check before stars? https://github.com/example/repopulse",
     },
   },

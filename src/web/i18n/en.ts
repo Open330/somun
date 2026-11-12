@@ -996,6 +996,21 @@ export const en: Record<string, string> = {
   "공개하지 않은 기능:": "Not public yet:",
   "공개하지 않은 기능": "Features not public yet",
   "비공개 기능": "Unreleased feature",
+  "콜론 첫 줄": "Colon opening",
+  "기능 목록": "Feature list",
+  "홍보 말투": "Self-promotion",
+  "문체 혼용": "Mixed register",
+  "경험 확인": "Check experience",
+  "첫 줄이 '이름:'처럼 콜론으로 시작합니다. 제목 붙이듯 쓰지 말고 문장으로 시작해 주세요.":
+    "The first line opens with a label and a colon. Start with a sentence instead of a heading.",
+  "기능을 목록 {count}줄로 나열했습니다. 가장 중요한 하나를 문장으로 풀고 나머지는 빼 주세요.":
+    "The post lists features in {count} bullet lines. Explain the most important one in a sentence and drop the rest.",
+  "자기 홍보 말투: {phrases}. 독자를 재촉하지 말고 무엇을 할 수 있는지만 쓰세요.":
+    "Self-promotional wording: {phrases}. State what the reader can do instead of urging them.",
+  "합니다체와 해요체가 섞였습니다({sample}). 한 문체로 맞춰 주세요.":
+    "Formal and polite Korean endings are mixed ({sample}). Use one register throughout.",
+  "작성자의 경험으로 쓴 문장: {phrases}. 근거 자료에 없는 경험입니다. 실제로 겪은 일인지 확인하고, 아니면 빼 주세요.":
+    "Written as the author's own experience: {phrases}. The sources do not show this experience. Confirm it happened or remove it.",
   "프로필에서 공개하지 않은 기능으로 표시한 내용: {phrases}. 이 기능은 빼 주세요.":
     "Marked as not public in the profile: {phrases}. Remove this feature from the post.",
   "회사명, 내부 호스트명…": "Company name, internal hostnames…",
