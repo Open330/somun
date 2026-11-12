@@ -190,7 +190,7 @@ export function retryGeneration(ctx: AppContext, ownerId: string, id: number): n
     if (job.kind === "draft" && job.channel && job.lang && storedPurpose === "introduction" && announcedSince(ctx, ownerId, job.candidateId, job.createdAt, job.channel as Channel)) {
       return enqueueJob(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, buildPrompt(ctx, ownerId, "draft", job.candidateId, job.channel as Channel, job.lang, { introduction: false, instruction: instructionOf(job.user, job.meta) }), job.continuation ?? undefined);
     }
-    const prompt = job.kind === "draft" ? { editorInstruction: instructionOf(job.user, job.meta) ?? "", draftPurpose: storedPurpose, sourceExcerpt: job.meta?.sourceExcerpt, system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
+    const prompt = job.kind === "draft" ? { editorInstruction: instructionOf(job.user, job.meta) ?? "", draftPurpose: storedPurpose, sourceExcerpt: job.meta?.sourceExcerpt, sourceScope: job.meta?.sourceScope, system: job.system, user: job.user, schema: JSON.parse(job.schemaJson), schemaName: job.kind } : buildPrompt(ctx, ownerId, job.kind as JobKind, job.candidateId);
     return enqueueJob(ctx, ownerId, job.kind as JobKind, job.candidateId, (job.channel ?? undefined) as Channel | undefined, job.lang ?? undefined, prompt, job.continuation ?? undefined);
   }).immediate();
 }

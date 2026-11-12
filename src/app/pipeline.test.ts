@@ -530,3 +530,11 @@ it("keeps the source scope of the prompt the model saw when a README arrives bef
   const scoped = queueStep(ctx, "test", "draft", id, "x", "ko", { introduction: true });
   expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, scoped)).get()!.meta?.sourceScope).toBe("readme");
 });
+
+it("keeps the stored source scope when a failed introduction draft is retried (Codex on #97)", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, readmeForChecks: "# Vite\n\nVite serves files." } }).run();
+  const jobId = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true });
+  ctx.db.update(schema.llmJobs).set({ status: "failed", error: "temporary", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, jobId)).run();
+  const retry = retryGeneration(ctx, "test", jobId);
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()!.meta?.sourceScope).toBe("readme");
+});
