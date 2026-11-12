@@ -72,6 +72,18 @@ export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
   },
 };
 
+/**
+ * 본문을 채운 작성 화면 주소. X·Threads는 공개된 작성 의도(intent) 주소를 받는다. 다른 채널은 빈 작성 화면으로 연다.
+ * 게시는 사람이 그 화면에서 직접 한다. 열었다고 게시한 것은 아니다.
+ */
+export function composeLink(spec: Pick<ChannelSpec, "id" | "composeUrl">, text?: string): string {
+  const body = text?.trim();
+  if (!body) return spec.composeUrl;
+  if (spec.id === "x") return `https://x.com/intent/post?text=${encodeURIComponent(body)}`;
+  if (spec.id === "threads") return `https://www.threads.net/intent/post?text=${encodeURIComponent(body)}`;
+  return spec.composeUrl;
+}
+
 export const ALL_CHANNELS = Object.keys(CHANNELS) as BuiltinChannel[];
 
 /** 기본 채널의 편집 정체성. 플랫폼의 자동 게시 규칙이 아닌 초안 프리셋이다. */

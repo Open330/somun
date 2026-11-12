@@ -1,7 +1,7 @@
 import { postLength } from "@core/post-length";
 import { useEffect, useRef, useState } from "react";
 import { Link, useBlocker } from "react-router-dom";
-import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "@core/channels";
+import { channelSpec, composeLink, draftChannelSpec, type Channel, type ChannelSpec } from "@core/channels";
 import { trackLinks } from "@core/links";
 import type { ConditionReviewState, Draft, Evidence, Publication } from "@shared/types";
 import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
@@ -242,6 +242,8 @@ export default function DraftPanel({
         keep(saved);
         setEditing(false);
         if (saved.copyHeld || saved.status !== "copied") {
+          // 고친 내용은 아직 복사(확인)를 거치지 않았다. 예전 복사 표시로 작성 화면에 미리 채우지 않는다.
+          if (bodyChanged) setCopiedId(null);
           const warning = unsupported(saved.lint);
           warned.current = `${saved.id}\n${saved.body}`;
           setActionError(
@@ -263,6 +265,8 @@ export default function DraftPanel({
         }
       } else {
         const saved = await postEdit(latest.id, latest, false, overwrite);
+        // 복사한 뒤 고쳐 저장만 한 글은 복사한 글이 아니다(작성 화면 미리 채우기·복사 완료 표시).
+        if (bodyChanged) setCopiedId(null);
         keep(saved);
         setEditing(false);
         const after = bodyChanged ? unsupported(saved?.lint) : undefined;
@@ -380,6 +384,11 @@ export default function DraftPanel({
       ? (versions.find((d) => d.id === target.id) ?? latest)
       : latest;
   const postDone = postDraft ? records.some((p) => p.draftId === postDraft.id) : true;
+  // 복사(원문 조건·수치 확인을 거친 단계)를 마친 판만 작성 화면에 미리 채운다. 확인 전 글을 채워 보내 그 확인을 건너뛰지 않게 한다.
+  const composeHref =
+    postDraft && (postDraft.status === "copied" || postDraft.id === copiedId)
+      ? composeLink(spec, track ? trackLinks(postDraft.body, { channel, homepage }) : postDraft.body)
+      : spec.composeUrl;
   const displayed = editing ? latest : (shown ?? latest);
   const count = postLength(channel, editing ? body : displayed.body);
   const checks = displayed.lint.filter((item) => !item.ok && item.detail);
@@ -739,7 +748,7 @@ export default function DraftPanel({
                 : t("게시하고 링크 남기기")}
             </b>
             {spec.composeUrl && (
-              <a className="btn sm" href={spec.composeUrl} target="_blank" rel="noreferrer">
+              <a className="btn sm" href={composeHref} target="_blank" rel="noreferrer">
                 {t("{channel} 작성 화면 열기", { channel: spec.label })} ↗
               </a>
             )}

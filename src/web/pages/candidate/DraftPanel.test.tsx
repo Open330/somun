@@ -116,3 +116,15 @@ it("switches between adapted and legacy excerpt provenance with the shown versio
   expect(screen.getByRole("link", { name: "공식 설명 발췌로 생성" }).getAttribute("href")).toBe("https://example.com/literal/");
   expect(screen.queryByRole("link", { name: "공식 설명을 바탕으로 작성" })).toBeNull();
 });
+
+it("prefills the X composer only with a copied version, never with an edited one", () => {
+  setLocale("ko");
+  show([draft({ status: "copied", body: "복사한 본문입니다." })]);
+  const copied = screen.getByRole("link", { name: /X 작성 화면 열기/ }).getAttribute("href")!;
+  expect(copied.startsWith("https://x.com/intent/post?text=")).toBe(true);
+  expect(new URL(copied).searchParams.get("text")).toContain("복사한 본문입니다.");
+  cleanup();
+  // 복사한 뒤 고쳐 저장한 판(edited)은 확인 전 내용이므로 빈 작성 화면을 연다.
+  show([draft({ status: "edited", body: "고친 뒤 복사하지 않은 본문입니다." })]);
+  expect(screen.getByRole("link", { name: /X 작성 화면 열기/ }).getAttribute("href")).toBe("https://x.com/compose/post");
+});
