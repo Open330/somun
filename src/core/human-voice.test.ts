@@ -139,3 +139,17 @@ describe("review regressions (Codex on #93)", () => {
     expect(failing("설정 파일을 읽습니다. 지원 장르: 가요. https://a.dev")).not.toContain("register_mixed");
   });
 });
+
+describe("wrong_language", () => {
+  const rule = (body: string, language: string) => lintDraft("x", undefined, body, [], { language }).find((r) => r.rule === "wrong_language");
+  it("flags Korean sentences in an English draft (the 2026-11-12 Tend run)", () => {
+    const r = rule("tmux에서 Claude Code나 Codex 같은 코딩 에이전트를 실행할 때 상태를 한눈에 파악할 수 있습니다. https://open330.github.io/tend/", "en");
+    expect(r).toMatchObject({ ok: false, args: { language: "en" } });
+    expect(REPAIRABLE.has("wrong_language")).toBe(true);
+  });
+  it("passes English, quoted or code Korean, and Korean drafts", () => {
+    expect(rule("Tend shows which agent waits. Run `tend --lang ko` for the Korean UI (`한국어 화면`). https://a.dev", "en")?.ok).toBe(true);
+    expect(rule("The Korean UI says “에이전트가 기다립니다”. https://a.dev", "en")?.ok).toBe(true);
+    expect(rule("Tend는 기다리는 창을 알려 줍니다. https://a.dev", "ko")).toBeUndefined();
+  });
+});

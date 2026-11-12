@@ -334,7 +334,8 @@ it.each([
   ['Now 40% faster. https://github.com/me/tool', 'Now handles line endings. https://github.com/me/tool'],
   ['소셜 media 게시글을 작성합니다. https://github.com/me/tool', '소셜 미디어 게시글을 작성합니다. https://github.com/me/tool'],
 ])('records copying but withholds an unsafe voice example until its warnings are corrected', (unsafe, fixed) => {
-  const id=draft(unsafe);
+  // Korean text belongs in a Korean draft; Korean in an English draft is now its own warning (wrong_language).
+  const id=draft(unsafe, "x", /[가-힣]/.test(unsafe) ? "ko" : "en");
   const copied=saveDraftEdit(ctx, OWNER, id, {body:unsafe,markCopied:true});
   expect(copied.status).toBe("copied");
   expect(ctx.db.select().from(schema.drafts).all().find((d) => d.id === id)?.copiedAt).toBeTruthy();

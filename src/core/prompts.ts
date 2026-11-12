@@ -296,6 +296,17 @@ export function instructionOf(user: string, meta?: { editorInstruction?: string 
   return (end < 0 ? rest : rest.slice(0, end)).trim() || undefined;
 }
 
+/**
+ * 판단의 각도는 화면 언어로 쓰인다. 영어 초안에 한국어 각도를 그대로 주면 모델이 본문도 한국어로 썼다(Tend 실측 2026-11-12).
+ * 언어가 다르면 각도는 생각만 따르고 문장·언어는 따르지 말라고 붙인다.
+ */
+export function angleLine(angle: string, lang: string): string {
+  const korean = /[가-힣]/.test(angle);
+  const target = lang.toLowerCase().split("-")[0];
+  if (korean === (target === "ko")) return `Angle to take: ${angle}`;
+  return `Angle to take (an editor note in another language; follow the idea, write in ${langName(lang)}): ${angle}`;
+}
+
 export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; profileClaimsEdited?: boolean; profileEditedFields?: (keyof ProfileLike)[]; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
@@ -369,7 +380,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         langInstruction(lang),
         publicName ? `Public project name: ${publicName}. Use this spelling; owner/repo belongs only inside URLs.` : "",
         opts.guide ? `## Voice guide (apply only where compatible with the selected channel)\n${opts.guide}` : "",
-        angle ? `Angle to take: ${angle}` : "",
+        angle ? angleLine(angle, lang) : "",
         opts.disputed?.length ? `## Flagged as wrong by the author (do not use)\n- ${opts.disputed.join("\n- ")}` : "",
         "## Facts",
         baselineIntroduction ? [
@@ -397,7 +408,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         "Keep each retained capability's prerequisites and exclusions; omit a capability that cannot fit accurately. Do not combine independent capabilities into a simultaneous behavior. No hype, hashtags, emoji, exclamation marks or generic closing questions. Put a supplied body link alone on the final line, without a sentence inviting readers to read more. Historical PR changes belong in updates and source review, not a general introduction.",
         opts.previous ? `## Previous version\n${opts.previous.body}` : "",
         opts.instruction ? `${INSTRUCTION_HEADING}${opts.instruction}` : "",
-        "## Final output\nReturn only JSON with an empty title and the complete body in the selected language. Read the BODY alone: what is this product, when would the reader need it, and what can they actually do?",
+        `## Final output\nReturn only JSON with an empty title and the complete body in ${langName(lang)}. The angle, channel description and sources may be in another language; they are material, not wording or language to copy. Read the BODY alone: what is this product, when would the reader need it, and what can they actually do?`,
       ].filter(Boolean).join("\n\n"),
     };
   }
@@ -448,7 +459,7 @@ Hard rules:
       spec.id === "x" ? lengthInstruction(spec) : spec.maxChars ? `Max length: ${spec.maxChars} characters.` : "",
       spec.maxSentences ? `Maximum ${spec.maxSentences} sentences in the entire body, including the closing question.` : "",
       spec.hasTitle ? `A title is required in the JSON title field (max ${spec.titleMaxChars} chars). Never return an empty title when this channel has a title.` : "No title (return empty string).",
-      angle ? `Angle to take: ${angle}` : "",
+      angle ? angleLine(angle, lang) : "",
       "",
       opts.guide ? `## Voice guide (apply only where compatible with the selected channel)\n${opts.guide}` : "",
       lang === "ko" ? `\n${KO_FLUENCY_RULES}` : "",
