@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelSpec, draftChannelSpec } from "./channels.js";
+import { composeLink, channelSpec, draftChannelSpec } from "./channels.js";
 import { lintDraft } from "./lint.js";
 import { draftPrompt } from "./prompts.js";
 
@@ -35,5 +35,18 @@ describe("introduction sentence budgets", () => {
     expect(draftChannelSpec(update, "update")).toBe(update);
     const custom = { ...channelSpec("x"), id: "custom_test" as const, maxSentences: 2 };
     expect(draftChannelSpec(custom, "introduction")).toBe(custom);
+  });
+});
+
+describe("composeLink", () => {
+  it("prefills X and Threads compose screens with the post, line breaks and links included", () => {
+    const body = "Tend shows which agent waits.\nhttps://open330.github.io/tend/";
+    expect(composeLink(channelSpec("x"), body)).toBe(`https://x.com/intent/post?text=${encodeURIComponent(body)}`);
+    expect(decodeURIComponent(new URL(composeLink(channelSpec("x"), body)).searchParams.get("text")!)).toBe(body);
+    expect(composeLink(channelSpec("threads"), "한 줄 소개")).toBe("https://www.threads.net/intent/post?text=%ED%95%9C%20%EC%A4%84%20%EC%86%8C%EA%B0%9C");
+  });
+  it("falls back to the empty composer elsewhere or without text", () => {
+    expect(composeLink(channelSpec("linkedin"), "body")).toBe(channelSpec("linkedin").composeUrl);
+    expect(composeLink(channelSpec("x"), "  ")).toBe("https://x.com/compose/post");
   });
 });
