@@ -7,7 +7,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { ALL_CHANNELS, enabledTargets, knownChannel, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
-import { backfillStarTrend, collectAll, profileMaterialFor } from "../../app/collect.js";
+import { backfillStarTrend, collectAll, collectSource, profileMaterialFor } from "../../app/collect.js";
 import { checkLocalResult } from "../../app/draft-repair.js";
 import { editProfile, EDIT_LIMITS, getProfile, listProfiles, regenerateProfile } from "../../app/profiles.js";
 import { acceptSuggestion, dismissSuggestion, GUIDE_MAX_CHARS, listSuggestions } from "../../app/learning.js";
@@ -29,7 +29,7 @@ import { addExample, dropDraft, importSeeds, listExamples, recordDraftReview, re
 import { getSettings, getSettingsView, updateSettings } from "../../app/settings.js";
 import { pickWeekly, weeklyPickView } from "../../app/weekly-pick.js";
 import { assertModelEndpoint } from "../../app/net-policy.js";
-import { listSources, removeSource, upsertSource } from "../../app/sources.js";
+import { listEnabledSources, listSources, removeSource, upsertSource } from "../../app/sources.js";
 import type { ChangeEvent } from "../../shared/types.js";
 import { TicketStore, type AuthVars } from "../auth.js";
 import { listVideos, requestVideo, videoFile } from "../../app/videos.js";
@@ -110,7 +110,12 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   // 끝나면 글감·소스 변경 이벤트로 화면이 갱신된다.
   app.post("/collect", async (c) => {
     const ownerId = c.get("ownerId");
-    const run = collectAll(ctx, ownerId, { fresh: true });
+    // 본문에 sourceId(와 repo)를 주면 그 소스(저장소)만 수집한다. 없으면 지금처럼 계정 전체.
+    const raw = await c.req.text();
+    const only = raw.trim() ? z.object({ sourceId: z.number().int().positive().optional(), repo: z.string().max(200).optional() }).parse(JSON.parse(raw)) : {};
+    if (only.repo && !only.sourceId) return c.json({ error: "repo needs sourceId" }, 400);
+    if (only.sourceId && !listEnabledSources(ctx, { ownerId }).some((s) => s.id === only.sourceId)) return c.json({ error: "source not found" }, 404);
+    const run = only.sourceId ? collectSource(ctx, ownerId, only.sourceId, only.repo) : collectAll(ctx, ownerId, { fresh: true });
     run.catch((err: Error) => ctx.log.error({ ownerId, err: err.message }, "collect failed"));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const waited = await Promise.race([run, new Promise<null>((done) => (timer = setTimeout(() => done(null), config.COLLECT_WAIT_MS)))]).finally(() => clearTimeout(timer));
@@ -211,14 +216,14 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
   app.post("/publications", async (c) => {
     const ownerId = c.get("ownerId");
-    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
+    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional(), account: z.string().max(100).optional() })));
     // 발행 전 추세의 기준점이 없으면 뒤에서 GitHub 스타 시각으로 채운다. 실패해도 등록은 그대로다.
     void backfillStarTrend(ctx, ownerId, id).catch((err: Error) => ctx.log.warn({ publicationId: id, err: err.message }, "star trend backfill failed"));
     return c.json({ id });
   });
   app.patch("/publications/:id", async (c) => {
     const ownerId = c.get("ownerId"), publicationId = id(c.req.param("id"));
-    updatePublication(ctx, ownerId, publicationId, await body(c, z.object({ url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
+    updatePublication(ctx, ownerId, publicationId, await body(c, z.object({ url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional(), account: z.string().max(100).optional() })));
     void backfillStarTrend(ctx, ownerId, publicationId).catch((err: Error) => ctx.log.warn({ publicationId, err: err.message }, "star trend backfill failed"));
     return c.body(null, 204);
   });

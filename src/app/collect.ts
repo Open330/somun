@@ -290,9 +290,11 @@ export function readmeHomepage(readme: string): string | undefined {
   return link?.[1];
 }
 
-export async function collectGithubSource(ctx: AppContext, sourceId: number): Promise<Record<string, number>> {
-  const source = listEnabledSources(ctx).find((s) => s.id === sourceId);
-  if (!source) return {};
+export async function collectGithubSource(ctx: AppContext, sourceId: number, opts: { only?: string } = {}): Promise<Record<string, number>> {
+  const found = listEnabledSources(ctx).find((s) => s.id === sourceId);
+  if (!found) return {};
+  // 저장소 하나만: 소스의 대상 가운데 그 저장소만 본다(조직 대상이면 그 조직의 저장소). 나머지 저장소는 건드리지 않는다.
+  const source = opts.only ? { ...found, targets: [opts.only] } : found;
   const ownerId = source.ownerId;
   const since = Date.now() - 14 * DAY;
   const summary: Record<string, number> = {};
@@ -478,14 +480,52 @@ export async function collectAll(ctx: AppContext, ownerId?: string, opts: { fres
   return out;
 }
 
+/**
+ * 소유자별 수집 잠금. 전체 수집과 소스·저장소 하나 수집이 같은 저장소를 동시에 읽고 쓰지 않게 차례로 돌린다.
+ * 잠금을 기다리는 작업마다 앞 작업이 끝난 뒤 하나씩 들어간다(여럿이 한꺼번에 깨어나지 않는다).
+ */
+const ownerLocks = new WeakMap<AppContext["db"], Map<string, Promise<unknown>>>();
+function withOwnerLock<T>(ctx: AppContext, ownerId: string, work: () => Promise<T>): Promise<T> {
+  const locks = ownerLocks.get(ctx.db) ?? new Map<string, Promise<unknown>>();
+  ownerLocks.set(ctx.db, locks);
+  const previous = locks.get(ownerId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(work);
+  const tail = next.catch(() => undefined);
+  locks.set(ownerId, tail);
+  void tail.then(() => { if (locks.get(ownerId) === tail) locks.delete(ownerId); });
+  return next;
+}
+
 function collectOwner(ctx: AppContext, ownerId: string): Promise<CollectResult> {
   const running = inFlight.get(ctx.db) ?? new Map<string, Promise<CollectResult>>();
   inFlight.set(ctx.db, running);
   const existing = running.get(ownerId);
   if (existing) return existing;
-  const p = collectAllOnce(ctx, ownerId).finally(() => running.delete(ownerId));
+  const p = withOwnerLock(ctx, ownerId, () => collectAllOnce(ctx, ownerId)).finally(() => running.delete(ownerId));
   running.set(ownerId, p);
   return p;
+}
+
+/**
+ * 소스 하나(또는 그 소스의 저장소 하나)만 수집한다. 계정의 모든 소스(수백 개 저장소)를 돌지 않고 방금 연결한 저장소를 바로 가져온다.
+ * 같은 소유자의 전체 수집이 돌고 있으면 끝난 뒤에 실행한다(같은 저장소를 동시에 쓰지 않게).
+ */
+export async function collectSource(ctx: AppContext, ownerId: string, sourceId: number, repo?: string): Promise<CollectResult> {
+  const source = listEnabledSources(ctx, { ownerId }).find((s) => s.id === sourceId);
+  if (!source) throw new NotFoundError("source");
+  if (repo) {
+    const wanted = normalizeGithubTarget(repo)?.toLowerCase();
+    const covered = source.kind === "github" && wanted?.includes("/") && source.targets.some((t) => { const n = normalizeGithubTarget(t)?.toLowerCase(); return n === wanted || n === wanted.split("/")[0]; });
+    if (!covered) throw new NotFoundError("repository in source");
+  }
+  return withOwnerLock(ctx, ownerId, async () => {
+    try {
+      return { [source.id]: source.kind === "blog" ? await collectBlogSource(ctx, source.id) : source.kind === "github" ? await collectGithubSource(ctx, source.id, { only: repo }) : {} };
+    } catch (e) {
+      ctx.log.error({ sourceId, err: (e as Error).message }, "collect failed");
+      return { [source.id]: { error: (e as Error).message } };
+    }
+  });
 }
 
 async function collectAllOnce(ctx: AppContext, ownerId: string): Promise<CollectResult> {

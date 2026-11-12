@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import pino from "pino";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 import { channelResultsForJudge, performanceSummary, registerPublication, removePublication, snapshotMetrics, updatePublicationUrl, updatePublication, listPublicationsWithMetrics } from "./publications.js";
@@ -215,4 +215,30 @@ it("keeps the latest actual posting time when an earlier post is registered late
   registerPublication(ctx, "me", { candidateId, channel: "x", publishedAt: now - day });
   registerPublication(ctx, "me", { candidateId, channel: "linkedin", publishedAt: now - 3 * day });
   expect(ledger()).toMatchObject({ publishedAt: now - day, publishedChannel: "x" });
+});
+
+describe("posting accounts", () => {
+  it("reads the handle from X and Threads links, prefers an explicit account, and groups results by account", async () => {
+    const { accountFromUrl } = await import("./publications.js");
+    expect(accountFromUrl("x", "https://x.com/open330dev/status/123")).toBe("@open330dev");
+    expect(accountFromUrl("x", "https://twitter.com/baejiun/status/9")).toBe("@baejiun");
+    expect(accountFromUrl("x", "https://x.com/i/status/9")).toBeUndefined();
+    expect(accountFromUrl("threads", "https://www.threads.net/@open330/post/abc")).toBe("@open330");
+    expect(accountFromUrl("linkedin", "https://www.linkedin.com/posts/x")).toBeUndefined();
+    const a = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/open330dev/status/1" });
+    const b = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://example.com/short", account: "baejiun" });
+    const rows = ctx.db.select().from(schema.publications).all();
+    expect(rows.find((r) => r.id === a)!.account).toBe("@open330dev");
+    expect(rows.find((r) => r.id === b)!.account).toBe("@baejiun");
+    updatePublication(ctx, "me", b, { url: "https://x.com/other/status/2" });
+    expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === b)!.account).toBe("@baejiun");
+    expect(performanceSummary(ctx, "me").byAccount?.map((g) => g.key).sort()).toEqual(["x @baejiun", "x @open330dev"]);
+    // 링크에서 읽은 계정은 링크를 바꾸면 새 링크로 다시 읽는다(Codex on #98).
+    updatePublication(ctx, "me", a, { url: "https://x.com/second/status/456" });
+    expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === a)!.account).toBe("@second");
+    // 직접 적은 계정이 옛 링크의 핸들과 같아도 직접 적은 값이다(링크를 바꿔도 둔다).
+    const c = registerPublication(ctx, "me", { candidateId, channel: "x", url: "https://x.com/first/status/5", account: "first" });
+    updatePublication(ctx, "me", c, { url: "https://x.com/second/status/6" });
+    expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === c)!.account).toBe("@first");
+  });
 });

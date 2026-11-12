@@ -143,6 +143,10 @@ export const publications = sqliteTable("publications", {
   /** 공개 엔드포인트에서 자동 수집한 반응. X(FxTwitter), Show HN(HN API). 없으면 null. */
   autoStats: json<{ likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string }>("auto_stats"),
   autoStatsAt: integer("auto_stats_at"),
+  /** 게시한 계정(@open330dev 등). 사용자가 적거나 X·Threads 링크에서 읽는다. 없으면 null(미기록). */
+  account: text("account"),
+  /** "manual": 사용자가 적은 계정(링크를 바꿔도 둔다), "link": 링크에서 읽은 계정. */
+  accountSource: text("account_source"),
 }, (t) => [index("publications_candidate").on(t.candidateId), index("publications_owner_time").on(t.ownerId, t.publishedAt)]);
 
 export const metricSnapshots = sqliteTable("metric_snapshots", {
