@@ -234,7 +234,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   // 첫 소개는 README·프로필을 근거로 쓴다. 판단의 각도는 그 창의 변경(버그 수정 PR 등)에 끌려가 소개를 변경 알림으로 바꿨다(2026-11-12 oh-my-prompt).
   const angle = requested || staleAngle || introduction ? undefined : judgment?.angle ?? undefined;
   // 문체는 설정의 프리셋·지침이 정한다. 예시는 켜져 있을 때만 참고로 붙인다. 다시 쓸 때는 직전 판을 보여줘 같은 문장을 반복하지 않게 한다.
-  const prompt = draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
+  const prompt: PromptSpec = draftPrompt(c, channel, lang, settings.voice.useExamples ? examplesFor(ctx, ownerId, channel, lang, 4) : [], angle, {
     channelSpec: channelSpec(channel, settings.customChannels),
     guide: voiceGuideFor(settings.voice, lang, channel),
     profile,
@@ -245,6 +245,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     instruction: opts.instruction?.trim() || undefined,
     previous: !opts.introduction && opts.instruction && prev ? { title: prev.title ?? undefined, body: prev.body } : undefined,
   });
+  // 원문 범위는 프롬프트를 만드는 지금 정한다. 작업이 기다리는 사이 README가 생겨도 모델이 본 범위(PR 포함)를 그대로 남긴다.
+  if (readmeOnlyIntroduction(introduction ? "introduction" : "update", channel, opts.instruction, c.evidence)) prompt.sourceScope = "readme";
   const source = c.evidence.homepageSource;
   if (introduction && channel === "x" && lang === "ko" && !opts.instruction?.trim() && !disputed.length && !settings.voice.useExamples && !settings.voice.guide.trim() && ["plain", "announce"].includes(settings.voice.preset) && source) {
     const facts = draftLintFacts(c, profile, "introduction");
@@ -346,22 +348,22 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
     let quotaError: SharedQuotaError | undefined;
     try { assertSharedQueueCapacity(ctx, ownerId); }
     catch (err) { if (!recordQuotaFailure || !(err instanceof SharedQuotaError)) throw err; quotaError = err; }
-    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.editorInstruction !== undefined || prompt.digestSourceHash || prompt.digestRevision || prompt.draftPurpose || prompt.sourceExcerpt || background ? { ...(prompt.editorInstruction !== undefined ? { editorInstruction: prompt.editorInstruction } : {}), ...(prompt.digestSourceHash ? { digestSourceHash: prompt.digestSourceHash } : {}), ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(prompt.sourceExcerpt ? { sourceExcerpt: prompt.sourceExcerpt } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.llmJobs).values({ ownerId, kind, candidateId, channel: channel ?? null, lang: lang ?? null, system: prompt.system, user: prompt.user, schemaJson: JSON.stringify(prompt.schema), meta: prompt.editorInstruction !== undefined || prompt.digestSourceHash || prompt.digestRevision || prompt.draftPurpose || prompt.sourceExcerpt || prompt.sourceScope || background ? { ...(prompt.sourceScope ? { sourceScope: prompt.sourceScope } : {}), ...(prompt.editorInstruction !== undefined ? { editorInstruction: prompt.editorInstruction } : {}), ...(prompt.digestSourceHash ? { digestSourceHash: prompt.digestSourceHash } : {}), ...(prompt.digestRevision ? { digestRevision: prompt.digestRevision } : {}), ...(prompt.draftPurpose ? { draftPurpose: prompt.draftPurpose } : {}), ...(prompt.sourceExcerpt ? { sourceExcerpt: prompt.sourceExcerpt } : {}), ...(background ? { background: true } : {}) } : null, executor: getSettings(ctx, ownerId).llm.provider === "local-agent" ? "local" : "server", continuation: continuation ?? null, status: quotaError ? "failed" : "pending", error: quotaError?.message, finishedAt: quotaError ? Date.now() : null, createdAt: Date.now() }).run().lastInsertRowid);
     emit(ctx, ownerId, { resource: "jobs", id });
     return id;
   }).immediate();
 }
 
 /** 초안 하나의 린트. 저장할 때와 생성 직후 보정할 때 같은 기준을 쓴다. */
-export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null, writing: { language?: string; editorInstruction?: string } = {}) {
+export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null, writing: { language?: string; editorInstruction?: string; readmeOnly?: boolean } = {}) {
   const c = getCandidateRow(ctx, ownerId, candidateId);
   const settings = getSettings(ctx, ownerId);
-  const readmeOnly = readmeOnlyIntroduction(purpose, channel, writing.editorInstruction, c.evidence as Evidence);
+  const readmeOnly = writing.readmeOnly ?? readmeOnlyIntroduction(purpose, channel, writing.editorInstruction, c.evidence as Evidence);
   return lintDraft(channel, title, body, settings.bannedPhrases, { ...draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), ...writing, readmeOnly }, settings.ui?.locale, channelSpec(channel, settings.customChannels));
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
-export function applyResult(ctx: AppContext, ownerId: string, args: { kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; editorInstruction?: string; promptText?: string; sourceExcerpt?: SourceExcerptOrigin; schemaJson?: string }, continuation?: GenerationPlan): Applied {
+export function applyResult(ctx: AppContext, ownerId: string, args: { sourceScope?: "readme"; kind: GenerationKind; candidateId: number; channel?: Channel; lang?: string; result: unknown; model: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; editorInstruction?: string; promptText?: string; sourceExcerpt?: SourceExcerptOrigin; schemaJson?: string }, continuation?: GenerationPlan): Applied {
   const c = getCandidateRow(ctx, ownerId, args.candidateId);
   const settings = getSettings(ctx, ownerId);
   const now = Date.now();
@@ -435,14 +437,14 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const body = excerpt && !origin?.adapted ? excerpt.body : prepareIntroduction(excerpt?.body ?? String(r.body ?? "").trim(), { channel, language: lang, purpose: origin?.adapted ? "introduction" : args.draftPurpose, tone: spec.identity?.tone, editorInstruction: args.editorInstruction, bannedPhrases: settings.bannedPhrases });
   if (!body) throw new Error("empty draft body");
   const adaptedIssues = origin?.adapted ? adaptedSourceIssues(body, origin.sourceBody) : [];
-  const lint = [...lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction }), ...adaptedIssues];
+  const lint = [...lintDraftFor(ctx, ownerId, c.id, channel, title, body, args.draftPurpose, { language: lang, editorInstruction: args.editorInstruction, readmeOnly: args.sourceScope === "readme" }), ...adaptedIssues];
   // Known mechanical failures must not create a new version. Human-review
   // warnings about factual scope remain visible and do not veto generation.
   const required = new Set(["length", "has_link", "preferred_link", "introduction_name_missing"]);
   const rejected = origin?.adapted ? [...new Set([...lint.filter(issue => !issue.ok && required.has(issue.rule)), ...adaptedIssues].map(issue => issue.rule))] : [];
   if (rejected.length) return { kind: "draft", draftRejected: rejected };
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, sourceScope: readmeOnlyIntroduction(args.draftPurpose, channel, args.editorInstruction, ev) ? "readme" : null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint, status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, sourceScope: args.sourceScope ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint, status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

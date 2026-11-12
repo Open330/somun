@@ -515,3 +515,18 @@ describe("voice examples keep the best-performing authored post", () => {
     expect(examplesFor(ctx, "test", "x", "en", 4).map((e) => e.body)).toEqual(["post 4", "post 3", "post 2"]);
   });
 });
+
+it("keeps the source scope of the prompt the model saw when a README arrives before completion (Codex on #97)", () => {
+  const pr = { number: 1, title: "Export", body: "Cloud export works only when the export flag is enabled.", url: "https://github.com/vitejs/vite/pull/1" };
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, mergedPrDetails: [pr] } }).run();
+  const jobId = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true });
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!.meta?.sourceScope).toBeUndefined();
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, mergedPrDetails: [pr], readmeForChecks: "# Vite\n\nVite serves files." } }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "vite exports notes to the cloud. https://github.com/vitejs/vite" }, draftPurpose: "introduction" });
+  const draft = ctx.db.select().from(schema.drafts).get()!;
+  expect(draft.sourceScope).toBeNull();
+  expect(draft.lint.find((l) => l.rule === "source_conditions_need_review")?.ok).toBe(false);
+  // README가 있을 때 만든 기본 소개 프롬프트는 범위를 작업에 남긴다.
+  const scoped = queueStep(ctx, "test", "draft", id, "x", "ko", { introduction: true });
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, scoped)).get()!.meta?.sourceScope).toBe("readme");
+});
