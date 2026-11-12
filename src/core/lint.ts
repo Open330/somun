@@ -2,6 +2,7 @@ import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
+import { humanVoiceChecks } from "./human-voice.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -169,6 +170,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
   const register = registerCheck(body, spec, facts, locale);
   if (register) results.push(register);
+  results.push(...humanVoiceChecks(channel, body, facts, locale, { registerChecked: register !== undefined }));
   const conditionReview = sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
   if (conditionReview) results.push(conditionReview);
 

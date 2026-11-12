@@ -14,7 +14,8 @@ describe("voice presets", () => {
       // Threads에서는 공통 문체 샘플의 URL을 첫 답글로 옮긴 본문을 검사한다.
       const adapted = channel === "threads" ? body.replace(/https?:\/\/\S+/g, "").trim() : body;
       // 문체 샘플은 여러 채널의 글이지 Threads용 완성 초안이 아니다. 형식·금지어는 검사하되 문장 수를 강제하지 않는다.
-      const failed = lintDraft(channel, undefined, adapted, undefined, undefined, undefined, { ...channelSpec(channel), maxSentences: undefined }).filter((r) => !r.ok);
+      // 작업 노트는 1인칭 경험을 쓰는 문체다. 그 경험이 실제인지는 작성자만 알므로 확인 경고는 정상이다.
+      const failed = lintDraft(channel, undefined, adapted, undefined, undefined, undefined, { ...channelSpec(channel), maxSentences: undefined }).filter((r) => !r.ok && !(id === "notes" && r.rule === "first_person_need_review"));
       expect(failed, `${channel}: ${JSON.stringify(failed)}`).toEqual([]);
     }
   });

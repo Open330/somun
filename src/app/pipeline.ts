@@ -19,6 +19,7 @@ import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
+import { HUMAN_VOICE_RULES } from "../core/human-voice.js";
 
 /**
  * LLM 파이프라인: 후보 new → digest(원자료→highlights) → judge(highlights만) → draft(채널별).
@@ -223,7 +224,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
     // Keep complete task paragraphs even when their original wording exceeds
     // the post budget; the generated body still has the normal channel limit.
     const bodies = sourceCopyBodies(source, facts.publicName, url, lang, Math.max(1200, spec.maxChars ?? 280), true).filter(body =>
-      lintDraft(channel, undefined, body, settings.bannedPhrases, { ...facts, language: lang }, settings.ui?.locale, spec).every(issue => issue.ok || issue.rule === "source_conditions_need_review" || issue.rule === "length"));
+      lintDraft(channel, undefined, body, settings.bannedPhrases, { ...facts, language: lang }, settings.ui?.locale, spec).every(issue => issue.ok || issue.rule === "source_conditions_need_review" || issue.rule === "length" || HUMAN_VOICE_RULES.has(issue.rule)));
     if (bodies.length) return adaptedSourcePrompt(prompt, bodies, url, facts.publicName, { planTask: settings.llm.provider !== "local-agent" });
   }
   return prompt;
