@@ -334,7 +334,8 @@ it.each([
   ['Now 40% faster. https://github.com/me/tool', 'Now handles line endings. https://github.com/me/tool'],
   ['소셜 media 게시글을 작성합니다. https://github.com/me/tool', '소셜 미디어 게시글을 작성합니다. https://github.com/me/tool'],
 ])('records copying but withholds an unsafe voice example until its warnings are corrected', (unsafe, fixed) => {
-  const id=draft(unsafe);
+  // Korean text belongs in a Korean draft; Korean in an English draft is now its own warning (wrong_language).
+  const id=draft(unsafe, "x", /[가-힣]/.test(unsafe) ? "ko" : "en");
   const copied=saveDraftEdit(ctx, OWNER, id, {body:unsafe,markCopied:true});
   expect(copied.status).toBe("copied");
   expect(ctx.db.select().from(schema.drafts).all().find((d) => d.id === id)?.copiedAt).toBeTruthy();
@@ -383,4 +384,14 @@ it("splits legacy untagged format suggestions by the channels of their source dr
   const rules = listSuggestions(ctx, OWNER).map((s) => [s.rule, s.count]).sort();
   expect(rules).toEqual([["[LinkedIn] Use bullet headings.", 1], ["[X] Use bullet headings.", 3]]);
   expect(tagLegacySuggestions(ctx)).toBe(0);
+});
+
+it("withholds a mixed-register Korean Threads post from voice examples now that save-time lint knows the language (Codex on #94)", () => {
+  const unsafe = "tool은 창을 묶습니다. 알림도 와요.";
+  const id = draft(unsafe, "threads", "ko");
+  const copied = saveDraftEdit(ctx, OWNER, id, { body: unsafe, markCopied: true });
+  expect(copied.lint.find((r) => r.rule === "register_mismatch")?.ok).toBe(false);
+  expect(examples()).toHaveLength(0);
+  saveDraftEdit(ctx, OWNER, id, { body: "tool은 창을 묶어요. 알림도 와요.", markCopied: true });
+  expect(examples()).toHaveLength(1);
 });

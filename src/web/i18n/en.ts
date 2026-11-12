@@ -997,6 +997,9 @@ export const en: Record<string, string> = {
   "공개하지 않은 기능": "Features not public yet",
   "비공개 기능": "Unreleased feature",
   "콜론 첫 줄": "Colon opening",
+  "언어 불일치": "Wrong language",
+  "선택한 언어({language})가 아닌 한국어 문장이 있습니다: {sentences}":
+    "Sentences are in Korean, not the selected language ({language}): {sentences}",
   "기능 목록": "Feature list",
   "홍보 말투": "Self-promotion",
   "문체 혼용": "Mixed register",

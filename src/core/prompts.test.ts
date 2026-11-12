@@ -1,7 +1,7 @@
 import { channelSpec } from "./channels.js";
 import { describe, expect, it } from "vitest";
 import { unsupportedNumbers } from "./lint.js";
-import { digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, profilePrompt, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
+import { angleLine, digestGroundingFromPrompt, digestPrompt, draftCoverageGuide, draftPrompt, draftPurposeOf, factsBlock, groundingText, instructionOf, judgePrompt, prConditionsBlock, prSourceBlock, profilePrompt, sourceConditionParagraphs, withoutFalseFirstClaims } from "./prompts.js";
 
 const candidate = { title: "A release", type: "release", evidence: { repo: "test/tool", repoUrl: "https://github.com/test/tool", highlights: ["CRLF positions are corrected.", "Only whole node_modules path segments are dependencies.", "Proxy matchers are pre-compiled."] } };
 
@@ -493,4 +493,14 @@ it.each(["x", "threads"] as const)("keeps release truncation and channel audienc
     expect(draftPrompt({ ...c, evidence: changed }, "x", "ko", [], undefined, { introduction: true }).user).not.toContain(text);
     expect(groundingText({ ...c, evidence: changed })).not.toContain(text);
   }
+});
+
+it("marks a judgment angle in another language as an idea, not wording or language to copy", () => {
+  expect(angleLine("코딩 에이전트의 상태를 한눈에 봅니다.", "en")).toContain("an editor note in another language; follow the idea, write in English");
+  expect(angleLine("See every agent's state.", "en")).toBe("Angle to take: See every agent's state.");
+  expect(angleLine("코딩 에이전트의 상태를 봅니다.", "ko")).toBe("Angle to take: 코딩 에이전트의 상태를 봅니다.");
+  expect(angleLine("See every agent's state.", "ko")).toContain("write in 한국어");
+  const prompt = draftPrompt(candidate, "x", "en", [], "코딩 에이전트의 상태를 봅니다.", { introduction: true });
+  expect(prompt.user).toContain("follow the idea, write in English");
+  expect(prompt.user).toContain("complete body in English");
 });

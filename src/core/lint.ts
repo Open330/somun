@@ -2,7 +2,7 @@ import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
-import { humanVoiceChecks } from "./human-voice.js";
+import { humanVoiceChecks, narration } from "./human-voice.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -192,6 +192,14 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const wording = normalizeForMatch(text.replace(/https?:\/\/[^\s<>()\[\]{}]+/gi, ""));
     const used = facts.unreleased.filter((w) => normalizeForMatch(w).trim() && wording.includes(normalizeForMatch(w).trim()));
     results.push({ rule: "unreleased_feature", ok: used.length === 0, detail: used.length ? say(`프로필에서 공개하지 않은 기능으로 표시한 내용: ${used.join(", ")}. 이 기능은 빼 주세요.`, `Marked as not public in the profile: ${used.join(", ")}. Remove this feature from the post.`) : undefined, args: used.length ? { phrases: used.join(", ") } : undefined });
+  }
+  // 영어(한국어가 아닌) 초안에 남은 한국어 문장. 각도·채널 설명이 한국어면 모델이 본문까지 한국어로 썼다(Tend 실측 2026-11-12).
+  // 인용·코드 안의 한국어(예: 제품의 한국어 명령 예시)는 본문 언어가 아니다.
+  const target = facts.language?.toLowerCase().split("-")[0];
+  if (target && target !== "ko") {
+    const korean = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(narration(body))]
+      .map((s) => s.segment.trim()).filter((s) => (s.match(/[가-힣]/g) ?? []).length >= 4);
+    results.push({ rule: "wrong_language", ok: korean.length === 0, detail: korean.length ? say(`선택한 언어(${facts.language})가 아닌 한국어 문장이 있습니다: ${korean.slice(0, 2).join(" / ")}`, `Sentences are in Korean, not the selected language (${facts.language}): ${korean.slice(0, 2).join(" / ")}`) : undefined, args: korean.length ? { language: facts.language!, sentences: korean.slice(0, 2).join(" / ") } : undefined });
   }
   if (/[가-힣]/.test(body)) {
     const found = TRANSLITERATED.flatMap(([re, en]) => [...text.matchAll(re)].map((m) => `${m[0]} → ${en}`));

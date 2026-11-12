@@ -179,6 +179,11 @@ export function lintDetail(l: { rule: string; detail?: string; args?: Record<str
       "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.",
       { phrases: l.args.phrases },
     );
+  if (l.rule === "wrong_language" && l.args?.sentences)
+    return t("선택한 언어({language})가 아닌 한국어 문장이 있습니다: {sentences}", {
+      language: l.args.language ?? "",
+      sentences: l.args.sentences,
+    });
   if (l.rule === "feature_list" && l.args?.count)
     return t("기능을 목록 {count}줄로 나열했습니다. 가장 중요한 하나를 문장으로 풀고 나머지는 빼 주세요.", { count: l.args.count });
   if (l.rule === "self_promotion" && l.args?.phrases)
@@ -234,6 +239,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     no_transliterated_names: t("이름 표기"),
     mixed_korean_terms: t("표현 확인"),
     mixed_language: t("영어 문장"),
+    wrong_language: t("언어 불일치"),
     avoid_terms: t("금지어"),
     unreleased_feature: t("비공개 기능"),
     colon_opening: t("콜론 첫 줄"),
