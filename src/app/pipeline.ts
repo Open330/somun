@@ -82,8 +82,37 @@ export function examplesFor(ctx: AppContext, ownerId: string, channel: Channel, 
   const rows = ctx.db.select().from(schema.examples).where(and(eq(schema.examples.ownerId, ownerId), eq(schema.examples.channel, channel), eq(schema.examples.lang, lang), eq(schema.examples.active, true))).orderBy(desc(schema.examples.createdAt), desc(schema.examples.id)).limit(50).all();
   const of = (origin: ExampleOrigin) => rows.filter((r) => exampleOrigin(r) === origin);
   const authored = of("authored");
-  const picked = authored.length >= 2 ? authored.slice(0, Math.min(3, limit)) : [...authored, ...of("seed"), ...of("accepted")].slice(0, limit);
+  let picked = authored.length >= 2 ? authored.slice(0, Math.min(3, limit)) : [...authored, ...of("seed"), ...of("accepted")].slice(0, limit);
+  // 최근 글만 고르면 반응이 좋았던 글이 밀려난다. 작성자 글이 더 있으면 반응이 가장 좋았던 하나를 마지막 자리에 넣는다.
+  // 표본이 작으니 가중치를 두지 않고 한 자리만 쓴다. 반응 기록이 없으면 지금처럼 최신순이다.
+  if (authored.length > picked.length && picked.length >= 2) {
+    const best = bestPerforming(ctx, ownerId, authored);
+    if (best && !picked.includes(best)) picked = [...picked.slice(0, -1), best];
+  }
   return picked.map((e) => ({ source: exampleOrigin(e), title: e.title ?? undefined, body: e.body }));
+}
+
+/** 게시 반응률. 조회수가 있으면 (좋아요+리포스트)/조회, 없으면 좋아요 수. 직접 입력한 값이 자동 수집보다 우선한다. */
+export function engagementScore(stats: { views?: number; likes?: number; reposts?: number } | null | undefined): number | undefined {
+  if (!stats) return undefined;
+  const likes = stats.likes ?? 0, reposts = stats.reposts ?? 0;
+  if (stats.views) return (likes + reposts) / stats.views;
+  return stats.likes === undefined && stats.reposts === undefined ? undefined : likes + reposts;
+}
+
+/** 작성자 예시 가운데 그 초안을 게시한 기록의 반응이 가장 좋은 것. 조회수가 있는 글끼리, 없는 글끼리 섞어 비교하지 않도록 조회수가 있는 글을 우선한다. */
+function bestPerforming<T extends { draftId: number | null }>(ctx: AppContext, ownerId: string, examples: T[]): T | undefined {
+  const ids = examples.map((e) => e.draftId).filter((id): id is number => id !== null);
+  if (!ids.length) return undefined;
+  const pubs = ctx.db.select({ draftId: schema.publications.draftId, manual: schema.publications.manualStats, auto: schema.publications.autoStats }).from(schema.publications)
+    .where(and(eq(schema.publications.ownerId, ownerId), inArray(schema.publications.draftId, ids))).all();
+  const scored = examples.map((e) => {
+    const p = pubs.find((x) => x.draftId === e.draftId);
+    const stats = p ? { ...(p.auto ?? {}), ...(p.manual ?? {}) } : undefined;
+    return { e, viewed: Boolean(stats?.views), score: engagementScore(stats) };
+  }).filter((x) => x.score !== undefined && x.score > 0);
+  const pool = scored.some((x) => x.viewed) ? scored.filter((x) => x.viewed) : scored;
+  return pool.sort((a, b) => b.score! - a.score!)[0]?.e;
 }
 
 function recentFeedback(ctx: AppContext, ownerId: string, limit: number) {

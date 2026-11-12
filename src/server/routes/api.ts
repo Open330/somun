@@ -225,7 +225,7 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.delete("/publications/:id", (c) => { removePublication(ctx, c.get("ownerId"), id(c.req.param("id"))); return c.body(null, 204); });
   app.post("/publications/:id/stats", async (c) => {
     const count = z.number().int().nonnegative();
-    setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ likes: count.optional(), comments: count.optional(), reposts: count.optional(), visits: count.optional(), installs: count.optional(), signups: count.optional() })));
+    setManualStats(ctx, c.get("ownerId"), id(c.req.param("id")), await body(c, z.object({ views: count.optional(), likes: count.optional(), comments: count.optional(), reposts: count.optional(), visits: count.optional(), installs: count.optional(), signups: count.optional() })));
     return c.body(null, 204);
   });
 
