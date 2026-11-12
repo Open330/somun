@@ -39,6 +39,26 @@ export function rubricTotal(scores: Rubric, weights: Rubric): number {
   return Math.round((raw / (2 * wsum)) * 100) / 10;
 }
 
+/** 처음 알리는 프로젝트는 측정치·실패담이 없는 게 정상이다. 그 두 항목이 0이라고 소개를 보류하지 않게 셋만 본다. */
+const INTRODUCTION_RUBRIC = ["runnable", "novelty", "audience"] as const;
+
+/** 소개 기준 합계. 같은 10점 만점·같은 기준점(6/4)을 쓰되, 숫자(numbers)·배운 점(lesson)은 결정에서 뺀다. */
+export function introductionTotal(scores: Rubric, weights: Rubric): number {
+  const pick = (r: Rubric) => Object.fromEntries(INTRODUCTION_RUBRIC.map((k) => [k, r[k]])) as Rubric;
+  return rubricTotal(pick(scores), pick(weights));
+}
+
+/**
+ * 이 글감을 소개 기준으로 결정하는가. 저장소를 어느 채널에도 게시했다고 확인한 적이 없어야 한다(복사는 게시가 아니다).
+ * 같은 저장소의 다른 글감에 버리지 않은 소개 초안이 이미 있으면 그 초안이 소개를 맡는다: 릴리스마다 소개 초안을 쌓지 않는다.
+ */
+export function introductionJudgment(ctx: AppContext, ownerId: string, repo: string, candidateId: number): boolean {
+  if (hasAnnounced(ctx, ownerId, repo)) return false;
+  const pending = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
+    .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), ne(schema.drafts.candidateId, candidateId), eq(schema.drafts.purpose, "introduction"), ne(schema.drafts.status, "dropped"), ne(schema.candidates.status, "dropped"))).get();
+  return !pending;
+}
+
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number; staleDigest?: boolean; draftRejected?: string[] };
 
 export type ExampleOrigin = "authored" | "accepted" | "seed";
@@ -339,14 +359,16 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const r = args.result as { scores?: Record<string, unknown>; reasoning?: string; suggestedChannels?: unknown; angle?: string };
     const clamp = (n: unknown) => Math.max(0, Math.min(2, Math.round(Number(n) || 0)));
     const scores = { runnable: clamp(r.scores?.runnable), numbers: clamp(r.scores?.numbers), lesson: clamp(r.scores?.lesson), novelty: clamp(r.scores?.novelty), audience: clamp(r.scores?.audience) };
-    const total = rubricTotal(scores, settings.rubricWeights);
-    const noChanges = Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
+    // 아직 알린 적 없는 프로젝트는 이번 창의 변경 크기가 아니라 프로젝트 자체로 결정한다. 알릴 변경이 없어도 소개할 수 있다.
+    const introducing = introductionJudgment(ctx, ownerId, c.repo, c.id);
+    const total = introducing ? introductionTotal(scores, settings.rubricWeights) : rubricTotal(scores, settings.rubricWeights);
+    const noChanges = !introducing && Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs, settings.customChannels);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
     const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
-    const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, createdAt: now }).run().lastInsertRowid);
+    const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, purpose: introducing ? "introduction" : null, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
     if (decision === "draft") {

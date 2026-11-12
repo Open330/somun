@@ -79,6 +79,7 @@ it("explains which profile edits survive regeneration and links back to the sour
             claims: [],
             limitations: ["A user-edited limitation"],
             avoid: [],
+            unreleased: [],
             stage: "beta",
             naming: "tool",
           },

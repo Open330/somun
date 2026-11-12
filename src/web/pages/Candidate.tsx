@@ -286,6 +286,7 @@ export default function Candidate() {
                   draft: settings?.draftThreshold ?? 6,
                   defer: settings?.deferThreshold ?? 4,
                 })}
+                {j.purpose === "introduction" ? ` · ${t("소개 기준(실행·새로움·청중)")}` : ""}
                 {j.overriddenDecision ? ` · ${t("수동")} ${j.overriddenDecision}` : ""}
               </span>
             </div>
@@ -588,6 +589,13 @@ export default function Candidate() {
           {j && (
             <section className="side-block">
               <h2>{t("판단 이유")}</h2>
+              {j.purpose === "introduction" && (
+                <p className="small muted">
+                  {t(
+                    "아직 어느 채널에도 게시한 기록이 없는 프로젝트라, 이번 변경의 크기가 아니라 프로젝트를 소개할 만한지로 판단했습니다. 숫자·배운 점 점수는 결정에 쓰지 않았습니다.",
+                  )}
+                </p>
+              )}
               <p className="small reasoning">{reasoning}</p>
               <div className="meta-line">
                 <code>{j.model.split("@")[0].replace("gemini/", "")}</code>

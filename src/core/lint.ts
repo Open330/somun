@@ -65,7 +65,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -98,7 +98,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**
@@ -183,6 +183,13 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const wording = text.replace(/https?:\/\/[^\s<>()\[\]{}]+/gi, "").toLowerCase();
     const used = facts.avoid.filter((w) => w.trim() && wording.includes(w.trim().toLowerCase()));
     results.push({ rule: "avoid_terms", ok: used.length === 0, detail: used.length ? say(`프로필에서 쓰지 않기로 한 말: ${used.join(", ")}`, `Words the profile says to avoid: ${used.join(", ")}`) : undefined });
+  }
+  // 프로필의 "공개하지 않은 기능". README에 있어도 운영에서 꺼 둔 기능을 홍보하지 않게 한다(도그푸딩 9/25).
+  // 적힌 문자열이 그대로 쓰였는지만 본다. 바꿔 말한 표현까지 판별하지는 않는다.
+  if (facts.unreleased?.length) {
+    const wording = normalizeForMatch(text.replace(/https?:\/\/[^\s<>()\[\]{}]+/gi, ""));
+    const used = facts.unreleased.filter((w) => normalizeForMatch(w).trim() && wording.includes(normalizeForMatch(w).trim()));
+    results.push({ rule: "unreleased_feature", ok: used.length === 0, detail: used.length ? say(`프로필에서 공개하지 않은 기능으로 표시한 내용: ${used.join(", ")}. 이 기능은 빼 주세요.`, `Marked as not public in the profile: ${used.join(", ")}. Remove this feature from the post.`) : undefined, args: used.length ? { phrases: used.join(", ") } : undefined });
   }
   if (/[가-힣]/.test(body)) {
     const found = TRANSLITERATED.flatMap(([re, en]) => [...text.matchAll(re)].map((m) => `${m[0]} → ${en}`));

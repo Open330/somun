@@ -310,6 +310,18 @@ it("keeps every profile edit up to the limits the API accepts", () => {
   expect(view.profile.avoid).toEqual(avoid);
 });
 
+it("keeps unreleased features only from the editor and tells drafts not to mention them", async () => {
+  const { profileBlock } = await import("../core/prompts.js");
+  const view = editProfile(ctx, OWNER, "me/tool", { unreleased: ["video generation", "Fleet"] });
+  expect(view.profile.unreleased).toEqual(["video generation", "Fleet"]);
+  expect(view.editedFields).toContain("unreleased");
+  const block = profileBlock(view.profile);
+  expect(block).toContain("not public yet");
+  expect(block).toContain("even when the README, release notes or PRs describe them");
+  expect(block).toContain("- video generation\n- Fleet");
+  expect(profileBlock({ ...view.profile, unreleased: [] })).not.toContain("not public yet");
+});
+
 it("keeps the author's stated motivation and hands it to drafts only when there is one", async () => {
   const { profileBlock } = await import("../core/prompts.js");
   const view = editProfile(ctx, OWNER, "me/tool", { why: "I kept missing which agent was waiting for me." });

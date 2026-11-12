@@ -5,7 +5,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { applyResult, buildPrompt, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES, windowFacts } from "./pipeline.js";
+import { applyResult, buildPrompt, introductionJudgment, introductionTotal, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES, windowFacts } from "./pipeline.js";
 import { retryGeneration } from "./jobs.js";
 import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
@@ -21,6 +21,12 @@ beforeEach(() => {
   id = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Dependency maintenance", type: "release", key: "test", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: [], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
 });
 afterEach(() => { ctx.db.$client.close(); vi.resetAllMocks(); });
+
+/** 이 저장소를 이미 한 번 게시한 상태. 일반(변경) 기준으로 판단하는 테스트가 쓴다. */
+function announced(repo = "vitejs/vite") {
+  const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo, title: "Earlier post", type: "release", key: `earlier-${repo}`, evidence: { repo, repoUrl: `https://github.com/${repo}` }, status: "published", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+  ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: other, channel: "x", url: "https://x.com/me/status/1", publishedAt: 1 }).run();
+}
 
 it.each(["gemini", "local-agent"] as const)("does not enqueue %s drafts when digest found no evidence", (provider) => {
   updateSettings(ctx, "test", { llm: { provider } });
@@ -48,6 +54,7 @@ it("keeps digest highlights whose numbers are not in the raw material out of jud
 });
 
 it("does not queue automatic drafts from an empty digest even when the model gives high scores", () => {
+  announced();
   updateSettings(ctx, "test", { llm: { provider: "local-agent" } });
   const result = applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "test", result: { scores: { runnable: 2, numbers: 2, lesson: 2, novelty: 2, audience: 2 }, reasoning: "Publish it", suggestedChannels: ["x"] } });
   expect(result.decision).toBe("ask");
@@ -279,6 +286,7 @@ it("drops an introduction-era angle from update drafts and marks unreleased high
 });
 
 it("shows the judge what the editor overrode, including deferring a draft verdict", () => {
+  announced();
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: { runnable: 2, numbers: 1, lesson: 1, novelty: 1, audience: 2 }, reasoning: "r" } });
   ctx.db.update(schema.candidates).set({ status: "judged" }).run();
@@ -376,4 +384,59 @@ it("uses stored profile edit provenance for introduction capabilities without ch
   expect(ctx.db.select().from(schema.repoProfiles).get()).toEqual(before);
   ctx.db.update(schema.repoProfiles).set({ edits: { claims: ["An explicitly edited claim"] } }).run();
   expect(buildPrompt(ctx, "test", "draft", id, "threads", "ko", { introduction: true }).user).toContain("An explicitly edited claim");
+});
+
+describe("never-announced projects are judged as introductions", () => {
+  const modest = { runnable: 1, numbers: 0, lesson: 0, novelty: 2, audience: 1 };
+  const judge = (scores: Record<string, number>) => applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores, reasoning: "r", suggestedChannels: ["x"] } });
+  beforeEach(() => {
+    ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Fixes a typo."], highlightsAt: 1 } }).run();
+  });
+
+  it("scores only runnable, novelty and audience on the same 10-point scale", () => {
+    const w = { runnable: 1, numbers: 1, lesson: 1, novelty: 1, audience: 1 };
+    expect(introductionTotal(modest, w)).toBe(6.7);
+    expect(rubricTotal(modest, w)).toBe(4);
+    expect(introductionTotal({ ...modest, numbers: 2, lesson: 2 }, w)).toBe(6.7);
+  });
+
+  it("drafts a modest window of a never-announced repo instead of deferring it as a small update", () => {
+    const result = judge(modest);
+    expect(result).toMatchObject({ decision: "draft", total: 6.7 });
+    const row = ctx.db.select().from(schema.judgments).get()!;
+    expect(row.purpose).toBe("introduction");
+    const draft = ctx.db.select().from(schema.llmJobs).all().find((j) => j.kind === "draft")!;
+    expect(draft.meta?.draftPurpose).toBe("introduction");
+  });
+
+  it("keeps the change rubric once the repo has a publication on any channel", () => {
+    announced();
+    expect(judge(modest)).toMatchObject({ decision: "defer", total: 4 });
+    expect(ctx.db.select().from(schema.judgments).get()!.purpose).toBeNull();
+  });
+
+  it("does not turn an empty digest into ask for an introduction", () => {
+    ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: [], highlightsAt: 1 } }).run();
+    expect(judge(modest).decision).toBe("draft");
+    expect(ctx.db.select().from(schema.judgments).get()!.reasoning).toBe("r");
+  });
+
+  it("leaves the introduction to an existing live introduction draft on another candidate", () => {
+    const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Earlier window", type: "release", key: "earlier", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite" }, status: "drafted", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+    const draft = Number(ctx.db.insert(schema.drafts).values({ ownerId: "test", candidateId: other, channel: "x", lang: "en", version: 1, purpose: "introduction", body: "b", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+    expect(introductionJudgment(ctx, "test", "vitejs/vite", id)).toBe(false);
+    expect(judge(modest).decision).toBe("defer");
+    // 그 소개 초안을 버리면 다시 소개 기준으로 본다.
+    ctx.db.update(schema.drafts).set({ status: "dropped" }).where(eq(schema.drafts.id, draft)).run();
+    expect(introductionJudgment(ctx, "test", "vitejs/vite", id)).toBe(true);
+    // 다른 저장소의 소개 초안은 상관없다.
+    expect(introductionJudgment(ctx, "test", "other/repo", id)).toBe(true);
+  });
+
+  it("tells the judge an overridden introduction verdict used the introduction rubric", () => {
+    judge(modest);
+    ctx.db.update(schema.candidates).set({ status: "judged" }).run();
+    setCandidateStatus(ctx, "test", id, "deferred");
+    expect(buildPrompt(ctx, "test", "judge", id).user).toContain("you said draft (6.7/10 on the introduction rubric (runnable, novelty, audience only);");
+  });
 });

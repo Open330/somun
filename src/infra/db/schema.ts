@@ -59,6 +59,8 @@ export const judgments = sqliteTable("judgments", {
   model: text("model").notNull(),
   overriddenDecision: text("overridden_decision"),
   overrideReason: text("override_reason"),
+  /** 결정 기준. "introduction"이면 아직 어디에도 알린 적 없는 저장소라 소개 기준(실행·새로움·청중)으로 결정했다. 예전 행은 null(일반 기준). */
+  purpose: text("purpose").$type<import("../../shared/types.js").DraftPurpose>(),
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("judgments_candidate").on(t.candidateId)]);
 
