@@ -2,6 +2,7 @@
  * 로컬 에이전트 워커. 설정의 프로바이더가 local-agent일 때 대기 작업을 가져와
  * 사용자의 Claude Code 또는 Codex CLI(본인 구독)로 처리하고 결과를 돌려준다.
  *   npm run agent-worker -- --cli claude   # 또는 --cli codex, --once, --interval 30
+ *   npm run agent-worker -- --cli claude --model claude-sonnet-5-5   # Claude Code에 넘길 모델(생략하면 CLI 기본값)
  */
 import type { AccountWorkspaces } from "../src/shared/workspaces.js";
 import { isBetterRepair } from "../src/core/draft-repair.js";
@@ -38,6 +39,8 @@ const arg = (k: string, d: string) => (argv.includes(k) ? argv[argv.indexOf(k) +
 const cli = arg("--cli", "claude");
 const once = argv.includes("--once");
 const intervalSec = Number(arg("--interval", "30"));
+/** Claude Code에 그대로 넘기는 모델 이름. 생략하면 사용자의 CLI 기본 모델을 쓴다. */
+const claudeModel = arg("--model", "");
 const runner = `${cli}@${hostname()}`;
 const workDir = mkdtempSync(join(tmpdir(), "somun-agent-"));
 process.on("exit", () => rmSync(workDir, { recursive: true, force: true }));
@@ -72,7 +75,7 @@ async function runAgent(job: Job, usage: LocalUsage[]): Promise<{ json: unknown;
   const failed = (provider: LocalUsage["provider"], model: string) => usage.push({ provider, model, startedAt, latencyMs: Date.now() - startedAt, status: "error", inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 });
   if (cli === "claude") {
     let stdout: string;
-    try { stdout = await run("claude", ["-p", "--output-format", "json", "--max-turns", "1"], prompt); }
+    try { stdout = await run("claude", ["-p", "--output-format", "json", "--max-turns", "1", ...(claudeModel ? ["--model", claudeModel] : [])], prompt); }
     catch (e) {
       // 최대 턴·오류로 끝나도 출력에 쓴 토큰이 있으면 그대로 오류 이벤트로 남긴다.
       let spent: LocalUsage[] = [];
