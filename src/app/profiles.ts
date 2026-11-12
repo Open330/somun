@@ -18,22 +18,23 @@ import { localeOf, say } from "./i18n.js";
  * README 해시가 바뀌면 다시 만든다. 사용자가 고친 필드(edits)는 재생성 뒤에도 우선한다.
  */
 
-const EMPTY: RepoProfile = { what: "", audience: "", why: "", claims: [], stage: "unknown", limitations: [], naming: "", avoid: [] };
+const EMPTY: RepoProfile = { what: "", audience: "", why: "", claims: [], stage: "unknown", limitations: [], naming: "", avoid: [], unreleased: [] };
 
 export function readmeHash(readme: string, description?: string): string {
   return createHash("sha1").update(readme).update("\n").update(description ?? "").digest("hex").slice(0, 16);
 }
 
 /** 모델이 만든 프로필은 짧게 둔다(기준선이 길면 초안이 목록이 된다). */
-const GENERATED_LIMITS = { claims: 4, limitations: 5, avoid: 8 };
+// 공개하지 않은 기능은 README로 알 수 없다. 모델 출력에 섞여 와도 받지 않는다(0).
+const GENERATED_LIMITS = { claims: 4, limitations: 5, avoid: 8, unreleased: 0 };
 /** 사용자가 고친 값은 API가 받는 만큼 그대로 둔다. 조용히 잘리면 넣은 줄이 사라진다. */
-export const EDIT_LIMITS = { claims: 6, limitations: 8, avoid: 12 };
+export const EDIT_LIMITS = { claims: 6, limitations: 8, avoid: 12, unreleased: 12 };
 
 function normalize(raw: unknown, limits = GENERATED_LIMITS): RepoProfile {
   const r = (raw ?? {}) as Partial<RepoProfile>;
   const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim()).slice(0, n) : []);
   const stage = ["experiment", "beta", "stable", "archived", "unknown"].includes(String(r.stage)) ? (r.stage as RepoProfile["stage"]) : "unknown";
-  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), why: String(r.why ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid) };
+  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), why: String(r.why ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid), unreleased: strs(r.unreleased, limits.unreleased) };
 }
 
 function merged(row: typeof schema.repoProfiles.$inferSelect): RepoProfileView {

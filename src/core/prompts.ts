@@ -46,7 +46,7 @@ export function homepageSourceBlock(e: EvidenceLike): string {
 export const DIGEST_REVISION = "pr-source-conditions-v1";
 export type PromptSpec = { sourceExcerpt?: import("../shared/types.js").SourceExcerptOrigin; editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
-export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[] };
+export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[]; unreleased?: string[] };
 
 /** 프로필 블록. 정체성은 여기서만 말하고, 변경은 다이제스트가 말한다. */
 export function profileBlock(p: ProfileLike): string {
@@ -60,6 +60,7 @@ export function profileBlock(p: ProfileLike): string {
     p.limitations.length ? `known limitations:\n- ${p.limitations.join("\n- ")}` : "",
     p.naming ? `how to name it: ${p.naming}` : "",
     p.avoid.length ? `never mention: ${p.avoid.join(", ")}` : "",
+    p.unreleased?.length ? `not public yet (the author has not released or announced these; never mention, describe, imply or promote them, even when the README, release notes or PRs describe them):\n- ${p.unreleased.join("\n- ")}` : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -267,7 +268,7 @@ export const INTRODUCTION_JUDGE_HEADING = "## Introducing the project to new rea
 const INTRODUCTION_JUDGE = `${INTRODUCTION_JUDGE_HEADING}
 The editor has not confirmed a publication for this repository on at least one enabled channel through this tool yet. Copied drafts are not publications. This says nothing about the project's age or release history: never call it a first release, first launch, or newly published project unless Facts say so. Judge whether the project as it stands today is worth introducing, not the size of this window's changes:
 - runnable: can a reader use it today from the homepage or repo?
-- novelty: the project itself is new to readers.
+- novelty: the project itself is new to these readers. Score novelty on whether this project was introduced in the last 30 days of publications, not on its age, release count or how mature it is. A long release history does not lower novelty here.
 - audience: who it is for, from the profile.
 The angle should introduce the project: what it is, who it is for, how it works. Recent changes are supporting detail at most.`;
 

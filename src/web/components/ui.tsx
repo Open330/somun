@@ -179,6 +179,8 @@ export function lintDetail(l: { rule: string; detail?: string; args?: Record<str
       "작성자 역할 확인: {phrases}. 저장소 연결만으로 직접 개발·출시한 역할이 확인되지는 않으니 원문과 작성자의 역할을 확인해 주세요.",
       { phrases: l.args.phrases },
     );
+  if (l.rule === "unreleased_feature" && l.args?.phrases)
+    return t("프로필에서 공개하지 않은 기능으로 표시한 내용: {phrases}. 이 기능은 빼 주세요.", { phrases: l.args.phrases });
   return l.detail === undefined ? undefined : t(l.detail);
 }
 
@@ -223,6 +225,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     mixed_korean_terms: t("표현 확인"),
     mixed_language: t("영어 문장"),
     avoid_terms: t("금지어"),
+    unreleased_feature: t("비공개 기능"),
     preferred_link: t("홈페이지 링크"),
   };
   return (

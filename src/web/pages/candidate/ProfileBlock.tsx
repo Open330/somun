@@ -12,6 +12,7 @@ const FIELD_LABEL: Record<string, string> = {
   claims: "핵심 주장",
   limitations: "한계",
   avoid: "쓰지 않음",
+  unreleased: "공개하지 않은 기능",
   stage: "단계",
   naming: "이름",
 };
@@ -27,6 +28,7 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
   const [claims, setClaims] = useState((p?.claims ?? []).join("\n"));
   const [avoid, setAvoid] = useState((p?.avoid ?? []).join(", "));
   const [limitations, setLimitations] = useState((p?.limitations ?? []).join("\n"));
+  const [unreleased, setUnreleased] = useState((p?.unreleased ?? []).join(", "));
   useEffect(() => {
     setWhat(p?.what ?? "");
     setAudience(p?.audience ?? "");
@@ -34,7 +36,8 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
     setClaims((p?.claims ?? []).join("\n"));
     setAvoid((p?.avoid ?? []).join(", "));
     setLimitations((p?.limitations ?? []).join("\n"));
-  }, [p?.what, p?.audience, p?.why, p?.claims, p?.avoid, p?.limitations]);
+    setUnreleased((p?.unreleased ?? []).join(", "));
+  }, [p?.what, p?.audience, p?.why, p?.claims, p?.avoid, p?.limitations, p?.unreleased]);
   const regen = async () => {
     setBusy(true);
     try {
@@ -121,6 +124,11 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
               {t("쓰지 않음:")} {p!.avoid.join(", ")}
             </div>
           )}
+          {(p!.unreleased?.length ?? 0) > 0 && (
+            <div className="tiny muted">
+              {t("공개하지 않은 기능:")} {p!.unreleased.join(", ")}
+            </div>
+          )}
           <div className="meta-line">
             <code>{view.model.split("@")[0].replace("gemini/", "")}</code>
             <span>{fmtDate(view.updatedAt)}</span>
@@ -163,6 +171,14 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
             <span>{t("글에 쓰지 않을 말 (쉼표로)")}</span>
             <input value={avoid} onChange={(ev) => setAvoid(ev.target.value)} placeholder={t("회사명, 내부 호스트명…")} />
           </label>
+          <label className="field">
+            <span>{t("공개하지 않은 기능 (쉼표로)")}</span>
+            <input
+              value={unreleased}
+              onChange={(ev) => setUnreleased(ev.target.value)}
+              placeholder={t("운영에서 꺼 둔 기능, 아직 알리지 않을 기능. README에 있어도 초안에서 뺍니다.")}
+            />
+          </label>
           <div className="toolbar">
             <button
               className="primary"
@@ -183,6 +199,10 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
                       .map((x) => x.trim())
                       .filter(Boolean),
                     avoid: avoid
+                      .split(",")
+                      .map((x) => x.trim())
+                      .filter(Boolean),
+                    unreleased: unreleased
                       .split(",")
                       .map((x) => x.trim())
                       .filter(Boolean),

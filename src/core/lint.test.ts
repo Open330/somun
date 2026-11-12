@@ -214,6 +214,18 @@ describe("dogfooding guardrails", () => {
     expect(rule(lintDraft("x", undefined, "somun drafts posts. https://somun.jiun.dev", [], { avoid: ["SQLite"] }), "avoid_terms")?.ok).toBe(true);
   });
 
+  it("flags features the profile marks as not public, outside links only", () => {
+    const r = lintDraft("x", undefined, "Tend는 에이전트 창을 묶고 영상 생성도 합니다. https://tend.jiun.dev", [], { unreleased: ["영상 생성", "Fleet"] });
+    expect(rule(r, "unreleased_feature")).toMatchObject({ ok: false, args: { phrases: "영상 생성" } });
+    expect(rule(lintDraft("x", undefined, "Tend groups agent panes. https://tend.jiun.dev/fleet", [], { unreleased: ["Fleet"] }), "unreleased_feature")?.ok).toBe(true);
+    expect(rule(lintDraft("x", undefined, "Tend groups agent panes. https://tend.jiun.dev", [], {}), "unreleased_feature")).toBeUndefined();
+  });
+
+  it("passes the profile's unreleased features into draft lint facts", () => {
+    const facts = draftLintFacts({ title: "t", type: "release", evidence: { repo: "o/tend", repoUrl: "https://github.com/o/tend" } }, { what: "", audience: "", claims: [], stage: "beta", limitations: [], naming: "Tend", avoid: [], unreleased: ["Fleet"] });
+    expect(facts.unreleased).toEqual(["Fleet"]);
+  });
+
   it("flags product and channel names transliterated into Hangul, with particles, but not longer words", () => {
     const body = "엑스와 스레드, 링크드인, 쇼 핸과 긱뉴스 같은 채널에 씁니다. 제미나이 에이피아이 키가 필요합니다. 깃허브에서 읽습니다.";
     const r = rule(lintDraft("linkedin", undefined, body), "no_transliterated_names");

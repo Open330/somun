@@ -104,7 +104,7 @@ export type SettingsView = Omit<Settings, "llm" | "notify"> & { llm: Omit<LlmCon
 
 export type Source = { id: number; kind: SourceKind; targets: string[]; options?: Record<string, string>; enabled: boolean; lastPolledAt?: number; lastError?: string };
 
-export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop" | "defer"; overrideReason?: string; createdAt: number };
+export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop" | "defer"; overrideReason?: string; purpose?: DraftPurpose; createdAt: number };
 
 /** 올리기 전 홈페이지 점검. items가 비어 있으면 점검할 홈페이지가 없거나(GitHub 페이지 포함) 열리지 않은 것. */
 export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean };
@@ -170,6 +170,8 @@ export type RepoProfile = {
   limitations: string[];
   naming: string;
   avoid: string[];
+  /** 공개하지 않은 기능(운영에서 꺼 두었거나 아직 알리지 않을 것). 사용자만 적는다. README에 있어도 초안은 언급하지 않는다. */
+  unreleased: string[];
 };
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 

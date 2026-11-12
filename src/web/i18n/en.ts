@@ -449,6 +449,9 @@ export const en: Record<string, string> = {
   "보관했습니다. 보관 필터에서 다시 열 수 있습니다.": "Archived. You can reopen it from the archived filter.",
   "추천점수 {n} · 평가 기준 보기": "Score {n} · See criteria",
   "합 {total} · {decision} · 기준 초안 {draft} / 보류 {defer}": "Total {total} · {decision} · Thresholds: draft {draft} / defer {defer}",
+  "소개 기준(실행·새로움·청중)": "Introduction rubric (runnable, novelty, audience)",
+  "아직 어느 채널에도 게시한 기록이 없는 프로젝트라, 이번 변경의 크기가 아니라 프로젝트를 소개할 만한지로 판단했습니다. 숫자·배운 점 점수는 결정에 쓰지 않았습니다.":
+    "This project has no recorded post on any channel yet, so it was judged on whether it is worth introducing, not on the size of this change. The numbers and lesson scores did not affect the decision.",
   초안: "Draft",
   수동: "Manual",
   "모델 설정 확인": "Check model settings",
@@ -987,6 +990,14 @@ export const en: Record<string, string> = {
   "누구를 위한 것인가": "Who it's for",
   "핵심 주장 (한 줄에 하나)": "Key claims (one per line)",
   "글에 쓰지 않을 말 (쉼표로)": "Words to avoid in posts (comma-separated)",
+  "공개하지 않은 기능 (쉼표로)": "Features not public yet (comma-separated)",
+  "운영에서 꺼 둔 기능, 아직 알리지 않을 기능. README에 있어도 초안에서 뺍니다.":
+    "Features turned off in production or not announced yet. Drafts leave them out even when the README describes them.",
+  "공개하지 않은 기능:": "Not public yet:",
+  "공개하지 않은 기능": "Features not public yet",
+  "비공개 기능": "Unreleased feature",
+  "프로필에서 공개하지 않은 기능으로 표시한 내용: {phrases}. 이 기능은 빼 주세요.":
+    "Marked as not public in the profile: {phrases}. Remove this feature from the post.",
   "회사명, 내부 호스트명…": "Company name, internal hostnames…",
   실험: "Experimental",
   베타: "Beta",
