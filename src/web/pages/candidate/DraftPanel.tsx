@@ -242,6 +242,8 @@ export default function DraftPanel({
         keep(saved);
         setEditing(false);
         if (saved.copyHeld || saved.status !== "copied") {
+          // 고친 내용은 아직 복사(확인)를 거치지 않았다. 예전 복사 표시로 작성 화면에 미리 채우지 않는다.
+          if (bodyChanged) setCopiedId(null);
           const warning = unsupported(saved.lint);
           warned.current = `${saved.id}\n${saved.body}`;
           setActionError(
@@ -263,6 +265,8 @@ export default function DraftPanel({
         }
       } else {
         const saved = await postEdit(latest.id, latest, false, overwrite);
+        // 복사한 뒤 고쳐 저장만 한 글은 복사한 글이 아니다(작성 화면 미리 채우기·복사 완료 표시).
+        if (bodyChanged) setCopiedId(null);
         keep(saved);
         setEditing(false);
         const after = bodyChanged ? unsupported(saved?.lint) : undefined;
