@@ -1,0 +1,82 @@
+[
+  {
+    "id": "D01",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D02",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D03",
+    "repo": "Open330/aas",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D04",
+    "repo": "Open330/aas",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D05",
+    "repo": "Open330/barshelf",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D06",
+    "repo": "Open330/barshelf",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D07",
+    "repo": "Open330/tend",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D08",
+    "repo": "Open330/tend",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D09",
+    "repo": "Open330/haejo",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D10",
+    "repo": "Open330/haejo",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  }
+]
