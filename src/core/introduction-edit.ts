@@ -6,7 +6,10 @@ const protectedText = /```[\s\S]*?(?:```|$)|`[^`]*(?:`|$)|(?:^|\n)[\t ]*>[^\n]*|
 
 /** 확실한 활용만 바꾼다. 일반 '습니다', 명사+입니다, 질문·인용·코드는 해석하지 않는다. */
 export function prepareIntroduction(body: string, options: { channel: string; language?: string; purpose?: string | null; tone?: string; editorInstruction?: string; bannedPhrases?: string[] }): string {
-  if (options.purpose !== "introduction" || !["x", "threads"].includes(options.channel) || options.language?.toLowerCase().split("-")[0] !== "ko") return body;
+  if (options.purpose !== "introduction" || !["x", "threads"].includes(options.channel)) return body;
+  // 링크 줄 앞의 빈 줄은 하나로 줄인다. 생성본이 빈 줄을 두 개 넣어 검토에서 형식 문제로 걸렸다(2026-11-12 8회차).
+  body = body.replace(/\n[\t ]*\n(?:[\t ]*\n)+(?=[\t ]*https?:\/\/\S+\s*$)/, "\n\n");
+  if (options.language?.toLowerCase().split("-")[0] !== "ko") return body;
   let prepared = body;
   const normalized = normalizeForMatch(body);
   const hasBannedPhrase = options.bannedPhrases?.some(phrase => {

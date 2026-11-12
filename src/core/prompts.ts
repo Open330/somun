@@ -314,7 +314,7 @@ export function angleLine(angle: string, lang: string): string {
 export const INTRODUCTION_SHAPE_KO = [
   "모양: 문장 두 개와 링크 한 줄.",
   "1) 선택: 독자가 겪는 상황 한 문장. 원문에 있는 상황만, 평서문으로 씁니다(예: \"에이전트를 여러 창에 띄워 두면 어느 창이 답을 기다리는지 놓치기 쉽습니다.\").",
-  "2) 제품 이름을 주어로 한 문장: 이 제품이 무엇을 하고 독자에게 무엇이 보이는지 씁니다(예: \"Tend는 … 알려 주고, … 데려다줍니다.\"). 명령어는 꼭 필요할 때 하나만 씁니다.",
+  "2) 제품 이름을 주어로 한 문장: 이 제품이 무엇을 하고 독자에게 무엇이 보이는지 씁니다(예: \"Tend는 … 알려 주고, … 데려다줍니다.\"). 명령어는 꼭 필요할 때 하나만, 백틱으로 감싸 씁니다(`tend attend`).",
   "쓰지 않는 것: \"~하려면\", \"~하려는 분을 위해\"로 여는 문장 / \"~할 수 있는 X입니다\"처럼 이름으로 끝나는 문장 / \"CLI 도구 X\" 같은 분류어 / \"사용해 보세요\", \"활용해 보세요\", \"~하세요\" 같은 권유 / 설치 요구 사항·지원 OS·버전·하드웨어·가격 / 명령어 여러 개 나열 / 원문에 없는 경험·감정·효과.",
   "모든 서술문을 채널이 정한 한 가지 문체로 끝냅니다. 번역투 대신 사람이 말하듯 씁니다.",
 ].join("\n");
@@ -326,7 +326,7 @@ export function koreanRegister(tone?: string): "해요체" | "합니다체" {
 export const INTRODUCTION_SHAPE_EN = [
   "Shape: two sentences and the link line.",
   "1) Optional: one sentence about the reader's situation, taken from the sources (a question is fine, e.g. \"Running several coding agents in tmux?\").",
-  "2) One sentence with the product name as the subject saying what it does and what the reader sees (e.g. \"Tend watches … and jumps to …\"). Name at most one command.",
+  "2) One sentence with the product name as the subject saying what it does and what the reader sees (e.g. \"Tend watches … and jumps to …\"). Name at most one command, in backticks.",
   "Do not write: an opening participle or 'When/If/To …' clause without the product as subject / 'use X to …', 'try X', 'check it out' or other invitations / installation requirements, supported OS or versions, hardware or pricing / a list of commands / a category label such as 'the X CLI tool' / experience, feelings or effects the sources do not state.",
 ].join("\n");
 
