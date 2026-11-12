@@ -59,7 +59,7 @@ export default function Published() {
         </div>
       ) : (
         <>
-          {summary && (summary.byChannel.length > 1 || summary.byVoice.length > 1) && (
+          {summary && (summary.byChannel.length > 1 || summary.byVoice.length > 1 || (summary.byAccount?.length ?? 0) > 1) && (
             <div className="perf">
               <div className="perf-col">
                 <div className="tiny muted mb-6">{t("채널별 · 7일 스타 관측")}</div>
@@ -97,6 +97,22 @@ export default function Published() {
                   </div>
                 ))}
               </div>
+              {(summary.byAccount?.length ?? 0) > 0 && (
+                <div className="perf-col">
+                  <div className="tiny muted mb-6">{t("계정별")}</div>
+                  {summary.byAccount!.map((g) => (
+                    <div key={g.key} className="perf-row">
+                      <span>
+                        {g.key} <span className="muted">{g.count}</span>
+                      </span>
+                      <span className="mono">
+                        {starText(g)}
+                        {g.avgLikes !== undefined ? ` · ${t("누적 반응 평균 {n}", { n: g.avgLikes })}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {rows.length > 0 && !rows.some((p) => p.series.some((s) => s.uniques !== undefined)) && (
@@ -115,6 +131,7 @@ export default function Published() {
               return (
                 <div key={p.id} className="pub">
                   <span className="badge outline">{channelLabel(p.channel, settings?.customChannels)}</span>
+                  {p.account && <span className="badge outline">{p.account}</span>}
                   <div className="min-w-0">
                     <Link to={`/c/${p.candidateId}${p.draftId ? `?draft=${p.draftId}` : ""}`} className="pub-title">
                       {p.candidateTitle}

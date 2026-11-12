@@ -6,7 +6,7 @@ import { trackLinks } from "@core/links";
 import type { ConditionReviewState, Draft, Evidence, Publication } from "@shared/types";
 import { LintBadges, Menu, REASONS, lintDetail, targetLabel } from "../../components/ui";
 import { ChannelPreview, WordDiff } from "../../components/preview";
-import { del, patch, post } from "../../lib/api";
+import { del, patch, post, useResource } from "../../lib/api";
 import { useAuth } from "../../lib/auth/context";
 import { linkTargets } from "../../lib/link-target";
 import { setUnsaved } from "../../lib/unsaved";
@@ -115,6 +115,12 @@ export default function DraftPanel({
   const [view, setView] = useState<"preview" | "text">("preview");
   const [step, setStep] = useState<"draft" | "post">("draft");
   const [url, setUrl] = useState("");
+  // 게시한 계정. 비워 두면 X·Threads 링크의 핸들로 서버가 채운다. 이전에 쓴 계정은 목록으로 고른다.
+  const [account, setAccount] = useState("");
+  const accountSummary = useResource<{ byAccount?: { key: string }[] }>("/publications/summary", ["publications"]);
+  const knownAccounts = (accountSummary.data?.byAccount ?? [])
+    .filter((g) => g.key.startsWith(`${channel} `))
+    .map((g) => g.key.slice(channel.length + 1));
   const [publishedAt, setPublishedAt] = useState(() => localDateTime());
   const [recorded, setRecorded] = useState<PublicationLink | null>(null);
   useEffect(() => {
@@ -838,6 +844,7 @@ export default function DraftPanel({
                   lang,
                   url: url.trim(),
                   publishedAt: new Date(publishedAt).getTime(),
+                  ...(account.trim() ? { account: account.trim() } : {}),
                 });
                 setRecorded({ id: r.id, draftId: postDraft.id, url: url.trim(), publishedAt: new Date(publishedAt).getTime() });
                 setShowDraft(false);
@@ -854,6 +861,20 @@ export default function DraftPanel({
               <span>{t("이미 게시했나요? 게시글 링크")}</span>
               <input type="url" placeholder="https://…" value={url} onChange={(ev) => setUrl(ev.target.value)} />
               <small>{t("링크는 나중에 추가해도 됩니다. 실제 게시한 경우에만 확인해 주세요.")}</small>
+            </label>
+            <label className="field">
+              <span>{t("게시한 계정")}</span>
+              <input
+                value={account}
+                list={`accounts-${channel}`}
+                placeholder={t("예: @open330dev · 비우면 링크에서 읽습니다")}
+                onChange={(ev) => setAccount(ev.target.value)}
+              />
+              <datalist id={`accounts-${channel}`}>
+                {knownAccounts.map((a) => (
+                  <option key={a} value={a} />
+                ))}
+              </datalist>
             </label>
             <label className="field">
               <span>{t("실제 게시 시각")}</span>

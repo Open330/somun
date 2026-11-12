@@ -216,14 +216,14 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.get("/publications", (c) => c.json(listPublicationsWithMetrics(ctx, c.get("ownerId"))));
   app.post("/publications", async (c) => {
     const ownerId = c.get("ownerId");
-    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
+    const id = registerPublication(ctx, ownerId, await body(c, z.object({ candidateId: z.number(), draftId: z.number().optional(), channel, lang: lang.optional(), url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional(), account: z.string().max(100).optional() })));
     // 발행 전 추세의 기준점이 없으면 뒤에서 GitHub 스타 시각으로 채운다. 실패해도 등록은 그대로다.
     void backfillStarTrend(ctx, ownerId, id).catch((err: Error) => ctx.log.warn({ publicationId: id, err: err.message }, "star trend backfill failed"));
     return c.json({ id });
   });
   app.patch("/publications/:id", async (c) => {
     const ownerId = c.get("ownerId"), publicationId = id(c.req.param("id"));
-    updatePublication(ctx, ownerId, publicationId, await body(c, z.object({ url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional() })));
+    updatePublication(ctx, ownerId, publicationId, await body(c, z.object({ url: z.union([z.string().url(), z.literal("")]).optional(), publishedAt: z.number().int().positive().max(Date.now()).optional(), account: z.string().max(100).optional() })));
     void backfillStarTrend(ctx, ownerId, publicationId).catch((err: Error) => ctx.log.warn({ publicationId, err: err.message }, "star trend backfill failed"));
     return c.body(null, 204);
   });

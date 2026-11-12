@@ -43,7 +43,26 @@ function validatePublishedAt(ctx: AppContext, ownerId: string, at: number): void
   if (!Number.isSafeInteger(at) || at <= 0 || at > Date.now()) throw new InvalidInputError(say(localeOf(ctx, ownerId), "실제 게시 시각을 입력해 주세요. 미래 시각은 사용할 수 없습니다.", "Enter the actual publication time. Future times are not allowed."));
 }
 
-export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url?: string; publishedAt?: number }): number {
+/**
+ * 게시 링크에 들어 있는 계정 핸들. X·Threads만 읽는다(x.com/<handle>/status/…, threads.net/@<handle>/post/…).
+ * 개인 계정과 브랜드 계정을 섞어 쓰면 어느 계정의 성과인지 갈라 볼 수 있어야 한다(2026-11-12).
+ */
+export function accountFromUrl(channel: string, url: string): string | undefined {
+  const x = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status\//i.exec(url);
+  if (channel === "x" && x && !["i", "home", "intent"].includes(x[1].toLowerCase())) return `@${x[1]}`;
+  const th = /^https?:\/\/(?:www\.)?threads\.(?:net|com)\/@([A-Za-z0-9_.]{1,30})\//i.exec(url);
+  if (channel === "threads" && th) return `@${th[1]}`;
+  return undefined;
+}
+
+/** 직접 적은 계정을 정리한다. 핸들처럼 보이면 @를 붙인다. 빈 값은 미기록. */
+const cleanAccount = (account?: string) => {
+  const value = account?.trim();
+  if (!value) return undefined;
+  return /^[A-Za-z0-9_.]{1,30}$/.test(value) ? `@${value}` : value.slice(0, 100);
+};
+
+export function registerPublication(ctx: AppContext, ownerId: string, input: { candidateId: number; draftId?: number; channel: Channel; lang?: string; url?: string; publishedAt?: number; account?: string }): number {
   getCandidateRow(ctx, ownerId, input.candidateId);
   const url = input.url?.trim() ?? "";
   validateUrl(ctx, ownerId, input.channel, url);
@@ -55,7 +74,7 @@ export function registerPublication(ctx: AppContext, ownerId: string, input: { c
     if (d.channel !== input.channel || (input.lang && d.lang !== input.lang)) throw new InvalidInputError(say(localeOf(ctx, ownerId), "초안과 게시 채널·언어가 다릅니다.", "The publication channel or language does not match the draft."));
   }
   const id = ctx.db.$client.transaction(() => {
-    const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url, publishedAt }).run().lastInsertRowid);
+    const id = Number(ctx.db.insert(schema.publications).values({ ownerId, candidateId: input.candidateId, draftId: input.draftId ?? null, channel: input.channel, lang: input.lang ?? null, url, publishedAt, account: cleanAccount(input.account) ?? accountFromUrl(input.channel, url) ?? null }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ status: "published", updatedAt: now }).where(and(eq(schema.candidates.id, input.candidateId), eq(schema.candidates.ownerId, ownerId))).run();
     syncPublishedChanges(ctx, ownerId, input.candidateId);
     return id;
@@ -74,14 +93,16 @@ export function updatePublicationUrl(ctx: AppContext, ownerId: string, id: numbe
 }
 
 /** URL과 실제 게시 시각을 함께 수정한다. 시각 수정은 지표와 변경 원장에도 반영한다. */
-export function updatePublication(ctx: AppContext, ownerId: string, id: number, input: { url?: string; publishedAt?: number }): void {
+export function updatePublication(ctx: AppContext, ownerId: string, id: number, input: { url?: string; publishedAt?: number; account?: string }): void {
   const publication = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
   if (!publication) throw new NotFoundError("publication");
   const url = input.url?.trim() ?? publication.url;
   validateUrl(ctx, ownerId, publication.channel as Channel, url);
   if (input.publishedAt !== undefined) validatePublishedAt(ctx, ownerId, input.publishedAt);
   ctx.db.$client.transaction(() => {
-    const r = ctx.db.update(schema.publications).set({ url, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
+    // 계정을 적으면 그 값, 링크만 바꾸면 새 링크에서 다시 읽는다(직접 적어 둔 계정은 링크가 바뀌어도 둔다).
+    const account = input.account !== undefined ? cleanAccount(input.account) ?? null : publication.account ?? accountFromUrl(publication.channel, url) ?? null;
+    const r = ctx.db.update(schema.publications).set({ url, account, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
     if (r.changes === 0) throw new NotFoundError("publication");
     if (input.publishedAt !== undefined) syncPublishedChanges(ctx, ownerId, publication.candidateId);
   })();
@@ -190,6 +211,8 @@ export function performanceSummary(ctx: AppContext, ownerId: string): Performanc
   return {
     byChannel: group((p) => p.channel).map((g) => ({ ...g, label: g.key })),
     byVoice: group((p) => p.voice ?? "unknown").map(({ key, count, avgStarDelta, avgExcessStars, avgLikes }) => ({ key, count, avgStarDelta, avgExcessStars, avgLikes })),
+    // 같은 채널이라도 개인·브랜드 계정의 청중은 다르다. 계정을 기록한 발행만 묶는다.
+    byAccount: group((p) => p.account ? `${p.channel} ${p.account}` : undefined).map(({ key, count, measured, avgStarDelta, avgExcessStars, avgLikes }) => ({ key, count, measured, avgStarDelta, avgExcessStars, avgLikes })),
   };
 }
 

@@ -120,7 +120,7 @@ export type GuideSuggestion = { id: number; rule: string; category: "voice" | "s
 
 /** 발행 성과 요약. 채널·문체별 평균. */
 /** avgStarDelta: 발행 후 7일 스타 증가 평균. avgExcessStars: 그중 발행 전 추세를 뺀 증가 평균. 인과 효과는 아니다. */
-export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; /** 관측 완료, 동시 게시 없는 스타 표본 수. */ measured?: number; pending?: number; unattributed?: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
+export type PerformanceSummary = { byChannel: { key: string; label: string; count: number; /** 관측 완료, 동시 게시 없는 스타 표본 수. */ measured?: number; pending?: number; unattributed?: number; avgStarDelta?: number; avgExcessStars?: number; avgUniques?: number; avgLikes?: number }[]; byVoice: { key: string; count: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] ; /** 계정을 기록한 발행만. key는 "채널 @계정". */ byAccount?: { key: string; count: number; measured?: number; avgStarDelta?: number; avgExcessStars?: number; avgLikes?: number }[] };
 
 export type Candidate = { id: number; type: CandidateType; title: string; repo: string; key: string; evidence: Evidence; status: CandidateStatus; latestJudgmentId?: number; createdAt: number; updatedAt: number };
 
@@ -130,7 +130,7 @@ export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; aw
 export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
 export type PublicationStats = { /** 조회수(노출). 채널 분석 화면의 값을 직접 적는다. */ views?: number; likes?: number; comments?: number; reposts?: number; visits?: number; installs?: number; signups?: number };
 /** url이 빈 문자열이면 URL 없이 사용자가 확인한 게시다. */
-export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: PublicationStats; autoStats?: AutoStats; autoStatsAt?: number };
+export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; account?: string; manualStats?: PublicationStats; autoStats?: AutoStats; autoStatsAt?: number };
 
 export type MetricPoint = { at: number; stars: number; uniques?: number; downloads?: number };
 export type PublicationWithMetrics = Publication & {
