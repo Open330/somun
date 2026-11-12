@@ -1,6 +1,6 @@
 import { digestSourceHash as sourceHash } from "./digest-cache.js";
 import { assertSharedQueueCapacity, hasBackgroundCapacity, SharedQuotaError } from "./shared-quota.js";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { representative } from "../core/releases.js";
 import { sourceCopyBodies } from "../core/source-copy.js";
 import { readSourceExcerptResult, adaptedSourceIssues, adaptedSourcePrompt } from "./source-excerpt.js";
@@ -56,7 +56,11 @@ export function introductionJudgment(ctx: AppContext, ownerId: string, repo: str
   if (hasAnnounced(ctx, ownerId, repo)) return false;
   const pending = ctx.db.select({ id: schema.drafts.id }).from(schema.drafts).innerJoin(schema.candidates, eq(schema.candidates.id, schema.drafts.candidateId))
     .where(and(eq(schema.drafts.ownerId, ownerId), eq(schema.candidates.repo, repo), ne(schema.drafts.candidateId, candidateId), eq(schema.drafts.purpose, "introduction"), ne(schema.drafts.status, "dropped"), ne(schema.candidates.status, "dropped"))).get();
-  return !pending;
+  if (pending) return false;
+  // 아직 반영되지 않은 소개 초안 작업도 자리를 맡은 것으로 본다. 두 글감의 판단이 첫 초안보다 먼저 끝나면 소개가 두 번 만들어졌다.
+  const queued = ctx.db.select({ meta: schema.llmJobs.meta }).from(schema.llmJobs).innerJoin(schema.candidates, eq(schema.candidates.id, schema.llmJobs.candidateId))
+    .where(and(eq(schema.llmJobs.ownerId, ownerId), eq(schema.candidates.repo, repo), ne(schema.llmJobs.candidateId, candidateId), eq(schema.llmJobs.kind, "draft"), inArray(schema.llmJobs.status, ["pending", "claimed"]), ne(schema.candidates.status, "dropped"))).all();
+  return !queued.some((j) => (j.meta as { draftPurpose?: string } | null)?.draftPurpose === "introduction");
 }
 
 export type Applied = { kind: JobKind; decision?: Decision; total?: number; draftId?: number; highlights?: number; staleDigest?: boolean; draftRejected?: string[] };
@@ -187,7 +191,8 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const anyUnannounced = enabledTargets(settings.channelLangs, settings.customChannels).some((t) => !hasAnnounced(ctx, ownerId, row.repo, t.channel));
   const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
   if (kind === "digest") return { ...digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed }), digestSourceHash: sourceHash(row.evidence) };
-  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction, overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision, digestSourceHash: (row.evidence as Evidence).digestSourceHash };
+  // 판단 프롬프트의 소개 절은 결정 규칙(introductionJudgment)과 같은 기준으로 붙인다. 소개 기준으로 점수를 매기게 하고 일반 기준으로 결정하면 안 된다.
+  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction: introductionJudgment(ctx, ownerId, row.repo, candidateId), overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision, digestSourceHash: (row.evidence as Evidence).digestSourceHash };
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;

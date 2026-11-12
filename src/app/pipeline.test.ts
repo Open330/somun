@@ -433,6 +433,27 @@ describe("never-announced projects are judged as introductions", () => {
     expect(introductionJudgment(ctx, "test", "other/repo", id)).toBe(true);
   });
 
+  it("counts a queued introduction draft of another candidate as taking the introduction", () => {
+    const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Other window", type: "release", key: "other", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+    // 다른 글감의 판단이 먼저 끝나 소개 초안 작업이 대기 중이다(아직 초안은 없다).
+    applyResult(ctx, "test", { kind: "judge", candidateId: other, model: "t", result: { scores: modest, reasoning: "r", suggestedChannels: ["x"] } });
+    expect(ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft")).toHaveLength(1);
+    expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(0);
+    expect(introductionJudgment(ctx, "test", "vitejs/vite", id)).toBe(false);
+    expect(judge(modest).decision).toBe("defer");
+    expect(ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft")).toHaveLength(1);
+    // 그 작업이 실패하면 자리를 비운다.
+    ctx.db.update(schema.llmJobs).set({ status: "failed" }).where(eq(schema.llmJobs.kind, "draft")).run();
+    expect(introductionJudgment(ctx, "test", "vitejs/vite", id)).toBe(true);
+  });
+
+  it("asks the judge for the introduction rubric only when the decision will use it", () => {
+    expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## Introducing the project to new readers");
+    const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Earlier window", type: "release", key: "earlier2", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite" }, status: "drafted", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+    ctx.db.insert(schema.drafts).values({ ownerId: "test", candidateId: other, channel: "x", lang: "en", version: 1, purpose: "introduction", body: "b", lint: [], status: "proposed", model: "m", createdAt: 1, updatedAt: 1 }).run();
+    expect(buildPrompt(ctx, "test", "judge", id).user).not.toContain("## Introducing the project to new readers");
+  });
+
   it("tells the judge an overridden introduction verdict used the introduction rubric", () => {
     judge(modest);
     ctx.db.update(schema.candidates).set({ status: "judged" }).run();
