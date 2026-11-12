@@ -447,6 +447,25 @@ describe("never-announced projects are judged as introductions", () => {
     expect(introductionJudgment(ctx, "test", "vitejs/vite", id)).toBe(true);
   });
 
+  it("keeps the rubric of the prompt the model saw when another candidate takes the introduction meanwhile (Codex on #92)", () => {
+    const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Other window", type: "release", key: "other2", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
+    // 두 판단 프롬프트가 모두 소개 기준으로 만들어졌다.
+    expect(buildPrompt(ctx, "test", "judge", id).draftPurpose).toBe("introduction");
+    expect(buildPrompt(ctx, "test", "judge", other).draftPurpose).toBe("introduction");
+    const project = { runnable: 2, numbers: 0, lesson: 0, novelty: 2, audience: 2 };
+    applyResult(ctx, "test", { kind: "judge", candidateId: other, model: "t", draftPurpose: "introduction", result: { scores: project, reasoning: "r", suggestedChannels: ["x"] } });
+    const result = applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", draftPurpose: "introduction", result: { scores: project, reasoning: "r", suggestedChannels: ["x"] } });
+    // 소개 기준 점수는 소개 기준으로 계산하고(10점), 소개 초안은 하나만 만든다.
+    expect(result).toMatchObject({ decision: "draft", total: 10 });
+    expect(ctx.db.select().from(schema.llmJobs).all().filter((j) => j.kind === "draft")).toHaveLength(1);
+    const row = ctx.db.select().from(schema.judgments).all().find((j) => j.candidateId === id)!;
+    expect(row.purpose).toBe("introduction");
+    expect(row.reasoning).toContain("다른 글감이 소개 초안을 맡고");
+    // 일반 기준 프롬프트로 판단한 결과는 일반 기준으로 계산한다.
+    expect(buildPrompt(ctx, "test", "judge", id).draftPurpose).toBe("update");
+    expect(applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", draftPurpose: "update", result: { scores: modest, reasoning: "r" } })).toMatchObject({ decision: "defer", total: 4 });
+  });
+
   it("asks the judge for the introduction rubric only when the decision will use it", () => {
     expect(buildPrompt(ctx, "test", "judge", id).user).toContain("## Introducing the project to new readers");
     const other = Number(ctx.db.insert(schema.candidates).values({ ownerId: "test", repo: "vitejs/vite", title: "Earlier window", type: "release", key: "earlier2", evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite" }, status: "drafted", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);

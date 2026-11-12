@@ -192,7 +192,7 @@ export function buildPrompt(ctx: AppContext, ownerId: string, kind: JobKind, can
   const introduction = requested ?? (channel ? !hasAnnounced(ctx, ownerId, row.repo, channel) : anyUnannounced);
   if (kind === "digest") return { ...digestPrompt(c, { profile, alreadyTold: alreadyTold(ctx, ownerId, row.repo, { excludeCandidateId: candidateId }).filter((t) => !disputed.includes(t.text)).map((t) => t.text), disputed }), digestSourceHash: sourceHash(row.evidence) };
   // 판단 프롬프트의 소개 절은 결정 규칙(introductionJudgment)과 같은 기준으로 붙인다. 소개 기준으로 점수를 매기게 하고 일반 기준으로 결정하면 안 된다.
-  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction: introductionJudgment(ctx, ownerId, row.repo, candidateId), overrides: recentOverrides(ctx, ownerId) }), digestRevision: (row.evidence as Evidence).digestRevision, digestSourceHash: (row.evidence as Evidence).digestSourceHash };
+  if (kind === "judge") return { ...judgePrompt(c, { recentPublished: recentPublishedTitles(ctx, ownerId, 30), enabledChannels: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))], channelPresets: [...new Set(enabledTargets(settings.channelLangs, settings.customChannels).map((t) => t.channel))].map((ch) => channelSpec(ch, settings.customChannels)), feedback: recentFeedback(ctx, ownerId, 10), profile, alreadyPublished: alreadyPublished(ctx, ownerId, row.repo), repoDrops: repoDropCount(ctx, ownerId, row.repo), channelResults: channelResultsForJudge(ctx, ownerId), locale: settings.ui?.locale, introduction: introductionJudgment(ctx, ownerId, row.repo, candidateId), overrides: recentOverrides(ctx, ownerId) }), draftPurpose: introductionJudgment(ctx, ownerId, row.repo, candidateId) ? "introduction" : "update", digestRevision: (row.evidence as Evidence).digestRevision, digestSourceHash: (row.evidence as Evidence).digestSourceHash };
   if (!channel || !lang) throw new Error("draft needs a channel and a language");
   if (!knownChannel(channel, settings.customChannels)) throw new Error("Unknown channel for this account");
   const judgment = row.latestJudgmentId ? ctx.db.select().from(schema.judgments).where(eq(schema.judgments.id, row.latestJudgmentId)).get() : null;
@@ -365,18 +365,24 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
     const clamp = (n: unknown) => Math.max(0, Math.min(2, Math.round(Number(n) || 0)));
     const scores = { runnable: clamp(r.scores?.runnable), numbers: clamp(r.scores?.numbers), lesson: clamp(r.scores?.lesson), novelty: clamp(r.scores?.novelty), audience: clamp(r.scores?.audience) };
     // 아직 알린 적 없는 프로젝트는 이번 창의 변경 크기가 아니라 프로젝트 자체로 결정한다. 알릴 변경이 없어도 소개할 수 있다.
-    const introducing = introductionJudgment(ctx, ownerId, c.repo, c.id);
+    // 모델이 실제로 본 판단 프롬프트의 기준(작업 메타)을 따른다. 대기하는 사이 다른 글감이 소개를 맡았어도
+    // 소개 기준으로 매긴 점수를 일반 기준으로 다시 더하지 않는다. 메타가 없던 예전 작업은 지금 상태로 정한다.
+    const eligible = introductionJudgment(ctx, ownerId, c.repo, c.id);
+    const introducing = args.draftPurpose ? args.draftPurpose === "introduction" : eligible;
+    // 소개 기준으로 판단했지만 그사이 다른 글감이 소개를 맡았다. 점수는 그대로 두고 소개 초안을 하나 더 만들지 않는다.
+    const reserved = introducing && !eligible;
     const total = introducing ? introductionTotal(scores, settings.rubricWeights) : rubricTotal(scores, settings.rubricWeights);
     const noChanges = !introducing && Boolean(ev.highlightsAt) && !ev.highlights?.some((text) => text.trim());
     const decision: Decision = noChanges ? "ask" : total >= settings.draftThreshold ? "draft" : total >= settings.deferThreshold ? "defer" : "ask";
     const targets = enabledTargets(settings.channelLangs, settings.customChannels);
     const suggested = (Array.isArray(r.suggestedChannels) ? r.suggestedChannels : []).filter((ch): ch is Channel => targets.some((t) => t.channel === ch));
-    const reasoning = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
+    const reasoningText = noChanges ? say(localeOf(ctx, ownerId), "요약에서 알릴 만한 변경 근거를 찾지 못했습니다. 변경 내용이 있는 소스를 추가한 뒤 다시 분석해 주세요.", "The digest found no change worth announcing. Add a source with real changes and analyze again.") : withoutFalseFirstClaims(String(r.reasoning ?? ""), ev.releaseCount);
+    const reasoning = reserved ? `${reasoningText}\n\n${say(localeOf(ctx, ownerId), "같은 저장소의 다른 글감이 소개 초안을 맡고 있어 이 글감의 초안은 자동으로 만들지 않았습니다.", "Another candidate of this repository already holds the introduction draft, so no draft was created automatically for this one.")}` : reasoningText;
     const angle = noChanges ? null : String(r.angle ?? "").trim() || null;
     const jid = Number(ctx.db.insert(schema.judgments).values({ ownerId, candidateId: c.id, scores, total, reasoning, angle, decision, suggestedChannels: suggested, model: args.model, purpose: introducing ? "introduction" : null, createdAt: now }).run().lastInsertRowid);
     ctx.db.update(schema.candidates).set({ latestJudgmentId: jid, status: c.status === "drafted" ? "drafted" : decision === "defer" ? "deferred" : "judged", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
     emit(ctx, ownerId, { resource: "candidates", id: c.id });
-    if (decision === "draft") {
+    if (decision === "draft" && !reserved) {
       // 초안은 하나만 자동으로 만든다. 채널·언어마다 만들면 대부분 읽히지 않은 채 쌓였다(운영: 36개 중 29개 미검토).
       // 출시용 채널(Show HN·Show GN)과 블로그 개요는 판단이 고를 때만 쓴다(작은 업데이트에 출시 글을 만들지 않게).
       const target = primaryTarget(ctx, ownerId, settings, suggested);
