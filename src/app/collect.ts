@@ -480,12 +480,28 @@ export async function collectAll(ctx: AppContext, ownerId?: string, opts: { fres
   return out;
 }
 
+/**
+ * 소유자별 수집 잠금. 전체 수집과 소스·저장소 하나 수집이 같은 저장소를 동시에 읽고 쓰지 않게 차례로 돌린다.
+ * 잠금을 기다리는 작업마다 앞 작업이 끝난 뒤 하나씩 들어간다(여럿이 한꺼번에 깨어나지 않는다).
+ */
+const ownerLocks = new WeakMap<AppContext["db"], Map<string, Promise<unknown>>>();
+function withOwnerLock<T>(ctx: AppContext, ownerId: string, work: () => Promise<T>): Promise<T> {
+  const locks = ownerLocks.get(ctx.db) ?? new Map<string, Promise<unknown>>();
+  ownerLocks.set(ctx.db, locks);
+  const previous = locks.get(ownerId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(work);
+  const tail = next.catch(() => undefined);
+  locks.set(ownerId, tail);
+  void tail.then(() => { if (locks.get(ownerId) === tail) locks.delete(ownerId); });
+  return next;
+}
+
 function collectOwner(ctx: AppContext, ownerId: string): Promise<CollectResult> {
   const running = inFlight.get(ctx.db) ?? new Map<string, Promise<CollectResult>>();
   inFlight.set(ctx.db, running);
   const existing = running.get(ownerId);
   if (existing) return existing;
-  const p = collectAllOnce(ctx, ownerId).finally(() => running.delete(ownerId));
+  const p = withOwnerLock(ctx, ownerId, () => collectAllOnce(ctx, ownerId)).finally(() => running.delete(ownerId));
   running.set(ownerId, p);
   return p;
 }
@@ -502,13 +518,14 @@ export async function collectSource(ctx: AppContext, ownerId: string, sourceId: 
     const covered = source.kind === "github" && wanted?.includes("/") && source.targets.some((t) => { const n = normalizeGithubTarget(t)?.toLowerCase(); return n === wanted || n === wanted.split("/")[0]; });
     if (!covered) throw new NotFoundError("repository in source");
   }
-  await inFlight.get(ctx.db)?.get(ownerId)?.catch(() => undefined);
-  try {
-    return { [source.id]: source.kind === "blog" ? await collectBlogSource(ctx, source.id) : source.kind === "github" ? await collectGithubSource(ctx, source.id, { only: repo }) : {} };
-  } catch (e) {
-    ctx.log.error({ sourceId, err: (e as Error).message }, "collect failed");
-    return { [source.id]: { error: (e as Error).message } };
-  }
+  return withOwnerLock(ctx, ownerId, async () => {
+    try {
+      return { [source.id]: source.kind === "blog" ? await collectBlogSource(ctx, source.id) : source.kind === "github" ? await collectGithubSource(ctx, source.id, { only: repo }) : {} };
+    } catch (e) {
+      ctx.log.error({ sourceId, err: (e as Error).message }, "collect failed");
+      return { [source.id]: { error: (e as Error).message } };
+    }
+  });
 }
 
 async function collectAllOnce(ctx: AppContext, ownerId: string): Promise<CollectResult> {

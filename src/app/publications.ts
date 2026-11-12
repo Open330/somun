@@ -101,7 +101,9 @@ export function updatePublication(ctx: AppContext, ownerId: string, id: number, 
   if (input.publishedAt !== undefined) validatePublishedAt(ctx, ownerId, input.publishedAt);
   ctx.db.$client.transaction(() => {
     // 계정을 적으면 그 값, 링크만 바꾸면 새 링크에서 다시 읽는다(직접 적어 둔 계정은 링크가 바뀌어도 둔다).
-    const account = input.account !== undefined ? cleanAccount(input.account) ?? null : publication.account ?? accountFromUrl(publication.channel, url) ?? null;
+    // 이전 링크에서 읽은 계정이면(직접 적은 값이 아님) 새 링크로 다시 읽는다. 직접 적은 계정은 둔다.
+    const inferred = !publication.account || publication.account === accountFromUrl(publication.channel, publication.url);
+    const account = input.account !== undefined ? cleanAccount(input.account) ?? null : inferred ? accountFromUrl(publication.channel, url) ?? null : publication.account;
     const r = ctx.db.update(schema.publications).set({ url, account, publishedAt: input.publishedAt ?? publication.publishedAt, ...(url !== publication.url ? { autoStats: null, autoStatsAt: null } : {}) }).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).run();
     if (r.changes === 0) throw new NotFoundError("publication");
     if (input.publishedAt !== undefined) syncPublishedChanges(ctx, ownerId, publication.candidateId);

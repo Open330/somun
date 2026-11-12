@@ -233,5 +233,8 @@ describe("posting accounts", () => {
     updatePublication(ctx, "me", b, { url: "https://x.com/other/status/2" });
     expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === b)!.account).toBe("@baejiun");
     expect(performanceSummary(ctx, "me").byAccount?.map((g) => g.key).sort()).toEqual(["x @baejiun", "x @open330dev"]);
+    // 링크에서 읽은 계정은 링크를 바꾸면 새 링크로 다시 읽는다(Codex on #98).
+    updatePublication(ctx, "me", a, { url: "https://x.com/second/status/456" });
+    expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === a)!.account).toBe("@second");
   });
 });
