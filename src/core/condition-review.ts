@@ -15,11 +15,20 @@ export function reviewConditionParagraphs(text: string): string[] {
  * Tend 운영 초안은 확인할 원문이 29개(PR 20)였다(2026-11-12).
  */
 export function introductionEvidence<T extends EvidenceLike>(e: T): T {
-  return readmeBased(e) ? { ...e, windowReleaseNotes: undefined, releaseNotes: undefined, mergedPrDetails: undefined } : e;
+  return { ...e, windowReleaseNotes: undefined, releaseNotes: undefined, mergedPrDetails: undefined };
 }
 
 /** README가 있어야 소개 초안이 README를 근거로 쓴다. 없으면 PR·릴리스가 근거이므로 그 조건도 확인 대상이다. */
 export const readmeBased = (e: EvidenceLike) => Boolean([e.readmeForChecks, e.readmeExcerpt].find((text) => text?.trim()));
+
+/**
+ * 이 초안이 README·홈페이지만으로 쓰였는가(prompts.draftPrompt의 baseline 소개와 같은 조건).
+ * 편집 지시가 있으면 PR·릴리스 원문이 프롬프트에 들어가고, README가 잘린 일반 채널 소개는 릴리스 노트가 들어간다. 그때는 줄이지 않는다.
+ */
+export function readmeOnlyIntroduction(purpose: string | null | undefined, channel: string, editorInstruction: string | undefined, e: EvidenceLike & { readmeTruncated?: boolean }): boolean {
+  if (purpose !== "introduction" || editorInstruction?.trim() || !readmeBased(e)) return false;
+  return channel === "x" || channel === "threads" || e.readmeTruncated === false;
+}
 
 export function conditionSources(e: EvidenceLike & { limitationsSource?: "readme" | "digest" }, profile?: ProfileLike): ConditionSource[] {
   const sources: ConditionSource[] = [];

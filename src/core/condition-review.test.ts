@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conditionCandidates, conditionSources, introductionEvidence, reviewConditionParagraphs } from "./condition-review.js";
+import { conditionCandidates, conditionSources, introductionEvidence, readmeOnlyIntroduction, reviewConditionParagraphs } from "./condition-review.js";
 import { sourceConditionParagraphs } from "./prompts.js";
 
 it("keeps review-only detection out of generation condition extraction", () => {
@@ -37,8 +37,19 @@ describe("introduction drafts review only the sources they are written from", ()
     expect(kinds).not.toContain("pr");
     expect(kinds).not.toContain("release");
   });
-  it("keeps PRs and releases when there is no README to write from", () => {
-    const kinds = conditionSources(introductionEvidence({ ...e, readmeForChecks: undefined })).map((s) => s.kind);
-    expect(kinds).toEqual(expect.arrayContaining(["pr", "release"]));
+  it("is applied only to drafts whose scope is README-only (see readmeOnlyIntroduction)", () => {
+    expect(conditionSources(e).map((s) => s.kind)).toEqual(expect.arrayContaining(["pr", "release"]));
+  });
+});
+
+describe("README-only scope follows the generation contract (Codex on #97)", () => {
+  const e = { repo: "o/t", repoUrl: "https://github.com/o/t", readmeForChecks: "# Tool\n\nTool stores notes.", readmeTruncated: true, mergedPrDetails: [{ number: 1, title: "Export", body: "Cloud export works only when the export flag is enabled.", url: "u" }] };
+  it("narrows only a default X/Threads introduction, or one with a complete README", () => {
+    expect(readmeOnlyIntroduction("introduction", "x", undefined, e)).toBe(true);
+    expect(readmeOnlyIntroduction("introduction", "x", "Introduce the Cloud export feature from PR #1.", e)).toBe(false);
+    expect(readmeOnlyIntroduction("introduction", "linkedin", undefined, e)).toBe(false);
+    expect(readmeOnlyIntroduction("introduction", "linkedin", undefined, { ...e, readmeTruncated: false })).toBe(true);
+    expect(readmeOnlyIntroduction("update", "x", undefined, e)).toBe(false);
+    expect(readmeOnlyIntroduction("introduction", "x", undefined, { ...e, readmeForChecks: undefined })).toBe(false);
   });
 });

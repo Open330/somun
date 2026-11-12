@@ -14,7 +14,7 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 
 /** 해시는 실제로 표시/대조하는 자료 전체를 묶는다. 조건 발췌나 모델 요약만 해시하지 않는다. */
 export function conditionReviewState(draft: DraftRow, evidence: EvidenceLike, profile?: ProfileLike): ConditionReviewState {
-  if (draft.purpose === "introduction") evidence = introductionEvidence(evidence);
+  if (draft.sourceScope === "readme") evidence = introductionEvidence(evidence);
   const material = conditionSources(evidence, profile);
   const sources = conditionCandidates(material);
   const revision = hash({ version: VERSION, ownerId: draft.ownerId, draftId: draft.id, title: draft.title ?? "", body: draft.body,

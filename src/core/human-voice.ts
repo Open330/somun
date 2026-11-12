@@ -61,9 +61,15 @@ function formalEndings(text: string): string[] {
  */
 const REQUIREMENT = /\b(?:requires?|required|prerequisites?|supports? (?:macOS|Linux|Windows))\b|(?:macOS|iOS|Windows|Linux|Node(?:\.js)?|Rust|Python|tmux)\s?\d+(?:\.\d+|\.x)*\+?|Apple Silicon|Unix-like|유닉스 계열|이상(?:의|에서|이 필요|을 지원)|필요합니다|무료로|\bfor free\b|\bfree of charge\b/iu;
 const INVITATION_KO = /[가-힣](?:해|어|아|여|워|써|봐)\s?보세요|만나\s?보세요|보시기\s?바랍니다|[가-힣]하세요(?=\s*(?:[.!]|$))|[가-힣](?:어|아|여)\s?주세요(?=\s*(?:[.!]|$))/u;
-const INVITATION_EN = /(?:^|[,;:]\s*)(?:try|use|check out|install|get started with|meet)\b|\bgive it a (?:try|spin)\b|\bcheck it out\b/iu;
+const INVITATION_EN = /(?:^|[,;:]\s*)(?:try|use|check out|install|get started with|meet)\b(?!\s+cases?\b|-)|\bgive it a (?:try|spin)\b|\bcheck it out\b/iu;
 /** 주어 없이 여는 첫 문장. 질문(“Running several agents?”)은 독자에게 묻는 말이라 허용한다. */
 const DANGLING_EN = /^(?:(?:When|While|After|Before|By|If|Once)\s+\w+ing\b|To\s+\w+\b[^,]*,|\w+ing\b[^,?]*,)/u;
+/** 쉼표 뒤 주절이 명령형이거나(", use tend to …") 주절이 아예 없으면 주어 없는 첫 문장이다. "When using tmux, Tend groups …"는 아니다. */
+const danglingEn = (sentence: string) => {
+  if (!DANGLING_EN.test(sentence)) return false;
+  const comma = sentence.indexOf(",");
+  return comma < 0 || /^\s*(?:use|try|run|see|get|install|check|let|make|keep|open|start)\b/i.test(sentence.slice(comma + 1));
+};
 /** 서술어 없이 끝난 한국어 문장("…상호작용할 때.", "…를 위해."). 2026-11-12 실측 3회차. */
 const FRAGMENT_KO = /(?:때|위해|통해|경우|위한|면서|으며|하며|하고|에서|으로|에게)\s*[.。]?\s*$/u;
 const DANGLING_KO = /^[^.?!]{0,80}(?:하려는 분을 위해|하려는 분들을 위해|하려면|하고 싶다면|하고 싶을 때)/u;
@@ -110,7 +116,7 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
       results.push({ rule: "sentence_fragment", ok: fragments.length === 0, detail: fragments.length ? say(`서술어 없이 끝난 문장입니다: ${fragments.map((x) => `“${x}”`).join(" ")} 완결된 문장으로 써 주세요.`, `A sentence ends without a predicate: ${fragments.map((x) => `“${x}”`).join(" ")} Write a complete sentence.`) : undefined, args: fragments.length ? { phrases: fragments.join(" / ") } : undefined });
     }
     const first = statements[0] ?? "";
-    const dangling = !/[?？]["'”’)]*$/.test(first) && (DANGLING_EN.test(first) || DANGLING_KO.test(first));
+    const dangling = !/[?？]["'”’)]*$/.test(first) && (danglingEn(first) || DANGLING_KO.test(first));
     results.push({ rule: "dangling_opener", ok: !dangling, detail: dangling ? say(`첫 문장이 주어 없는 조건절로 시작합니다: “${first}” 제품 이름을 주어로 하거나 상황을 평서문으로 써 주세요.`, `The first sentence opens with a clause that has no subject: “${first}” Make the product the subject or state the situation plainly.`) : undefined, args: dangling ? { sentence: first } : undefined });
   }
 

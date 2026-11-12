@@ -193,3 +193,15 @@ it("flags Korean sentence fragments and transliterated Claude (round 3)", () => 
   expect(rules("클로드가 앱을 조작합니다. https://a.dev")).toContain("no_transliterated_names");
   expect(rules("Oh My Prompt는 에이전트와 나눈 대화를 기록하고 통계를 보여 줍니다. https://a.dev")).toEqual([]);
 });
+
+describe("review regressions (Codex on #97)", () => {
+  const fails = (body: string, lang = "en") => lintDraft("x", undefined, body, [], { language: lang, purpose: "introduction", publicName: "Tend", repo: "me/Tend" }).filter((r) => !r.ok).map((r) => r.rule);
+  it("accepts an opening clause whose main clause has the product as subject", () => {
+    expect(fails("When using tmux, Tend groups panes by project. https://github.com/me/Tend")).not.toContain("dangling_opener");
+    expect(fails("When managing agents in tmux, use Tend to see which one waits. https://github.com/me/Tend")).toContain("dangling_opener");
+  });
+  it("does not read 'Use cases' as an invitation", () => {
+    expect(fails("Use cases include local file search. Tend indexes files. https://github.com/me/Tend")).not.toContain("introduction_invitation");
+    expect(fails("Use Tend to see which agent waits. https://github.com/me/Tend")).toContain("introduction_invitation");
+  });
+});

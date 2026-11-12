@@ -78,7 +78,7 @@ function saveDraftEditInTransaction(ctx: AppContext, ownerId: string, id: number
   const changed = d.body !== input.body || (d.title ?? "") !== (input.title ?? "");
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { ...(cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}), language: d.lang }, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
+  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { ...(cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}), language: d.lang, readmeOnly: d.sourceScope === "readme" }, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
   if (d.sourceExcerpt?.adapted) lint.push(...adaptedSourceIssues(input.body, d.sourceExcerpt.sourceBody));
   const review = currentConditionReview(ctx, ownerId, { ...d, title: input.title ?? null, body: input.body, conditionReview: changed ? null : d.conditionReview });
   const needsConditionReview = review.required && review.confirmedAt === undefined;

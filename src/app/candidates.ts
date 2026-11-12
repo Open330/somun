@@ -9,7 +9,6 @@ import { crossLangNumberDiff, sourceConditionReview } from "../core/lint.js";
 import { sourceConditionPrNumbers } from "../core/prompts.js";
 import { localeOf } from "./i18n.js";
 import { conditionReviewState } from "./condition-review.js";
-import { readmeBased } from "../core/condition-review.js";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -105,8 +104,8 @@ export function getCandidateDetail(ctx: AppContext, ownerId: string, id: number)
   const profile = getProfile(ctx, ownerId, c.repo);
   const drafts = ctx.db.select().from(schema.drafts).where(eq(schema.drafts.candidateId, id)).all().map((r) => {
     const d = toDraft(r);
-    // 첫 소개는 PR 원문을 쓰지 않으므로 PR 조건 확인 경고를 붙이지 않는다.
-    return { ...d, conditionReview: conditionReviewState(r, c.evidence as Evidence, profile?.profile), lint: [...d.lint.filter((l) => l.rule !== "source_conditions_need_review"), ...(conditionReview && !(d.purpose === "introduction" && readmeBased(c.evidence as Evidence)) ? [conditionReview] : [])] };
+    // README·홈페이지만으로 쓴 소개는 PR 원문을 쓰지 않았으므로 PR 조건 확인 경고를 붙이지 않는다.
+    return { ...d, conditionReview: conditionReviewState(r, c.evidence as Evidence, profile?.profile), lint: [...d.lint.filter((l) => l.rule !== "source_conditions_need_review"), ...(conditionReview && r.sourceScope !== "readme" ? [conditionReview] : [])] };
   });
   const publications = ctx.db.select().from(schema.publications).where(eq(schema.publications.candidateId, id)).all().map(toPublication);
   const signals = ctx.db.select().from(schema.signals).where(eq(schema.signals.candidateId, id)).orderBy(desc(schema.signals.occurredAt)).limit(30).all().map((s) => ({ id: s.id, kind: s.kind as SignalKind, title: s.title, occurredAt: s.occurredAt }));

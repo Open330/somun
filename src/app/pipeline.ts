@@ -19,6 +19,7 @@ import { disputedFor, repoDropCount } from "./learning.js";
 import { channelResultsForJudge, hasAnnounced, lastAnnouncedAt } from "./publications.js";
 import { localeOf, say } from "./i18n.js";
 import { voiceGuideFor } from "../core/voice.js";
+import { readmeOnlyIntroduction } from "../core/condition-review.js";
 import { HUMAN_VOICE_RULES } from "../core/human-voice.js";
 
 /**
@@ -355,7 +356,8 @@ export function enqueueJob(ctx: AppContext, ownerId: string, kind: JobKind, cand
 export function lintDraftFor(ctx: AppContext, ownerId: string, candidateId: number, channel: Channel, title: string | undefined, body: string, purpose?: DraftPurpose | null, writing: { language?: string; editorInstruction?: string } = {}) {
   const c = getCandidateRow(ctx, ownerId, candidateId);
   const settings = getSettings(ctx, ownerId);
-  return lintDraft(channel, title, body, settings.bannedPhrases, { ...draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), ...writing }, settings.ui?.locale, channelSpec(channel, settings.customChannels));
+  const readmeOnly = readmeOnlyIntroduction(purpose, channel, writing.editorInstruction, c.evidence as Evidence);
+  return lintDraft(channel, title, body, settings.bannedPhrases, { ...draftLintFacts({ title: c.title, type: c.type, evidence: c.evidence as Evidence }, getProfile(ctx, ownerId, c.repo)?.profile, purpose), ...writing, readmeOnly }, settings.ui?.locale, channelSpec(channel, settings.customChannels));
 }
 
 /** 결과 반영. 다음 단계(판단 → 채널별 초안)는 같은 트랜잭션에서 큐에 넣는다. */
@@ -440,7 +442,7 @@ export function applyResult(ctx: AppContext, ownerId: string, args: { kind: Gene
   const rejected = origin?.adapted ? [...new Set([...lint.filter(issue => !issue.ok && required.has(issue.rule)), ...adaptedIssues].map(issue => issue.rule))] : [];
   if (rejected.length) return { kind: "draft", draftRejected: rejected };
   const version = ctx.db.select().from(schema.drafts).where(and(eq(schema.drafts.candidateId, c.id), eq(schema.drafts.channel, channel), eq(schema.drafts.lang, lang))).all().length + 1;
-  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint, status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
+  const draftId = Number(ctx.db.insert(schema.drafts).values({ ownerId, candidateId: c.id, channel, lang, version, sourceExcerpt: origin ?? null, purpose: args.draftPurpose ?? null, sourceScope: readmeOnlyIntroduction(args.draftPurpose, channel, args.editorInstruction, ev) ? "readme" : null, title: title ?? null, body, mediaHint: spec.mediaHint || null, lint, status: "proposed", model: args.model, voice: settings.voice.preset, styleKey: styleKeyOf(settings.voice), createdAt: now, updatedAt: now }).run().lastInsertRowid);
   ctx.db.update(schema.candidates).set({ status: c.status === "published" || (c.status === "deferred" && editorDeferred(ctx, c.latestJudgmentId)) ? c.status : "drafted", updatedAt: now }).where(eq(schema.candidates.id, c.id)).run();
   emit(ctx, ownerId, { resource: "drafts", id: draftId });
   emit(ctx, ownerId, { resource: "candidates", id: c.id });

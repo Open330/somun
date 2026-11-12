@@ -3,7 +3,6 @@ import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
 import { humanVoiceChecks, narration } from "./human-voice.js";
-import { readmeBased } from "./condition-review.js";
 import { groundingText, sourceConditionPrNumbers, type CandidateLike, type ProfileLike } from "./prompts.js";
 
 /**
@@ -67,7 +66,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -100,7 +99,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: purpose === "introduction" && readmeBased(candidate.evidence) ? [] : sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**
@@ -172,7 +171,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   const register = registerCheck(body, spec, facts, locale);
   if (register) results.push(register);
   results.push(...humanVoiceChecks(channel, body, facts, locale, { registerChecked: register !== undefined }));
-  const conditionReview = sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
+  // README·홈페이지만으로 쓴 소개는 PR 원문을 쓰지 않았으므로 PR 조건 확인을 붙이지 않는다(readmeOnlyIntroduction).
+  const conditionReview = facts.readmeOnly ? undefined : sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
   if (conditionReview) results.push(conditionReview);
 
   const hits = banned.filter((p) => normalizeForMatch(p).trim() && normalized.includes(normalizeForMatch(p).trim()));

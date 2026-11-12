@@ -316,8 +316,13 @@ export const INTRODUCTION_SHAPE_KO = [
   "1) 선택: 독자가 겪는 상황 한 문장. 원문에 있는 상황만, 평서문으로 씁니다(예: \"에이전트를 여러 창에 띄워 두면 어느 창이 답을 기다리는지 놓치기 쉽습니다.\").",
   "2) 제품 이름을 주어로 한 문장: 이 제품이 무엇을 하고 독자에게 무엇이 보이는지 씁니다(예: \"Tend는 … 알려 주고, … 데려다줍니다.\"). 명령어는 꼭 필요할 때 하나만 씁니다.",
   "쓰지 않는 것: \"~하려면\", \"~하려는 분을 위해\"로 여는 문장 / \"~할 수 있는 X입니다\"처럼 이름으로 끝나는 문장 / \"CLI 도구 X\" 같은 분류어 / \"사용해 보세요\", \"활용해 보세요\", \"~하세요\" 같은 권유 / 설치 요구 사항·지원 OS·버전·하드웨어·가격 / 명령어 여러 개 나열 / 원문에 없는 경험·감정·효과.",
-  "모든 서술문을 같은 문체(합니다체)로 끝냅니다. 번역투 대신 사람이 말하듯 씁니다.",
+  "모든 서술문을 채널이 정한 한 가지 문체로 끝냅니다. 번역투 대신 사람이 말하듯 씁니다.",
 ].join("\n");
+
+/** 채널 문체 설정에서 한국어 종결 문체를 고른다. 해요체로 지정한 채널(기본 Threads)만 해요체, 나머지는 합니다체. */
+export function koreanRegister(tone?: string): "해요체" | "합니다체" {
+  return /해요체(?=$|[.,;·\s])/.test(tone ?? "") && !/합니다체|하십시오체|해요체\s*(?:금지|아님|아닌|말고|대신|사용하지)/.test(tone ?? "") ? "해요체" : "합니다체";
+}
 export const INTRODUCTION_SHAPE_EN = [
   "Shape: two sentences and the link line.",
   "1) Optional: one sentence about the reader's situation, taken from the sources (a question is fine, e.g. \"Running several coding agents in tmux?\").",
@@ -421,9 +426,9 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         spec.maxSentences ? `Maximum ${spec.maxSentences} sentences.` : "",
         "## First introduction",
         lang === "ko"
-          ? INTRODUCTION_SHAPE_KO
+          ? `${INTRODUCTION_SHAPE_KO}\n이 채널의 문체: ${koreanRegister(spec.identity?.tone)}.`
           : INTRODUCTION_SHAPE_EN,
-        `Do not combine independent capabilities into a simultaneous behavior. No hype, hashtags, emoji, exclamation marks or closing questions. ${c.evidence.homepage ? `Put the homepage ${c.evidence.homepage} alone on the final line; do not use the repository URL.` : "Put the repository URL alone on the final line."} Historical PR changes belong in updates, not a general introduction.`,
+        `Do not combine independent capabilities into a simultaneous behavior. No hype, hashtags, emoji, exclamation marks or closing questions. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body; the link goes in the first reply." : c.evidence.homepage ? `Put the homepage ${c.evidence.homepage} alone on the final line; do not use the repository URL.` : "Put the repository URL alone on the final line."} Historical PR changes belong in updates, not a general introduction.`,
         opts.previous ? `## Previous version\n${opts.previous.body}` : "",
         opts.instruction ? `${INSTRUCTION_HEADING}${opts.instruction}` : "",
         `## Final output\nReturn only JSON with an empty title and the complete body in ${langName(lang)}. The angle, channel description and sources may be in another language; they are material, not wording or language to copy. Read the BODY alone: what is this product, when would the reader need it, and what can they actually do?`,

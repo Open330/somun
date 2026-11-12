@@ -68,6 +68,8 @@ export const drafts = sqliteTable("drafts", {
   sourceExcerpt: json<import("../../shared/types.js").SourceExcerptOrigin>("source_excerpt"),
   conditionReview: json<import("../../shared/types.js").ConditionConfirmation>("condition_review"),
   purpose: text("purpose").$type<import("../../shared/types.js").DraftPurpose>(),
+  /** "readme"이면 README·홈페이지만으로 쓴 소개(편집 지시 없음). 원문 조건 확인을 그 자료로 한정한다. 예전 행은 null. */
+  sourceScope: text("source_scope"),
   id: integer("id").primaryKey({ autoIncrement: true }),
   ownerId: text("owner_id").notNull(),
   candidateId: integer("candidate_id").notNull(),

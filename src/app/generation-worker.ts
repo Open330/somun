@@ -2,7 +2,8 @@ import { reserveSharedExecution, SharedQuotaError } from "./shared-quota.js";
 import { isBetterRepair } from "../core/draft-repair.js";
 import { judgmentTextIssues } from "../core/judgment-text.js";
 import { INTRODUCTION_CRITIC_SCHEMA, INTRODUCTION_CRITIC_SYSTEM, INTRODUCTION_EDITOR_SYSTEM, introductionCritiquePrompt, introductionEditPrompt } from "../core/introduction-editor.js";
-import { draftPurposeOf } from "../core/prompts.js";
+import { draftPurposeOf, koreanRegister } from "../core/prompts.js";
+import { channelSpec, type Channel } from "../core/channels.js";
 import { asc, eq, inArray, and } from "drizzle-orm";
 import { schema } from "../infra/db/index.js";
 import { LlmError, modelFor, runLlm } from "../infra/llm/providers.js";
@@ -80,7 +81,7 @@ async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, curr
       ctx.log.info({ jobId: job.id, round, publishable: critique?.publishable === true, problems, lint: before.map((l) => l.rule) }, "introduction critique");
       if (critique?.publishable === true && !problems.length && !before.length) break;
       if (!problems.length && !remaining.length) break;
-      const edited = await run(introductionEditPrompt(job.user, body, job.lang ?? "ko", [...problems, ...remaining]), job.schemaJson, INTRODUCTION_EDITOR_SYSTEM);
+      const edited = await run(introductionEditPrompt(job.user, body, job.lang ?? "ko", [...problems, ...remaining], koreanRegister(channelSpec(job.channel as Channel, settings.customChannels).identity?.tone)), job.schemaJson, INTRODUCTION_EDITOR_SYSTEM);
       const after = draftIssues(ctx, ownerId, job, edited.json);
       const editedBody = after === null ? "" : readJobDraft(job, edited.json, settings.customChannels, settings.bannedPhrases).body;
       const keep = after !== null && editedBody.trim().length > 0 && after.length <= before.length && after.every((issue) => before!.some((b) => b.rule === issue.rule));

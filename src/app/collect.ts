@@ -405,7 +405,8 @@ export async function collectGithubSource(ctx: AppContext, sourceId: number): Pr
       // 아직 어디에도 알린 적 없고 글감도 한 번도 없는 저장소: 최근 활동이 약해도 소개할 수 있게 소개용 글감을 하나 만든다.
       // 최신 릴리스(오래됐어도)가 있으면 그 릴리스로, 없으면 저장소 자체로. 같은 ref라 다음 수집에서 겹치지 않는다(2026-11-12 oh-my-prompt).
       // 직접 지정한 저장소만(App 설치로 고른 수백 개 저장소에 한꺼번에 만들지 않게), 소개 근거가 될 README가 있을 때만.
-      if (!source.options?.installationId && readme.trim() && !hasAnyCandidate(ctx, ownerId, name) && !hasAnnounced(ctx, ownerId, name)) {
+      const explicitTarget = source.targets.some((t) => normalizeGithubTarget(t)?.toLowerCase() === name.toLowerCase());
+      if (!source.options?.installationId && explicitTarget && readme.trim() && !hasAnyCandidate(ctx, ownerId, name) && !hasAnnounced(ctx, ownerId, name)) {
         const newest = allReleases[0];
         const seed: IncomingSignal = newest
           ? { kind: "release", repo: name, ref: `gh:release:${name}@${newest.tag_name}`, title: `${name} ${newest.tag_name}`, payload: { tag: newest.tag_name, name: newest.name, body: newest.body?.slice(0, RELEASE_NOTES_MAX), url: newest.html_url }, occurredAt: Date.parse(newest.published_at) }
