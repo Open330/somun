@@ -1,0 +1,62 @@
+[
+ {
+  "repo": "jiunbae/oh-my-prompt",
+  "lang": "ko",
+  "body": "AI 코딩 에이전트와 상호작용할 때. Oh My Prompt는 에이전트와의 상호작용을 캡처하고 품질을 분석해 통계를 보여주는 셀프 호스팅 프롬프트 저널 겸 CLI입니다. https://github.com/jiunbae/oh-my-prompt",
+  "failed": []
+ },
+ {
+  "repo": "jiunbae/oh-my-prompt",
+  "lang": "en",
+  "body": "Running hundreds of prompts a day with AI coding agents? Oh My Prompt captures every prompt and interaction with Claude Code, Codex, OpenCode, and Gemini CLI, then turns them into actionable insights and local analytics. https://github.com/jiunbae/oh-my-prompt",
+  "failed": []
+ },
+ {
+  "repo": "Open330/aas",
+  "lang": "ko",
+  "body": "여러 코딩 에이전트 계정을 함께 사용할 때 남은 사용량을 한눈에 확인합니다. aas는 명령 한 번으로 계정을 즉시 전환하고 격리된 세션을 실행합니다. https://github.com/Open330/aas",
+  "failed": []
+ },
+ {
+  "repo": "Open330/aas",
+  "lang": "en",
+  "body": "Using several Claude Code or Codex accounts? aas lets you switch accounts instantly, run isolated sessions, and see every account's remaining usage. https://github.com/Open330/aas",
+  "failed": []
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "ko",
+  "body": "클로드나 Codex가 앱을 직접 조작하게 만들면 반복 작업에서 매번 모델을 호출하지 않고 결과를 확인할 수 있습니다. Haejo는 앱을 실행하고 입력한 뒤 결과를 확인한 과정을 저장된 Flow로 재사용합니다. https://open330.github.io/haejo/",
+  "failed": []
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "en",
+  "body": "Haejo lets Claude and Codex use your Mac and browser apps for you by opening apps, clicking, typing, and checking results before saving the steps as a reusable Flow. https://open330.github.io/haejo/",
+  "failed": []
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "ko",
+  "body": "코딩 에이전트를 여러 개 실행하면 어떤 에이전트가 입력을 기다리는지 찾기 어렵습니다. Tend는 실행 중인 에이전트가 멈춘 순간을 알려 주고 해당 pane으로 바로 이동해 줍니다. https://open330.github.io/tend/",
+  "failed": []
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "en",
+  "body": "Running several coding agents in tmux? Tend watches Claude Code, Codex, and Antigravity CLI sessions, tells you when one waits for input, and jumps straight to its pane. https://open330.github.io/tend/",
+  "failed": []
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "ko",
+  "body": "자주 보는 정보가 작은 아이콘과 브라우저 탭에 흩어져 있습니다. BarShelf는 날씨, 배터리, 시스템 상태, 커스텀 위젯을 메뉴바의 아이콘 하나로 모아 줍니다. https://barshelf.jiun.dev",
+  "failed": []
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "en",
+  "body": "Your menu bar can become cluttered with icons, browser tabs, and terminal windows. BarShelf collects them into one icon and a popup of native widgets. https://barshelf.jiun.dev",
+  "failed": []
+ }
+]

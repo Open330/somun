@@ -1,0 +1,78 @@
+[
+ {
+  "repo": "jiunbae/oh-my-prompt",
+  "lang": "ko",
+  "body": "AI 코딩 에이전트와 대화할 때 프롬프트 품질 점수 기록을 복구하는 벌크 업데이트 타입 캐스팅 수정 사항을 Oh My Prompt에 적용해 보세요. https://github.com/jiunbae/oh-my-prompt",
+  "failed": []
+ },
+ {
+  "repo": "jiunbae/oh-my-prompt",
+  "lang": "en",
+  "body": "You write hundreds of prompts a day to AI coding agents. Oh My Prompt captures every interaction and turns them into actionable insights.\n\nhttps://github.com/jiunbae/oh-my-prompt",
+  "failed": []
+ },
+ {
+  "repo": "Open330/aas",
+  "lang": "ko",
+  "body": "여러 코딩 에이전트 계정을 번갈아 사용하면 로그인 정보를 일일이 바꾸거나 남은 사용량을 확인하기 번거롭습니다. aas는 여러 코딩 에이전트 계정을 나란히 사용하며 즉시 전환하고 각 계정의 남은 사용량을 한눈에 보여줍니다. https://github.com/Open330/aas",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/aas",
+  "lang": "en",
+  "body": "aas lets you run several coding-agent accounts side by side and see every account's remaining usage at a glance. https://github.com/Open330/aas",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "ko",
+  "body": "클릭과 입력을 반복하는 업무는 시간 소모가 큽니다. Haejo는 macOS와 브라우저 앱을 넘나들며 AI 에이전트가 클릭과 입력을 수행하도록 돕고 결과를 확인합니다. https://open330.github.io/haejo/",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "en",
+  "body": "Want to let AI agents use your Mac and browser apps? Haejo opens apps, clicks and types, and saves the steps as a reusable Flow so it runs next time with new inputs and no model call. https://open330.github.io/haejo/",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "ko",
+  "body": "tmux 환경에서 여러 코딩 에이전트를 실행하면 어떤 창이 입력을 기다리는지 파악하기 어렵습니다. Tend는 입력이나 오류를 기다리는 에이전트를 알려 주고 해당 창으로 바로 이동해 줍니다. https://open330.github.io/tend/",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "en",
+  "body": "Running several coding agents in tmux? Tend watches the sessions you already run and takes you straight to the pane that is waiting for your input.\n\nhttps://open330.github.io/tend/",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "ko",
+  "body": "메뉴바가 작은 아이콘들과 탭으로 가득 차면 자주 보는 정보를 한눈에 파악하기 어렵습니다. BarShelf는 시스템 상태와 위젯을 하나의 메뉴바 아이콘과 팝오버로 모아 깔끔하게 정리해 줍니다.\n\nhttps://barshelf.jiun.dev",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "en",
+  "body": "Your menu bar should not be a junk drawer. BarShelf collects weather, calendar, system stats, and scripts behind one native SwiftUI icon and popover. https://barshelf.jiun.dev",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ }
+]
