@@ -9,8 +9,17 @@ const vaguePhrases = (text: string) => new Set([...text.matchAll(VAGUE_MAGNITUDE
  * 보정은 기존 문제를 줄이면서 새로운 위반을 만들지 않아야 한다. 서버·로컬 워커가 같은 기준으로 선택한다.
  * texts가 있으면 일관된 한국어 말투를 바꾼 보정과, 수치 경고를 지우면서 막연한 크기 표현을 새로 넣은 보정도 거절한다.
  */
+/** "289/280"에서 초과분. 길이 위반이 아니면 undefined. */
+const overflow = (issues: { rule: string; detail?: string }[]) => {
+  const m = issues.find((issue) => issue.rule === "length")?.detail?.match(/^(\d+)\/(\d+)$/);
+  return m ? Number(m[1]) - Number(m[2]) : undefined;
+};
+
 export function isBetterRepair(before: { rule: string; detail?: string }[], after: { rule: string; detail?: string }[] | null, texts?: { before: string; after: string }): boolean {
-  if (after === null || after.length >= before.length) return false;
+  if (after === null) return false;
+  // 같은 위반만 남았지만 길이 초과가 줄었다면 진전이다. 반복 보정이 한 번에 못 줄인 길이를 이어서 줄일 수 있게 한다.
+  const shorter = after.length === before.length && after.every((issue) => before.some((b) => b.rule === issue.rule)) && (overflow(after) ?? Infinity) < (overflow(before) ?? -Infinity);
+  if (!shorter && after.length >= before.length) return false;
   const previous = new Set(before.map((issue) => issue.rule));
   const grounding = new Set(["numbers_need_review", "claims_need_review", "endorsement_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "avoid_terms", "preferred_link"]);
   const fewer = after.every(

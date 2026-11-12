@@ -1,0 +1,82 @@
+[
+ {
+  "id": "D01",
+  "repo": "jiunbae/oh-my-prompt",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Oh My Prompt는 Claude Code, Codex, OpenCode, Gemini CLI에 입력한 프롬프트를 셸 훅으로 자동 저장합니다. 저장한 프롬프트는 품질 점수, 토큰 사용량, 세션 패턴으로 분석해 대시보드에서 보여 줍니다.\nhttps://github.com/jiunbae/oh-my-prompt",
+  "sources": "source-jiunbae__oh-my-prompt.md"
+ },
+ {
+  "id": "D02",
+  "repo": "jiunbae/oh-my-prompt",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Running Claude Code, Codex, OpenCode or Gemini CLI all day? Oh My Prompt is a self-hosted prompt journal that captures your prompts through shell hooks, then shows quality scores, token usage and session patterns in a dashboard.\nhttps://github.com/jiunbae/oh-my-prompt",
+  "sources": "source-jiunbae__oh-my-prompt.md"
+ },
+ {
+  "id": "D03",
+  "repo": "Open330/aas",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "aas는 Claude Code, Codex 등 여러 코딩 에이전트 계정을 한 기기에서 나란히 쓰게 해 주는 CLI입니다. 계정마다 로그인을 따로 저장해 두고, 기본 로그인은 그대로 둔 채 다른 계정으로 세션 하나만 실행할 수 있습니다. 모든 계정의 남은 사용량도 한 번에 보여 줍니다.\nhttps://github.com/Open330/aas",
+  "sources": "source-Open330__aas.md"
+ },
+ {
+  "id": "D04",
+  "repo": "Open330/aas",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Juggling several Claude Code and Codex accounts? aas stores each account as its own profile, shows every account's remaining usage with one command, and runs a single session on another account without changing your default login.\nhttps://github.com/Open330/aas",
+  "sources": "source-Open330__aas.md"
+ },
+ {
+  "id": "D05",
+  "repo": "Open330/barshelf",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "자주 보는 정보가 메뉴바 아이콘 여러 개와 브라우저 탭, 확인하려고 켜 둔 앱에 흩어져 있습니다.\nBarShelf는 날씨, 달력, 배터리, 시스템 상태를 아이콘 하나의 팝업에 위젯으로 모아 보여 줍니다.\nhttps://barshelf.jiun.dev",
+  "sources": "source-Open330__barshelf.md"
+ },
+ {
+  "id": "D06",
+  "repo": "Open330/barshelf",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Your most-checked things end up in menu bar icons, browser tabs and apps you keep open just to look. BarShelf puts weather, calendar, battery and system stats behind one menu bar icon, and shows scripts and CLI tools there too.\nhttps://barshelf.jiun.dev",
+  "sources": "source-Open330__barshelf.md"
+ },
+ {
+  "id": "D07",
+  "repo": "Open330/tend",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "코딩 에이전트를 여럿 돌리면 어느 쪽이 답을 기다리는지 놓치기 쉽습니다. Tend는 tmux에서 돌리는 Claude Code, Codex, Antigravity CLI 세션이 입력, 선택, 오류로 멈추면 알려 주고, 그 pane으로 데려다줍니다.\nhttps://open330.github.io/tend/",
+  "sources": "source-Open330__tend.md"
+ },
+ {
+  "id": "D08",
+  "repo": "Open330/tend",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Running several coding agents in tmux? Tend watches your Claude Code, Codex, and Antigravity CLI sessions, tells you when one stops for input, a choice, or an error, and takes you to its pane with tend attend.\n\nhttps://open330.github.io/tend/",
+  "sources": "source-Open330__tend.md"
+ },
+ {
+  "id": "D09",
+  "repo": "Open330/haejo",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Haejo는 Claude와 Codex가 Mac과 브라우저 앱을 대신 쓰게 합니다. 앱을 열고 클릭하고 입력한 뒤 결과를 확인하며, 그 단계를 Flow로 저장해 다음에는 새 입력값으로 모델 호출 없이 다시 실행합니다.\nhttps://open330.github.io/haejo/",
+  "sources": "source-Open330__haejo.md"
+ },
+ {
+  "id": "D10",
+  "repo": "Open330/haejo",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Haejo lets Claude and Codex use your Mac and browser apps, and checks the result before calling a task done. It saves the steps as a Flow that replays with new inputs and no model calls during normal replay.\n\nhttps://open330.github.io/haejo/",
+  "sources": "source-Open330__haejo.md"
+ }
+]

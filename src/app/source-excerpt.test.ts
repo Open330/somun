@@ -48,7 +48,9 @@ it("uses collected whole source units and keeps the same bytes through local che
   expect(completeJob(ctx, "me", id, { claimToken, resultJson: JSON.stringify({ body }) })).toEqual({ applied: true });
   const saved = toDraft(ctx.db.select().from(schema.drafts).get()!);
   expect(saved).toMatchObject({ body, sourceExcerpt: { url }, purpose: "introduction" });
-  expect(saved.lint.filter(issue => !issue.ok)).toEqual([]);
+  // The verbatim homepage copy has a heading fragment and ends with "관리하세요". It cannot be rewritten in verbatim mode,
+  // so it is not repaired, but the invitation stays visible as a warning on the saved draft.
+  expect(saved.lint.filter(issue => !issue.ok).map(issue => issue.rule)).toEqual(["introduction_invitation", "sentence_fragment"]);
 });
 
 it.each(["invented content", "prefix", "suffix"])("rejects an out-of-enum %s before storage without trimming it into membership", variation => {

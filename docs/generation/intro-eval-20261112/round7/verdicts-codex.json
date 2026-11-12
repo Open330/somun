@@ -1,0 +1,92 @@
+[
+  {
+    "id": "D01",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "Korean",
+    "publishable_as_is": false,
+    "reasons": [
+      "\"Claude Code, Codex, OpenCode, Gemini CLI 상호작용을 기록하고 분석하여\" drops the relation between the listed agents and the interactions. In fluent Korean this needs \"와의 상호작용\" or, more concretely, \"에 보낸 프롬프트\". The compressed noun string reads as translated prose rather than a finished sentence."
+    ],
+    "what_author_would_change": "Say \"Claude Code, Codex, OpenCode, Gemini CLI에 보낸 프롬프트를 기록하고 분석해 …\"."
+  },
+  {
+    "id": "D02",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "English",
+    "publishable_as_is": false,
+    "reasons": [
+      "\"searchable analytics and actionable quality scores\" is vague promotional phrasing rather than a concrete account of what the user sees. The source distinguishes a searchable prompt journal from dashboard analytics; the post compresses them into \"searchable analytics\" and adds the empty qualifier \"actionable\" to scores. A careful author would replace this phrase with the actual outputs."
+    ],
+    "what_author_would_change": "Name the searchable prompt history and dashboard quality scores/token usage/session patterns directly; remove \"actionable\"."
+  },
+  {
+    "id": "D03",
+    "repo": "Open330/aas",
+    "language": "Korean",
+    "publishable_as_is": false,
+    "reasons": [
+      "\"aas는 … 여러 에이전트 계정을 나란히 사용하며\" makes aas itself the user of the accounts. The person uses the accounts; aas stores, switches or launches sessions under them. The subject/action mismatch needs rewriting, as in round 9 D03."
+    ],
+    "what_author_would_change": "Write \"aas로 … 여러 계정을 함께 쓸 수 있습니다\" or make aas the subject of concrete account-management actions."
+  },
+  {
+    "id": "D04",
+    "repo": "Open330/aas",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D05",
+    "repo": "Open330/barshelf",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D06",
+    "repo": "Open330/barshelf",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D07",
+    "repo": "Open330/haejo",
+    "language": "Korean",
+    "publishable_as_is": false,
+    "reasons": [
+      "\"앱 화면 작업을 수동으로 반복하는 경우가 있습니다\" is an empty, generic opener. The next sentence only says Haejo lets agents operate apps and checks results, without explaining the saved-Flow replay that would address the stated repetition. The opener adds padding rather than a useful situation or capability."
+    ],
+    "what_author_would_change": "Drop the opener, or replace it with a specific sourced task and explain the reusable Flow/replay connection."
+  },
+  {
+    "id": "D08",
+    "repo": "Open330/haejo",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D09",
+    "repo": "Open330/tend",
+    "language": "Korean",
+    "publishable_as_is": false,
+    "reasons": [
+      "\"해당 창으로 바로 이동해 줍니다\" uses \"창\" for the destination that the sources identify specifically as a tmux pane. A tmux window and pane are different objects; the post never names tmux and leaves this central navigation capability imprecise."
+    ],
+    "what_author_would_change": "Specify tmux and the waiting pane, for example \"입력을 기다리는 tmux pane을 알려 주고 그 pane으로 이동할 수 있게 합니다\"."
+  },
+  {
+    "id": "D10",
+    "repo": "Open330/tend",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  }
+]

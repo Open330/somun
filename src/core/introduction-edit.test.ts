@@ -71,3 +71,9 @@ it("preserves product identity before its supporting workflow", () => {
   const body = "Acme는 원격 기기의 화면을 조작하고 파일을 복사하는 소프트웨어입니다. 파일 창에서 다른 기기의 폴더를 엽니다.";
   expect(prepareIntroduction(body, { ...options, channel: "x", tone: "평서문" })).toBe(body);
 });
+
+it("collapses extra blank lines before the final link of an introduction (round 8)", () => {
+  const out = prepareIntroduction("Tend watches panes.\n\n\nhttps://open330.github.io/tend/", { channel: "x", language: "en", purpose: "introduction" });
+  expect(out).toBe("Tend watches panes.\n\nhttps://open330.github.io/tend/");
+  expect(prepareIntroduction("A.\n\n\nhttps://a.dev", { channel: "x", language: "en", purpose: "update" })).toBe("A.\n\n\nhttps://a.dev");
+});

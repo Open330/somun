@@ -1,0 +1,71 @@
+[
+ {
+  "repo": "Open330/aas",
+  "lang": "ko",
+  "body": "여러 코딩 에이전트 계정을 전환하고 할당량을 관리하는 CLI 도구 aas를 사용해 보세요. aas switch로 계정을 바꾸거나 aas usage로 잔여 사용량을 병렬로 확인할 수 있습니다. https://github.com/Open330/aas",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/aas",
+  "lang": "en",
+  "body": "When you need to run several Claude Code, Codex and other coding-agent accounts side by side, use the aas command-line tool to switch accounts instantly, run isolated sessions and see every account's usage at a glance in a single Rust binary. https://github.com/Open330/aas",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "ko",
+  "body": "맥OS 메뉴바에 흩어진 시스템 상태, 위젯, 스크립트를 아이콘 하나로 모아 관리할 수 있는 도구인 BarShelf를 사용해보세요. 메뉴바에 남긴 값은 작은 칩 한 줄로 접혀 있다가 클릭하면 위젯 카드가 열리며, ⌘F로 모든 위젯을 검색하고 화살표로 이동할 수 있습니다. macOS 14 이상과 Apple Silicon 환경에서 무료로 사용할 수 있습니다 https://barshelf.jiun.dev",
+  "failed": [
+   "length",
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/barshelf",
+  "lang": "en",
+  "body": "When your macOS menu bar is cluttered with scattered tools, BarShelf collects weather, calendars, and command-line scripts behind a single icon and native popup. You can browse pinned widgets, search with command-F, or render any JSON-emitting CLI command into native UI. https://github.com/Open330/barshelf",
+  "failed": [
+   "preferred_link",
+   "length",
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "ko",
+  "body": "반복되는 macOS 앱과 브라우저 작업을 자동화하려는 분을 위해, Claude와 Codex가 화면을 읽고 클릭과 입력을 수행하는 컴퓨터 제어 도구 Haejo를 활용해 보세요. --then 플래그로 여러 앱을 한 번에 실행하고 저장된 Flow로 재실행할 수 있습니다. https://open330.github.io/haejo/",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/haejo",
+  "lang": "en",
+  "body": "When you need Claude or Codex to interact with Mac and browser apps for you, Haejo opens apps, clicks, types, and checks results before finishing tasks. It saves steps as a reusable Flow to run later with new inputs without model calls. https://github.com/Open330/haejo",
+  "failed": [
+   "preferred_link",
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "ko",
+  "body": "tmux에서 여러 코딩 에이전트를 실행할 때 대기 중인 세션을 파악하는 CLI 도구 tend를 사용해 보세요. tmux 3.x 환경에서 tend attend로 가장 오래 멈춘 패널로 즉시 이동하고 tend watch로 상태를 확인합니다. https://open330.github.io/tend",
+  "failed": [
+   "source_conditions_need_review"
+  ]
+ },
+ {
+  "repo": "Open330/tend",
+  "lang": "en",
+  "body": "When managing multiple coding agent sessions in tmux, use tend to see which agent is waiting for input and jump straight to its pane. Requires tmux 3.x or herdr and a Unix-like OS, and works with Claude Code, Codex, and Antigravity CLI sessions. https://github.com/Open330/tend",
+  "failed": [
+   "preferred_link",
+   "source_conditions_need_review"
+  ]
+ }
+]

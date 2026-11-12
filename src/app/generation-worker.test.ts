@@ -26,7 +26,8 @@ const request = (path: string, body: unknown = {}) => app.request(path, { method
 const row = (id: number) => ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, id)).get()!;
 const params = { targets: [{ channel: "x", lang: "en" }] };
 beforeEach(() => {
-  ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: {}, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] };
+  // 편집 단계는 아래 전용 테스트에서 켠다. 나머지 테스트는 생성·보정 호출 수를 그대로 본다.
+  ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { introductionEditor: false }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] };
   app = createApp(ctx, loadConfig({ SOMUN_TOKEN: "test" }));
   cid = Number(ctx.db.insert(schema.candidates).values({ ownerId: "local", repo: "a/b", title: "Fix", type: "release", key: "test", evidence: { repo: "a/b", repoUrl: "https://github.com/a/b", highlights: ["Fixes CRLF positions."], highlightsAt: 1, digestRevision: DIGEST_REVISION }, status: "judged", createdAt: 1, updatedAt: 1 }).run().lastInsertRowid);
   vi.mocked(runLlm).mockResolvedValue(output(draft));
@@ -331,7 +332,7 @@ it("rewrites a draft once with the failed checks and keeps the repaired version 
   const fixed = { title: "", body: "Fixes CRLF positions in the editor. https://github.com/a/b" };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(long)).mockResolvedValueOnce(output(fixed));
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   const repairPrompt = vi.mocked(runLlm).mock.calls[1][1].user;
   expect(repairPrompt).toContain("## Fix these problems");
   expect(repairPrompt).toContain("- length:");
@@ -386,7 +387,7 @@ it('keeps the grounded first draft when a shorter repair invents a measurement',
   const repair = { title:'Show GN: b', body:'무엇이 달라졌나\nCRLF positions are fixed, now 40% faster. https://github.com/a/b' };
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repair));
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // first + 2 attempts; the third returns nothing and the loop stops
   expect(ctx.db.select().from(schema.drafts).all()[0].body).toBe(first.body);
 });
 
@@ -473,7 +474,7 @@ it("automatically removes unsupported praise even when the original draft passes
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }] });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("endorsement_need_review");
   const saved = ctx.db.select().from(schema.drafts).get()!;
   expect(saved.body).toBe(repaired.body);
@@ -498,7 +499,7 @@ it("preserves required 해요체 when an endorsement repair returns formal endin
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(changedTone));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "ko" }] });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   const saved = ctx.db.select().from(schema.drafts).get()!;
   expect(saved.body).toBe("CRLF 위치를 수정해요.");
   expect(saved.lint.find((r) => r.rule === "endorsement_need_review")?.ok).toBe(true);
@@ -512,7 +513,7 @@ it("automatically rewrites a generic Threads trial question into a concrete work
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(revised));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }] });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("question_specificity");
   expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(revised.body);
 });
@@ -546,7 +547,7 @@ it("repairs sentence overflow using the same expanded introduction budget", asyn
   const response = await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
   expect(response.status).toBe(202);
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   const repair = vi.mocked(runLlm).mock.calls[1][1].user;
   expect(repair).toContain("sentence_count");
   expect(repair).toContain("Maximum 6 sentences");
@@ -565,7 +566,7 @@ it.each(["평소 써보셨나요?", "어떻게 생각하시나요?"])("keeps int
   vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(repaired));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "ko" }], introduction: true });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // repair continues while repairable issues remain (REPAIR_ATTEMPTS)
   const repair = vi.mocked(runLlm).mock.calls[1][1].user;
   expect(repair).toContain("For question_specificity: delete the generic closing question");
   expect(repair).not.toContain("then one concrete question about the reader");
@@ -573,19 +574,19 @@ it.each(["평소 써보셨나요?", "어떻게 생각하시나요?"])("keeps int
 });
 
 
-it("attempts one repair for an introduction habit question and keeps the warning if it fails", async () => {
+it("attempts bounded repairs for an introduction habit question and keeps the warning if they fail", async () => {
   const first = { title: "", body: "Reads source code. How do you usually read code?" };
   vi.mocked(runLlm).mockReset().mockResolvedValue(output(first));
   await request(`/api/candidates/${cid}/redraft`, { targets: [{ channel: "threads", lang: "en" }], introduction: true });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(4); // first + REPAIR_ATTEMPTS attempts, none better
   const saved = ctx.db.select().from(schema.drafts).get()!;
   expect(saved.body).toBe(first.body);
   expect(saved.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(false);
   const edited = await request(`/api/drafts/${saved.id}/edit`, { body: "Reads source code.", markCopied: false });
   expect(edited.status).toBe(200);
   expect(ctx.db.select().from(schema.drafts).get()!.lint.find((r) => r.rule === "introduction_habit_question")?.ok).toBe(true);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(4); // saving an edit makes no model call
 });
 
 it("repairs duplicate introduction sentences while preserving the source and product context", async () => {
@@ -608,7 +609,7 @@ it("repairs duplicate introduction sentences while preserving the source and pro
 
 it.each(["server", "local"] as const)("prepares generated introductions consistently for %s while preserving the original response", async executor => {
   if (executor === "local") updateSettings(ctx, "local", { llm: { provider: "local-agent" } });
-  const first = "Windows와 Mac에서 파일을 관리하려면 b를 사용합니다.";
+  const first = "b는 Windows와 Mac에서 파일 창을 엽니다.";
   const next = "파일 창에서 SSH로 원격 폴더를 열고 항목을 복사합니다.";
   const link = "\nhttps://github.com/a/b";
   const raw = { title: "", body: `${first} ${next}${link}` };
@@ -693,11 +694,53 @@ it("repairs a default introduction whose public name appears only in its URL", a
   expect(saved.lint.find(r => r.rule === "introduction_name_missing")?.ok).toBe(true);
 });
 
-it("keeps the missing-name warning when the single repair still omits it", async () => {
+it("keeps the missing-name warning when every bounded repair still omits it", async () => {
   const first = { title: "", body: "Fixes CRLF positions. https://github.com/a/b" };
   vi.mocked(runLlm).mockReset().mockResolvedValue(output(first));
   queueStep(ctx, "local", "draft", cid, "threads", "en", { introduction: true });
   await processServerJob(ctx);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(4); // first + REPAIR_ATTEMPTS attempts, none better
   expect(ctx.db.select().from(schema.drafts).get()!.lint).toContainEqual(expect.objectContaining({ rule: "introduction_name_missing", ok: false }));
+});
+
+it("keeps repairing up to the attempt limit while each rewrite is better, then stops (REPAIR_ATTEMPTS)", async () => {
+  await request(`/api/candidates/${cid}/redraft`, { ...params, introduction: false });
+  const longest = { title: "", body: `${"Fixes CRLF positions in the editor. ".repeat(12)}https://github.com/a/b` };
+  const longer = { title: "", body: `${"Fixes CRLF positions in the editor. ".repeat(9)}https://github.com/a/b` };
+  const fixed = { title: "", body: "Fixes CRLF positions in the editor. https://github.com/a/b" };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(longest)).mockResolvedValueOnce(output(longer)).mockResolvedValueOnce(output(fixed));
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).get()!.body).toBe(fixed.body);
+});
+
+it("asks the judge again when its reasoning has broken Korean, and keeps the clean answer", async () => {
+  const broken = { scores: { runnable: 2, numbers: 0, lesson: 0, novelty: 2, audience: 2 }, reasoning: "여러 코딩 아젠트를 다루는 도구입니다.", suggestedChannels: ["x"], angle: "b를 소개합니다." };
+  const clean = { ...broken, reasoning: "여러 코딩 에이전트를 다루는 도구입니다.", angle: "b는 기다리는 에이전트를 알려 줍니다." };
+  queueStep(ctx, "local", "judge", cid);
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(broken)).mockResolvedValueOnce(output(clean));
+  await processServerJob(ctx);
+  expect(vi.mocked(runLlm).mock.calls[1][1].user).toContain("## Fix before returning");
+  const j = ctx.db.select().from(schema.judgments).get()!;
+  expect(j.reasoning).toBe(clean.reasoning);
+  expect(j.angle).toBe(clean.angle);
+});
+
+it("critiques an introduction against the sources, fixes the quoted problems, and keeps the fix only when checks do not get worse", async () => {
+  ctx.env.introductionEditor = true;
+  const first = { title: "", body: "b는 파일 창을 엽니다. https://github.com/a/b" };
+  const fixed = { title: "", body: "b는 원격 폴더를 파일 창으로 엽니다. https://github.com/a/b" };
+  const worse = { title: "", body: "지금 바로 b를 사용해 보세요! https://github.com/a/b" };
+  const problem = { publishable: false, problems: ["\"파일 창\"만으로는 무엇을 여는지 알 수 없습니다(원문: 원격 폴더)."] };
+  queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true });
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output(fixed)).mockResolvedValueOnce(output({ publishable: true, problems: [] }));
+  await processServerJob(ctx);
+  const calls = vi.mocked(runLlm).mock.calls;
+  expect(calls[1][1].system).toContain("strict independent editor");
+  expect(calls[2][1].user).toContain("원격 폴더");
+  expect(calls).toHaveLength(4);
+  expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(fixed.body);
+  queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true, instruction: "다시" });
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output(worse));
+  await processServerJob(ctx);
+  expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(first.body);
 });

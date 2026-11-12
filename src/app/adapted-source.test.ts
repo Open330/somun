@@ -206,7 +206,7 @@ it("keeps the first valid introduction if editing fails or adds a length violati
   vi.mocked(runLlm).mockClear().mockResolvedValueOnce(output()).mockResolvedValueOnce(output(`${prose} ${"기록을 정리해요. ".repeat(40)}`));
   enqueue();
   expect(await processServerJob(ctx)).toBe(true);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // a worse attempt is discarded and repair retries once more (mock then returns nothing)
   expect(ctx.db.select().from(schema.drafts).all().at(-1)?.body).toBe(prose);
 });
 
@@ -216,7 +216,7 @@ it("does not use editing completion to accept an unchanged or worse real violati
   vi.mocked(runLlm).mockResolvedValueOnce(output(tooLong)).mockResolvedValueOnce(output(tooLong + " 기록을 보관해요."));
   enqueue();
   expect(await processServerJob(ctx)).toBe(true);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  expect(runLlm).toHaveBeenCalledTimes(3); // a worse attempt is discarded and repair retries once more (mock then returns nothing)
   expect(ctx.db.select().from(schema.drafts).all()).toEqual([]);
 });
 
@@ -253,7 +253,8 @@ it.each([true, false])("checks technical notation before storing generated draft
   vi.mocked(runLlm).mockResolvedValueOnce(output(bad, source)).mockResolvedValueOnce(output(fixed ? good : bad, source));
   const id = enqueueJob(ctx, "me", "draft", cid, "x", "ko", base);
   expect(await processServerJob(ctx)).toBe(true);
-  expect(runLlm).toHaveBeenCalledTimes(2);
+  // A clean repair ends the loop (2 calls); an unchanged one is discarded and retried once more before the mock runs out (3 calls).
+  expect(runLlm).toHaveBeenCalledTimes(fixed ? 2 : 3);
   expect(row(id).status).toBe(fixed ? "done" : "failed");
   expect(ctx.db.select().from(schema.drafts).all()).toHaveLength(fixed ? 1 : 0);
   if (!fixed) return;

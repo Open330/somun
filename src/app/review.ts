@@ -36,7 +36,7 @@ export function recordDraftReview(ctx: AppContext, ownerId: string, draftId: num
 /** 채널·언어별로 프롬프트 후보가 되는 내 예시 수. 오래된 것부터 물러난다. */
 export const OWN_EXAMPLE_CAP = 8;
 /** 경고된 근거·표현 오류가 문체 예시로 굳지 않게 한다. 복사 사실과 수정량은 별도로 기록한다. */
-const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "source_conditions_need_review", "author_role_need_review", "unreleased_feature", "colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms", "wrong_language", "register_mismatch"]);
+const EXAMPLE_GATE = new Set(["banned_phrases", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "source_conditions_need_review", "author_role_need_review", "unreleased_feature", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment", "colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "no_invented_limit", "repo_name", "mixed_korean_terms", "wrong_language", "register_mismatch"]);
 
 /** 사용자 예시가 채널당 5개 쌓이면 시드는 비활성화. 내 예시는 최근 OWN_EXAMPLE_CAP개만 활성. */
 function retireSeeds(ctx: AppContext, ownerId: string, channel: string, lang: string) {
@@ -78,7 +78,7 @@ function saveDraftEditInTransaction(ctx: AppContext, ownerId: string, id: number
   const changed = d.body !== input.body || (d.title ?? "") !== (input.title ?? "");
   const now = Date.now();
   const cand = ctx.db.select().from(schema.candidates).where(and(eq(schema.candidates.id, d.candidateId), eq(schema.candidates.ownerId, ownerId))).get();
-  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { ...(cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}), language: d.lang }, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
+  const lint = lintDraft(d.channel as Channel, input.title, input.body, settings.bannedPhrases, { ...(cand ? draftLintFacts({ title: cand.title, type: cand.type, evidence: cand.evidence as Evidence }, getProfile(ctx, ownerId, cand.repo)?.profile, d.purpose as "introduction" | "update" | null) : {}), language: d.lang, readmeOnly: d.sourceScope === "readme" }, settings.ui?.locale, channelSpec(d.channel as Channel, settings.customChannels));
   if (d.sourceExcerpt?.adapted) lint.push(...adaptedSourceIssues(input.body, d.sourceExcerpt.sourceBody));
   const review = currentConditionReview(ctx, ownerId, { ...d, title: input.title ?? null, body: input.body, conditionReview: changed ? null : d.conditionReview });
   const needsConditionReview = review.required && review.confirmedAt === undefined;

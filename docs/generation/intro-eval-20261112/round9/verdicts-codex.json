@@ -1,0 +1,84 @@
+[
+  {
+    "id": "D01",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D02",
+    "repo": "jiunbae/oh-my-prompt",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D03",
+    "repo": "Open330/aas",
+    "language": "Korean",
+    "publishable_as_is": false,
+    "reasons": [
+      "The subject and action do not agree naturally in \"aas는 … 계정을 여러 개 등록해 두고 명령 하나로 바꿔 씁니다.\" The person registers and uses the accounts; aas manages or switches them. With aas as the explicit subject, \"바꿔 씁니다\" makes the tool sound as though it uses the accounts itself. This needs a grammatical rewrite, not merely a stylistic preference."
+    ],
+    "what_author_would_change": "Change the first sentence to \"aas에 Claude Code, Codex 같은 코딩 에이전트 계정을 여러 개 등록해 두면 명령 하나로 계정을 바꿔 쓸 수 있습니다.\" Keep the remaining usage sentence and link."
+  },
+  {
+    "id": "D04",
+    "repo": "Open330/aas",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D05",
+    "repo": "Open330/haejo",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D06",
+    "repo": "Open330/haejo",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D07",
+    "repo": "Open330/tend",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D08",
+    "repo": "Open330/tend",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D09",
+    "repo": "Open330/barshelf",
+    "language": "Korean",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  },
+  {
+    "id": "D10",
+    "repo": "Open330/barshelf",
+    "language": "English",
+    "publishable_as_is": true,
+    "reasons": [],
+    "what_author_would_change": ""
+  }
+]

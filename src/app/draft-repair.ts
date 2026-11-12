@@ -3,6 +3,7 @@ import type { SourceExcerptOrigin } from "../shared/types.js";
 import { and, eq } from "drizzle-orm";
 import { channelSpec, draftChannelSpec, lengthInstruction, type Channel, type CustomChannel } from "../core/channels.js";
 import { requestsQuestion, type LintResult } from "../core/lint.js";
+import { HUMAN_VOICE_RULES } from "../core/human-voice.js";
 import { prepareIntroduction } from "../core/introduction-edit.js";
 import { draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
@@ -18,7 +19,7 @@ import { lintDraftFor } from "./pipeline.js";
  */
 
 /** 모델이 다시 쓰면 고칠 수 있는 린트. 사람이 판단할 일(사실 확인 등)이 아니라 형식·표현·근거 위반이다. */
-export const REPAIRABLE = new Set(["introduction_name_missing", "introduction_repeated_sentence", "introduction_habit_question", "register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "unreleased_feature", "colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "wrong_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
+export const REPAIRABLE = new Set(["introduction_name_missing", "introduction_repeated_sentence", "introduction_habit_question", "register_mismatch", "no_body_link", "question_specificity", "endorsement_need_review", "sentence_count", "length", "title_length", "outline_structure", "sections", "open_question", "avoid_terms", "unreleased_feature", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment", "colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "no_transliterated_names", "mixed_korean_terms", "mixed_language", "wrong_language", "banned_phrases", "paragraphs", "has_link", "preferred_link", "no_exclamation", "no_emoji_bullets", "no_placeholder", "numbers_need_review", "claims_need_review", "author_role_need_review", "no_invented_limit", "repo_name", "no_vote_request"]);
 
 type DraftJob = { id: number; candidateId: number; channel?: Channel | null; lang?: string; editorInstruction?: string; user: string; sourceExcerpt?: SourceExcerptOrigin; schemaJson?: string };
 
@@ -43,7 +44,9 @@ export function draftIssues(ctx: AppContext, ownerId: string, job: DraftJob, jso
   const d = readJobDraft(job, json, settings.customChannels, settings.bannedPhrases);
   const purpose = draftPurposeOf(null, job.user);
   if (!d.body) return null;
-  const issues = lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose, { language: job.lang, editorInstruction: instructionOf(job.user, job) }).filter((l) => !l.ok && REPAIRABLE.has(l.rule));
+  // 원문을 그대로 옮기는 발췌(adapted가 아님)는 문장을 바꿀 수 없으므로 말투 규칙을 보정 대상으로 삼지 않는다. 경고는 초안 린트에 남는다.
+  const verbatim = Boolean(job.sourceExcerpt && !job.sourceExcerpt.adapted);
+  const issues = lintDraftFor(ctx, ownerId, job.candidateId, channel, d.title, d.body, purpose, { language: job.lang, editorInstruction: instructionOf(job.user, job) }).filter((l) => !l.ok && REPAIRABLE.has(l.rule) && !(verbatim && HUMAN_VOICE_RULES.has(l.rule)));
   if (job.sourceExcerpt?.adapted) issues.push(...adaptedSourceIssues(d.body, (json as { sourceBody: string }).sourceBody));
   // A pending editing step, not an automatically detected semantic defect.
   // Never let this signal mask an existing repairable violation in comparison.

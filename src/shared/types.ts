@@ -27,7 +27,7 @@ export type DraftPurpose = "introduction" | "update";
 export type SourceExcerptOrigin = { url: string; adapted?: true; sourceBody?: string };
 export type HomepageCopyUnit = { id: string; language: string; heading: string; paragraph: string; parentId?: string };
 /** llm_jobs.meta. 생성 당시 초안 목적 또는 프로필의 저장소·README 해시. */
-export type JobMeta = { sourceExcerpt?: SourceExcerptOrigin; /** 재생성 시 빈 줄·Markdown 제목을 포함한 편집 지시 전체. */ editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
+export type JobMeta = { /** 초안 프롬프트를 만든 순간의 원문 범위. 완료 때 근거가 바뀌어도 모델이 실제로 본 범위를 초안에 남긴다. */ sourceScope?: "readme"; sourceExcerpt?: SourceExcerptOrigin; /** 재생성 시 빈 줄·Markdown 제목을 포함한 편집 지시 전체. */ editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: DraftPurpose; repo?: string; readmeHash?: string; /** 자동 처리(새 글감 순회)가 시작한 작업. 공유 한도의 마지막 몫을 쓰지 않는다. */ background?: boolean; /** 처음 요청한 시각. 다시 시도해도 유지된다. */ queuedAt?: number };
 export type JobStatus = "pending" | "claimed" | "done" | "failed";
 
 export type RubricScores = { runnable: number; numbers: number; lesson: number; novelty: number; audience: number };

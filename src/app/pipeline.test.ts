@@ -150,6 +150,7 @@ it("filters unverified highlights before keeping eight, and checks against the t
 });
 
 it("stores the judge's angle separately from its reasoning", () => {
+  announced();
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "Plain verdict.", angle: "The flag nobody asked for" } });
   expect(ctx.db.select().from(schema.judgments).get()).toMatchObject({ reasoning: "Plain verdict.", angle: "The flag nobody asked for" });
@@ -245,7 +246,7 @@ it("honors an explicit introduction despite publication history and an old chang
   expect(prompt.user).toContain("Keep it short");
   expect(prompt.user).not.toContain("Only discuss the latest patch");
   expect(prompt.user).not.toContain("Previous update draft");
-  expect(prompt.system).toContain("Explain a concrete reader need");
+  expect(prompt.system).toContain("leave installation requirements, supported OS or versions, hardware and pricing to the linked page");
 });
 
 it("scales the weighted rubric to 10 so raising a weight does not lower the bar", () => {
@@ -276,7 +277,8 @@ it("tells drafts which releases a window spans and which PRs are not released ye
 it("drops an introduction-era angle from update drafts and marks unreleased highlights", () => {
   ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds a flag.", "(unreleased) Mac app tab dragging."], highlightsAt: 1 } }).run();
   applyResult(ctx, "test", { kind: "judge", candidateId: id, model: "t", result: { scores: {}, reasoning: "r", angle: "Introduce vite to new readers" } });
-  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).toContain("Introduce vite to new readers");
+  // 첫 소개 초안은 판단의 각도를 쓰지 않는다(README·프로필이 근거다).
+  expect(buildPrompt(ctx, "test", "draft", id, "x", "en").user).not.toContain("Introduce vite to new readers");
   applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "Intro" }, draftPurpose: "introduction" });
   registerPublication(ctx, "test", { candidateId: id, channel: "x" });
   const update = buildPrompt(ctx, "test", "draft", id, "x", "en").user;
@@ -512,4 +514,27 @@ describe("voice examples keep the best-performing authored post", () => {
     for (const n of [1, 2, 3, 4]) authored(n);
     expect(examplesFor(ctx, "test", "x", "en", 4).map((e) => e.body)).toEqual(["post 4", "post 3", "post 2"]);
   });
+});
+
+it("keeps the source scope of the prompt the model saw when a README arrives before completion (Codex on #97)", () => {
+  const pr = { number: 1, title: "Export", body: "Cloud export works only when the export flag is enabled.", url: "https://github.com/vitejs/vite/pull/1" };
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, mergedPrDetails: [pr] } }).run();
+  const jobId = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true });
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, jobId)).get()!.meta?.sourceScope).toBeUndefined();
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, mergedPrDetails: [pr], readmeForChecks: "# Vite\n\nVite serves files." } }).run();
+  applyResult(ctx, "test", { kind: "draft", candidateId: id, channel: "x", lang: "en", model: "t", result: { body: "vite exports notes to the cloud. https://github.com/vitejs/vite" }, draftPurpose: "introduction" });
+  const draft = ctx.db.select().from(schema.drafts).get()!;
+  expect(draft.sourceScope).toBeNull();
+  expect(draft.lint.find((l) => l.rule === "source_conditions_need_review")?.ok).toBe(false);
+  // README가 있을 때 만든 기본 소개 프롬프트는 범위를 작업에 남긴다.
+  const scoped = queueStep(ctx, "test", "draft", id, "x", "ko", { introduction: true });
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, scoped)).get()!.meta?.sourceScope).toBe("readme");
+});
+
+it("keeps the stored source scope when a failed introduction draft is retried (Codex on #97)", () => {
+  ctx.db.update(schema.candidates).set({ evidence: { repo: "vitejs/vite", repoUrl: "https://github.com/vitejs/vite", highlights: ["Adds export."], highlightsAt: 1, readmeForChecks: "# Vite\n\nVite serves files." } }).run();
+  const jobId = queueStep(ctx, "test", "draft", id, "x", "en", { introduction: true });
+  ctx.db.update(schema.llmJobs).set({ status: "failed", error: "temporary", finishedAt: Date.now() }).where(eq(schema.llmJobs.id, jobId)).run();
+  const retry = retryGeneration(ctx, "test", jobId);
+  expect(ctx.db.select().from(schema.llmJobs).where(eq(schema.llmJobs.id, retry)).get()!.meta?.sourceScope).toBe("readme");
 });

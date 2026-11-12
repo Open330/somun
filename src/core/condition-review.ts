@@ -10,6 +10,26 @@ export function reviewConditionParagraphs(text: string): string[] {
 }
 
 /** 원자료와 유효 프로필 제약. 생성된 highlights는 확인 근거로 쓰지 않는다. */
+/**
+ * 첫 소개 초안이 실제로 근거로 쓰는 자료: 홈페이지·README·프로필 한계. 릴리스 노트와 PR은 소개 초안에 넘기지 않으므로 확인 대상도 아니다.
+ * Tend 운영 초안은 확인할 원문이 29개(PR 20)였다(2026-11-12).
+ */
+export function introductionEvidence<T extends EvidenceLike>(e: T): T {
+  return { ...e, windowReleaseNotes: undefined, releaseNotes: undefined, mergedPrDetails: undefined };
+}
+
+/** README가 있어야 소개 초안이 README를 근거로 쓴다. 없으면 PR·릴리스가 근거이므로 그 조건도 확인 대상이다. */
+export const readmeBased = (e: EvidenceLike) => Boolean([e.readmeForChecks, e.readmeExcerpt].find((text) => text?.trim()));
+
+/**
+ * 이 초안이 README·홈페이지만으로 쓰였는가(prompts.draftPrompt의 baseline 소개와 같은 조건).
+ * 편집 지시가 있으면 PR·릴리스 원문이 프롬프트에 들어가고, README가 잘린 일반 채널 소개는 릴리스 노트가 들어간다. 그때는 줄이지 않는다.
+ */
+export function readmeOnlyIntroduction(purpose: string | null | undefined, channel: string, editorInstruction: string | undefined, e: EvidenceLike & { readmeTruncated?: boolean }): boolean {
+  if (purpose !== "introduction" || editorInstruction?.trim() || !readmeBased(e)) return false;
+  return channel === "x" || channel === "threads" || e.readmeTruncated === false;
+}
+
 export function conditionSources(e: EvidenceLike & { limitationsSource?: "readme" | "digest" }, profile?: ProfileLike): ConditionSource[] {
   const sources: ConditionSource[] = [];
   const homepage = e.homepageSource;

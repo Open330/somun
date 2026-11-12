@@ -225,7 +225,7 @@ describe("project introduction writing brief", () => {
     expect(draftPrompt(candidate, "x", "ko", []).user).toContain("Maximum 280 X weighted characters");
     expect(prompt.user).toContain("as few short sentences as needed");
     expect(prompt.user).not.toContain("220 characters");
-    expect(prompt.user).toContain("Use fewer sentences when evidence is sparse");
+    expect(prompt.user).toContain("use fewer sentences when evidence is sparse");
   });
   it("preserves updates and custom channel limits", () => {
     expect(draftPrompt(candidate, "threads", "ko", []).user).toContain("Maximum 2 sentences");
@@ -248,9 +248,10 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
 
 it("uses introduction space for distinctive reader value rather than a generic setup summary", () => {
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("구체적인 사용 상황과 제품명·종류·주용도를 도입에서 연결해 설명");
-  expect(prompt.user).toContain("서로 다른 동작과 보이는 결과");
-  expect(prompt.system).toContain("connected main actions");
+  expect(prompt.user).toContain("제품 이름을 주어로 한 문장");
+  expect(prompt.user).toContain("무엇을 하고 독자에게 무엇이 보이는지");
+  expect(prompt.user).toContain("설치 요구 사항·지원 OS·버전·하드웨어·가격");
+  expect(prompt.system).toContain("need no editing before posting");
   expect(prompt.user).not.toContain("If only two supported sentences");
   expect(prompt.user).not.toContain("then add one concrete workflow detail");
 });
@@ -261,15 +262,14 @@ it.each(["x", "threads"] as const)("keeps the core product task ahead of a narro
   const intro = draftPrompt(c, channel, "ko", [], undefined, { introduction: true });
   expect(intro.user).toContain(c.evidence.readmeForChecks);
   expect(intro.user).not.toContain(c.evidence.releaseNotes);
-  expect(intro.user).toContain("제품명·종류·주용도를 도입에서 연결해 설명");
+  expect(intro.user).toContain("제품 이름을 주어로 한 문장");
   expect(intro.user).toContain("Historical PR changes belong in updates");
   expect(intro.user).toContain("what is this product, when would the reader need it");
-  expect(intro.user).toContain("각 문장은 서로 다른 정보를 보태는 완결된 문장");
-  expect(intro.user).toContain("Keep each retained capability's prerequisites and exclusions");
+  expect(intro.user).toContain("명령어 여러 개 나열");
+  expect(intro.user).toContain("Do not combine independent capabilities");
   expect(intro.editorInstruction).toBe("");
-  expect(intro.system).toContain("what kind of product this is");
+  expect(intro.system).toContain("Never state a capability more broadly than the source does");
   expect(intro.user).toContain(channel === "x" ? "Use a supplied link in the body" : "No URLs in the body");
-  expect(intro.system).toContain("concrete reader need");
   const update = draftPrompt(c, channel, "ko", [], undefined, { introduction: false });
   expect(update.system).not.toContain("A concrete product/category description is welcome");
   expect(update.user).not.toContain("can they identify the product's main use");

@@ -110,7 +110,7 @@ export function channelSpec(channel: Channel, customChannels: readonly CustomCha
 export function lengthInstruction(spec: Pick<ChannelSpec, "id" | "maxChars">): string {
   if (spec.maxChars === null) return "";
   return spec.id === "x"
-    ? `Maximum ${spec.maxChars} X weighted characters in the body: Korean/CJK characters count as 2, ASCII as 1, and each URL as 23. With one link this leaves about ${Math.max(0, Math.floor((spec.maxChars - 23) / 2))} CJK characters for the text. Fewer sentences are allowed to fit this budget. Keep the reader reason and necessary conditions; remove optional details first.`
+    ? `Maximum ${spec.maxChars} X weighted characters in the body: Korean/CJK characters count as 2, ASCII as 1, and each URL as 23. With one link this leaves about ${Math.max(0, Math.floor((spec.maxChars - 23) / 2))} CJK characters for the text. Aim at least 20 characters under the limit. Fewer sentences are allowed to fit this budget; remove optional details first.`
     : `Maximum ${spec.maxChars} characters.`;
 }
 
@@ -127,11 +127,11 @@ export function draftChannelSpec(spec: ChannelSpec, purpose?: "introduction" | "
   return {
     ...spec,
     maxSentences,
-    rules: `Introduce the project in ${sentenceGuide}. Make the product's main use and the intended reader's action understandable in the opening. Combine a concrete reader need, product name/kind and main purpose in the opening, then explain distinct user actions and visible results. Do not spend a separate sentence merely labelling it a tool. A category label alone is insufficient. Do not lead with a minor fix that requires knowing an earlier version or a setup tutorial. Add at most one closely related supporting capability that gives a new reason to use the product. Do not repeat the opening or list unrelated features. Each sentence must add source-backed information. Use fewer sentences when evidence is sparse; never pad the post. Preserve prerequisites and exclusions with the chosen capability. Do not end with a generic question about the reader's habits. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
+    rules: `Introduce the project in ${sentenceGuide}. Say what the product does for the reader with the product name as the subject, then at most one distinct action or visible result. Each sentence adds source-backed information; use fewer sentences when evidence is sparse. Do not include installation requirements, supported OS or versions, hardware or pricing; the link covers them. Do not invite the reader to try or use it, list commands, or label it with a category. Do not invent the author's experience, ownership, motivation, comparisons or outcomes. No hashtags, emoji or exclamation marks. ${spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "No URLs in the body." : "Use a supplied link in the body."}`,
     identity: spec.identity ? {
       ...spec.identity,
       purpose: "처음 보는 독자가 사용 상황과 핵심 기능을 이해할 수 있게 프로젝트 소개",
-      structure: threads ? "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건. 같은 설명 반복 없이 짧은 문단. 링크는 첫 답글" : "구체적 사용 상황과 제품명·종류·주용도를 함께 설명 → 서로 다른 실제 동작·결과와 필요한 조건 → 링크. 같은 설명 반복 없이 글자 수 안에서",
+      structure: threads ? "독자의 상황(선택) → 제품 이름이 주어인 문장으로 하는 일과 보이는 결과. 짧은 문단. 링크는 첫 답글" : "독자의 상황(선택) → 제품 이름이 주어인 문장으로 하는 일과 보이는 결과 → 링크. 글자 수 안에서",
     } : undefined,
   };
 }

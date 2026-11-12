@@ -363,3 +363,42 @@ it("uses only an explicit README website link when GitHub homepage is absent", (
   expect(readmeHomepage("[**공식 홈페이지**](https://tool.example/)")).toBe("https://tool.example/");
   for (const source of ["[Sponsor](https://sponsor.example/)", "[Website](file:///etc/passwd)", "![Website](https://badge.example/)", "https://tool.example/", "x".repeat(8000) + "[Website](https://late.example/)", "## Examples\n[Website](https://example.example/)", "<!-- [Website](https://comment.example/) -->", "`[Website](https://code.example/)`", "```md\n[Website](https://code.example/)\n```", "```md\n~~~\n[Website](https://mixed.example/)\n```", "``[Website](https://inline.example/)``", "    [Website](https://indent.example/)", "\t[Website](https://indent.example/)", "<p><code>[Website](https://html.example/)</code></p>"]) expect(readmeHomepage(source)).toBeUndefined();
 });
+
+describe("introduction candidates for never-announced repositories", () => {
+  let ctx: AppContext;
+  beforeEach(() => { ctx = { db: openDb(":memory:"), log: pino({ level: "silent" }), env: { githubToken: "pat" }, bus: new EventEmitter(), usage: { record: vi.fn() } as unknown as AppContext["usage"] }; });
+  afterEach(() => { ctx.db.$client.close(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  const setup = (opts: { installationId?: string; readme?: boolean; releases?: boolean } = {}) => {
+    const id = Number(ctx.db.insert(schema.sources).values({ ownerId: "me", kind: "github", targets: ["me/old"], enabled: true, options: opts.installationId ? { installationId: opts.installationId } : null }).run().lastInsertRowid);
+    const repo = { full_name: "me/old", html_url: "https://github.com/me/old", description: "Old tool", homepage: null, stargazers_count: 56, forks_count: 0, language: null, license: null, created_at: "2024-01-01T00:00:00Z", pushed_at: new Date().toISOString(), fork: false, archived: false, private: false };
+    const old = new Date(Date.now() - 40 * 86400e3).toISOString();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/me/old")) return new Response(JSON.stringify(repo), { status: 200 });
+      if (url.endsWith("/readme")) return opts.readme === false ? new Response("{}", { status: 404 }) : new Response(JSON.stringify({ content: Buffer.from("# Old\n\nShows prompt analytics.").toString("base64") }), { status: 200 });
+      if (url.includes("/releases")) return new Response(JSON.stringify(opts.releases === false ? [] : [{ tag_name: "v2026.1025.1", name: "v", body: "Notes", html_url: "u", published_at: old }]), { status: 200 });
+      if (url.includes("/pulls") || url.includes("/commits")) return new Response("[]", { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    return id;
+  };
+
+  it("seeds one candidate from the latest release even when it is outside the window (oh-my-prompt, 2026-11-12)", async () => {
+    const id = setup();
+    await collectGithubSource(ctx, id);
+    await collectGithubSource(ctx, id);
+    const cands = ctx.db.select().from(schema.candidates).all();
+    expect(cands.map((c) => c.title)).toEqual(["me/old v2026.1025.1"]);
+  });
+
+  it("falls back to the repository itself without releases", async () => {
+    const id = setup({ releases: false });
+    await collectGithubSource(ctx, id);
+    expect(ctx.db.select().from(schema.candidates).all().map((c) => c.type)).toEqual(["new-repo"]);
+  });
+
+  it("does not seed without a README to introduce from", async () => {
+    await collectGithubSource(ctx, setup({ readme: false }));
+    expect(ctx.db.select().from(schema.candidates).all()).toHaveLength(0);
+  });
+});
+

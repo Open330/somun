@@ -1,0 +1,82 @@
+[
+ {
+  "id": "D01",
+  "repo": "jiunbae/oh-my-prompt",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "AI 코딩 에이전트와 주고받은 프롬프트를 기록하고 분석하는 도구입니다. Oh My Prompt는 상호작용을 캡처하여 통계와 품질 점수를 보여줍니다. https://github.com/jiunbae/oh-my-prompt",
+  "sources": "source-jiunbae__oh-my-prompt.md"
+ },
+ {
+  "id": "D02",
+  "repo": "jiunbae/oh-my-prompt",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Running hundreds of prompts a day to AI coding agents? Oh My Prompt captures every interaction and turns them into searchable analytics. https://github.com/jiunbae/oh-my-prompt",
+  "sources": "source-jiunbae__oh-my-prompt.md"
+ },
+ {
+  "id": "D03",
+  "repo": "Open330/aas",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "코딩 에이전트 계정을 여러 개 번갈아 쓸 때 기본 로그인을 건드리지 않고 세션을 따로 실행합니다. aas는 계정별 남은 사용량을 한눈에 보여주고 명령어로 즉시 전환합니다. https://github.com/Open330/aas",
+  "sources": "source-Open330__aas.md"
+ },
+ {
+  "id": "D04",
+  "repo": "Open330/aas",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Using several coding-agent accounts side by side? aas lets you switch accounts in one command and see every account's remaining usage at a glance. https://github.com/Open330/aas",
+  "sources": "source-Open330__aas.md"
+ },
+ {
+  "id": "D05",
+  "repo": "Open330/haejo",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Claude와 Codex가 Mac과 브라우저 앱을 직접 사용하게 할 수 있습니다. Haejo는 앱을 열고 입력과 조작을 수행하며 결과를 확인한 뒤 작업을 Flow로 저장합니다. https://open330.github.io/haejo/",
+  "sources": "source-Open330__haejo.md"
+ },
+ {
+  "id": "D06",
+  "repo": "Open330/haejo",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Haejo lets Claude and Codex use your Mac and browser apps to open interfaces, click controls, and enter information. It saves the steps as a reusable Flow so you can run it again with new inputs and no model call. https://open330.github.io/haejo/",
+  "sources": "source-Open330__haejo.md"
+ },
+ {
+  "id": "D07",
+  "repo": "Open330/tend",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "tmux에서 코딩 에이전트를 여러 개 실행하면 어떤 에이전트가 입력이나 답변을 기다리는지 파악하기 어렵습니다. Tend는 실행 중인 에이전트 상태를 감지하여 기다리는 에이전트를 알려 주고 해당 창으로 바로 이동시킵니다. https://open330.github.io/tend/",
+  "sources": "source-Open330__tend.md"
+ },
+ {
+  "id": "D08",
+  "repo": "Open330/tend",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Running several coding agents in tmux? Tend watches the sessions you already run, tells you the moment one stops for input or an error, and takes you straight to its pane. https://open330.github.io/tend/",
+  "sources": "source-Open330__tend.md"
+ },
+ {
+  "id": "D09",
+  "repo": "Open330/barshelf",
+  "language": "Korean",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "날씨, 달력, 시스템 상태, 스크립트와 명령어 출력을 작은 아이콘 하나로 모으고 싶을 때가 있습니다. BarShelf는 메뉴바와 데스크톱에서 위젯과 도구를 하나의 팝오버로 정리해 보여줍니다. https://barshelf.jiun.dev",
+  "sources": "source-Open330__barshelf.md"
+ },
+ {
+  "id": "D10",
+  "repo": "Open330/barshelf",
+  "language": "English",
+  "channel": "X (280 weighted chars; Korean counts 2)",
+  "body": "Your menu bar holds a dozen tiny icons, browser tabs, and terminal windows. BarShelf collects your weather, system stats, passwords, and custom CLI outputs behind one native menu bar icon and popover.\n\nhttps://barshelf.jiun.dev",
+  "sources": "source-Open330__barshelf.md"
+ }
+]
