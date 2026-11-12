@@ -128,7 +128,7 @@ export type Candidate = { id: number; type: CandidateType; title: string; repo: 
 export type CandidateListItem = Candidate & { unpublishedDraftCount?: number; awaitingPublication?: number; judgment: Judgment | null };
 
 export type AutoStats = { likes?: number; comments?: number; reposts?: number; views?: number; score?: number; source: string };
-export type PublicationStats = { likes?: number; comments?: number; reposts?: number; visits?: number; installs?: number; signups?: number };
+export type PublicationStats = { /** 조회수(노출). 채널 분석 화면의 값을 직접 적는다. */ views?: number; likes?: number; comments?: number; reposts?: number; visits?: number; installs?: number; signups?: number };
 /** url이 빈 문자열이면 URL 없이 사용자가 확인한 게시다. */
 export type Publication = { id: number; candidateId: number; draftId?: number; channel: Channel; lang?: string; url: string; publishedAt: number; manualStats?: PublicationStats; autoStats?: AutoStats; autoStatsAt?: number };
 

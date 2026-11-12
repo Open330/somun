@@ -5,7 +5,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
-import { applyResult, buildPrompt, introductionJudgment, introductionTotal, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES, windowFacts } from "./pipeline.js";
+import { applyResult, buildPrompt, engagementScore, examplesFor, introductionJudgment, introductionTotal, processNewCandidates, queueStep, requestedIntroduction, rubricTotal, SWEEP_BACKOFF_MS, SWEEP_MAX_FAILURES, windowFacts } from "./pipeline.js";
 import { retryGeneration } from "./jobs.js";
 import { setCandidateStatus } from "./candidates.js";
 import { GenerationConflictError } from "./context.js";
@@ -485,4 +485,31 @@ it("tells the introduction judge not to lower novelty for a long release history
   const user = buildPrompt(ctx, "test", "judge", id).user;
   expect(user).toContain("## Introducing the project to new readers");
   expect(user).toContain("A long release history does not lower novelty here.");
+});
+
+describe("voice examples keep the best-performing authored post", () => {
+  const authored = (n: number, stats?: Record<string, number>) => {
+    const draft = Number(ctx.db.insert(schema.drafts).values({ ownerId: "test", candidateId: id, channel: "x", lang: "en", version: n, body: `draft ${n}`, lint: [], status: "copied", model: "m", createdAt: n, updatedAt: n }).run().lastInsertRowid);
+    ctx.db.insert(schema.examples).values({ ownerId: "test", channel: "x", lang: "en", body: `post ${n}`, source: "edited", draftId: draft, active: true, createdAt: n }).run();
+    if (stats) ctx.db.insert(schema.publications).values({ ownerId: "test", candidateId: id, draftId: draft, channel: "x", url: `https://x.com/me/status/${n}`, publishedAt: n, manualStats: stats }).run();
+  };
+
+  it("scores engagement per view when views are recorded, else by reactions", () => {
+    expect(engagementScore({ views: 1000, likes: 30, reposts: 10 })).toBe(0.04);
+    expect(engagementScore({ likes: 5 })).toBe(5);
+    expect(engagementScore({ comments: 3 } as never)).toBeUndefined();
+    expect(engagementScore(undefined)).toBeUndefined();
+  });
+
+  it("puts an older post with the best engagement in the last slot", () => {
+    authored(1, { views: 500, likes: 40 });
+    authored(2, { views: 5000, likes: 50 });
+    authored(3); authored(4); authored(5);
+    expect(examplesFor(ctx, "test", "x", "en", 4).map((e) => e.body)).toEqual(["post 5", "post 4", "post 1"]);
+  });
+
+  it("keeps the newest posts when nothing has engagement recorded", () => {
+    for (const n of [1, 2, 3, 4]) authored(n);
+    expect(examplesFor(ctx, "test", "x", "en", 4).map((e) => e.body)).toEqual(["post 4", "post 3", "post 2"]);
+  });
 });

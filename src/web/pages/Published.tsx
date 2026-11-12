@@ -182,6 +182,7 @@ export default function Published() {
 }
 
 const STAT_LABELS = {
+  views: "조회수",
   likes: "좋아요 수",
   comments: "댓글 수",
   reposts: "리포스트 수",
