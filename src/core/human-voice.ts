@@ -87,7 +87,8 @@ export function koSubjectMismatch(statements: string[], name: string): string[] 
   const topic = new RegExp(`^${n}\\s?[은는이가]\\s`, "iu");
   return statements.filter((s, i) => {
     if (KO_CAUSATIVE.test(s)) return false;
-    const product = topic.test(s) || (i > 0 && !READER_SUBJECT.test(s) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
+    const otherSubject = /^([A-Za-z][\w .-]*?)\s?[이가]\s/u.exec(s);
+    const product = topic.test(s) || (i > 0 && !READER_SUBJECT.test(s) && !(otherSubject && otherSubject[1].toLowerCase() !== name.toLowerCase()) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
     return (product && KO_PERCEIVE.test(s)) || (topic.test(s) && /(?:Claude|Codex)(?:와\s?(?:Claude|Codex))?가\s/u.test(s));
   });
 }
