@@ -35,7 +35,9 @@ function normalize(raw: unknown, limits = GENERATED_LIMITS): RepoProfile {
   const r = (raw ?? {}) as Partial<RepoProfile>;
   const strs = (x: unknown, n: number) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim()).slice(0, n) : []);
   const stage = ["experiment", "beta", "stable", "archived", "unknown"].includes(String(r.stage)) ? (r.stage as RepoProfile["stage"]) : "unknown";
-  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), why: String(r.why ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid), unreleased: strs(r.unreleased, limits.unreleased) };
+  return { what: String(r.what ?? "").trim(), audience: String(r.audience ?? "").trim(), why: String(r.why ?? "").trim(), claims: strs(r.claims, limits.claims), stage, limitations: strs(r.limitations, limits.limitations), naming: String(r.naming ?? "").trim(), avoid: strs(r.avoid, limits.avoid), unreleased: strs(r.unreleased, limits.unreleased),
+    // 승인한 한 줄은 사용자만 적는다(모델 출력에 섞여 와도 받지 않는다).
+    ...(limits === EDIT_LIMITS ? { oneLinerKo: String(r.oneLinerKo ?? "").trim(), oneLinerEn: String(r.oneLinerEn ?? "").trim() } : {}) };
 }
 
 function merged(row: typeof schema.repoProfiles.$inferSelect): RepoProfileView {

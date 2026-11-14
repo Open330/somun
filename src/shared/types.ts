@@ -174,6 +174,9 @@ export type RepoProfile = {
   avoid: string[];
   /** 공개하지 않은 기능(운영에서 꺼 두었거나 아직 알리지 않을 것). 사용자만 적는다. README에 있어도 초안은 언급하지 않는다. */
   unreleased: string[];
+  /** 사용자가 승인한 첫 소개 한 줄(한국어·영어). 사용자만 적는다. 첫 소개 초안은 이 문장을 첫 문장으로 쓴다. */
+  oneLinerKo?: string;
+  oneLinerEn?: string;
 };
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 

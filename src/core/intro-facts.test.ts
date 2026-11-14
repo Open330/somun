@@ -82,3 +82,21 @@ describe("review fixes (PR #100)", () => {
     expect(rules("introduction")).toContain("ko_translationese");
   });
 });
+
+describe("approved one-liner (experiment b)", () => {
+  it("adds the author's line for the draft language only", async () => {
+    const { approvedOneLiner } = await import("./prompts.js");
+    const profile = { what: "", audience: "", claims: [], stage: "beta", limitations: [], naming: "Tend", avoid: [], oneLinerKo: "Tend는 기다리는 에이전트를 알려 줍니다.", oneLinerEn: "" };
+    expect(approvedOneLiner(profile, "ko")).toContain("Tend는 기다리는 에이전트를 알려 줍니다.");
+    expect(approvedOneLiner(profile, "en")).toBe("");
+    expect(approvedOneLiner(undefined, "ko")).toBe("");
+  });
+  it("flags a post that rewrites the approved line", async () => {
+    const { lintDraft } = await import("./lint.js");
+    const facts = { language: "ko", purpose: "introduction" as const, publicName: "aas", repo: "o/aas", oneLiners: { ko: "aas는 계정 여러 개를 함께 쓰게 해 줍니다." } };
+    const rule = (body: string) => lintDraft("x", undefined, body, [], facts).find((r) => r.rule === "approved_oneliner_changed")?.ok;
+    expect(rule("aas는 계정 여러 개를 함께 쓰게 해 줍니다.\nhttps://a.dev")).toBe(true);
+    expect(rule("aas는 계정 여러 개를 나란히 씁니다.\nhttps://a.dev")).toBe(false);
+    expect(rule("개발자를 위해 aas는 계정 여러 개를 함께 쓰게 해 줍니다.\nhttps://a.dev")).toBe(false);
+  });
+});

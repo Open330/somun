@@ -67,7 +67,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** 첫 소개 필수 전제어(evidence.introFacts). */ prerequisites?: string[]; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** 첫 소개 필수 전제어(evidence.introFacts). */ prerequisites?: string[]; /** 사용자가 승인한 첫 소개 한 줄(프로필). */ oneLiners?: { ko?: string; en?: string }; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -100,7 +100,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence), oneLiners: purpose === "introduction" && (profile?.oneLinerKo || profile?.oneLinerEn) ? { ko: profile?.oneLinerKo || undefined, en: profile?.oneLinerEn || undefined } : undefined };
 }
 
 /**
@@ -162,6 +162,13 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       const name = new RegExp(`(?<![\\p{Script=Latin}\\p{N}_])${escaped}(?![\\p{Script=Latin}\\p{N}_])`, "u");
       const present = name.test(normalizeForMatch(body.replace(/https?:\/\/\S+/gi, "")));
       results.push({ rule: "introduction_name_missing", ok: present, detail: present ? undefined : say(`소개 본문에 제품명 ${publicName}을 써 주세요. 링크나 제목만으로는 제품명을 확인할 수 없습니다.`, `Include the product name ${publicName} in the introduction body. A link or title alone does not identify the product.`), args: present ? undefined : { name: publicName } });
+    }
+    // 승인한 한 줄은 그대로 써야 한다. 모델이 고쳐 쓰면(나란히 쓰며, 기본 로그인 없이, MinIO 덧붙이기) 사람이 확인한 관계가 깨졌다(r18).
+    const approved = (facts.language?.toLowerCase().startsWith("ko") ? facts.oneLiners?.ko : facts.oneLiners?.en)?.trim();
+    if (approved) {
+      // 앞에 덧붙인 말("…개발자를 위해")도 승인 문장을 바꾼 것이다. 본문은 승인 문장으로 시작해야 한다.
+      const kept = normalizeForMatch(body).trimStart().startsWith(normalizeForMatch(approved));
+      results.push({ rule: "approved_oneliner_changed", ok: kept, detail: kept ? undefined : say(`승인한 한 줄 소개를 앞뒤에 덧붙이지 말고 그대로 써 주세요: “${approved}”`, `Use the approved one-liner exactly as written, with nothing before it: “${approved}”`), args: kept ? undefined : { phrases: approved } });
     }
     const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
     const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(prose)].map((s) => s.segment.trim()).filter(Boolean);

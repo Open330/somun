@@ -90,12 +90,12 @@ async function critiqueIntroduction(ctx: AppContext, job: Job, body: string, run
  * 그 목록과 남은 형식 위반을 고치게 한다. 그대로 게시할 만하다는 답이 나오거나 상한에 닿으면 멈춘다.
  * 형식 위반이 늘거나 새로 생긴 수정본은 버린다. 원문 발췌를 그대로 옮기는 초안은 고치지 않는다.
  */
-async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, current: LlmResult, run: Run): Promise<LlmResult> {
+async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, current: LlmResult, run: Run, rounds = INTRODUCTION_CRITIQUE_ROUNDS): Promise<LlmResult> {
   if (ctx.env.introductionEditor === false || draftPurposeOf(null, job.user) !== "introduction" || !["x", "threads"].includes(job.channel ?? "") || job.sourceExcerpt) return current;
   const settings = getSettings(ctx, ownerId);
   let before = draftIssues(ctx, ownerId, job, current.json);
   if (before === null) return current;
-  for (let round = 1; round <= INTRODUCTION_CRITIQUE_ROUNDS; round++) {
+  for (let round = 1; round <= rounds; round++) {
     try {
       const body = readJobDraft(job, current.json, settings.customChannels, settings.bannedPhrases).body;
       const { publishable, problems } = await critiqueIntroduction(ctx, job, body, run, round);
@@ -117,6 +117,40 @@ async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, curr
     }
   }
   return current;
+}
+
+/** 첫 소개 후보 수 상한과 후보 모드의 호출 상한(무료 flash-lite, 유료 0). */
+export const INTRODUCTION_CALL_BUDGET = 20;
+
+/**
+ * 첫 소개 후보 여러 개를 끝까지(생성 → 형식 보정 → 비평·수정 1라운드) 만들고, 완성본을 다시 비평해 점수가 가장 낮은 것을 고른다.
+ * 점수 = 비평 지적 수(한국어는 표현 비평 포함) + 형식 위반 수×2.
+ * 근거(2026-11-14 고정 측정): 같은 구성 3회의 완성본 중 하나라도 두 판정자를 통과한 칸이 9~10/10이었고, 이 점수로 고르면 7/10이었다.
+ * 후보를 덜 다듬은 채 고르면(12회 예산) 3.7/10으로 나빠졌다. 호출이 상한에 가까워지면 후보를 더 만들지 않는다.
+ */
+async function bestIntroduction(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: Run, calls: () => number, count: number): Promise<LlmResult> {
+  const settings = getSettings(ctx, ownerId);
+  const finish = async (res: LlmResult) => editIntroduction(ctx, ownerId, job, await repairDraft(ctx, ownerId, job, res, run), run, 1);
+  const scored: { res: LlmResult; score: number }[] = [];
+  const perCandidate: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const start = calls();
+    // 남은 예산이 지난 후보 하나에 든 호출보다 적으면 멈춘다.
+    if (i > 0 && INTRODUCTION_CALL_BUDGET - start < Math.max(...perCandidate)) break;
+    try {
+      const res = await finish(i === 0 ? first : await run(job.user, repairSchemaJson(job)));
+      const issues = draftIssues(ctx, ownerId, job, res.json);
+      if (issues === null) { perCandidate.push(calls() - start); continue; }
+      const critique = await critiqueIntroduction(ctx, job, readJobDraft(job, res.json, settings.customChannels, settings.bannedPhrases).body, run, 0);
+      scored.push({ res, score: critique.problems.length + issues.length * 2 });
+    } catch (err) {
+      ctx.log.warn({ jobId: job.id, candidate: i, err: err instanceof Error ? err.message : String(err) }, "introduction candidate failed");
+    }
+    perCandidate.push(calls() - start);
+  }
+  ctx.log.info({ jobId: job.id, scores: scored.map((c) => c.score), perCandidate }, "introduction candidates");
+  if (!scored.length) return first;
+  return scored.reduce((a, b) => (b.score < a.score ? b : a)).res;
 }
 
 /** 직전에 처리한 소유자. 다음 차례는 그 뒤 소유자부터라 한 사람의 대기열이 다른 사람을 막지 않는다. */
@@ -180,8 +214,13 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
         };
         // 보정·편집도 같은 모델(~/.agents/AI_API.md: 문장 생성처럼 품질이 값어치를 하는 단계만 3.7-flash). 개인 키·다른 제공사는 사용자가 고른 모델 그대로.
         const run: Run = (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); };
-        res = await repairDraft(ctx, ownerId, job, res, run);
-        res = await editIntroduction(ctx, ownerId, job, res, run);
+        const candidates = ctx.env.introCandidates ?? 1;
+        if (candidates > 1 && ctx.env.introductionEditor !== false && introFactsEligible(ctx, ownerId, job)) {
+          res = await bestIntroduction(ctx, ownerId, job, res, run, () => calls, candidates);
+        } else {
+          res = await repairDraft(ctx, ownerId, job, res, run);
+          res = await editIntroduction(ctx, ownerId, job, res, run);
+        }
       }
       ctx.log.info({ jobId: job.id, kind: job.kind, calls }, "generation calls");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
