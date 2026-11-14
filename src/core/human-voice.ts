@@ -78,14 +78,16 @@ const KO_TRANSLATIONESE = /상호\s?작용|[을를]\s?통해|[가-힣]\s?때가\
 /** 첫 소개에서만 보는 번역투(업데이트 글의 "다른 사용자의 세션"은 정당한 표현이다). */
 const KO_TRANSLATIONESE_INTRO = /수행|[가-힣]하여(?=\s)|사용자의|[\u3040-\u30ff\u4e00-\u9fff]+/gu;
 const KO_PERCEIVE = /(?:봅니다|파악합니다|(?:쓸|사용할|볼|확인할|전환할)\s?수\s?있습니다)[.。]?\s*$/u;
+/** 독자·사람이 주어로 드러난 문장("다른 사용자가 …")은 제품의 행동이 아니다. */
+const READER_SUBJECT = /(?:사용자|독자|개발자|사람|여러분|누구|팀)(?:들)?(?:이|가|도|나)\s/u;
 const KO_CAUSATIVE = /게\s?(?:해\s?)?(?:줍니다|합니다|돕습니다|만듭니다)|도록/u;
 /** 제품이 주어(또는 생략된 주어)인 문장이 독자의 행동으로 끝나거나, 제품 주제 아래 다른 주체(Claude가)가 행동하는 문장. */
 export function koSubjectMismatch(statements: string[], name: string): string[] {
   const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const topic = new RegExp(`^${n}\\s?[은는]\\s`, "iu");
+  const topic = new RegExp(`^${n}\\s?[은는이가]\\s`, "iu");
   return statements.filter((s, i) => {
     if (KO_CAUSATIVE.test(s)) return false;
-    const product = topic.test(s) || (i > 0 && !/^[가-힣A-Za-z]+[이가]\s/u.test(s) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
+    const product = topic.test(s) || (i > 0 && !READER_SUBJECT.test(s) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
     return (product && KO_PERCEIVE.test(s)) || (topic.test(s) && /(?:Claude|Codex)(?:와\s?(?:Claude|Codex))?가\s/u.test(s));
   });
 }

@@ -63,6 +63,8 @@ describe("review fixes (PR #100)", () => {
     const { koSubjectMismatch } = await import("./human-voice.js");
     expect(koSubjectMismatch(["Tool은 로그를 모아 줍니다.", "사용자가 결과를 확인할 수 있습니다."], "Tool")).toEqual([]);
     expect(koSubjectMismatch(["ripgrep은 파일에서 일치하는 줄을 찾습니다."], "ripgrep")).toEqual([]);
+    expect(koSubjectMismatch(["Tool은 로그를 모아 줍니다.", "다른 사용자가 결과를 확인할 수 있습니다."], "Tool")).toEqual([]);
+    expect(koSubjectMismatch(["aas는 계정을 전환합니다.", "aas가 여러 계정을 번갈아 가며 쓸 수 있습니다."], "aas")).toHaveLength(1);
   });
   it("ignores stored facts from an older source", async () => {
     const { draftLintFacts } = await import("./lint.js");
