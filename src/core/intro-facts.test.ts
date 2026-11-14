@@ -42,3 +42,14 @@ describe("deterministic candidate checks", () => {
 
 });
 
+
+describe("Korean subject and action", () => {
+  it("flags a product doing the reader's or another agent's action, allows causative phrasing", async () => {
+    const { koSubjectMismatch } = await import("./human-voice.js");
+    expect(koSubjectMismatch(["Haejo는 Mac에서 Claude와 Codex가 앱을 열고 결과를 확인합니다."], "Haejo")).toHaveLength(1);
+    expect(koSubjectMismatch(["aas는 여러 계정을 번갈아 가며 쓸 수 있습니다."], "aas")).toHaveLength(1);
+    expect(koSubjectMismatch(["BarShelf는 정보를 아이콘 하나 뒤에 모읍니다.", "메뉴바 앱이 없던 도구도 같은 자리에서 봅니다."], "BarShelf")).toHaveLength(1);
+    expect(koSubjectMismatch(["Haejo는 Claude와 Codex가 Mac 앱을 대신 쓰게 해 줍니다."], "Haejo")).toEqual([]);
+    expect(koSubjectMismatch(["Tend는 기다리는 에이전트를 알려 줍니다."], "Tend")).toEqual([]);
+  });
+});

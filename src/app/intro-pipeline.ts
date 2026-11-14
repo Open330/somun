@@ -49,7 +49,8 @@ export async function introFactsHint(ctx: AppContext, ownerId: string, job: Job,
   ctx.log.info({ jobId: job.id, prerequisites: facts.prerequisites.map((p) => p.term), actions: facts.actions.length, cached }, "introduction facts");
   return [
     facts.prerequisites.length ? `## Required words\nName where the product works using these words from the source: ${facts.prerequisites.map((p) => p.term).join(", ")}. Say it as the place it works, not as an installation requirement.` : "",
-    facts.actions[0] ? `## Core (must be conveyed in full)\n"${facts.actions[0].quote}"` : "",
+    ev.description ? `## Core claim (the product description; if it has two parts, such as "X — and for Y", convey both)\n"${ev.description}"` : "",
+    facts.actions[0] ? `## Core action (must be conveyed in full)\n"${facts.actions[0].quote}"` : "",
     facts.problem ? `## Problem as the source states it (if you use it, keep every place and relation as written; do not merge separate places into one)\n"${facts.problem.quote}"` : "",
     "## Source priority\nIf the repository description and the README or homepage disagree, follow the README and homepage; the description may be outdated.",
   ].filter(Boolean).map((block) => `\n\n${block}`).join("");

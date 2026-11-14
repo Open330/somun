@@ -1013,6 +1013,7 @@ export const en: Record<string, string> = {
   "전제 누락": "Missing prerequisite",
   "근거 없는 수량": "Unsupported quantity",
   번역투: "Translationese",
+  "주어·행동 불일치": "Subject and action mismatch",
   조회수: "Views",
   "언어 불일치": "Wrong language",
   "선택한 언어({language})가 아닌 한국어 문장이 있습니다: {sentences}":

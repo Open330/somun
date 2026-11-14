@@ -75,6 +75,18 @@ const danglingEn = (sentence: string) => {
 // "될 때가 있습니다"도 같은 정보 없는 문장이다(r9a BarShelf 후보 4개가 모두 이 문장으로 탈락).
 // 수행·~하여·사용자의: 판정 모음에서 이 표현이 든 한국어 초안 34개 중 1개만 두 판정자를 통과했다. 가나·한자는 모델이 섞어 쓴 글자(코ディング).
 const KO_TRANSLATIONESE = /상호\s?작용|[을를]\s?통해|[가-힣]\s?때가\s?있(?:습니다|어요)|하는\s?경우가\s?(?:있|많)(?:습니다|어요)|에\s?있어서|실행\s?가능한\s?통찰|및\s?기타|[을를]\s?점수\s?매기|수행|[가-힣]하여(?=\s)|사용자의|[\u3040-\u30ff\u4e00-\u9fff]+/gu;
+const KO_PERCEIVE = /(?:봅니다|파악합니다|찾습니다|(?:쓸|사용할|볼|확인할|전환할)\s?수\s?있습니다)[.。]?\s*$/u;
+const KO_CAUSATIVE = /게\s?(?:해\s?)?(?:줍니다|합니다|돕습니다|만듭니다)|도록/u;
+/** 제품이 주어(또는 생략된 주어)인 문장이 독자의 행동으로 끝나거나, 제품 주제 아래 다른 주체(Claude가)가 행동하는 문장. */
+export function koSubjectMismatch(statements: string[], name: string): string[] {
+  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const topic = new RegExp(`^${n}\\s?[은는]\\s`, "iu");
+  return statements.filter((s, i) => {
+    if (KO_CAUSATIVE.test(s)) return false;
+    const product = topic.test(s) || (i > 0 && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
+    return (product && KO_PERCEIVE.test(s)) || (topic.test(s) && /(?:Claude|Codex)(?:와\s?(?:Claude|Codex))?가\s/u.test(s));
+  });
+}
 /** 서술어 없이 끝난 한국어 문장("…상호작용할 때.", "…를 위해."). 2026-11-12 실측 3회차. */
 const FRAGMENT_KO = /(?:때|위해|통해|경우|위한|면서|으며|하며|하고|에서|으로|에게)\s*[.。]?\s*$/u;
 const DANGLING_KO = /^[^.?!]{0,80}(?:하려는 분을 위해|하려는 분들을 위해|하려면|하고 싶다면|하고 싶을 때)/u;
@@ -125,6 +137,12 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
       const commands = [...new Set([...body.replace(URL, "").matchAll(new RegExp(`\`${cli}\\s+([a-z][a-z-]*)[^\`]*\`|(?<![\\w-])${cli}\\s+([a-z][a-z-]*)(?=[가-힣])`, "gu"))].map((m) => (m[1] ?? m[2]).toLowerCase()))];
       results.push({ rule: "command_list", ok: commands.length < 2, detail: commands.length >= 2 ? say(`명령어를 ${commands.length}개 나열했습니다(${commands.join(", ")}). 하는 일을 설명하고 명령은 하나만 남겨 주세요.`, `The post lists ${commands.length} commands (${commands.join(", ")}). Describe what it does and keep at most one command.`) : undefined, args: commands.length >= 2 ? { commands: commands.join(", ") } : undefined });
     }
+    if (korean && introduction && name) {
+      // 제품이 주어인데 독자가 하는 일(봅니다·쓸 수 있습니다)이나 다른 주체의 행동(Claude가 … 확인합니다)으로 끝나는 문장(고정 점검표 C4).
+      // 판정 모음 한국어 초안 147개에서 이 규칙에 걸린 18개 중 2개만 두 판정자를 통과했다(걸리지 않은 초안은 129개 중 33개).
+      const mismatched = koSubjectMismatch(statements, name);
+      results.push({ rule: "ko_subject_mismatch", ok: mismatched.length === 0, detail: mismatched.length ? say(`주어와 행동이 맞지 않습니다: ${mismatched.map((x) => `“${x}”`).join(" ")} ${name}가 하는 일(알려 줍니다, 모아 줍니다, 보여 줍니다)로 쓰거나, 독자나 다른 도구가 하는 일이면 "${name}로 …할 수 있습니다", "…하게 해 줍니다"로 써 주세요.`, `Subject and action do not match: ${mismatched.map((x) => `“${x}”`).join(" ")}`) : undefined, args: mismatched.length ? { phrases: mismatched.join(" / "), name } : undefined });
+    }
     if (korean) {
       // 번역투와 정보 없는 첫 문장(고정 점검표 C4·C5). 표면 패턴만 본다.
       const translationese = [...new Set(statements.flatMap((sentence) => [...sentence.matchAll(KO_TRANSLATIONESE)].map((m) => m[0])))];
@@ -166,4 +184,4 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
 }
 
 /** 사람 말투 규칙. 생성 결과의 문장을 고치게 하는 규칙이라, 다시 쓸 원자료(홈페이지 단락)를 고르는 데는 쓰지 않는다. */
-export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment", "prerequisite_missing", "unsupported_quantity", "ko_translationese"]);
+export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment", "prerequisite_missing", "unsupported_quantity", "ko_translationese", "ko_subject_mismatch"]);

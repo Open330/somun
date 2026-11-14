@@ -252,6 +252,7 @@ export function LintBadges({ lint }: { lint: { rule: string; ok: boolean; detail
     prerequisite_missing: t("전제 누락"),
     unsupported_quantity: t("근거 없는 수량"),
     ko_translationese: t("번역투"),
+    ko_subject_mismatch: t("주어·행동 불일치"),
     feature_list: t("기능 목록"),
     self_promotion: t("홍보 말투"),
     register_mixed: t("문체 혼용"),
