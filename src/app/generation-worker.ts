@@ -63,12 +63,34 @@ async function repairDraft(ctx: AppContext, ownerId: string, job: Job, first: Ll
 /** 비평·수정 반복 상한. */
 export const INTRODUCTION_CRITIQUE_ROUNDS = 2;
 
+type Run = (user: string, schemaJson?: string, system?: string) => Promise<LlmResult>;
+type Critique = { publishable: boolean; problems: string[] };
+
+/** 원문 대조 비평 + (한국어면) 표현 전용 비평. 표현 비평은 인용이 초안에 실제로 있는 지적만 쓴다. 표현 비평이 실패해도 일반 비평으로 계속한다. */
+async function critiqueIntroduction(ctx: AppContext, job: Job, body: string, run: Run, round: number): Promise<Critique> {
+  const critique = (await run(introductionCritiquePrompt(job.user, body, job.lang ?? "ko"), JSON.stringify(INTRODUCTION_CRITIC_SCHEMA), INTRODUCTION_CRITIC_SYSTEM)).json as { publishable?: unknown; problems?: unknown };
+  const problems = (Array.isArray(critique?.problems) ? critique.problems : []).filter((p): p is string => typeof p === "string" && p.trim().length > 0).slice(0, 8);
+  if ((job.lang ?? "ko").toLowerCase().startsWith("ko")) {
+    // 한국어 표현만 따로 본다. 사실·형식까지 보는 비평은 flash-lite에서 한국어 문제를 거의 잡지 못했다(r12).
+    try {
+      const ko = (await run(koreanCritiquePrompt(body), JSON.stringify(KOREAN_CRITIC_SCHEMA), KOREAN_CRITIC_SYSTEM)).json as { problems?: unknown };
+      for (const p of Array.isArray(ko?.problems) ? ko.problems.slice(0, 6) : []) {
+        const { quote, why, fix } = (p ?? {}) as { quote?: unknown; why?: unknown; fix?: unknown };
+        if (typeof quote === "string" && quote.trim() && body.includes(quote.trim())) problems.push(`“${quote.trim()}”: ${typeof why === "string" ? why : ""}${typeof fix === "string" && fix.trim() ? ` → ${fix.trim()}` : ""}`);
+      }
+    } catch (err) {
+      ctx.log.warn({ jobId: job.id, round, err: err instanceof Error ? err.message : String(err) }, "korean critique failed");
+    }
+  }
+  return { publishable: critique?.publishable === true, problems };
+}
+
 /**
  * 첫 소개(X·Threads)의 비평·수정 단계(core/introduction-editor). 같은 모델이 독립 검토 기준으로 원문과 대조해 문제를 인용해 적고,
  * 그 목록과 남은 형식 위반을 고치게 한다. 그대로 게시할 만하다는 답이 나오거나 상한에 닿으면 멈춘다.
  * 형식 위반이 늘거나 새로 생긴 수정본은 버린다. 원문 발췌를 그대로 옮기는 초안은 고치지 않는다.
  */
-async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, current: LlmResult, run: (user: string, schemaJson?: string, system?: string) => Promise<LlmResult>): Promise<LlmResult> {
+async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, current: LlmResult, run: Run): Promise<LlmResult> {
   if (ctx.env.introductionEditor === false || draftPurposeOf(null, job.user) !== "introduction" || !["x", "threads"].includes(job.channel ?? "") || job.sourceExcerpt) return current;
   const settings = getSettings(ctx, ownerId);
   let before = draftIssues(ctx, ownerId, job, current.json);
@@ -76,23 +98,10 @@ async function editIntroduction(ctx: AppContext, ownerId: string, job: Job, curr
   for (let round = 1; round <= INTRODUCTION_CRITIQUE_ROUNDS; round++) {
     try {
       const body = readJobDraft(job, current.json, settings.customChannels, settings.bannedPhrases).body;
-      const critique = (await run(introductionCritiquePrompt(job.user, body, job.lang ?? "ko"), JSON.stringify(INTRODUCTION_CRITIC_SCHEMA), INTRODUCTION_CRITIC_SYSTEM)).json as { publishable?: unknown; problems?: unknown };
-      const problems = (Array.isArray(critique?.problems) ? critique.problems : []).filter((p): p is string => typeof p === "string" && p.trim().length > 0).slice(0, 8);
-      if ((job.lang ?? "ko").toLowerCase().startsWith("ko")) {
-        // 한국어 표현만 따로 본다. 실패해도 일반 비평 결과로 계속한다.
-        try {
-          const ko = (await run(koreanCritiquePrompt(body), JSON.stringify(KOREAN_CRITIC_SCHEMA), KOREAN_CRITIC_SYSTEM)).json as { problems?: unknown };
-          for (const p of Array.isArray(ko?.problems) ? ko.problems.slice(0, 6) : []) {
-            const { quote, why, fix } = (p ?? {}) as { quote?: unknown; why?: unknown; fix?: unknown };
-            if (typeof quote === "string" && quote.trim() && body.includes(quote.trim())) problems.push(`“${quote.trim()}”: ${typeof why === "string" ? why : ""}${typeof fix === "string" && fix.trim() ? ` → ${fix.trim()}` : ""}`);
-          }
-        } catch (err) {
-          ctx.log.warn({ jobId: job.id, round, err: err instanceof Error ? err.message : String(err) }, "korean critique failed");
-        }
-      }
+      const { publishable, problems } = await critiqueIntroduction(ctx, job, body, run, round);
       const remaining = before.map((issue) => `${issue.rule}${issue.detail ? `: ${issue.detail}` : ""}`);
-      ctx.log.info({ jobId: job.id, round, publishable: critique?.publishable === true, problems, lint: before.map((l) => l.rule) }, "introduction critique");
-      if (critique?.publishable === true && !problems.length && !before.length) break;
+      ctx.log.info({ jobId: job.id, round, publishable, problems, lint: before.map((l) => l.rule) }, "introduction critique");
+      if (publishable && !problems.length && !before.length) break;
       if (!problems.length && !remaining.length) break;
       const edited = await run(introductionEditPrompt(job.user, body, job.lang ?? "ko", [...problems, ...remaining], koreanRegister(channelSpec(job.channel as Channel, settings.customChannels).identity?.tone)), job.schemaJson, INTRODUCTION_EDITOR_SYSTEM);
       const after = draftIssues(ctx, ownerId, job, edited.json);
@@ -170,8 +179,9 @@ export async function processServerJob(ctx: AppContext, signal?: AbortSignal): P
           catch (err) { if (!(err instanceof SharedQuotaError)) recordLlmUsage(ctx, ownerId, cfg, t, { failedModel: modelFor(cfg, modelKind), error: err }); throw err; }
         };
         // 보정·편집도 같은 모델(~/.agents/AI_API.md: 문장 생성처럼 품질이 값어치를 하는 단계만 3.7-flash). 개인 키·다른 제공사는 사용자가 고른 모델 그대로.
-        res = await repairDraft(ctx, ownerId, job, res, (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); });
-        res = await editIntroduction(ctx, ownerId, job, res, (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); });
+        const run: Run = (user, schemaJson, system) => { calls++; return extra(user, schemaJson, system); };
+        res = await repairDraft(ctx, ownerId, job, res, run);
+        res = await editIntroduction(ctx, ownerId, job, res, run);
       }
       ctx.log.info({ jobId: job.id, kind: job.kind, calls }, "generation calls");
       completeJob(ctx, ownerId, job.id, { claimToken: claim.claimToken, resultJson: JSON.stringify(res.json), model: `${res.provider}/${res.model}${res.keyLabel ? `@${res.keyLabel}` : ""}` }, "server");
