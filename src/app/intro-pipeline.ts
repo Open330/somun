@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { readmeBased } from "../core/condition-review.js";
-import { framingText, FACTS_SCHEMA, FACTS_SYSTEM, factsPrompt, verifyFacts, type IntroFacts } from "../core/intro-facts.js";
+import { framingText, FACTS_SCHEMA, FACTS_SYSTEM, factsPrompt, introFactsHash, introFactsSource, verifyFacts, type IntroFacts } from "../core/intro-facts.js";
 import { draftLintFacts } from "../core/lint.js";
 import { draftPurposeOf, instructionOf } from "../core/prompts.js";
 import { schema } from "../infra/db/index.js";
@@ -21,7 +20,6 @@ export function introFactsEligible(ctx: AppContext, ownerId: string, job: Job): 
   return Boolean(row && readmeBased(row.evidence as Evidence));
 }
 
-const sourceOf = (e: Evidence) => [e.description ? `Description: ${e.description}` : "", e.homepageSource?.status === "ok" && e.homepageSource.text ? `Homepage:\n${e.homepageSource.text}` : "", `README:\n${e.readmeForChecks || e.readmeExcerpt || ""}`].filter(Boolean).join("\n\n");
 
 /**
  * 첫 소개 생성에 덧붙일 사실 힌트. 원문에서 사실을 뽑아(인용 문자열 검증) 필수 전제어·핵심 동작·문제 인용을 원래 소개 프롬프트에 붙인다.
@@ -35,8 +33,8 @@ export async function introFactsHint(ctx: AppContext, ownerId: string, job: Job,
   const ev = row.evidence as Evidence;
   const profile = getProfile(ctx, ownerId, row.repo)?.profile;
   const name = draftLintFacts({ title: row.title, type: row.type, evidence: ev }, profile, "introduction").publicName ?? row.repo.split("/").at(-1)!;
-  const source = sourceOf(ev);
-  const hash = createHash("sha256").update(name).update("\n").update(source).digest("hex").slice(0, 16);
+  const source = introFactsSource(ev);
+  const hash = introFactsHash(name, ev);
   let facts: IntroFacts | undefined = ev.introFacts?.hash === hash ? ev.introFacts.facts : undefined;
   const cached = Boolean(facts);
   if (!facts) {

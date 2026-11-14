@@ -1,3 +1,4 @@
+import { introFactsHash } from "./intro-facts.js";
 import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
@@ -99,7 +100,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" ? candidate.evidence.introFacts?.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**

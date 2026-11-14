@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { normalizeForMatch } from "./text-match.js";
 
 /**
@@ -100,7 +101,7 @@ export function missingPrerequisites(body: string, facts: Pick<IntroFacts, "prer
   const text = norm(body);
   return facts.prerequisites.map((p) => p.term).filter((term) => {
     const key = norm(term);
-    const aliases = lang.toLowerCase().startsWith("ko") ? KO_ALIASES[key] ?? [] : [];
+    const aliases = lang.toLowerCase().startsWith("ko") && Object.hasOwn(KO_ALIASES, key) ? KO_ALIASES[key] : [];
     return !text.includes(key) && !aliases.some((a) => text.includes(norm(a)));
   });
 }
@@ -112,6 +113,18 @@ export const VAGUE_MARKETING = /\b(?:actionable insights?|valuable insights?|unl
 const QUANTITY = /\b(?:a dozen|dozens|hundreds|thousands|millions|countless|every single|the best|the fastest|the only)\b|수십|수백|수천|수많은|가장\s?(?:빠른|좋은|쉬운|강력한|편한|많이\s?쓰는)|최고의|유일한|모든 것/giu;
 export function unsupportedQuantities(body: string, source: string): string[] {
   const src = norm(source);
+  // 링크 주소 속 낱말(…/seamless)은 글의 주장이 아니다.
+  body = body.replace(/https?:\/\/\S+/g, " ");
   const quantities = [...new Set([...body.matchAll(QUANTITY)].map((m) => m[0]))].filter((w) => !src.includes(norm(w)));
   return [...quantities, ...new Set([...body.matchAll(VAGUE_MARKETING)].map((m) => m[0]))];
+}
+
+type FactsEvidence = { description?: string; homepageSource?: { status?: string; text?: string }; readmeForChecks?: string; readmeExcerpt?: string };
+/** 사실 추출에 넣는 원문. */
+export function introFactsSource(e: FactsEvidence): string {
+  return [e.description ? `Description: ${e.description}` : "", e.homepageSource?.status === "ok" && e.homepageSource.text ? `Homepage:\n${e.homepageSource.text}` : "", `README:\n${e.readmeForChecks || e.readmeExcerpt || ""}`].filter(Boolean).join("\n\n");
+}
+/** 저장한 사실이 지금 원문·이름에서 뽑은 것인지 가리는 열쇠. 원문이 바뀌면 저장한 사실은 쓰지 않는다. */
+export function introFactsHash(name: string, e: FactsEvidence): string {
+  return createHash("sha256").update(name).update("\n").update(introFactsSource(e)).digest("hex").slice(0, 16);
 }

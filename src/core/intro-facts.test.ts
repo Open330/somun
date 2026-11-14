@@ -53,3 +53,29 @@ describe("Korean subject and action", () => {
     expect(koSubjectMismatch(["Tend는 기다리는 에이전트를 알려 줍니다."], "Tend")).toEqual([]);
   });
 });
+
+describe("review fixes (PR #100)", () => {
+  it("does not crash on inherited alias keys and ignores words inside links", () => {
+    expect(missingPrerequisites("Tool은 상품을 검색합니다.", { prerequisites: [{ term: "Constructor", quote: "" }] }, "ko")).toEqual(["Constructor"]);
+    expect(unsupportedQuantities("Tool indexes local files.\nhttps://github.com/acme/seamless", "")).toEqual([]);
+  });
+  it("accepts an explicit subject and the product's own search action", async () => {
+    const { koSubjectMismatch } = await import("./human-voice.js");
+    expect(koSubjectMismatch(["Tool은 로그를 모아 줍니다.", "사용자가 결과를 확인할 수 있습니다."], "Tool")).toEqual([]);
+    expect(koSubjectMismatch(["ripgrep은 파일에서 일치하는 줄을 찾습니다."], "ripgrep")).toEqual([]);
+  });
+  it("ignores stored facts from an older source", async () => {
+    const { draftLintFacts } = await import("./lint.js");
+    const { introFactsHash } = await import("./intro-facts.js");
+    const ev = { repo: "o/tool", repoUrl: "", readmeForChecks: "Tool now runs in the browser." };
+    const facts = { prerequisites: [{ term: "tmux", quote: "runs in tmux" }], actions: [] };
+    expect(draftLintFacts({ title: "", type: "repo", evidence: { ...ev, introFacts: { hash: "stale", facts } } }, undefined, "introduction").prerequisites).toBeUndefined();
+    expect(draftLintFacts({ title: "", type: "repo", evidence: { ...ev, introFacts: { hash: introFactsHash("tool", ev), facts } } }, undefined, "introduction").prerequisites).toEqual(["tmux"]);
+  });
+  it("keeps update posts free of introduction-only translationese rules", async () => {
+    const { lintDraft } = await import("./lint.js");
+    const rules = (purpose: "update" | "introduction") => lintDraft("x", undefined, "Tool 2.0은 다른 사용자의 세션을 숨깁니다. https://a.dev", [], { language: "ko", purpose, publicName: "Tool", repo: "o/tool" }).filter((r) => !r.ok).map((r) => r.rule);
+    expect(rules("update")).not.toContain("ko_translationese");
+    expect(rules("introduction")).toContain("ko_translationese");
+  });
+});

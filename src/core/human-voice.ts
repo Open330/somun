@@ -74,8 +74,10 @@ const danglingEn = (sentence: string) => {
 // 두 판정자가 일관되게 탈락시킨 표현만 둔다. "해당", "나란히 쓰다" 같은 경계 표현은 좋은 후보까지 막아 뺐다(r7a 후보 판정).
 // "될 때가 있습니다"도 같은 정보 없는 문장이다(r9a BarShelf 후보 4개가 모두 이 문장으로 탈락).
 // 수행·~하여·사용자의: 판정 모음에서 이 표현이 든 한국어 초안 34개 중 1개만 두 판정자를 통과했다. 가나·한자는 모델이 섞어 쓴 글자(코ディング).
-const KO_TRANSLATIONESE = /상호\s?작용|[을를]\s?통해|[가-힣]\s?때가\s?있(?:습니다|어요)|하는\s?경우가\s?(?:있|많)(?:습니다|어요)|에\s?있어서|실행\s?가능한\s?통찰|및\s?기타|[을를]\s?점수\s?매기|수행|[가-힣]하여(?=\s)|사용자의|[\u3040-\u30ff\u4e00-\u9fff]+/gu;
-const KO_PERCEIVE = /(?:봅니다|파악합니다|찾습니다|(?:쓸|사용할|볼|확인할|전환할)\s?수\s?있습니다)[.。]?\s*$/u;
+const KO_TRANSLATIONESE = /상호\s?작용|[을를]\s?통해|[가-힣]\s?때가\s?있(?:습니다|어요)|하는\s?경우가\s?(?:있|많)(?:습니다|어요)|에\s?있어서|실행\s?가능한\s?통찰|및\s?기타|[을를]\s?점수\s?매기/gu;
+/** 첫 소개에서만 보는 번역투(업데이트 글의 "다른 사용자의 세션"은 정당한 표현이다). */
+const KO_TRANSLATIONESE_INTRO = /수행|[가-힣]하여(?=\s)|사용자의|[\u3040-\u30ff\u4e00-\u9fff]+/gu;
+const KO_PERCEIVE = /(?:봅니다|파악합니다|(?:쓸|사용할|볼|확인할|전환할)\s?수\s?있습니다)[.。]?\s*$/u;
 const KO_CAUSATIVE = /게\s?(?:해\s?)?(?:줍니다|합니다|돕습니다|만듭니다)|도록/u;
 /** 제품이 주어(또는 생략된 주어)인 문장이 독자의 행동으로 끝나거나, 제품 주제 아래 다른 주체(Claude가)가 행동하는 문장. */
 export function koSubjectMismatch(statements: string[], name: string): string[] {
@@ -83,7 +85,7 @@ export function koSubjectMismatch(statements: string[], name: string): string[] 
   const topic = new RegExp(`^${n}\\s?[은는]\\s`, "iu");
   return statements.filter((s, i) => {
     if (KO_CAUSATIVE.test(s)) return false;
-    const product = topic.test(s) || (i > 0 && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
+    const product = topic.test(s) || (i > 0 && !/^[가-힣A-Za-z]+[이가]\s/u.test(s) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
     return (product && KO_PERCEIVE.test(s)) || (topic.test(s) && /(?:Claude|Codex)(?:와\s?(?:Claude|Codex))?가\s/u.test(s));
   });
 }
@@ -145,7 +147,7 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
     }
     if (korean) {
       // 번역투와 정보 없는 첫 문장(고정 점검표 C4·C5). 표면 패턴만 본다.
-      const translationese = [...new Set(statements.flatMap((sentence) => [...sentence.matchAll(KO_TRANSLATIONESE)].map((m) => m[0])))];
+      const translationese = [...new Set(statements.flatMap((sentence) => [...sentence.matchAll(KO_TRANSLATIONESE), ...(introduction ? sentence.matchAll(KO_TRANSLATIONESE_INTRO) : [])].map((m) => m[0])))];
       results.push({ rule: "ko_translationese", ok: translationese.length === 0, detail: translationese.length ? say(`번역투나 정보 없는 표현: ${translationese.join(", ")}. 우리말로 구체적으로 바꿔 주세요.`, `Translationese or information-free wording: ${translationese.join(", ")}.`) : undefined, args: translationese.length ? { phrases: translationese.join(", ") } : undefined });
       const fragments = statements.filter((sentence) => /[가-힣]/.test(sentence) && !/[?？]["'”’)]*$/.test(sentence) && FRAGMENT_KO.test(sentence));
       results.push({ rule: "sentence_fragment", ok: fragments.length === 0, detail: fragments.length ? say(`서술어 없이 끝난 문장입니다: ${fragments.map((x) => `“${x}”`).join(" ")} 완결된 문장으로 써 주세요.`, `A sentence ends without a predicate: ${fragments.map((x) => `“${x}”`).join(" ")} Write a complete sentence.`) : undefined, args: fragments.length ? { phrases: fragments.join(" / ") } : undefined });
