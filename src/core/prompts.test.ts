@@ -248,7 +248,7 @@ it("retains an explicitly stricter builtin sentence budget for introductions", (
 
 it("uses introduction space for distinctive reader value rather than a generic setup summary", () => {
   const prompt = draftPrompt(candidate, "threads", "ko", [], undefined, { introduction: true });
-  expect(prompt.user).toContain("제품 이름을 주어로 한 문장");
+  expect(prompt.user).toContain("첫 문장은 제품 이름을 주어로 시작합니다");
   expect(prompt.user).toContain("무엇을 하고 독자에게 무엇이 보이는지");
   expect(prompt.user).toContain("설치 요구 사항·지원 OS·버전·하드웨어·가격");
   expect(prompt.system).toContain("need no editing before posting");
@@ -262,7 +262,7 @@ it.each(["x", "threads"] as const)("keeps the core product task ahead of a narro
   const intro = draftPrompt(c, channel, "ko", [], undefined, { introduction: true });
   expect(intro.user).toContain(c.evidence.readmeForChecks);
   expect(intro.user).not.toContain(c.evidence.releaseNotes);
-  expect(intro.user).toContain("제품 이름을 주어로 한 문장");
+  expect(intro.user).toContain("첫 문장은 제품 이름을 주어로 시작합니다");
   expect(intro.user).toContain("Historical PR changes belong in updates");
   expect(intro.user).toContain("what is this product, when would the reader need it");
   expect(intro.user).toContain("명령어 여러 개 나열");

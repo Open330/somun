@@ -1,3 +1,4 @@
+import { introFactsHash } from "./intro-facts.js";
 import { postLength } from "./post-length.js";
 import { normalizeForMatch } from "./text-match.js";
 import { channelSpec, draftChannelSpec, type Channel, type ChannelSpec } from "./channels.js";
@@ -66,7 +67,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** 첫 소개 필수 전제어(evidence.introFacts). */ prerequisites?: string[]; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -80,7 +81,7 @@ export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"
 const TRANSLITERATED: [RegExp, string][] = ([
   ["엑스", "X"], ["링크드인", "LinkedIn"], ["쇼 ?(?:에이치엔|에이치 엔|핸|에이낸)", "Show HN"], ["쇼 ?지엔", "Show GN"], ["긱 ?뉴스", "GeekNews"],
   ["깃 ?허브", "GitHub"], ["제미나이", "Gemini"], ["에이피아이", "API"], ["씨엘아이", "CLI"], ["엔피엠", "npm"], ["알에스에스", "RSS"],
-  ["클로드 ?코드", "Claude Code"], ["클로드", "Claude"], ["코덱스", "Codex"], ["타입스크립트", "TypeScript"],
+  ["클로드 ?코드", "Claude Code"], ["클로드", "Claude"], ["코덱스", "Codex"], ["러스트", "Rust"], ["파이썬", "Python"], ["자바스크립트", "JavaScript"], ["타입스크립트", "TypeScript"],
 ] as const).map(([ko, en]) => [new RegExp(`(?<![가-힣])${ko}(?=(?:에서|으로|에게|까지|처럼|보다|[와과는은이가를을에의도로만])?(?![가-힣]))`, "g"), en]);
 /**
  * Show GN 본문에 있어야 할 절(채널 규칙). 무엇을 했는지는 항상, 왜는 프로필에 만든 이유가 있을 때만, 한계는 근거에 한계가 있을 때만 요구한다.
@@ -99,7 +100,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence) };
 }
 
 /**

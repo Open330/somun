@@ -732,15 +732,20 @@ it("critiques an introduction against the sources, fixes the quoted problems, an
   const worse = { title: "", body: "지금 바로 b를 사용해 보세요! https://github.com/a/b" };
   const problem = { publishable: false, problems: ["\"파일 창\"만으로는 무엇을 여는지 알 수 없습니다(원문: 원격 폴더)."] };
   queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true });
-  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output(fixed)).mockResolvedValueOnce(output({ publishable: true, problems: [] }));
+  // 한국어 초안은 일반 비평 뒤 한국어 표현 비평을 한 번 더 거친다. 인용이 초안에 있는 지적만 편집에 넘긴다.
+  const korean = { problems: [{ quote: "창을 엽니다", why: "무엇을 여는지 모호합니다", fix: "폴더를 엽니다" }, { quote: "초안에 없는 인용구", why: "x", fix: "y" }] };
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output(korean)).mockResolvedValueOnce(output(fixed)).mockResolvedValueOnce(output({ publishable: true, problems: [] })).mockResolvedValueOnce(output({ problems: [] }));
   await processServerJob(ctx);
   const calls = vi.mocked(runLlm).mock.calls;
   expect(calls[1][1].system).toContain("strict independent editor");
-  expect(calls[2][1].user).toContain("원격 폴더");
-  expect(calls).toHaveLength(4);
+  expect(calls[2][1].system).toContain("한국어 원어민 교정자");
+  expect(calls[3][1].user).toContain("원격 폴더");
+  expect(calls[3][1].user).toContain("폴더를 엽니다");
+  expect(calls[3][1].user).not.toContain("초안에 없는 인용구");
+  expect(calls).toHaveLength(6);
   expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(fixed.body);
   queueStep(ctx, "local", "draft", cid, "x", "ko", { introduction: true, instruction: "다시" });
-  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output(worse));
+  vi.mocked(runLlm).mockReset().mockResolvedValueOnce(output(first)).mockResolvedValueOnce(output(problem)).mockResolvedValueOnce(output({ problems: [] })).mockResolvedValueOnce(output(worse));
   await processServerJob(ctx);
   expect(ctx.db.select().from(schema.drafts).all().at(-1)!.body).toBe(first.body);
 });

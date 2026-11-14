@@ -39,6 +39,8 @@ export type HomepageSource = {
 };
 
 export type Evidence = {
+  /** 첫 소개용으로 원문에서 뽑아 검증한 사실(app/intro-pipeline). hash가 원문과 맞을 때만 다시 쓴다. */
+  introFacts?: { hash: string; facts: import("../core/intro-facts.js").IntroFacts };
   repo: string; repoUrl: string; description?: string; version?: string; releaseNotes?: string; stars?: number; forks?: number;
   commitCount?: number; releaseCount?: number; firstReleaseAt?: string; language?: string; license?: string; homepage?: string;
   npmPackage?: string; npmMonthlyDownloads?: number; demoAsset?: string; limitations?: string[]; /** 한계의 출처. readme면 다음 수집 때 README 결과로 통째로 바뀐다. */ limitationsSource?: "readme" | "digest"; readmeExcerpt?: string;

@@ -1,5 +1,6 @@
 import { normalizeForMatch } from "./text-match.js";
 import { say as sayIn, type Locale } from "../shared/locale.js";
+import { missingPrerequisites, unsupportedQuantities } from "./intro-facts.js";
 
 /**
  * 사람이 쓴 글처럼 읽히는가. 2026-11-12 Threads 출시 글을 손으로 고친 다섯 가지를 규칙으로 옮겼다:
@@ -8,7 +9,7 @@ import { say as sayIn, type Locale } from "../shared/locale.js";
  */
 
 type Result = { rule: string; ok: boolean; detail?: string; args?: Record<string, string> };
-export type HumanVoiceFacts = { language?: string; editorInstruction?: string; sourceText?: string; why?: string; purpose?: "introduction" | "update" | null; publicName?: string; repo?: string };
+export type HumanVoiceFacts = { language?: string; editorInstruction?: string; sourceText?: string; why?: string; purpose?: "introduction" | "update" | null; publicName?: string; repo?: string; prerequisites?: string[] };
 
 /** 짧은 게시글 채널. 긴 글(Show HN·GN·블로그 개요)은 절과 목록이 형식의 일부다. */
 const POST_CHANNELS = new Set(["x", "threads", "linkedin"]);
@@ -70,6 +71,27 @@ const danglingEn = (sentence: string) => {
   const comma = sentence.indexOf(",");
   return comma < 0 || /^\s*(?:use|try|run|see|get|install|check|let|make|keep|open|start)\b/i.test(sentence.slice(comma + 1));
 };
+// 두 판정자가 일관되게 탈락시킨 표현만 둔다. "해당", "나란히 쓰다" 같은 경계 표현은 좋은 후보까지 막아 뺐다(r7a 후보 판정).
+// "될 때가 있습니다"도 같은 정보 없는 문장이다(r9a BarShelf 후보 4개가 모두 이 문장으로 탈락).
+// 수행·~하여·사용자의: 판정 모음에서 이 표현이 든 한국어 초안 34개 중 1개만 두 판정자를 통과했다. 가나·한자는 모델이 섞어 쓴 글자(코ディング).
+const KO_TRANSLATIONESE = /상호\s?작용|[을를]\s?통해|[가-힣]\s?때가\s?있(?:습니다|어요)|하는\s?경우가\s?(?:있|많)(?:습니다|어요)|에\s?있어서|실행\s?가능한\s?통찰|및\s?기타|[을를]\s?점수\s?매기/gu;
+/** 첫 소개에서만 보는 번역투(업데이트 글의 "다른 사용자의 세션"은 정당한 표현이다). */
+const KO_TRANSLATIONESE_INTRO = /수행|[가-힣]하여(?=\s)|사용자의|[\u3040-\u30ff\u4e00-\u9fff]+/gu;
+const KO_PERCEIVE = /(?:봅니다|파악합니다|(?:쓸|사용할|볼|확인할|전환할)\s?수\s?있습니다)[.。]?\s*$/u;
+/** 독자·사람이 주어로 드러난 문장("다른 사용자가 …")은 제품의 행동이 아니다. */
+const READER_SUBJECT = /(?:사용자|독자|개발자|사람|여러분|누구|팀)(?:들)?(?:이|가|도|나)\s/u;
+const KO_CAUSATIVE = /게\s?(?:해\s?)?(?:줍니다|합니다|돕습니다|만듭니다)|도록/u;
+/** 제품이 주어(또는 생략된 주어)인 문장이 독자의 행동으로 끝나거나, 제품 주제 아래 다른 주체(Claude가)가 행동하는 문장. */
+export function koSubjectMismatch(statements: string[], name: string): string[] {
+  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const topic = new RegExp(`^${n}\\s?[은는이가]\\s`, "iu");
+  return statements.filter((s, i) => {
+    if (KO_CAUSATIVE.test(s)) return false;
+    const otherSubject = /^([A-Za-z][\w .-]*?)\s?[이가]\s/u.exec(s);
+    const product = topic.test(s) || (i > 0 && !READER_SUBJECT.test(s) && !(otherSubject && otherSubject[1].toLowerCase() !== name.toLowerCase()) && !/[가-힣A-Za-z)](?<![같있없많좋작높낮넓크])[은는]\s/u.test(s));
+    return (product && KO_PERCEIVE.test(s)) || (topic.test(s) && /(?:Claude|Codex)(?:와\s?(?:Claude|Codex))?가\s/u.test(s));
+  });
+}
 /** 서술어 없이 끝난 한국어 문장("…상호작용할 때.", "…를 위해."). 2026-11-12 실측 3회차. */
 const FRAGMENT_KO = /(?:때|위해|통해|경우|위한|면서|으며|하며|하고|에서|으로|에게)\s*[.。]?\s*$/u;
 const DANGLING_KO = /^[^.?!]{0,80}(?:하려는 분을 위해|하려는 분들을 위해|하려면|하고 싶다면|하고 싶을 때)/u;
@@ -91,6 +113,15 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
   // 문장마다 보는 규칙은 인용·코드를 뺀 서술문으로 본다.
   const statements = segment(narration(body));
   const introduction = facts.purpose === "introduction" && isPost(channel);
+  if (introduction && facts.prerequisites?.length) {
+    // 원문에서 확인한 필수 전제(tmux, Mac 메뉴바 등)가 빠지면 처음 보는 사람은 어디에 쓰는 제품인지 모른다(고정 점검표 C3).
+    const missing = missingPrerequisites(body, { prerequisites: facts.prerequisites.map((term) => ({ term, quote: term })) }, facts.language ?? "en");
+    results.push({ rule: "prerequisite_missing", ok: missing.length === 0, detail: missing.length ? say(`필수 전제가 빠졌습니다: ${missing.join(", ")}. 이 제품이 어디에서 동작하는지 함께 써 주세요.`, `A prerequisite is missing: ${missing.join(", ")}. Say where the product works.`) : undefined, args: missing.length ? { terms: missing.join(", ") } : undefined });
+  }
+  if (introduction) {
+    const quantities = unsupportedQuantities(body, facts.sourceText ?? "");
+    results.push({ rule: "unsupported_quantity", ok: quantities.length === 0, detail: quantities.length ? say(`원문에 없는 수량·최상급이나 막연한 홍보 표현: ${quantities.join(", ")}. 구체적인 결과로 바꿔 주세요.`, `Unsupported quantity or superlative, or a vague marketing phrase: ${quantities.join(", ")}. State concrete results instead.`) : undefined, args: quantities.length ? { phrases: quantities.join(", ") } : undefined });
+  }
   if (introduction) {
     const requirement = statements.filter((sentence) => REQUIREMENT.test(sentence));
     results.push({ rule: "introduction_requirements", ok: requirement.length === 0, detail: requirement.length ? say(`첫 소개에 설치 요구 사항·지원 환경·가격 문장이 있습니다: ${requirement.map((x) => `“${x}”`).join(" ")} 이 내용은 링크한 페이지에 맡기고 빼 주세요.`, `The introduction states requirements, supported environments or pricing: ${requirement.map((x) => `“${x}”`).join(" ")} Leave this to the linked page.`) : undefined, args: requirement.length ? { phrases: requirement.join(" / ") } : undefined });
@@ -111,7 +142,16 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
       const commands = [...new Set([...body.replace(URL, "").matchAll(new RegExp(`\`${cli}\\s+([a-z][a-z-]*)[^\`]*\`|(?<![\\w-])${cli}\\s+([a-z][a-z-]*)(?=[가-힣])`, "gu"))].map((m) => (m[1] ?? m[2]).toLowerCase()))];
       results.push({ rule: "command_list", ok: commands.length < 2, detail: commands.length >= 2 ? say(`명령어를 ${commands.length}개 나열했습니다(${commands.join(", ")}). 하는 일을 설명하고 명령은 하나만 남겨 주세요.`, `The post lists ${commands.length} commands (${commands.join(", ")}). Describe what it does and keep at most one command.`) : undefined, args: commands.length >= 2 ? { commands: commands.join(", ") } : undefined });
     }
+    if (korean && introduction && name) {
+      // 제품이 주어인데 독자가 하는 일(봅니다·쓸 수 있습니다)이나 다른 주체의 행동(Claude가 … 확인합니다)으로 끝나는 문장(고정 점검표 C4).
+      // 판정 모음 한국어 초안 147개에서 이 규칙에 걸린 18개 중 2개만 두 판정자를 통과했다(걸리지 않은 초안은 129개 중 33개).
+      const mismatched = koSubjectMismatch(statements, name);
+      results.push({ rule: "ko_subject_mismatch", ok: mismatched.length === 0, detail: mismatched.length ? say(`주어와 행동이 맞지 않습니다: ${mismatched.map((x) => `“${x}”`).join(" ")} ${name}가 하는 일(알려 줍니다, 모아 줍니다, 보여 줍니다)로 쓰거나, 독자나 다른 도구가 하는 일이면 "${name}로 …할 수 있습니다", "…하게 해 줍니다"로 써 주세요.`, `Subject and action do not match: ${mismatched.map((x) => `“${x}”`).join(" ")}`) : undefined, args: mismatched.length ? { phrases: mismatched.join(" / "), name } : undefined });
+    }
     if (korean) {
+      // 번역투와 정보 없는 첫 문장(고정 점검표 C4·C5). 표면 패턴만 본다.
+      const translationese = [...new Set(statements.flatMap((sentence) => [...sentence.matchAll(KO_TRANSLATIONESE), ...(introduction ? sentence.matchAll(KO_TRANSLATIONESE_INTRO) : [])].map((m) => m[0])))];
+      results.push({ rule: "ko_translationese", ok: translationese.length === 0, detail: translationese.length ? say(`번역투나 정보 없는 표현: ${translationese.join(", ")}. 우리말로 구체적으로 바꿔 주세요.`, `Translationese or information-free wording: ${translationese.join(", ")}.`) : undefined, args: translationese.length ? { phrases: translationese.join(", ") } : undefined });
       const fragments = statements.filter((sentence) => /[가-힣]/.test(sentence) && !/[?？]["'”’)]*$/.test(sentence) && FRAGMENT_KO.test(sentence));
       results.push({ rule: "sentence_fragment", ok: fragments.length === 0, detail: fragments.length ? say(`서술어 없이 끝난 문장입니다: ${fragments.map((x) => `“${x}”`).join(" ")} 완결된 문장으로 써 주세요.`, `A sentence ends without a predicate: ${fragments.map((x) => `“${x}”`).join(" ")} Write a complete sentence.`) : undefined, args: fragments.length ? { phrases: fragments.join(" / ") } : undefined });
     }
@@ -149,4 +189,4 @@ export function humanVoiceChecks(channel: string, body: string, facts: HumanVoic
 }
 
 /** 사람 말투 규칙. 생성 결과의 문장을 고치게 하는 규칙이라, 다시 쓸 원자료(홈페이지 단락)를 고르는 데는 쓰지 않는다. */
-export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment"]);
+export const HUMAN_VOICE_RULES = new Set(["colon_opening", "feature_list", "self_promotion", "register_mixed", "first_person_need_review", "introduction_requirements", "introduction_invitation", "name_predicate", "command_list", "dangling_opener", "sentence_fragment", "prerequisite_missing", "unsupported_quantity", "ko_translationese", "ko_subject_mismatch"]);
