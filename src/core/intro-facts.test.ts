@@ -98,5 +98,6 @@ describe("approved one-liner (experiment b)", () => {
     expect(rule("aas는 계정 여러 개를 함께 쓰게 해 줍니다.\nhttps://a.dev")).toBe(true);
     expect(rule("aas는 계정 여러 개를 나란히 씁니다.\nhttps://a.dev")).toBe(false);
     expect(rule("개발자를 위해 aas는 계정 여러 개를 함께 쓰게 해 줍니다.\nhttps://a.dev")).toBe(false);
+    expect(rule("aas는 계정 여러 개를 함께 쓰게 해 줍니다. 유료 플랜에서만 됩니다.\nhttps://a.dev")).toBe(false);
   });
 });

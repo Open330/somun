@@ -130,7 +130,9 @@ export const INTRODUCTION_CALL_BUDGET = 20;
  */
 async function bestIntroduction(ctx: AppContext, ownerId: string, job: Job, first: LlmResult, run: Run, calls: () => number, count: number): Promise<LlmResult> {
   const settings = getSettings(ctx, ownerId);
-  const finish = async (res: LlmResult) => editIntroduction(ctx, ownerId, job, await repairDraft(ctx, ownerId, job, res, run), run, 1);
+  // 지난 후보의 호출 수로 멈추는 것만으로는 다음 후보가 더 많이 쓸 때 상한을 넘는다. 호출마다 상한을 확인한다.
+  const guarded: Run = (user, schemaJson, system) => calls() >= INTRODUCTION_CALL_BUDGET ? Promise.reject(new Error("introduction call budget reached")) : run(user, schemaJson, system);
+  const finish = async (res: LlmResult) => editIntroduction(ctx, ownerId, job, await repairDraft(ctx, ownerId, job, res, guarded), guarded, 1);
   const scored: { res: LlmResult; score: number }[] = [];
   const perCandidate: number[] = [];
   for (let i = 0; i < count; i++) {
@@ -138,10 +140,10 @@ async function bestIntroduction(ctx: AppContext, ownerId: string, job: Job, firs
     // 남은 예산이 지난 후보 하나에 든 호출보다 적으면 멈춘다.
     if (i > 0 && INTRODUCTION_CALL_BUDGET - start < Math.max(...perCandidate)) break;
     try {
-      const res = await finish(i === 0 ? first : await run(job.user, repairSchemaJson(job)));
+      const res = await finish(i === 0 ? first : await guarded(job.user, repairSchemaJson(job)));
       const issues = draftIssues(ctx, ownerId, job, res.json);
       if (issues === null) { perCandidate.push(calls() - start); continue; }
-      const critique = await critiqueIntroduction(ctx, job, readJobDraft(job, res.json, settings.customChannels, settings.bannedPhrases).body, run, 0);
+      const critique = await critiqueIntroduction(ctx, job, readJobDraft(job, res.json, settings.customChannels, settings.bannedPhrases).body, guarded, 0);
       scored.push({ res, score: critique.problems.length + issues.length * 2 });
     } catch (err) {
       ctx.log.warn({ jobId: job.id, candidate: i, err: err instanceof Error ? err.message : String(err) }, "introduction candidate failed");

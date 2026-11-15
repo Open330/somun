@@ -167,8 +167,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const approved = (facts.language?.toLowerCase().startsWith("ko") ? facts.oneLiners?.ko : facts.oneLiners?.en)?.trim();
     if (approved) {
       // 앞에 덧붙인 말("…개발자를 위해")도 승인 문장을 바꾼 것이다. 본문은 승인 문장으로 시작해야 한다.
-      const kept = normalizeForMatch(body).trimStart().startsWith(normalizeForMatch(approved));
-      results.push({ rule: "approved_oneliner_changed", ok: kept, detail: kept ? undefined : say(`승인한 한 줄 소개를 앞뒤에 덧붙이지 말고 그대로 써 주세요: “${approved}”`, `Use the approved one-liner exactly as written, with nothing before it: “${approved}”`), args: kept ? undefined : { phrases: approved } });
+      // 뒤에 덧붙인 조건("…only on paid plans")도 승인 문장의 뜻을 바꾼다. 승인 문장 뒤에는 링크만 온다.
+      const start = normalizeForMatch(body).trimStart();
+      const kept = start.startsWith(normalizeForMatch(approved)) && !start.slice(normalizeForMatch(approved).length).replace(/https?:\/\/\S+/g, "").trim();
+      results.push({ rule: "approved_oneliner_changed", ok: kept, detail: kept ? undefined : say(`승인한 한 줄 소개를 앞뒤에 아무것도 덧붙이지 말고 그대로 쓰고 링크만 붙여 주세요: “${approved}”`, `Use the approved one-liner exactly as written, followed only by the link: “${approved}”`), args: kept ? undefined : { phrases: approved } });
     }
     const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
     const sentences = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(prose)].map((s) => s.segment.trim()).filter(Boolean);
