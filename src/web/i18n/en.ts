@@ -1016,7 +1016,8 @@ export const en: Record<string, string> = {
   "승인 문장 바뀜": "Approved line changed",
   "승인한 한 줄 소개(한국어)": "Approved one-liner (Korean)",
   "승인한 한 줄 소개(영어)": "Approved one-liner (English)",
-  "첫 소개 초안이 이 문장을 첫 문장으로 그대로 씁니다. 비워 두면 원문에서 새로 씁니다.": "First-introduction drafts open with this sentence as written. Leave empty to write from the sources.",
+  "첫 소개 초안이 이 문장을 첫 문장으로 그대로 씁니다. 비워 두면 원문에서 새로 씁니다.":
+    "First-introduction drafts open with this sentence as written. Leave empty to write from the sources.",
   "영어 첫 소개 초안이 이 문장을 첫 문장으로 그대로 씁니다.": "English first-introduction drafts open with this sentence as written.",
   "주어·행동 불일치": "Subject and action mismatch",
   조회수: "Views",
