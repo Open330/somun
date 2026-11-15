@@ -47,7 +47,7 @@ export function homepageSourceBlock(e: EvidenceLike): string {
 export const DIGEST_REVISION = "pr-source-conditions-v1";
 export type PromptSpec = { /** "readme": 이 초안 프롬프트는 README·홈페이지만 담았다(만든 순간 기준). */ sourceScope?: "readme"; sourceExcerpt?: import("../shared/types.js").SourceExcerptOrigin; editorInstruction?: string; digestSourceHash?: string; digestRevision?: string; draftPurpose?: import("../shared/types.js").DraftPurpose; system: string; user: string; schema: Record<string, unknown>; schemaName: string };
 
-export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[]; unreleased?: string[] };
+export type ProfileLike = { what: string; audience: string; why?: string; claims: string[]; stage: string; limitations: string[]; naming: string; avoid: string[]; unreleased?: string[]; oneLinerKo?: string; oneLinerEn?: string };
 
 /** 프로필 블록. 정체성은 여기서만 말하고, 변경은 다이제스트가 말한다. */
 export function profileBlock(p: ProfileLike): string {
@@ -99,7 +99,7 @@ export function factsBlock(c: CandidateLike, profile?: ProfileLike): string {
  */
 export function groundingText(c: CandidateLike, profile?: ProfileLike): string {
   // 프롬프트의 README 발췌는 1500자라, 그 뒤에 있는 원문 수치("1.0 이전에는…")가 근거 없는 수치로 걸렸다. 대조에는 더 긴 본문을 쓴다.
-  return [homepageSourceBlock(c.evidence), factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, profile), rawBlock(c, false), prConditionsBlock(c.evidence), c.evidence.readmeForChecks ? `## README (for checks)\n${c.evidence.readmeForChecks}` : ""].filter(Boolean).join("\n\n");
+  return [profile?.oneLinerKo || profile?.oneLinerEn ? `## Approved one-liner (author)\n${[profile.oneLinerKo, profile.oneLinerEn].filter(Boolean).join("\n")}` : "", homepageSourceBlock(c.evidence), factsBlock({ ...c, evidence: { ...c.evidence, highlights: undefined } }, profile), rawBlock(c, false), prConditionsBlock(c.evidence), c.evidence.readmeForChecks ? `## README (for checks)\n${c.evidence.readmeForChecks}` : ""].filter(Boolean).join("\n\n");
 }
 
 /** 초안이 쓸 수 있는 숫자를 한 줄로 못 박는다. 모델이 placeholder를 남발하지 않게. */
@@ -336,6 +336,12 @@ export const INTRODUCTION_SHAPE_EN = [
   "Do not write: an opening participle or 'When/If/To …' clause without the product as subject / 'use X to …', 'try X', 'check it out' or other invitations / installation requirements, supported OS or versions, hardware or pricing / a list of commands / a category label such as 'the X CLI tool' / experience, feelings or effects the sources do not state.",
 ].join("\n");
 
+/** 사용자가 승인한 첫 소개 한 줄. 사람이 확인한 사실과 주어·서술어 관계를 그대로 첫 문장으로 쓴다(2026-11-15 실험 b). */
+export function approvedOneLiner(profile: ProfileLike | undefined, lang: string): string {
+  const line = (lang.toLowerCase().startsWith("ko") ? profile?.oneLinerKo : profile?.oneLinerEn)?.trim();
+  return line ? `## Approved one-line introduction (the author wrote and approved this)\n${line}\nThe post is this text word for word, followed by the link line. Add nothing before or after it: no audience preface, no platform sentence, no extra feature. Added sentences repeated it or overran the length in the fixed measurement.` : "";
+}
+
 export type DraftOptions = { channelSpec?: ChannelSpec; guide?: string; instruction?: string; previous?: { title?: string; body: string }; profile?: ProfileLike; profileClaimsEdited?: boolean; profileEditedFields?: (keyof ProfileLike)[]; disputed?: string[]; introduction?: boolean };
 
 /** 짧은 채널은 선택·압축하되, 긴 채널은 변경 누락 대신 부연을 줄인다. */
@@ -430,6 +436,7 @@ export function draftPrompt(c: CandidateLike, channel: Channel, lang: string, ex
         spec.rules,
         lengthInstruction(spec),
         spec.maxSentences ? `Maximum ${spec.maxSentences} sentences.` : "",
+        approvedOneLiner(opts.profile, lang),
         "## First introduction",
         lang === "ko"
           ? `${INTRODUCTION_SHAPE_KO}\n이 채널의 문체: ${koreanRegister(spec.identity?.tone)}.`

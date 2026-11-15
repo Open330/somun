@@ -16,6 +16,8 @@ export type AppContext = {
     introductionEditor?: boolean;
     /** 첫 소개를 사실 추출 → 조립 파이프라인으로 만든다(app/intro-pipeline). 기본 켜짐. SOMUN_INTRO_PIPELINE=false로 끈다. */
     introPipeline?: boolean;
+    /** 첫 소개 후보 수(SOMUN_INTRO_CANDIDATES). 1이면 후보 하나를 그대로 다듬는다. */
+    introCandidates?: number;
     /** jiun-api LLM 게이트웨이. 있으면 서버 키 Gemini 호출이 게이트웨이로 간다(GEMINI_API_KEYS 대신). */
     llmGateway?: import("../infra/llm/providers.js").LlmGateway;
     /**

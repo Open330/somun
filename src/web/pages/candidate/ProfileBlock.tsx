@@ -13,6 +13,8 @@ const FIELD_LABEL: Record<string, string> = {
   limitations: "한계",
   avoid: "쓰지 않음",
   unreleased: "공개하지 않은 기능",
+  oneLinerKo: "승인한 한 줄 소개(한국어)",
+  oneLinerEn: "승인한 한 줄 소개(영어)",
   stage: "단계",
   naming: "이름",
 };
@@ -29,6 +31,8 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
   const [avoid, setAvoid] = useState((p?.avoid ?? []).join(", "));
   const [limitations, setLimitations] = useState((p?.limitations ?? []).join("\n"));
   const [unreleased, setUnreleased] = useState((p?.unreleased ?? []).join(", "));
+  const [oneLinerKo, setOneLinerKo] = useState(p?.oneLinerKo ?? "");
+  const [oneLinerEn, setOneLinerEn] = useState(p?.oneLinerEn ?? "");
   useEffect(() => {
     setWhat(p?.what ?? "");
     setAudience(p?.audience ?? "");
@@ -37,7 +41,9 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
     setAvoid((p?.avoid ?? []).join(", "));
     setLimitations((p?.limitations ?? []).join("\n"));
     setUnreleased((p?.unreleased ?? []).join(", "));
-  }, [p?.what, p?.audience, p?.why, p?.claims, p?.avoid, p?.limitations, p?.unreleased]);
+    setOneLinerKo(p?.oneLinerKo ?? "");
+    setOneLinerEn(p?.oneLinerEn ?? "");
+  }, [p?.what, p?.audience, p?.why, p?.claims, p?.avoid, p?.limitations, p?.unreleased, p?.oneLinerKo, p?.oneLinerEn]);
   const regen = async () => {
     setBusy(true);
     try {
@@ -179,6 +185,24 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
               placeholder={t("운영에서 꺼 둔 기능, 아직 알리지 않을 기능. README에 있어도 초안에서 뺍니다.")}
             />
           </label>
+          <label className="field">
+            <span>{t("승인한 한 줄 소개(한국어)")}</span>
+            <textarea
+              value={oneLinerKo}
+              onChange={(ev) => setOneLinerKo(ev.target.value)}
+              className="profile-claims-input"
+              placeholder={t("첫 소개 초안이 이 문장을 첫 문장으로 그대로 씁니다. 비워 두면 원문에서 새로 씁니다.")}
+            />
+          </label>
+          <label className="field">
+            <span>{t("승인한 한 줄 소개(영어)")}</span>
+            <textarea
+              value={oneLinerEn}
+              onChange={(ev) => setOneLinerEn(ev.target.value)}
+              className="profile-claims-input"
+              placeholder={t("영어 첫 소개 초안이 이 문장을 첫 문장으로 그대로 씁니다.")}
+            />
+          </label>
           <div className="toolbar">
             <button
               className="primary"
@@ -206,6 +230,8 @@ export default function ProfileBlock({ repo, view, showToast }: { repo: string; 
                       .split(",")
                       .map((x) => x.trim())
                       .filter(Boolean),
+                    oneLinerKo,
+                    oneLinerEn,
                   });
                   setEditing(false);
                   showToast(t("프로필을 저장했습니다. 다음에 쓰는 초안부터 반영됩니다."));
