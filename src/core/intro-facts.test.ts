@@ -100,4 +100,21 @@ describe("approved one-liner (experiment b)", () => {
     expect(rule("개발자를 위해 aas는 계정 여러 개를 함께 쓰게 해 줍니다.\nhttps://a.dev")).toBe(false);
     expect(rule("aas는 계정 여러 개를 함께 쓰게 해 줍니다. 유료 플랜에서만 됩니다.\nhttps://a.dev")).toBe(false);
   });
+
+  it("does not ask to rewrite the approved line itself, only what follows it", async () => {
+    const { lintDraft } = await import("./lint.js");
+    // 승인 문장은 Mac이라고 썼고 전제어는 macOS다. 승인 문장 안의 "사용자의"도 다시 고치게 하지 않는다.
+    const approved = "BarShelf는 Mac 메뉴바에서 사용자의 날씨와 배터리를 아이콘 하나 뒤에 모아 줍니다.";
+    const facts = { language: "ko", purpose: "introduction" as const, publicName: "BarShelf", repo: "o/barshelf", prerequisites: ["macOS"], oneLiners: { ko: approved } };
+    const failed = (body: string) => lintDraft("x", undefined, body, [], facts).filter((r) => !r.ok).map((r) => r.rule);
+    expect(failed(`${approved}\nhttps://a.dev`)).toEqual([]);
+    expect(failed(`${approved} 사용자의 시간을 아껴 줍니다.\nhttps://a.dev`)).toContain("ko_translationese");
+    expect(failed("BarShelf는 메뉴바에서 날씨를 모아 줍니다.\nhttps://a.dev")).toEqual(expect.arrayContaining(["approved_oneliner_changed", "prerequisite_missing"]));
+  });
+
+  it("does not require an approved line that cannot fit the channel", async () => {
+    const { lintDraft } = await import("./lint.js");
+    const facts = { language: "en", purpose: "introduction" as const, publicName: "aas", repo: "o/aas", oneLiners: { en: `aas ${"lets you use accounts ".repeat(14)}` } };
+    expect(lintDraft("x", undefined, "aas lets you use accounts.\nhttps://a.dev", [], facts).some((r) => r.rule === "approved_oneliner_changed")).toBe(false);
+  });
 });
