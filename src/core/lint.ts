@@ -147,12 +147,24 @@ export function requestsQuestion(instruction = ""): boolean {
   return /질문|question|[?？]/i.test(instruction);
 }
 
+/** 승인 문장으로 시작하는 본문에서 승인 문장 뒤의 나머지(링크 등)를 돌려준다. 비교는 normalizeForMatch 기준이다. */
+function afterApproved(body: string, approved: string): string {
+  // 승인 일치 판정과 같은 기준으로 자른다. 정규화로 사라지는 앞부분(공백, 폭 없는 문자)도 함께 건너뛴다.
+  const target = normalizeForMatch(approved);
+  for (let end = 1; end <= body.length; end++) {
+    if (normalizeForMatch(body.slice(0, end)).trimStart() === target) return body.slice(end);
+  }
+  return body;
+}
+
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const spec = draftChannelSpec(channelPreset ?? channelSpec(channel), facts.purpose);
   const text = `${title ?? ""}\n${body}`;
   const normalized = normalizeForMatch(text);
   const results: LintResult[] = [];
+  // 사람이 승인한 한 줄은 문체·전제 규칙으로 다시 고치게 하지 않는다. 승인 문장을 지킨 본문은 그 뒤에 덧붙인 부분만 본다(r20: Mac→macOS, 대시 삭제).
+  let voiceBody = body;
   // 관찰 가능한 편집 패턴만 검사한다. 연결 동사나 문장의 의미적 유사도를 판정하지 않는다.
   if (facts.purpose === "introduction" && (channel === "x" || channel === "threads") && !facts.editorInstruction?.trim()) {
     const publicName = facts.publicName?.trim();
@@ -164,12 +176,16 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       results.push({ rule: "introduction_name_missing", ok: present, detail: present ? undefined : say(`소개 본문에 제품명 ${publicName}을 써 주세요. 링크나 제목만으로는 제품명을 확인할 수 없습니다.`, `Include the product name ${publicName} in the introduction body. A link or title alone does not identify the product.`), args: present ? undefined : { name: publicName } });
     }
     // 승인한 한 줄은 그대로 써야 한다. 모델이 고쳐 쓰면(나란히 쓰며, 기본 로그인 없이, MinIO 덧붙이기) 사람이 확인한 관계가 깨졌다(r18).
+    // 승인 문장과 링크가 채널 글자 수를 넘으면 그대로 쓸 수 없으므로 이 규칙을 적용하지 않는다(aas 영어 + X 280자, r20).
     const approved = (facts.language?.toLowerCase().startsWith("ko") ? facts.oneLiners?.ko : facts.oneLiners?.en)?.trim();
-    if (approved) {
+    // 본문에 들어갈 링크만 센다. Threads처럼 링크가 첫 답글로 가면 본문에 링크가 없고, 홈페이지가 없으면 저장소 링크가 들어간다.
+    const bodyLink = spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "" : facts.preferLink ?? (facts.repo ? `https://github.com/${facts.repo}` : "");
+    if (approved && (spec.maxChars === null || postLength(channel, `${approved} ${bodyLink}`.trim()) <= spec.maxChars)) {
       // 앞에 덧붙인 말("…개발자를 위해")도 승인 문장을 바꾼 것이다. 본문은 승인 문장으로 시작해야 한다.
       // 뒤에 덧붙인 조건("…only on paid plans")도 승인 문장의 뜻을 바꾼다. 승인 문장 뒤에는 링크만 온다.
       const start = normalizeForMatch(body).trimStart();
       const kept = start.startsWith(normalizeForMatch(approved)) && !start.slice(normalizeForMatch(approved).length).replace(/https?:\/\/\S+/g, "").trim();
+      if (kept) voiceBody = afterApproved(body, approved);
       results.push({ rule: "approved_oneliner_changed", ok: kept, detail: kept ? undefined : say(`승인한 한 줄 소개를 앞뒤에 아무것도 덧붙이지 말고 그대로 쓰고 링크만 붙여 주세요: “${approved}”`, `Use the approved one-liner exactly as written, followed only by the link: “${approved}”`), args: kept ? undefined : { phrases: approved } });
     }
     const prose = body.replace(/```[\s\S]*?(?:```|$)/g, "").replace(/^\s*>.*$/gm, "").replace(/https?:\/\/\S+/g, "");
@@ -178,9 +194,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const repeated = normalizedSentences.length !== new Set(normalizedSentences).size;
     results.push({ rule: "introduction_repeated_sentence", ok: !repeated, detail: repeated ? say("소개에 같은 문장이 반복됩니다. 중복 문장을 삭제하고 원문의 조건은 유지하세요.", "The introduction repeats an identical sentence. Remove the duplicate while preserving source conditions.") : undefined });
   }
-  const register = registerCheck(body, spec, facts, locale);
+  // 승인 문장의 종결어미도 사람이 고른 것이라 문체 규칙에서 뺀다(Threads 해요체).
+  const register = registerCheck(voiceBody, spec, facts, locale);
   if (register) results.push(register);
-  results.push(...humanVoiceChecks(channel, body, facts, locale, { registerChecked: register !== undefined }));
+  results.push(...humanVoiceChecks(channel, voiceBody, voiceBody === body ? facts : { ...facts, prerequisites: undefined }, locale, { registerChecked: register !== undefined }));
   // README·홈페이지만으로 쓴 소개는 PR 원문을 쓰지 않았으므로 PR 조건 확인을 붙이지 않는다(readmeOnlyIntroduction).
   const conditionReview = facts.readmeOnly ? undefined : sourceConditionReview(facts.sourceConditionPrs ?? [], locale);
   if (conditionReview) results.push(conditionReview);
