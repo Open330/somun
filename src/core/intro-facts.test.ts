@@ -118,6 +118,16 @@ describe("approved one-liner (experiment b)", () => {
     expect(lintDraft("x", undefined, "aas lets you use accounts.\nhttps://a.dev", [], facts).some((r) => r.rule === "approved_oneliner_changed")).toBe(false);
   });
 
+  it("keeps the approved line out of the register check and slices it after normalized leading characters", async () => {
+    const { lintDraft } = await import("./lint.js");
+    const approved = "BarShelf는 Mac 메뉴바에서 사용자의 날씨와 배터리를 아이콘 하나 뒤에 모아 줍니다.";
+    const facts = { language: "ko", purpose: "introduction" as const, publicName: "BarShelf", repo: "o/barshelf", prerequisites: ["macOS"], oneLiners: { ko: approved } };
+    const failed = (channel: Parameters<typeof lintDraft>[0], body: string) => lintDraft(channel, undefined, body, [], facts).filter((r) => !r.ok).map((r) => r.rule);
+    expect(failed("threads", approved)).not.toContain("register_mismatch");
+    expect(failed("threads", `${approved} 메뉴바가 정리됩니다.`)).toContain("approved_oneliner_changed");
+    expect(failed("x", `\u200B ${approved}\nhttps://a.dev`)).toEqual([]);
+  });
+
   it("budgets only the link that goes in the body when deciding whether the approved line fits", async () => {
     const { lintDraft } = await import("./lint.js");
     const has = (channel: Parameters<typeof lintDraft>[0], facts: Parameters<typeof lintDraft>[4]) => lintDraft(channel, undefined, "aas does something else.\nhttps://github.com/o/aas", [], facts).some((r) => r.rule === "approved_oneliner_changed");

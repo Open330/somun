@@ -149,10 +149,10 @@ export function requestsQuestion(instruction = ""): boolean {
 
 /** 승인 문장으로 시작하는 본문에서 승인 문장 뒤의 나머지(링크 등)를 돌려준다. 비교는 normalizeForMatch 기준이다. */
 function afterApproved(body: string, approved: string): string {
-  const start = body.length - body.trimStart().length;
+  // 승인 일치 판정과 같은 기준으로 자른다. 정규화로 사라지는 앞부분(공백, 폭 없는 문자)도 함께 건너뛴다.
   const target = normalizeForMatch(approved);
-  for (let end = start + 1; end <= body.length; end++) {
-    if (normalizeForMatch(body.slice(start, end)) === target) return body.slice(end);
+  for (let end = 1; end <= body.length; end++) {
+    if (normalizeForMatch(body.slice(0, end)).trimStart() === target) return body.slice(end);
   }
   return body;
 }
@@ -194,7 +194,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const repeated = normalizedSentences.length !== new Set(normalizedSentences).size;
     results.push({ rule: "introduction_repeated_sentence", ok: !repeated, detail: repeated ? say("소개에 같은 문장이 반복됩니다. 중복 문장을 삭제하고 원문의 조건은 유지하세요.", "The introduction repeats an identical sentence. Remove the duplicate while preserving source conditions.") : undefined });
   }
-  const register = registerCheck(body, spec, facts, locale);
+  // 승인 문장의 종결어미도 사람이 고른 것이라 문체 규칙에서 뺀다(Threads 해요체).
+  const register = registerCheck(voiceBody, spec, facts, locale);
   if (register) results.push(register);
   results.push(...humanVoiceChecks(channel, voiceBody, voiceBody === body ? facts : { ...facts, prerequisites: undefined }, locale, { registerChecked: register !== undefined }));
   // README·홈페이지만으로 쓴 소개는 PR 원문을 쓰지 않았으므로 PR 조건 확인을 붙이지 않는다(readmeOnlyIntroduction).
