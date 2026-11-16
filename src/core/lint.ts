@@ -178,7 +178,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     // 승인한 한 줄은 그대로 써야 한다. 모델이 고쳐 쓰면(나란히 쓰며, 기본 로그인 없이, MinIO 덧붙이기) 사람이 확인한 관계가 깨졌다(r18).
     // 승인 문장과 링크가 채널 글자 수를 넘으면 그대로 쓸 수 없으므로 이 규칙을 적용하지 않는다(aas 영어 + X 280자, r20).
     const approved = (facts.language?.toLowerCase().startsWith("ko") ? facts.oneLiners?.ko : facts.oneLiners?.en)?.trim();
-    if (approved && (spec.maxChars === null || postLength(channel, `${approved} ${facts.preferLink ?? ""}`.trim()) <= spec.maxChars)) {
+    // 본문에 들어갈 링크만 센다. Threads처럼 링크가 첫 답글로 가면 본문에 링크가 없고, 홈페이지가 없으면 저장소 링크가 들어간다.
+    const bodyLink = spec.linkPlacement === "reply" || spec.linkPlacement === "none" ? "" : facts.preferLink ?? (facts.repo ? `https://github.com/${facts.repo}` : "");
+    if (approved && (spec.maxChars === null || postLength(channel, `${approved} ${bodyLink}`.trim()) <= spec.maxChars)) {
       // 앞에 덧붙인 말("…개발자를 위해")도 승인 문장을 바꾼 것이다. 본문은 승인 문장으로 시작해야 한다.
       // 뒤에 덧붙인 조건("…only on paid plans")도 승인 문장의 뜻을 바꾼다. 승인 문장 뒤에는 링크만 온다.
       const start = normalizeForMatch(body).trimStart();

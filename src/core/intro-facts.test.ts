@@ -117,4 +117,16 @@ describe("approved one-liner (experiment b)", () => {
     const facts = { language: "en", purpose: "introduction" as const, publicName: "aas", repo: "o/aas", oneLiners: { en: `aas ${"lets you use accounts ".repeat(14)}` } };
     expect(lintDraft("x", undefined, "aas lets you use accounts.\nhttps://a.dev", [], facts).some((r) => r.rule === "approved_oneliner_changed")).toBe(false);
   });
+
+  it("budgets only the link that goes in the body when deciding whether the approved line fits", async () => {
+    const { lintDraft } = await import("./lint.js");
+    const has = (channel: Parameters<typeof lintDraft>[0], facts: Parameters<typeof lintDraft>[4]) => lintDraft(channel, undefined, "aas does something else.\nhttps://github.com/o/aas", [], facts).some((r) => r.rule === "approved_oneliner_changed");
+    const base = { language: "en", purpose: "introduction" as const, publicName: "aas", repo: "o/aas" };
+    // Threads puts the link in the first reply: a 480-char line fits its 500 limit, so the rule stays.
+    expect(has("threads", { ...base, oneLiners: { en: `aas ${"a".repeat(476)}` }, preferLink: "https://example.com/product" })).toBe(true);
+    // X with no homepage still needs the repository link: 260 + link (23) exceeds 280, so the rule is skipped.
+    expect(has("x", { ...base, oneLiners: { en: `aas ${"a".repeat(256)}` } })).toBe(false);
+    // The same line with room for the link keeps the rule.
+    expect(has("x", { ...base, oneLiners: { en: `aas ${"a".repeat(200)}` } })).toBe(true);
+  });
 });
