@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeLink, channelSpec, draftChannelSpec } from "./channels.js";
+import { DEFAULT_CHANNEL_LANGS, composeLink, channelSpec, draftChannelSpec } from "./channels.js";
 import { lintDraft } from "./lint.js";
 import { draftPrompt } from "./prompts.js";
 
@@ -48,5 +48,24 @@ describe("composeLink", () => {
   it("falls back to the empty composer elsewhere or without text", () => {
     expect(composeLink(channelSpec("linkedin"), "body")).toBe(channelSpec("linkedin").composeUrl);
     expect(composeLink(channelSpec("x"), "  ")).toBe("https://x.com/compose/post");
+  });
+});
+
+describe("disquiet channel", () => {
+  it("is a Korean titled channel with the link in the body and an editorial identity", () => {
+    const spec = channelSpec("disquiet");
+    expect(spec).toMatchObject({ id: "disquiet", fixedLang: "ko", hasTitle: true, linkPlacement: "body", composeUrl: "https://disquiet.io/" });
+    expect(spec.identity?.audience).toContain("메이커");
+    expect(spec.runbook.join(" ")).toContain("제품에 연결");
+  });
+
+  it("is not enabled by default, so no extra drafts are generated until a user turns it on", () => {
+    expect(DEFAULT_CHANNEL_LANGS).not.toHaveProperty("disquiet");
+  });
+
+  it("puts the channel rules and own-product disclosure into the draft prompt", () => {
+    const candidate = { title: "Tool", type: "release", evidence: { repo: "owner/tool", repoUrl: "https://github.com/owner/tool" } };
+    const prompt = draftPrompt(candidate, "disquiet", "ko", []);
+    expect(JSON.stringify(prompt)).toContain("the author made it");
   });
 });

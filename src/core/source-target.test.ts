@@ -13,6 +13,7 @@ it("preserves owner-wide collection", () => expect(normalizeGithubTarget("Open33
 it("recognizes channel hosts without mistaking lookalikes or custom domains", () => {
   expect(publicationChannel("https://www.linkedin.com/posts/test")).toBe("linkedin");
   expect(publicationChannel("https://threads.com/@me/post/1")).toBe("threads");
+  expect(publicationChannel("https://disquiet.io/@maker/products/tool")).toBe("disquiet");
   expect(publicationChannel("https://twitter.com/me/status/1")).toBe("x");
   expect(publicationChannel("https://linkedin.com.evil.test/post")).toBeUndefined();
   expect(publicationChannel("https://my.blog/post")).toBeUndefined();

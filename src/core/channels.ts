@@ -2,7 +2,7 @@
  * 채널 = 플랫폼. 언어는 채널의 설정이다 (채널마다 여러 언어, 코드는 자유).
  * 초안은 (channel, lang) 쌍으로 만들어진다. Show HN처럼 언어가 고정된 채널도 있다.
  */
-export type BuiltinChannel = "x" | "threads" | "linkedin" | "show_hn" | "show_gn" | "blog";
+export type BuiltinChannel = "x" | "threads" | "linkedin" | "show_hn" | "show_gn" | "disquiet" | "blog";
 export type Channel = BuiltinChannel | `custom_${string}`;
 export type ChannelIdentity = { audience: string; purpose: string; tone: string; structure: string };
 
@@ -63,6 +63,15 @@ export const CHANNELS: Record<BuiltinChannel, ChannelSpec> = {
     composeUrl: "https://news.hada.io/new",
     runbook: ["평일 오전 9~11시 등록이 첫 화면에 오래 남음", "사실만, 마케팅 어휘 없이 (GeekNews 가이드)", "지인에게 추천·댓글 부탁 금지", "버전마다 재등록 금지. 큰 변화가 있을 때만"],
   },
+  // 디스콰이엇: 한국 IT 메이커 커뮤니티. 본인이 만든 제품만 등록할 수 있고, 등록한 제품에 연결한 글만 메인 피드에 뜬다(검토 후 승인).
+  // 근거: ~/reading/monetize/launch/communities.md(https://disquiet.io/announcement 공식 확인). 글자 수·제목 한도는 공식 문서에서 확인하지 못해 보수적으로 잡았다.
+  disquiet: {
+    id: "disquiet", label: "디스콰이엇", fixedLang: "ko", defaultLangs: ["ko"], maxChars: 2000, hasTitle: true, titleMaxChars: 60,
+    rules: "A Korean maker-community post about a product the author made, linked to that product's page on the site. Title: what the product does for the reader in plain words, no hype. Body: 2-4 short paragraphs. State plainly in the first sentence that the author made it. Then what it does, for whom only if Facts supplies the audience, and how to try it. Mention price, platform limits or what is not yet verified only when Facts supplies them. End with the link and, optionally, one specific question about using the product. Use one Korean register throughout (해요체 or 합니다체). No hashtags, no emoji, no exclamation marks, never ask for upvotes or comments.",
+    mediaHint: "제품 화면 스크린샷 1~2장 (실제로 쓰는 장면)",
+    composeUrl: "https://disquiet.io/",
+    runbook: ["제품을 먼저 등록하고, 이 글을 그 제품에 연결해 올림 (연결하지 않은 글은 메인 피드에 뜨지 않음)", "본인이 만든 제품만 등록할 수 있음", "작성 → 검토 요청 → 승인 뒤에 보임", "같은 문구를 다른 곳에 동시에 붙이지 않음"],
+  },
   blog: {
     id: "blog", label: "블로그 개요", defaultLangs: ["ko"], maxChars: 2000, hasTitle: true, titleMaxChars: 60,
     rules: "Do not write the article. Outline only: 3 title candidates, each under 30 characters and describing a concrete task or change. Put each title on a separate line. Do not add numeric claims or title character counts to make titles concrete. Then write 4-6 short sections, each on its own line stating which supplied facts belong there, and a final line with an actual question to ask the reader, ending with a question mark.",
@@ -93,6 +102,7 @@ export const CHANNEL_IDENTITIES: Record<BuiltinChannel, ChannelIdentity> = {
   linkedin: { audience: "직무와 업무 맥락을 중시하는 동료", purpose: "업무에서 달라진 점과 근거 있는 경험 공유", tone: "차분하고 구체적인 업무 설명", structure: "짧은 훅 → 사실과 업무 맥락 → 근거 있는 시사점 → 링크" },
   show_hn: { audience: "직접 써 보고 기술적 선택을 논의하는 개발자", purpose: "실행 가능한 제품과 구현 내용을 소개", tone: "사실 중심, 기술적이고 솔직하게", structure: "제목 + 첫 댓글: 기능 → 근거 있는 동작/설계 → 한계 → 열린 질문" },
   show_gn: { audience: "기술 뉴스와 직접 쓸 도구를 찾는 한국어 독자", purpose: "핵심 기능이나 변화를 사실 중심으로 설명", tone: "간결한 한국어, 홍보 어휘 없이", structure: "제목 → 무엇인가/변경 내용 → 근거 있는 한계. 댓글/추천 요청 없이" },
+  disquiet: { audience: "직접 만들고 써 보는 한국어 메이커·1인 창업자", purpose: "내가 만든 제품이 무엇을 해 주는지 사실 중심으로 소개", tone: "담백한 한국어, 한 가지 높임말로 통일, 홍보 어휘 없이", structure: "제목 → 직접 만들었다는 한 문장 → 하는 일과 써 보는 방법 → 근거 있는 조건 → 링크(선택: 사용에 관한 질문 하나)" },
   blog: { audience: "배경과 과정을 자세히 이해하려는 독자", purpose: "근거를 배치한 긴 글의 개요 준비", tone: "설명 중심의 차분한 문장", structure: "제목 후보 3개 → 4~6개 절과 넣을 근거 → 실제 독자 질문" },
 };
 

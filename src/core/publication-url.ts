@@ -9,5 +9,6 @@ export function publicationChannel(url: string): Channel | undefined {
   if (host === "linkedin.com" || host.endsWith(".linkedin.com")) return "linkedin";
   if (host === "news.ycombinator.com") return "show_hn";
   if (host === "news.hada.io") return "show_gn";
+  if (host === "disquiet.io") return "disquiet";
   return undefined;
 }

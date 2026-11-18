@@ -19,7 +19,7 @@ const evidenceSchema = z.object({
 }).strict();
 export const casesSchema = z.array(z.object({
   introduction: z.boolean().optional(),
-  id, channel: z.enum(["x", "threads", "linkedin", "show_hn", "show_gn", "blog"]), lang: z.string().min(2),
+  id, channel: z.enum(["x", "threads", "linkedin", "show_hn", "show_gn", "disquiet", "blog"]), lang: z.string().min(2),
   candidate: z.object({ title: z.string(), type: z.string(), evidence: evidenceSchema }).strict(),
   required: z.array(z.string().min(1)).default([]),
   requiredAny: z.array(z.object({ id, phrases: z.array(z.string().min(1)).min(1) }).strict()).optional(), forbidden: z.array(z.string().min(1)).default([]),

@@ -21,7 +21,7 @@ const OPEN = ["queued", "working"];
 const MAX_OPEN_PER_OWNER = 2;
 /** 대본으로 쓸 초안: 검수한 것 먼저, 짧은 채널 먼저. */
 const STATUS_RANK: Record<string, number> = { copied: 0, edited: 1, proposed: 2 };
-const CHANNEL_RANK = ["x", "threads", "linkedin", "show_gn", "show_hn", "blog"];
+const CHANNEL_RANK = ["x", "threads", "linkedin", "show_gn", "show_hn", "disquiet", "blog"];
 /** 영상 서버 기획서 한도(src/video/server.ts)에 맞춘다. 대본은 앞부분만, 금지 표현은 짧은 것만. */
 const SCRIPT_MAX = 3_000, BANNED_MAX = 200, BANNED_LEN = 80;
 /** 요청을 영상 서버에 보내는 중인 계정. 동시에 두 번 눌러 한도를 넘지 않게. */

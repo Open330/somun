@@ -10,6 +10,7 @@ export const CHANNEL_LABEL: Record<string, string> = {
   linkedin: "LinkedIn",
   show_hn: "Show HN",
   show_gn: "Show GN",
+  disquiet: "디스콰이엇",
   blog: "블로그 개요",
 };
 export const channelLabel = (channel: string, customChannels: readonly CustomChannel[] = []): string =>
@@ -52,6 +53,17 @@ export function ChannelIcon({ channel, size = 16 }: { channel: string; size?: nu
           <rect width="24" height="24" rx="4" fill="#2e8b57" />
           <path
             d="M12.5 5C8.9 5 6.5 7.9 6.5 12s2.4 7 6 7c2 0 3.6-.8 4.7-2.2v-5.3h-5v2.2h2.6v2.1c-.5.5-1.3.8-2.3.8-2.2 0-3.6-1.9-3.6-4.6s1.4-4.6 3.6-4.6c1.2 0 2.1.5 2.8 1.4l1.7-1.5C15.9 5.8 14.4 5 12.5 5z"
+            fill="#fff"
+          />
+        </svg>
+      );
+    case "disquiet":
+      // 사이트 로고를 흉내 내지 않고 중립 색 사각형에 글자만 둔다.
+      return (
+        <svg {...s} viewBox="0 0 24 24" aria-hidden>
+          <rect width="24" height="24" rx="4" fill="#4b5563" />
+          <path
+            d="M8 5h3.6c3.6 0 5.9 2.6 5.9 7s-2.3 7-5.9 7H8V5zm2.2 2.1v9.8h1.3c2.3 0 3.7-1.8 3.7-4.9s-1.4-4.9-3.7-4.9h-1.3z"
             fill="#fff"
           />
         </svg>
