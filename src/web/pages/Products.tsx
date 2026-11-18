@@ -18,6 +18,44 @@ export default function Products() {
   // 다시 수집해 스타·홈페이지만 바뀐 경우도 반영하도록 소스 변경에도 다시 불러온다.
   const { data: rows, error, reload } = useResource<ProductRow[]>("/products", ["candidates", "publications", "sources"]);
   if (error) return <ErrorState title={t("제품 목록을 불러오지 못했습니다")} message={error} onRetry={reload} />;
+  // 지금 알릴 수 있는 것과 글감이 있는 것만 먼저 보이고, 글감이 없는 저장소와 보관은 접어 둔다.
+  const main = rows?.filter((p) => p.status === "ready" || (p.status === "needs_line" && p.candidateId)) ?? [];
+  const rest = rows?.filter((p) => !main.includes(p)) ?? [];
+  const row = (p: ProductRow) => {
+    const [label, cls] = STATUS[p.status];
+    return (
+      <div key={p.repo} className="pub">
+        <span className={cls}>{t(label)}</span>
+        <div className="min-w-0">
+          {p.candidateId ? (
+            <Link to={`/c/${p.candidateId}`} className="pub-title">
+              {p.name}
+            </Link>
+          ) : (
+            <b className="pub-title">{p.name}</b>
+          )}
+          <div className="tiny muted">
+            {p.repo}
+            {p.stars !== undefined ? ` · ${t("스타 {n}", { n: p.stars })}` : ""}
+            {` · ${p.lastPublishedAt ? t("마지막 게시 {date}", { date: fullDate(p.lastPublishedAt) }) : t("아직 게시 안 함")}`}
+          </div>
+          <div className="small">
+            <span className="badge outline">KO</span> {p.oneLinerKo ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
+          </div>
+          <div className="small">
+            <span className="badge outline">EN</span> {p.oneLinerEn ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
+          </div>
+          {p.homepage && /^https?:\/\//i.test(p.homepage) && (
+            <div className="tiny">
+              <a href={p.homepage} target="_blank" rel="noreferrer">
+                {p.homepage.replace(/^https?:\/\//, "")}
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
   return (
     <>
       <header className="page-head workspace-head">
@@ -41,43 +79,13 @@ export default function Products() {
       ) : (
         <>
           <p className="tiny muted">{t("스타와 주소는 가장 최근 글감을 수집할 때의 값입니다.")}</p>
-          <div className="rows">
-            {rows.map((p) => {
-              const [label, cls] = STATUS[p.status];
-              return (
-                <div key={p.repo} className="pub">
-                  <span className={cls}>{t(label)}</span>
-                  <div className="min-w-0">
-                    {p.candidateId ? (
-                      <Link to={`/c/${p.candidateId}`} className="pub-title">
-                        {p.name}
-                      </Link>
-                    ) : (
-                      <b className="pub-title">{p.name}</b>
-                    )}
-                    <div className="tiny muted">
-                      {p.repo}
-                      {p.stars !== undefined ? ` · ${t("스타 {n}", { n: p.stars })}` : ""}
-                      {` · ${p.lastPublishedAt ? t("마지막 게시 {date}", { date: fullDate(p.lastPublishedAt) }) : t("아직 게시 안 함")}`}
-                    </div>
-                    <div className="small">
-                      <span className="badge outline">KO</span> {p.oneLinerKo ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
-                    </div>
-                    <div className="small">
-                      <span className="badge outline">EN</span> {p.oneLinerEn ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
-                    </div>
-                    {p.homepage && /^https?:\/\//i.test(p.homepage) && (
-                      <div className="tiny">
-                        <a href={p.homepage} target="_blank" rel="noreferrer">
-                          {p.homepage.replace(/^https?:\/\//, "")}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <div className="rows">{main.map(row)}</div>
+          {rest.length > 0 && (
+            <details className="raw mt-8">
+              <summary>{t("그 밖의 저장소 {n}개 (글감 없음·보관)", { n: rest.length })}</summary>
+              <div className="rows">{rest.map(row)}</div>
+            </details>
+          )}
         </>
       )}
     </>
