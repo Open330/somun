@@ -249,11 +249,11 @@ export function sitemapRoot(xml: string): string | undefined {
   return root;
 }
 
-/** 사이트의 기준 경로. 마지막 마디가 파일(index.html)이면 그 폴더다. 루트는 빈 문자열. */
+/** 사이트의 기준 경로. 마지막 마디가 문서 파일(index.html, home.php)이면 그 폴더다. /team.docs처럼 점이 든 경로는 폴더 이름이다. 루트는 빈 문자열. */
 export function siteBase(homepage: string): string {
   const path = new URL(homepage).pathname;
   const lastSlash = path.lastIndexOf("/");
-  const dir = path.slice(lastSlash + 1).includes(".") ? path.slice(0, lastSlash) : path;
+  const dir = /\.(?:html?|xhtml|php|aspx?|jsp)$/i.test(path.slice(lastSlash + 1)) ? path.slice(0, lastSlash) : path;
   return trimSlashes(dir);
 }
 
@@ -304,7 +304,9 @@ export function sitemapPages(xml: string, homepage: string, limit: number): stri
     try { url = new URL(loc); } catch { continue; }
     if (!withinSite(url.href, homepage) || norm(url) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
-    if (!seen.has(url.href)) { seen.add(url.href); out.push(url.href); }
+    // /p0와 /p0/는 같은 페이지로 본다(한쪽이 다른 쪽으로 넘어가는 경우가 대부분이라 자리를 두 번 쓰지 않게).
+    const key = norm(url);
+    if (!seen.has(key)) { seen.add(key); out.push(url.href); }
     if (out.length >= limit) break;
   }
   return out;
