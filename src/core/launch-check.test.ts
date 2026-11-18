@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPage, checkRobots, checkSitemap, pageCopy, sitemapPages } from "./launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, sitemapPages, withinSite } from "./launch-check.js";
 
 const level = (items: ReturnType<typeof checkPage>, id: string) => items.find((i) => i.id === id)?.level;
 
@@ -54,6 +54,14 @@ describe("sitemap pages and page copy", () => {
     expect(sitemapPages(xml, "https://barshelf.jiun.dev/", 1)).toEqual(["https://barshelf.jiun.dev/widgets/weather"]);
   });
 
+  it("tells whether a URL stays under the homepage path", () => {
+    expect(withinSite("https://open330.github.io/tend/docs/", "https://open330.github.io/tend/")).toBe(true);
+    expect(withinSite("https://open330.github.io/tend", "https://open330.github.io/tend/")).toBe(true);
+    expect(withinSite("https://open330.github.io/tendency/", "https://open330.github.io/tend/")).toBe(false);
+    expect(withinSite("https://docs.example/x", "https://open330.github.io/tend/")).toBe(false);
+    expect(withinSite("https://barshelf.jiun.dev/widgets/a", "https://barshelf.jiun.dev")).toBe(true);
+  });
+
   it("keeps only pages under a project site's path", () => {
     const xml = `<urlset><url><loc>https://open330.github.io/</loc></url><url><loc>https://open330.github.io/kiwimu/</loc></url>
       <url><loc>https://open330.github.io/tend/</loc></url><url><loc>https://open330.github.io/tend/docs/</loc></url><url><loc>https://open330.github.io/tendency/</loc></url></urlset>`;
@@ -63,5 +71,6 @@ describe("sitemap pages and page copy", () => {
   it("reads the full title and description", () => {
     expect(pageCopy(`<title>BarShelf &amp; widgets</title><meta name="description" content="One icon for your menu bar.">`)).toEqual({ title: "BarShelf & widgets", description: "One icon for your menu bar." });
     expect(pageCopy("<p>no head</p>")).toEqual({ title: undefined, description: undefined });
+    expect(pageCopy(`<!-- <title>Uses MinIO</title> --><title>Product</title>`).title).toBe("Product");
   });
 });

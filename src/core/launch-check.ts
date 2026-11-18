@@ -26,8 +26,11 @@ function metas(head: string): Map<string, string> {
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 const clip = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+// 주석 안의 <title>·<meta>는 검색엔진과 방문자가 보지 않는다.
+const stripComments = (html: string) => html.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+
 export function checkPage(rawHtml: string): CheckItem[] {
-  const html = rawHtml.slice(0, MAX_HTML);
+  const html = stripComments(rawHtml.slice(0, MAX_HTML));
   const m = metas(html);
   const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "");
   const description = m.get("description") ?? "";
@@ -49,7 +52,8 @@ export function checkPage(rawHtml: string): CheckItem[] {
   ];
 }
 
-export type Fetched = { status: number; contentType: string; body: string } | undefined;
+/** url은 리다이렉트를 따라간 뒤 실제로 연 주소다. */
+export type Fetched = { status: number; contentType: string; body: string; url?: string } | undefined;
 
 export function checkRobots(res: Fetched): CheckItem {
   if (!res || res.status === 404) return { id: "robots", level: "ok", value: "none" };
@@ -75,26 +79,32 @@ export function checkSitemap(res: Fetched): CheckItem {
 
 /** 홈페이지의 검색 제목과 설명 원문(자르지 않음). 문구 일관성 점검(core/consistency)에 쓴다. */
 export function pageCopy(rawHtml: string): { title?: string; description?: string } {
-  const html = rawHtml.slice(0, MAX_HTML);
+  const html = stripComments(rawHtml.slice(0, MAX_HTML));
   const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "");
   const description = decode(metas(html).get("description") ?? "");
   return { title: title || undefined, description: description || undefined };
 }
 
+/** url이 홈페이지와 같은 출처이고 홈페이지 경로 아래(또는 홈페이지 자신)인가. GitHub Pages 프로젝트 사이트는 출처를 다른 프로젝트와 나눠 쓴다. */
+export function withinSite(url: string, homepage: string): boolean {
+  let u: URL, home: URL;
+  try { u = new URL(url); home = new URL(homepage); } catch { return false; }
+  const base = home.pathname.replace(/\/+$/, "");
+  return u.origin === home.origin && (!base || u.pathname === base || u.pathname.startsWith(`${base}/`));
+}
+
 /**
  * sitemap.xml에서 홈페이지 경로 아래의 페이지 주소를 순서대로 limit개까지(홈페이지 자신은 뺀다).
  * 생성기로 만든 하위 페이지(BarShelf 위젯 25개 등)가 검색 노출 대부분을 받으므로 홈페이지만 보면 모자라다.
- * GitHub Pages 프로젝트 사이트(open330.github.io/tend/)는 출처 사이트맵에 다른 프로젝트가 섞이므로 경로 아래만 본다.
  */
 export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
   const home = new URL(homepage);
   const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
-  const base = home.pathname.replace(/\/+$/, "");
   const out: string[] = [];
   for (const m of xml.slice(0, MAX_HTML).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
     let url: URL;
     try { url = new URL(decode(m[1]!)); } catch { continue; }
-    if (url.origin !== home.origin || norm(url) === norm(home) || (base && !url.pathname.startsWith(`${base}/`)) || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
+    if (!withinSite(url.href, homepage) || norm(url) === norm(home) || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
     if (!out.includes(url.href)) out.push(url.href);
     if (out.length >= limit) break;

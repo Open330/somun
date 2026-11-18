@@ -16,6 +16,20 @@ describe("retiredNames", () => {
   });
 });
 
+describe("retiredNames edge cases", () => {
+  it("reads names wrapped in Markdown and stops at the previous sentence", () => {
+    expect(retiredNames("**Gemini CLI** is no longer supported.")).toEqual(["Gemini CLI"]);
+    expect(retiredNames("Use the [Old Sync](https://x.dev) app. Legacy Bridge is deprecated.")).toEqual(["Legacy Bridge"]);
+  });
+
+  it("scans a long uppercase identifier quickly", () => {
+    const readme = `${"A".repeat(32_000)} plain text`;
+    const start = performance.now();
+    expect(retiredNames(readme)).toEqual([]);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+});
+
 describe("properTerms", () => {
   it("keeps capitalized names but skips sentence-initial words and common terms", () => {
     expect(properTerms("Record every prompt to MinIO. Then see usage in a CLI on macOS.")).toEqual(["MinIO"]);
@@ -45,6 +59,13 @@ describe("copyIssues", () => {
 
   it("passes copy that matches the README and ignores the product name", () => {
     expect(copyIssues({ readme: README, readmeTruncated: false, productName: "Tend", texts: [...texts("Know which tmux coding agent is waiting. Works with Claude Code and Codex."), { source: "oneliner_en", text: "Tend watches the Claude Code and Codex sessions you run." }] })).toEqual([]);
+  });
+
+  it("flags a name at the start of a title and does not count a substring as a mention", () => {
+    expect(copyIssues({ readme: "Works with GitHub releases.", readmeTruncated: false, productName: "p", texts: [{ source: "homepage_title", text: "MinIO integration" }, { source: "description", text: "Works with Git." }] })).toEqual([
+      { kind: "not_in_readme", source: "homepage_title", term: "MinIO" },
+      { kind: "not_in_readme", source: "description", term: "Git" },
+    ]);
   });
 
   it("returns nothing without a README", () => {

@@ -82,6 +82,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   };
   const failing = (data?.items.filter((i) => i.level !== "ok").length ?? 0) + (data?.pages?.issues.length ?? 0) + (data?.copy?.length ?? 0);
   const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
+  // 홈페이지를 열지 못했거나 하위 페이지를 하나도 열지 못했으면 통과라고 하지 않는다.
+  const incomplete = Boolean(data?.unreachable) || data?.pages?.checked === 0;
   return (
     <section className="side-block">
       <details
@@ -93,7 +95,9 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
         <summary>
           {t("링크 미리보기 점검")}
           {checked ? (
-            <span className={`badge ml-6 ${failing ? "warn" : "ok"}`}>{failing ? t("고칠 곳 {n}", { n: failing }) : t("통과")}</span>
+            <span className={`badge ml-6 ${failing || incomplete ? "warn" : "ok"}`}>
+              {failing ? t("고칠 곳 {n}", { n: failing }) : incomplete ? t("다 보지 못함") : t("통과")}
+            </span>
           ) : null}
         </summary>
         <p className="tiny muted launch-check-intro">
@@ -161,7 +165,9 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
                 ))}
               </ul>
             ) : (
-              <div className="tiny muted">{t("열어 본 하위 페이지는 모두 통과했습니다.")}</div>
+              <div className="tiny muted">
+                {data.pages.checked ? t("열어 본 하위 페이지는 모두 통과했습니다.") : t("하위 페이지를 하나도 열지 못했습니다.")}
+              </div>
             )}
           </div>
         )}
