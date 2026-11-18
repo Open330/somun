@@ -96,6 +96,14 @@ describe("disquiet lint", () => {
     for (const other of ["https://disquiet.io/products/tool", "https://disquiet.io/@maker/product/tool", "https://disquiet.io/product/tool/comments"]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 CSV로 저장합니다.\n\n${other}`)).toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool/")).not.toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/unrelated")).toContain("preferred_link");
+    // 홈페이지가 없어도 다른 제품 페이지 링크는 걸린다. 하이픈은 이름의 일부다.
+    const bare = { purpose: "introduction" as const, language: "ko", publicName: "My-Tool", repo: "o/my-tool" };
+    const bareFailed = (body: string) => lintDraft("disquiet", "제목", body, [], bare).filter((r) => !r.ok).map((r) => r.rule);
+    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/unrelated")).toContain("preferred_link");
+    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/mytool")).toContain("preferred_link");
+    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/my-tool")).not.toContain("preferred_link");
+    // 이름의 %가 다른 채널의 lint를 깨지 않는다.
+    expect(() => lintDraft("x", undefined, "100% Tool은 기록을 저장합니다. https://tool.example/", [], { purpose: "introduction", publicName: "100% Tool", preferLink: "https://tool.example/" })).not.toThrow();
   });
 
   it("only claims authorship when the facts establish it", () => {

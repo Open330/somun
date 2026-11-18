@@ -157,6 +157,27 @@ function afterApproved(body: string, approved: string): string {
   return body;
 }
 
+/**
+ * 디스콰이엇 글의 disquiet.io 링크 분류. 제품 페이지 주소는 저장하지 않으므로, /product/<이름> 또는 /@<메이커>/products/<이름>이고
+ * 그 이름이 공개 이름이나 저장소 이름과 같을 때만 이 제품의 페이지로 본다(공백은 -로, 대소문자 무시, 그 밖의 글자는 그대로).
+ */
+function disquietLinks(channel: string, body: string, facts: LintFacts): { product: boolean; wrong: boolean } {
+  if (channel !== "disquiet") return { product: false, wrong: false };
+  const slug = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "-");
+  const decode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
+  const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
+  let product = false, wrong = false;
+  for (const token of body.match(/https?:\/\/[^\s<>"`]+/g) ?? []) {
+    let u: URL;
+    try { u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); } catch { continue; }
+    if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname)) continue;
+    const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
+    if (m && names.includes(slug(decode(m[1]!)))) product = true;
+    else wrong = true;
+  }
+  return { product, wrong };
+}
+
 export function lintDraft(channel: Channel, title: string | undefined, body: string, banned: string[] = DEFAULT_BANNED_PHRASES, facts: LintFacts = {}, locale: Locale = "ko", channelPreset?: ChannelSpec): LintResult[] {
   const say = (ko: string, en: string) => sayIn(locale, ko, en);
   const spec = draftChannelSpec(channelPreset ?? channelSpec(channel), facts.purpose);
@@ -279,6 +300,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "has_link", ok: LINK.test(body) });
   }
   if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
+  const disquiet = disquietLinks(channel, body, facts);
+  // 홈페이지가 없어도, 디스콰이엇 글의 disquiet.io 링크는 이 제품의 페이지여야 한다.
+  if (disquiet.wrong && !facts.preferLink) results.push({ rule: "preferred_link", ok: false, detail: say("디스콰이엇 링크는 이 제품의 페이지(제품 이름 주소)여야 합니다.", "A Disquiet link must point to this product's page (its name in the address).") });
   if (facts.preferLink && channel !== "blog" && spec.linkPlacement !== "reply" && spec.linkPlacement !== "none" && channel !== "threads") {
     const link = facts.preferLink.replace(/\/+$/, "");
     const canonical = (value: string): string | undefined => {
@@ -310,17 +334,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     });
     // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
     // 주소를 하나씩 풀어 실제로 여는 곳이 disquiet.io인지 본다(다른 사이트 주소 안에 든 글자는 아니다).
-    // 제품 페이지 주소는 저장하지 않으므로, 마지막 경로(제품 이름)가 공개 이름이나 저장소 이름과 같을 때만 이 제품의 페이지로 본다.
-    const slug = (v: string) => decodeURIComponent(v).toLowerCase().replace(/[^a-z0-9가-힣]/g, "");
-    const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
-    const productPage = channel === "disquiet" && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some((token) => {
-      try {
-        const u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, ""));
-        const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
-        return /^(?:www\.)?disquiet\.io$/i.test(u.hostname) && m !== null && names.includes(slug(m[1]!));
-      } catch { return false; }
-    });
-    results.push({ rule: "preferred_link", ok: matches || productPage, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
+    results.push({ rule: "preferred_link", ok: (matches || disquiet.product) && !disquiet.wrong, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.
