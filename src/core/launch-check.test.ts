@@ -103,6 +103,13 @@ describe("sitemap pages and page copy", () => {
     expect(pageCopy(`<meta data-content="Internal placeholder" name="description" content="Search and filter every document in your workspace.">`).description).toBe("Search and filter every document in your workspace.");
   });
 
+  it("reads only the page location of each entry, not image or video locations", () => {
+    const images = Array.from({ length: 25 }, (_, i) => `<image:image><image:loc>https://a.example/media/render?id=${i}</image:loc></image:image>`).join("");
+    const xml = `<urlset><url><loc>https://a.example/</loc>${images}</url><url><loc>https://a.example/docs</loc></url></urlset>`;
+    expect(sitemapPages(xml, "https://a.example/", 25)).toEqual(["https://a.example/docs"]);
+    expect(checkSitemap({ status: 200, contentType: "application/xml", body: xml })).toEqual({ id: "sitemap", level: "ok", value: "2" });
+  });
+
   it("reads namespaced sitemap entries", () => {
     expect(sitemapPages(`<s:urlset xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"><s:url><s:loc>https://a.example/docs</s:loc></s:url></s:urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/docs"]);
   });

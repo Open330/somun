@@ -258,10 +258,28 @@ export function withinSite(url: string, homepage: string): boolean {
   return u.origin === home.origin && (!base || u.pathname === base || u.pathname.startsWith(`${base}/`));
 }
 
-/** 사이트맵의 <loc> 주소들. 주석으로 막은 항목(<!-- <url>…</url> -->)은 사이트맵에 없는 것이다. */
+/**
+ * 사이트맵의 페이지(또는 하위 사이트맵) 주소들. 각 <url>·<sitemap> 안에서 같은 이름공간 접두어의 첫 <loc>만 읽는다.
+ * <image:loc>·<video:loc> 같은 첨부 주소는 페이지가 아니다. 주석으로 막은 항목은 사이트맵에 없는 것이다.
+ */
 export function sitemapLocs(xml: string): string[] {
-  // 이름공간 접두어(<s:loc>)도 같은 항목이다.
-  return [...removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<(?:[\w-]+:)?loc>\s*([^<\s]+)\s*<\/(?:[\w-]+:)?loc>/gi)].map((m) => decode(m[1]!));
+  const doc = xml.slice(0, MAX_HTML);
+  const lower = asciiLower(doc);
+  const out: string[] = [];
+  let entryPrefix: string | undefined;
+  eachTag(doc, lower, (tag) => {
+    if (tag.name === "!--") return;
+    const [prefix, local] = tag.name.includes(":") ? [tag.name.slice(0, tag.name.lastIndexOf(":")), tag.name.slice(tag.name.lastIndexOf(":") + 1)] : ["", tag.name];
+    if (local === "url" || local === "sitemap") { entryPrefix = tag.closing ? undefined : prefix; return; }
+    if (local !== "loc" || tag.closing || entryPrefix !== prefix) return;
+    const close = closeAt(lower, tag.name, tag.end);
+    if (close < 0) return doc.length;
+    const value = decode(doc.slice(tag.end, close).trim());
+    if (value && !/\s/.test(value)) out.push(value);
+    entryPrefix = undefined;
+    return close;
+  });
+  return out;
 }
 
 /**
