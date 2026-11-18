@@ -78,12 +78,14 @@ describe("disquiet lint", () => {
   it("rejects exclamation marks and vote requests", () => {
     const rules = failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/");
     expect(rules).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다. 추천 버튼을 눌러 주세요.\n\nhttps://tool.example/")).toContain("no_vote_request");
   });
 
   it("accepts the registered product page or the homepage as the link, and requires a link", () => {
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).not.toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/")).not.toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://unrelated.example/?next=https://disquiet.io/@maker/products/tool")).toContain("preferred_link");
   });
 
   it("only claims authorship when the facts establish it", () => {

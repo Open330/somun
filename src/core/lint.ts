@@ -309,7 +309,10 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       return canonical(candidate) === expected;
     });
     // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
-    const productPage = channel === "disquiet" && /https?:\/\/(?:www\.)?disquiet\.io\/\S+/i.test(body);
+    // 주소를 하나씩 풀어 실제로 여는 곳이 disquiet.io인지 본다(다른 사이트 주소 안에 든 글자는 아니다).
+    const productPage = channel === "disquiet" && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some((token) => {
+      try { const u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); return /^(?:www\.)?disquiet\.io$/i.test(u.hostname) && u.pathname.length > 1; } catch { return false; }
+    });
     results.push({ rule: "preferred_link", ok: matches || productPage, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
@@ -373,7 +376,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "title_length", ok: len > 0 && len <= spec.titleMaxChars, detail: `${len}/${spec.titleMaxChars}` });
   }
   if (channel === "show_hn" || channel === "show_gn" || channel === "disquiet") {
-    const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|추천\s?부탁|추천(?:을|해)?\s?(?:눌러|주세요)|투표\s?(?:부탁|해\s?주세요)|좋아요\s?(?:부탁|눌러)/i.test(normalizeForMatch(text));
+    const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|추천\s?부탁|추천(?:을|해)?\s?(?:눌러|주세요)|(?:추천|좋아요|업보트|투표)\s?(?:버튼|표)(?:을|를)?\s?(?:눌러|부탁)|투표\s?(?:부탁|해\s?주세요)|좋아요\s?(?:부탁|눌러)/i.test(normalizeForMatch(text));
     results.push({ rule: "no_vote_request", ok: !asksVotes });
   }
   return results;
