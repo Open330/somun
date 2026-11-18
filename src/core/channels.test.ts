@@ -79,6 +79,9 @@ describe("disquiet lint", () => {
     const rules = failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/");
     expect(rules).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다. 추천 버튼을 눌러 주세요.\n\nhttps://tool.example/")).toContain("no_vote_request");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다. 추천 좀 눌러 주세요.\n\nhttps://tool.example/")).toContain("no_vote_request");
+    // 제품 기능 이름인 '추천'을 누르라는 안내는 추천 요청이 아니다.
+    expect(failed("Tool로 기록 저장하기", "Tool은 추천 탭을 눌러 비슷한 기록을 보여 줍니다.\n\nhttps://tool.example/")).not.toContain("no_vote_request");
   });
 
   it("accepts the registered product page or the homepage as the link, and requires a link", () => {
@@ -86,6 +89,8 @@ describe("disquiet lint", () => {
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/")).not.toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://unrelated.example/?next=https://disquiet.io/@maker/products/tool")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/announcement")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/tool")).not.toContain("preferred_link");
   });
 
   it("only claims authorship when the facts establish it", () => {
