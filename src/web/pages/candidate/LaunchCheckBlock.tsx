@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CopyIssue } from "@core/consistency";
 import type { CheckItem } from "@core/launch-check";
 import type { LaunchCheck } from "@shared/types";
@@ -73,17 +73,31 @@ const MARK: Record<CheckItem["level"], [string, string]> = { ok: ["✓", "badge 
 export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homepage?: string }) {
   const [data, setData] = useState<LaunchCheck | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const details = useRef<HTMLDetailsElement>(null);
+  // 요청마다 번호를 붙여 마지막 요청의 답만 쓴다. 다른 글감으로 옮긴 뒤 늦게 온 답이 새 글감에 붙지 않게.
+  const ticket = useRef(0);
   const load = async () => {
+    const mine = ++ticket.current;
     // 다시 점검하는 동안이나 실패했을 때 이전 결과를 통과처럼 남기지 않는다.
     setData(null);
     setState("loading");
     try {
-      setData(await api<LaunchCheck>(`/candidates/${cid}/launch-check`));
+      const result = await api<LaunchCheck>(`/candidates/${cid}/launch-check`);
+      if (mine !== ticket.current) return;
+      setData(result);
       setState("idle");
     } catch {
-      setState("error");
+      if (mine === ticket.current) setState("error");
     }
   };
+  // 글감이 바뀌면 이전 결과를 지우고, 패널이 열려 있으면 새 글감을 점검한다.
+  useEffect(() => {
+    ticket.current++;
+    setData(null);
+    setState("idle");
+    if (details.current?.open) void load();
+    // load는 cid로 정해지므로 cid만 본다.
+  }, [cid]);
   const failing = (data?.items.filter((i) => i.level !== "ok").length ?? 0) + (data?.pages?.issues.length ?? 0) + (data?.copy?.length ?? 0);
   const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
   // 홈페이지나 하위 페이지를 열지 못했으면 통과라고 하지 않는다.
@@ -97,10 +111,11 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   return (
     <section className="side-block">
       <details
+        ref={details}
         className="raw"
         onToggle={(ev) => {
           // 열 때마다 다시 묻는다. 승인 문장·설명을 고친 뒤 다시 열면 새 결과를 보여 준다(사이트 점검은 서버가 기억해 다시 열지 않는다).
-          if ((ev.target as HTMLDetailsElement).open && state !== "loading") void load();
+          if ((ev.target as HTMLDetailsElement).open) void load();
         }}
       >
         <summary>
