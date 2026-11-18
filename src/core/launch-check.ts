@@ -8,7 +8,14 @@ export type CheckItem = { id: CheckId; level: CheckLevel; value?: string };
 
 const MAX_HTML = 200_000;
 
-const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
+const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" };
+/** HTML·XML 문자 참조를 한 번에 푼다(&amp; &#38; &#x26;). 한 번만 풀어야 &amp;lt;가 <로 두 번 풀리지 않는다. */
+const decode = (s: string) =>
+  s.replace(/&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|(amp|lt|gt|quot|apos));/gi, (whole, dec?: string, hex?: string, name?: string) => {
+    if (name) return NAMED[name.toLowerCase()] ?? whole;
+    const code = dec ? Number(dec) : parseInt(hex!, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
 const clip = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** 대문자 A–Z만 소문자로. toLowerCase는 İ 같은 글자를 두 글자로 늘려 원문과 위치가 어긋난다. */

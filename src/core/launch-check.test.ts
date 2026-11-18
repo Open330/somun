@@ -110,6 +110,11 @@ describe("sitemap pages and page copy", () => {
     expect(checkSitemap({ status: 200, contentType: "application/xml", body: xml })).toEqual({ id: "sitemap", level: "ok", value: "2" });
   });
 
+  it("decodes numeric character references once", () => {
+    expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
+    expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");
+  });
+
   it("reads namespaced sitemap entries", () => {
     expect(sitemapPages(`<s:urlset xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"><s:url><s:loc>https://a.example/docs</s:loc></s:url></s:urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/docs"]);
   });
