@@ -207,6 +207,24 @@ describe("launchCheck limits and coverage", () => {
     }
   });
 
+  it("re-crawls after two minutes when the project sitemap failed transiently and the root one was used", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const home = "https://x.example/project/";
+      web.set(home, { body: GOOD("Project home page title") });
+      web.set("https://x.example/project/sitemap.xml", { status: 503, body: "busy" });
+      web.set("https://x.example/sitemap.xml", { body: urlset("https://x.example/other/docs"), type: "application/xml" });
+      const { ctx, id } = setup(home);
+      expect((await launchCheck(ctx, "o", id)).pages).toBeUndefined();
+      web.set("https://x.example/project/sitemap.xml", { body: urlset("https://x.example/project/docs"), type: "application/xml" });
+      web.set("https://x.example/project/docs", { body: GOOD("Docs page title is fine") });
+      vi.setSystemTime(Date.now() + 121_000);
+      expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ checked: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads a gzip child sitemap that starts with a comment", async () => {
     const home = "https://w.example/";
     web.set(home, { body: GOOD("Home page title is fine") });

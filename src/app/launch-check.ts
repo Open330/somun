@@ -135,7 +135,8 @@ async function crawl(requested: string): Promise<Crawl> {
   const items = [...checkPage(page.body), checkRobots(robots), checkSitemap(sitemap)];
   const pages = await checkSubpages(homepage, sitemap, deadline);
   const transient = (r: Fetched) => !r || r.status >= 500;
-  const partial = transient(sitemap) || Boolean(pages && (pages.unreachable > 0 || pages.missedSitemaps));
+  // 먼저 보려던 프로젝트 사이트맵이 잠시 실패해 출처 사이트맵으로 넘어갔어도 미완료다(404는 사이트맵이 없다는 뜻이라 아니다).
+  const partial = transient(sitemap) || Boolean(sub && transient(ownSitemap)) || Boolean(pages && (pages.unreachable > 0 || pages.missedSitemaps));
   return { items, pages, homeCopy: pageCopy(page.body), partial };
 }
 
