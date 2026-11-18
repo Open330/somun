@@ -17,9 +17,10 @@ export function listProducts(ctx: AppContext, ownerId: string): ProductRow[] {
     (
       ctx.db.$client
         .prepare(
-          `SELECT repo, id, json_extract(evidence, '$.stars') AS stars, json_extract(evidence, '$.homepage') AS homepage FROM (
-        SELECT repo, id, evidence, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY created_at DESC, id DESC) AS rn
-        FROM candidates WHERE owner_id = ? AND repo IN (${marks})) WHERE rn = 1`,
+          // 순위는 id·시각만으로 매기고, 이긴 한 줄의 근거에서만 값을 꺼낸다(큰 근거를 정렬에 싣지 않게).
+          `SELECT c.repo AS repo, c.id AS id, json_extract(c.evidence, '$.stars') AS stars, json_extract(c.evidence, '$.homepage') AS homepage
+        FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY repo ORDER BY created_at DESC, id DESC) AS rn FROM candidates WHERE owner_id = ? AND repo IN (${marks})) r
+        JOIN candidates c ON c.id = r.id WHERE r.rn = 1`,
         )
         .all(ownerId, ...repos) as { repo: string; id: number; stars: number | null; homepage: string | null }[]
     ).map((r) => [r.repo, r]),
