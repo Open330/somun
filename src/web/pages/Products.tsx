@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import type { ProductRow } from "@shared/types";
-import { ErrorState, Skeleton, fmtDate } from "../components/ui";
+import { ErrorState, Skeleton } from "../components/ui";
 import { useResource } from "../lib/api";
-import { t } from "../i18n";
+import { dateLocale, t } from "../i18n";
 
 const STATUS: Record<ProductRow["status"], [string, string]> = {
   ready: ["준비됨", "badge ok"],
@@ -10,9 +10,13 @@ const STATUS: Record<ProductRow["status"], [string, string]> = {
   hold: ["보관", "badge outline"],
 };
 
+/** 해가 바뀐 지난 게시도 최근처럼 보이지 않게 연도까지 쓴다. */
+const fullDate = (ts: number) => new Date(ts).toLocaleDateString(dateLocale(), { year: "numeric", month: "numeric", day: "numeric" });
+
 /** 제품 표: 무엇을 먼저 알릴지 고르도록 제품마다 승인한 한 줄, 주소, 최근 스타, 마지막 게시를 한곳에 모은다. */
 export default function Products() {
-  const { data: rows, error, reload } = useResource<ProductRow[]>("/products", ["candidates", "publications"]);
+  // 다시 수집해 스타·홈페이지만 바뀐 경우도 반영하도록 소스 변경에도 다시 불러온다.
+  const { data: rows, error, reload } = useResource<ProductRow[]>("/products", ["candidates", "publications", "sources"]);
   if (error) return <ErrorState title={t("제품 목록을 불러오지 못했습니다")} message={error} onRetry={reload} />;
   return (
     <>
@@ -54,7 +58,7 @@ export default function Products() {
                     <div className="tiny muted">
                       {p.repo}
                       {p.stars !== undefined ? ` · ${t("스타 {n}", { n: p.stars })}` : ""}
-                      {` · ${p.lastPublishedAt ? t("마지막 게시 {date}", { date: fmtDate(p.lastPublishedAt) }) : t("아직 게시 안 함")}`}
+                      {` · ${p.lastPublishedAt ? t("마지막 게시 {date}", { date: fullDate(p.lastPublishedAt) }) : t("아직 게시 안 함")}`}
                     </div>
                     <div className="small">
                       <span className="badge outline">KO</span> {p.oneLinerKo ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
@@ -62,7 +66,7 @@ export default function Products() {
                     <div className="small">
                       <span className="badge outline">EN</span> {p.oneLinerEn ?? <span className="muted">{t("승인한 한 줄 없음")}</span>}
                     </div>
-                    {p.homepage && (
+                    {p.homepage && /^https?:\/\//i.test(p.homepage) && (
                       <div className="tiny">
                         <a href={p.homepage} target="_blank" rel="noreferrer">
                           {p.homepage.replace(/^https?:\/\//, "")}
