@@ -13,7 +13,7 @@ import type { Config } from "./config.js";
 const LANDING = /<!--landing:start-->[\s\S]*?<!--landing:end-->/;
 
 /** 웹 앱의 라우트(App.tsx). 이 밖의 주소는 앱 화면을 그대로 내려주되 404로 알린다(검색엔진·모니터링이 없는 페이지를 정상으로 보지 않게). */
-const APP_ROUTES = [/^\/$/, /^\/c\/\d+$/, /^\/(?:published|connectors|voice|settings|welcome)$/, /^\/github\/(?:setup|pick)$/, /^\/setup\/github-app$/, /^\/auth\/callback$/];
+const APP_ROUTES = [/^\/$/, /^\/c\/\d+$/, /^\/(?:products|published|connectors|voice|settings|welcome)$/, /^\/github\/(?:setup|pick)$/, /^\/setup\/github-app$/, /^\/auth\/callback$/];
 
 /** 첫 화면 머리말의 영어판. 웹 앱처럼 Accept-Language에 한국어가 있으면 한국어, 없으면 영어. 헤더가 없으면(일부 크롤러) 기본 한국어. */
 const EN_HEAD = {
