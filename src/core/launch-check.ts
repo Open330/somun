@@ -15,8 +15,8 @@ const attr = (tag: string, name: string): string | undefined => {
 
 function metas(head: string): Map<string, string> {
   const out = new Map<string, string>();
-  // [^<>]: 닫히지 않은 <meta가 많아도 다음 < 에서 멈춰 한 번만 훑는다.
-  for (const tag of head.match(/<meta\b[^<>]*>/gi) ?? []) {
+  // 따옴표 안의 < 는 값의 일부다(content="price < $20"). 세 갈래의 첫 글자가 서로 달라 되돌아가지 않는다.
+  for (const tag of head.match(/<meta\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi) ?? []) {
     const key = (attr(tag, "property") ?? attr(tag, "name"))?.toLowerCase();
     const content = attr(tag, "content");
     if (key && content !== undefined && !out.has(key)) out.set(key, content.trim());
@@ -27,12 +27,20 @@ function metas(head: string): Map<string, string> {
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 const clip = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-/** lower에서 from 이후 처음 나오는 <tag(뒤가 글자가 아닌 것)의 위치. */
-function openAt(lower: string, tag: string, from: number): number {
-  for (let i = lower.indexOf(`<${tag}`, from); i >= 0; i = lower.indexOf(`<${tag}`, i + 1)) {
-    if (!/[a-z0-9-]/.test(lower[i + tag.length + 1] ?? "")) return i;
+/** 대문자 A–Z만 소문자로. toLowerCase는 İ 같은 글자를 두 글자로 늘려 원문과 위치가 어긋난다. */
+const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+
+/** lower에서 from 이후 처음 나오는 <tag 또는 </tag(뒤가 이름 글자가 아닌 것)의 위치. </scripture는 </script가 아니다. */
+function tagAt(lower: string, prefix: string, from: number): number {
+  for (let i = lower.indexOf(prefix, from); i >= 0; i = lower.indexOf(prefix, i + 1)) {
+    if (!/[a-z0-9-]/.test(lower[i + prefix.length] ?? "")) return i;
   }
   return -1;
+}
+
+/** lower에서 from 이후 처음 나오는 <tag(뒤가 글자가 아닌 것)의 위치. */
+function openAt(lower: string, tag: string, from: number): number {
+  return tagAt(lower, `<${tag}`, from);
 }
 
 /**
@@ -40,7 +48,7 @@ function openAt(lower: string, tag: string, from: number): number {
  * 정규식 대신 indexOf로 앞에서 뒤로 한 번만 훑는다. 닫히지 않은 블록은 끝까지 지운다.
  */
 function removeBlocks(html: string, tags: string[]): string {
-  const lower = html.toLowerCase();
+  const lower = asciiLower(html);
   const next = new Map<string, number>();
   const find = (key: string, from: number) => {
     let at = next.get(key);
@@ -63,7 +71,7 @@ function removeBlocks(html: string, tags: string[]): string {
       const close = lower.indexOf("-->", start + 4);
       i = close < 0 ? html.length : close + 3;
     } else {
-      const close = lower.indexOf(`</${tag}`, start + tag.length + 1);
+      const close = tagAt(lower, `</${tag}`, start + tag.length + 1);
       const gt = close < 0 ? -1 : lower.indexOf(">", close);
       i = gt < 0 ? html.length : gt + 1;
     }
@@ -72,11 +80,11 @@ function removeBlocks(html: string, tags: string[]): string {
 
 /** 첫 <title>의 글자. 주석·스크립트를 지운 뒤에 찾으므로 스크립트 문자열 속 <title>은 읽지 않는다. */
 function titleOf(clean: string): string {
-  const lower = clean.toLowerCase();
+  const lower = asciiLower(clean);
   const open = openAt(lower, "title", 0);
   if (open < 0) return "";
   const gt = lower.indexOf(">", open);
-  const close = gt < 0 ? -1 : lower.indexOf("</title", gt);
+  const close = gt < 0 ? -1 : tagAt(lower, "</title", gt);
   return close < 0 ? "" : decode(clean.slice(gt + 1, close).trim());
 }
 
@@ -129,7 +137,9 @@ export function checkSitemap(res: Fetched): CheckItem {
   if (!res || res.status >= 400) return { id: "sitemap", level: "warn", value: res ? String(res.status) : "none" };
   const xml = /xml/i.test(res.contentType) || /^\s*(<\?xml|<urlset|<sitemapindex)/i.test(res.body);
   if (!xml) return { id: "sitemap", level: "fail", value: "html" };
-  return { id: "sitemap", level: "ok", value: String((res.body.match(/<loc>/gi) ?? []).length) };
+  // xml로 와도 urlset·sitemapindex가 없으면 사이트맵이 아니다(200으로 온 오류 문서).
+  if (!/<(?:urlset|sitemapindex)\b/i.test(res.body)) return { id: "sitemap", level: "fail", value: /<html\b/i.test(res.body) ? "html" : "invalid" };
+  return { id: "sitemap", level: "ok", value: String(sitemapLocs(res.body).length) };
 }
 
 /** 홈페이지의 검색 제목과 설명 원문(자르지 않음). 문구 일관성 점검(core/consistency)에 쓴다. */
@@ -140,12 +150,24 @@ export function pageCopy(rawHtml: string): { title?: string; description?: strin
   return { title: title || undefined, description: description || undefined };
 }
 
-/** url이 홈페이지와 같은 출처이고 홈페이지 경로 아래(또는 홈페이지 자신)인가. GitHub Pages 프로젝트 사이트는 출처를 다른 프로젝트와 나눠 쓴다. */
+/** 사이트의 기준 경로. 마지막 마디가 파일(index.html)이면 그 폴더다. 루트는 빈 문자열. */
+export function siteBase(homepage: string): string {
+  const path = new URL(homepage).pathname;
+  const dir = /\/[^/]*\.[^/]*$/.test(path) ? path.replace(/\/[^/]*$/, "") : path;
+  return dir.replace(/\/+$/, "");
+}
+
+/** url이 홈페이지와 같은 출처이고 홈페이지 경로 아래(또는 그 폴더 자신)인가. GitHub Pages 프로젝트 사이트는 출처를 다른 프로젝트와 나눠 쓴다. */
 export function withinSite(url: string, homepage: string): boolean {
   let u: URL, home: URL;
   try { u = new URL(url); home = new URL(homepage); } catch { return false; }
-  const base = home.pathname.replace(/\/+$/, "");
+  const base = siteBase(homepage);
   return u.origin === home.origin && (!base || u.pathname === base || u.pathname.startsWith(`${base}/`));
+}
+
+/** 사이트맵의 <loc> 주소들. 주석으로 막은 항목(<!-- <url>…</url> -->)은 사이트맵에 없는 것이다. */
+export function sitemapLocs(xml: string): string[] {
+  return [...removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => decode(m[1]!));
 }
 
 /**
@@ -153,16 +175,17 @@ export function withinSite(url: string, homepage: string): boolean {
  * 생성기로 만든 하위 페이지(BarShelf 위젯 25개 등)가 검색 노출 대부분을 받으므로 홈페이지만 보면 모자라다.
  */
 export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
-  const home = new URL(homepage);
-  const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
+  // 쿼리가 다르면 다른 페이지다(/?page=2). 끝 / 차이와 #만 같은 것으로 본다.
+  const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+  const home = norm(new URL(homepage));
   const out: string[] = [];
-  // 주석으로 막은 항목(<!-- <url>…</url> -->)은 사이트맵에 없는 것이다.
-  for (const m of removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+  const seen = new Set<string>();
+  for (const loc of sitemapLocs(xml)) {
     let url: URL;
-    try { url = new URL(decode(m[1]!)); } catch { continue; }
-    if (!withinSite(url.href, homepage) || norm(url) === norm(home) || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
+    try { url = new URL(loc); } catch { continue; }
+    if (!withinSite(url.href, homepage) || norm(url) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
-    if (!out.includes(url.href)) out.push(url.href);
+    if (!seen.has(url.href)) { seen.add(url.href); out.push(url.href); }
     if (out.length >= limit) break;
   }
   return out;

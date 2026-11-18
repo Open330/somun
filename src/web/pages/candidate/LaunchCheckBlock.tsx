@@ -34,7 +34,9 @@ function hint(item: CheckItem): string | undefined {
       ? t("URL {n}개", { n: value ?? "0" })
       : value === "html"
         ? t("HTML이 나옵니다. SPA가 모든 경로에 index.html을 돌려주는지 확인하세요.")
-        : t("없습니다. 페이지가 여럿이면 만들어 두세요.");
+        : value === "invalid"
+          ? t("사이트맵 형식(urlset·sitemapindex)이 아닙니다.")
+          : t("없습니다. 페이지가 여럿이면 만들어 두세요.");
   if (level === "ok") return value;
   if (id === "title") return level === "fail" ? t("<title>이 없습니다.") : t("{value} · 10~70자가 좋습니다.", { value: value ?? "" });
   if (id === "description")
@@ -84,7 +86,11 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
   // 홈페이지나 하위 페이지를 열지 못했으면 통과라고 하지 않는다.
   // 사이트맵 상한(25개)으로 덜 연 것은 문장으로 알리고, 열려다 실패한 페이지가 있으면 통과라고 하지 않는다.
-  const incomplete = Boolean(data?.unreachable) || data?.pages?.checked === 0 || (data?.pages?.unreachable ?? 0) > 0;
+  const incomplete =
+    Boolean(data?.unreachable) ||
+    data?.pages?.checked === 0 ||
+    (data?.pages?.unreachable ?? 0) > 0 ||
+    (data?.pages?.missedSitemaps ?? 0) > 0;
   return (
     <section className="side-block">
       <details
@@ -146,6 +152,9 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             <div className="tiny muted">
               {t("사이트맵 {total}개 가운데 {checked}개를 열어 봤습니다.", { total: data.pages.total, checked: data.pages.checked })}
               {data.pages.unreachable ? ` ${t("{n}개는 열지 못했습니다.", { n: data.pages.unreachable })}` : ""}
+              {data.pages.missedSitemaps
+                ? ` ${t("하위 사이트맵 {n}개를 열지 못해 그 안의 페이지는 세지 못했습니다.", { n: data.pages.missedSitemaps })}`
+                : ""}
             </div>
             {data.pages.issues.length ? (
               <ul className="launch-check small">

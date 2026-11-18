@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPage, checkRobots, checkSitemap, pageCopy, sitemapPages, withinSite } from "./launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapPages, withinSite } from "./launch-check.js";
 
 const level = (items: ReturnType<typeof checkPage>, id: string) => items.find((i) => i.id === id)?.level;
 
@@ -45,6 +45,8 @@ describe("robots and sitemap", () => {
   });
 });
 
+const urlsetOf = (...locs: string[]) => `<urlset>${locs.map((l) => `<url><loc>${l}</loc></url>`).join("")}</urlset>`;
+
 describe("hostile pages", () => {
   it("parses malformed pages in linear time", () => {
     for (const html of ["<".repeat(200_000), "<script".repeat(28_000), "<title>".repeat(28_000), "<meta".repeat(40_000), "<!--".repeat(50_000), "<head".repeat(40_000)]) {
@@ -53,6 +55,15 @@ describe("hostile pages", () => {
       pageCopy(html);
       expect(performance.now() - start).toBeLessThan(300);
     }
+  });
+
+  it("reads quoted < in meta, keeps offsets with non-ASCII letters, and needs an exact closing tag", () => {
+    expect(level(checkPage(`<meta name="description" content="Find items whose price is < $20 in seconds, every day.">`), "description")).toBe("ok");
+    expect(pageCopy(`<head><meta name="author" content="İ"><title>Product launch notes</title></head>`).title).toBe("Product launch notes");
+    expect(pageCopy(`<script>const x = "</scripture><title>Wrong title</title>";</script><title>Correct title</title>`).title).toBe("Correct title");
+    const start = performance.now();
+    for (const html of [`<meta "`.repeat(30_000), `<meta '`.repeat(30_000), `<meta content="${"a".repeat(100_000)}`]) checkPage(html);
+    expect(performance.now() - start).toBeLessThan(300);
   });
 
   it("does not read a title from script text and ignores commented sitemap entries", () => {
@@ -68,6 +79,18 @@ describe("sitemap pages and page copy", () => {
       <url><loc>https://barshelf.jiun.dev/widgets/weather#top</loc></url><url><loc>https://barshelf.jiun.dev/widgets/battery</loc></url></urlset>`;
     expect(sitemapPages(xml, "https://barshelf.jiun.dev", 10)).toEqual(["https://barshelf.jiun.dev/widgets/weather", "https://barshelf.jiun.dev/widgets/battery"]);
     expect(sitemapPages(xml, "https://barshelf.jiun.dev/", 1)).toEqual(["https://barshelf.jiun.dev/widgets/weather"]);
+  });
+
+  it("rejects an XML document that is not a sitemap", () => {
+    expect(checkSitemap({ status: 200, contentType: "application/xml", body: "<error>Not found</error>" })).toEqual({ id: "sitemap", level: "fail", value: "invalid" });
+  });
+
+  it("uses the folder of an index document as the site base and keeps query pages", () => {
+    expect(siteBase("https://a.example/project/index.html")).toBe("/project");
+    expect(siteBase("https://a.example/project/")).toBe("/project");
+    expect(siteBase("https://a.example/")).toBe("");
+    expect(withinSite("https://a.example/project/docs", "https://a.example/project/index.html")).toBe(true);
+    expect(sitemapPages(urlsetOf("https://example.org/", "https://example.org/?page=2"), "https://example.org/", 10)).toEqual(["https://example.org/?page=2"]);
   });
 
   it("tells whether a URL stays under the homepage path", () => {

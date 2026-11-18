@@ -21,6 +21,14 @@ const COMMON = new Set(["I", "AI", "UI", "API", "CLI", "OS", "URL", "OTP", "PR",
 const words = (s: string) => s.split(/\s+/).filter(Boolean);
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** 앞의 기호와 뒤의 기호(+·# 제외)를 뗀다. 정규식 대신 앞뒤에서 한 번씩만 걷는다. */
+function trimToken(raw: string): string {
+  let a = 0, b = raw.length;
+  while (a < b && !/\w/.test(raw[a]!)) a++;
+  while (b > a && !/[\w+#]/.test(raw[b - 1]!)) b--;
+  return raw.slice(a, b);
+}
+
 /** README가 지원 종료라고 적은 이름들. 맨 앞의 관사·회사 이름은 뺀 이름도 함께 돌려준다(The Google Gemini CLI → Gemini CLI). */
 export function retiredNames(readme: string): string[] {
   // **Gemini CLI**, `Gemini CLI`, [Gemini CLI](url) 같은 Markdown 꾸밈을 벗겨야 이름 바로 뒤의 표현과 붙는다.
@@ -28,11 +36,14 @@ export function retiredNames(readme: string): string[] {
   const text = readme
     .replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,500}\)/g, "$1")
     .replace(/[*`]+/g, "")
-    .replace(/(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "");
+    .replace(/(?<!\w)_+|_+(?!\w)/g, "");
   const out = new Set<string>();
   for (const m of text.matchAll(RETIRED_MARK)) {
-    // 짧은 구간 안에서만 공백을 하나로 모은다. 긴 공백 줄도 이 구간 길이만큼만 본다.
-    const before = text.slice(Math.max(0, m.index - WINDOW), m.index).replace(/\s+/g, " ");
+    // 대문자로 시작한 표현(Deprecated flags…)은 새 문장이라 앞 낱말을 가리키지 않는다.
+    if (/^[A-Z]/.test(m[0])) continue;
+    // 짧은 구간 안에서만 본다. 빈 줄(문단 경계) 앞은 다른 문단이고, 공백은 하나로 모은다.
+    const raw = text.slice(Math.max(0, m.index - WINDOW), m.index);
+    const before = raw.slice(raw.search(/\n\s*\n(?![\s\S]*\n\s*\n)/) + 1).replace(/\s+/g, " ");
     const stripped = before.replace(CONNECTOR, "");
     // 문장이 끝난 뒤에 나온 표현("…Tend. Deprecated options")은 앞 낱말을 가리키지 않는다.
     if (/[.:!?]$/.test(stripped)) continue;
@@ -53,13 +64,15 @@ export function retiredNames(readme: string): string[] {
 /** 짧은 문구에서 고유명 후보. 대문자가 든 라틴 낱말 가운데 일반 낱말과, 문장 첫머리라 대문자가 된 평범한 낱말(Record, Turn)은 뺀다. MinIO·OpenCode처럼 안에 대문자가 더 있으면 첫머리여도 남긴다. */
 export function properTerms(text: string): string[] {
   const out: string[] = [];
-  const tokens = text.split(/(\s+|[,;:()·/—–"“”'‘’]|\.(?=\s|$)|[!?。])/);
+  // 문구는 짧다. 긴 문구는 앞부분만 보고, 낱말이 아주 길면(기호 줄 등) 고유명으로 보지 않는다.
+  const tokens = text.slice(0, 2000).split(/(\s+|[,;:()·/—–"“”'‘’]|\.(?=\s|$)|[!?。])/);
   let sentenceStart = true;
   for (const raw of tokens) {
     if (raw === undefined || !raw.trim()) continue;
     if (/^[.!?。:—–]$/.test(raw)) { sentenceStart = true; continue; }
     if (/^[,;()·/"“”'‘’]$/.test(raw)) continue;
-    const token = raw.replace(/^[^\w]+|[^\w+#]+$/g, "");
+    if (raw.length > 80) { sentenceStart = false; continue; }
+    const token = trimToken(raw);
     const latin = /^[A-Za-z][\w+#.-]*$/.test(token);
     const ordinary = /^[A-Z][a-z]+$/.test(token);
     if (latin && /[A-Z]/.test(token) && !(sentenceStart && ordinary) && !COMMON.has(token) && token.length >= 2) out.push(token);
@@ -73,7 +86,7 @@ export function copyIssues(input: { readme?: string; readmeTruncated?: boolean; 
   if (!readme.trim()) return [];
   // 낱말 단위로 찾는다. Git이 GitHub 안에 들어 있다고 README에 있는 것으로 치지 않는다.
   // 라틴 글자·숫자로만 경계를 본다. 한국어 조사(MinIO를)는 붙어 있어도 언급으로 친다.
-  const mentioned = (term: string) => new RegExp(`(?<![A-Za-z0-9])${escape(term)}(?![A-Za-z0-9])`, "i").test(readme);
+  const mentioned = (term: string) => new RegExp(`(?<![A-Za-z0-9_])${escape(term)}(?![A-Za-z0-9_])`, "i").test(readme);
   const retired = retiredNames(readme);
   const name = input.productName?.toLowerCase();
   const issues: CopyIssue[] = [];

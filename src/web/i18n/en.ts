@@ -1213,6 +1213,9 @@ export const en: Record<string, string> = {
   "열어 본 하위 페이지는 모두 통과했습니다.": "Every page opened passed.",
   "하위 페이지를 하나도 열지 못했습니다.": "None of the other pages could be opened.",
   "다 보지 못함": "Incomplete",
+  "하위 사이트맵 {n}개를 열지 못해 그 안의 페이지는 세지 못했습니다.":
+    "{n} child sitemaps could not be opened, so their pages are not counted.",
+  "사이트맵 형식(urlset·sitemapindex)이 아닙니다.": "Not a sitemap (no urlset or sitemapindex).",
   "문구 일관성": "Copy consistency",
   "저장소 설명·홈페이지·승인한 한 줄에서 README와 어긋난 이름을 찾지 못했습니다.":
     "No names in the repository description, homepage or approved one-liners conflict with the README.",

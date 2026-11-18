@@ -1,5 +1,5 @@
 import { copyIssues, type CopyIssue, type CopySource } from "../core/consistency.js";
-import { checkPage, checkRobots, checkSitemap, pageCopy, sitemapPages, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapLocs, sitemapPages, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
 import { publicFetch } from "../infra/net.js";
 import type { Evidence, LaunchCheck, LaunchCheckPages } from "../shared/types.js";
 import type { AppContext } from "./context.js";
@@ -22,15 +22,27 @@ const cache = new Map<string, { at: number; crawl: Crawl }>();
 const inflight = new Map<string, Promise<Crawl>>();
 
 let active = 0;
-const waiting: (() => void)[] = [];
-async function slot<T>(fn: () => Promise<T>): Promise<T> {
-  if (active >= GLOBAL_SUBPAGES) await new Promise<void>((resolve) => waiting.push(resolve));
-  active++;
+const waiting: { grant: () => void }[] = [];
+/**
+ * 서버 전체에서 동시에 여는 하위 페이지 수를 묶는다. 끝난 자리는 숫자를 줄이지 않고 기다리던 쪽에 바로 넘겨,
+ * 그 사이에 끼어든 요청이 같은 자리를 차지하지 못하게 한다. 마감까지 자리를 못 얻으면 열지 않는다(undefined).
+ */
+async function slot<T>(deadline: number, fn: () => Promise<T>): Promise<T | undefined> {
+  if (active < GLOBAL_SUBPAGES) active++;
+  else {
+    const granted = await new Promise<boolean>((resolve) => {
+      const entry = { grant: () => { clearTimeout(timer); resolve(true); } };
+      const timer = setTimeout(() => { waiting.splice(waiting.indexOf(entry), 1); resolve(false); }, Math.max(0, deadline - Date.now()));
+      waiting.push(entry);
+    });
+    if (!granted) return undefined;
+  }
   try {
     return await fn();
   } finally {
-    active--;
-    waiting.shift()?.();
+    const next = waiting.shift();
+    if (next) next.grant();
+    else active--;
   }
 }
 
@@ -58,8 +70,8 @@ async function get(url: string, opts: Get): Promise<Fetched> {
   }
 }
 
-/** 사이트맵 본문이 진짜 사이트맵인가. 200으로 온 오류 페이지(content-type이 xml이어도)는 아니다. */
-const realSitemap = (res: Fetched) => checkSitemap(res).level === "ok" && /<(?:urlset|sitemapindex)\b/i.test(res!.body);
+/** 사이트맵 본문이 진짜 사이트맵인가(사이트맵 항목 판정과 같은 기준). 200으로 온 오류 문서는 아니다. */
+const realSitemap = (res: Fetched) => checkSitemap(res).level === "ok";
 
 /** 사이트맵의 하위 페이지를 점검한다. 사이트맵 색인(sitemapindex)이면 같은 출처의 첫 하위 사이트맵 두 개까지 읽는다. */
 async function checkSubpages(homepage: string, sitemap: Fetched, deadline: number): Promise<LaunchCheckPages | undefined> {
@@ -67,29 +79,31 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
   const origin = new URL(homepage).origin;
   const sameOrigin = (u: URL) => u.origin === origin;
   let xmls = [sitemap!.body];
+  let missedSitemaps = 0;
   if (/<sitemapindex\b/i.test(sitemap!.body)) {
     const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } }).slice(0, 2);
-    xmls = (await Promise.all(children.map((u) => get(u, { deadline, scope: sameOrigin })))).filter(realSitemap).map((r) => r!.body);
+    const fetched = await Promise.all(children.map((u) => get(u, { deadline, scope: sameOrigin })));
+    // 열지 못한 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.
+    missedSitemaps = fetched.filter((r) => !realSitemap(r)).length;
+    xmls = fetched.filter(realSitemap).map((r) => r!.body);
   }
   // 하위 사이트맵마다 따로 고른다. 하나로 이으면 앞 사이트맵이 길 때 뒤 사이트맵이 잘린다.
-  const all = [...new Set(xmls.flatMap((xml) => sitemapPages(xml, homepage, MAX_PAGES * 4)))];
-  if (!all.length) return undefined;
+  const all = [...new Set(xmls.flatMap((xml) => sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER)))];
+  if (!all.length) return missedSitemaps ? { checked: 0, unreachable: 0, total: 0, issues: [], missedSitemaps } : undefined;
   const urls = all.slice(0, MAX_PAGES);
   const inScope = (u: URL) => withinSite(u.href, homepage);
   const results: { url: string; items?: CheckItem[] }[] = [];
   for (let i = 0; i < urls.length; i += PAGE_CONCURRENCY) {
     const batch = urls.slice(i, i + PAGE_CONCURRENCY);
-    const pages = await Promise.all(batch.map((u) => slot(() => get(u, { deadline, scope: inScope }))));
+    const pages = await Promise.all(batch.map((u) => slot(deadline, () => get(u, { deadline, scope: inScope }))));
     batch.forEach((url, j) => {
       const page = pages[j];
       results.push({ url, items: page && page.status < 400 ? checkPage(page.body) : undefined });
     });
   }
   const issues = results.flatMap((r) => (r.items ? [{ url: r.url, items: r.items.filter((it) => it.level !== "ok") }] : [])).filter((r) => r.items.length);
-  return { checked: results.filter((r) => r.items).length, unreachable: results.filter((r) => !r.items).length, total: all.length, issues };
+  return { checked: results.filter((r) => r.items).length, unreachable: results.filter((r) => !r.items).length, total: all.length, issues, ...(missedSitemaps ? { missedSitemaps } : {}) };
 }
-
-const sitemapLocs = (xml: string) => [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]!);
 
 async function crawl(requested: string): Promise<Crawl> {
   const deadline = Date.now() + CRAWL_BUDGET_MS;
@@ -98,7 +112,8 @@ async function crawl(requested: string): Promise<Crawl> {
   // 홈페이지가 다른 주소(www, 다른 경로)로 넘어가면 그 주소를 기준으로 robots·사이트맵·하위 페이지를 본다.
   const homepage = page.url ?? requested;
   const origin = new URL(homepage).origin;
-  const sub = new URL(homepage).pathname.replace(/\/+$/, "");
+  // /project/index.html로 넘어가도 기준은 /project 폴더다.
+  const sub = siteBase(homepage);
   const [robots, rootSitemap, ownSitemap] = await Promise.all([
     get(`${origin}/robots.txt`, { deadline }),
     get(`${origin}/sitemap.xml`, { deadline }),

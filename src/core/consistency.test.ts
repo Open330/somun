@@ -27,6 +27,19 @@ describe("retiredNames edge cases", () => {
     expect(retiredNames("Configure Tend. Deprecated options are listed below.")).toEqual([]);
   });
 
+  it("keeps double underscores and does not cross a paragraph or start a new sentence", () => {
+    expect(retiredNames("OLD__SYNC is deprecated.")).toEqual(["OLD__SYNC"]);
+    expect(retiredNames("Works with Codex\n\nDeprecated flags are listed below.")).toEqual([]);
+    expect(retiredNames("Works with Codex\nDeprecated flags are listed below.")).toEqual([]);
+  });
+
+  it("splits long punctuation runs in short copy quickly", () => {
+    const start = performance.now();
+    properTerms(`Filter${"=".repeat(50_000)}Results and More`);
+    copyIssues({ readme: "x", readmeTruncated: false, texts: [{ source: "homepage_description", text: `A ${"=".repeat(200_000)}B` }] });
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
   it("scans long runs of whitespace quickly", () => {
     const start = performance.now();
     expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}x`)).toEqual([]);
@@ -78,6 +91,10 @@ describe("copyIssues", () => {
       { kind: "not_in_readme", source: "homepage_title", term: "MinIO" },
       { kind: "not_in_readme", source: "description", term: "Git" },
     ]);
+  });
+
+  it("treats underscores as part of a name when matching the README", () => {
+    expect(copyIssues({ readme: "Use OLD_SYNC_NEXT.", readmeTruncated: false, productName: "p", texts: [{ source: "description", text: "Uses OLD_SYNC." }] })).toEqual([{ kind: "not_in_readme", source: "description", term: "OLD_SYNC" }]);
   });
 
   it("counts a name followed by a Korean particle as mentioned", () => {

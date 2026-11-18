@@ -8,9 +8,13 @@ import type { AppContext } from "./context.js";
 type Page = { status?: number; body?: string; type?: string; finalUrl?: string; delayMs?: number };
 const web = new Map<string, Page>();
 const opened: string[] = [];
+let inFlight = 0, peak = 0;
 vi.mock("../infra/net.js", () => ({
   publicFetch: async (url: string, _init: unknown, _max: number, allowRedirect?: (u: URL) => boolean) => {
     opened.push(url);
+    const sub = /^https:\/\/lim\d\.example\/p\d$/.test(url);
+    if (sub) { inFlight++; peak = Math.max(peak, inFlight); }
+    try {
     const page = web.get(url) ?? { status: 404, body: "not found", type: "text/html" };
     // 실제 publicFetch처럼 리다이렉트 대상은 요청하기 전에 거른다.
     if (page.finalUrl && allowRedirect && !allowRedirect(new URL(page.finalUrl))) throw new Error("redirect out of scope");
@@ -18,6 +22,7 @@ vi.mock("../infra/net.js", () => ({
     const res = new Response(page.body ?? "", { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html" } });
     Object.defineProperty(res, "url", { value: page.finalUrl ?? url });
     return res;
+    } finally { if (sub) inFlight--; }
   },
 }));
 
@@ -121,6 +126,44 @@ describe("launchCheck discovery", () => {
     const res = await launchCheck(second.ctx, "o", second.id);
     expect(res.items.find((i) => i.id === "sitemap")?.level).toBe("ok");
     expect(res.pages).toMatchObject({ checked: 1 });
+  });
+});
+
+describe("launchCheck limits and coverage", () => {
+  it("never opens more than 8 sub-pages at once across concurrent checks", async () => {
+    const checks = [];
+    for (let site = 0; site < 6; site++) {
+      const home = `https://lim${site}.example/`;
+      web.set(home, { body: GOOD("Home page title is fine") });
+      web.set(`https://lim${site}.example/sitemap.xml`, { body: urlset(...Array.from({ length: 8 }, (_, i) => `https://lim${site}.example/p${i}`)), type: "application/xml" });
+      for (let i = 0; i < 8; i++) web.set(`https://lim${site}.example/p${i}`, { body: GOOD("Sub page title is fine"), delayMs: 15 });
+      const { ctx, id } = setup(home);
+      checks.push(launchCheck(ctx, "o", id));
+    }
+    peak = 0;
+    const results = await Promise.all(checks);
+    expect(results.every((r) => r.pages?.checked === 8)).toBe(true);
+    // 6곳 × 점검당 4개 = 24개가 한꺼번에 몰릴 수 있지만, 서버 전체 상한 8을 넘지 않아야 한다.
+    expect(peak).toBe(8);
+  });
+
+  it("counts a child sitemap that could not be opened", async () => {
+    const home = "https://m.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://m.example/sitemap.xml", { body: `<sitemapindex><sitemap><loc>https://m.example/s1.xml</loc></sitemap><sitemap><loc>https://m.example/s2.xml</loc></sitemap></sitemapindex>`, type: "application/xml" });
+    web.set("https://m.example/s1.xml", { body: urlset("https://m.example/a"), type: "application/xml" });
+    web.set("https://m.example/a", { body: GOOD("Sub page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1, missedSitemaps: 1 });
+  });
+
+  it("keeps the project folder when the homepage redirects to index.html, and counts every eligible page", async () => {
+    const home = "https://n.example/project/";
+    web.set(home, { body: GOOD("Project home page title"), finalUrl: "https://n.example/project/index.html" });
+    web.set("https://n.example/sitemap.xml", { body: urlset(...Array.from({ length: 101 }, (_, i) => `https://n.example/project/p${i}`)), type: "application/xml" });
+    for (let i = 0; i < 25; i++) web.set(`https://n.example/project/p${i}`, { body: GOOD("Sub page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 101, checked: 25 });
   });
 });
 

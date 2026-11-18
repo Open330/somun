@@ -111,7 +111,8 @@ export type Judgment = { id: number; candidateId: number; scores: RubricScores; 
 
 /** 올리기 전 홈페이지 점검. items가 비어 있으면 점검할 홈페이지가 없거나(GitHub 페이지 포함) 열리지 않은 것. */
 /** 사이트맵 하위 페이지 점검 결과. 고칠 곳이 있는 페이지만 담고, 몇 개를 봤는지는 따로 센다. */
-export type LaunchCheckPages = { checked: number; unreachable: number; total: number; issues: { url: string; items: CheckItem[] }[] };
+/** missedSitemaps: 사이트맵 색인에서 열지 못한 하위 사이트맵 수(그 안의 페이지는 total에 없다). */
+export type LaunchCheckPages = { checked: number; unreachable: number; total: number; issues: { url: string; items: CheckItem[] }[]; missedSitemaps?: number };
 export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean; pages?: LaunchCheckPages; copy?: CopyIssue[] };
 
 export type LintResult = { rule: string; ok: boolean; detail?: string };
