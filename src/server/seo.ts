@@ -59,7 +59,11 @@ export function seoRoutes(app: Hono, config: Config) {
     const english = prefersEnglish(acceptLanguage);
     const html = english ? toEnglish(source) : source;
     const image = english ? "og-en.png" : "og.png";
-    const status = APP_ROUTES.some((re) => re.test(path)) ? 200 : 404;
+    // 끝의 / 는 같은 화면이다(React Router도 /products/를 /products로 연다).
+    let end = path.length;
+    while (end > 1 && path[end - 1] === "/") end--;
+    const route = path.slice(0, end);
+    const status = APP_ROUTES.some((re) => re.test(route)) ? 200 : 404;
     const home = path === "/";
     const head: string[] = [];
     if (!home) head.push(`<meta name="robots" content="noindex" />`);
