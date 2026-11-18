@@ -268,6 +268,17 @@ describe("launchCheck limits and coverage", () => {
     expect(worst).toBeLessThan(400);
   });
 
+  it("does not count the original homepage as a sub-page when it redirects to index.html", async () => {
+    const home = "https://ad.example/";
+    web.set(home, { body: GOOD("Home page title is fine"), finalUrl: "https://ad.example/index.html" });
+    web.set("https://ad.example/sitemap.xml", { body: urlset("https://ad.example/", "https://ad.example/guide"), type: "application/xml" });
+    web.set("https://ad.example/guide", { body: GOOD("Guide page title is fine") });
+    const { ctx, id } = setup(home);
+    const res = await launchCheck(ctx, "o", id);
+    expect(res.pages).toMatchObject({ total: 1, checked: 1, unreachable: 0 });
+    expect(res.partial).toBeUndefined();
+  });
+
   it("does not decompress a gzip homepage body", async () => {
     const home = "https://y.example/";
     web.set(home, { body: gzipSync(GOOD("Home page title is fine")), type: "application/gzip" });

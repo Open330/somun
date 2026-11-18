@@ -80,10 +80,11 @@ async function get(url: string, opts: Get): Promise<Fetched> {
 }
 
 /** 사이트맵 본문이 진짜 사이트맵인가(사이트맵 항목 판정과 같은 기준). 200으로 온 오류 문서는 아니다. */
-const realSitemap = (res: Fetched) => checkSitemap(res).level === "ok";
+// 첫 요소만 본다(항목을 다 세는 checkSitemap보다 싸다). 판정 기준은 checkSitemap과 같다.
+const realSitemap = (res: Fetched) => Boolean(res && res.status < 400 && ["urlset", "sitemapindex"].includes(sitemapRoot(res.body) ?? ""));
 
 /** 사이트맵의 하위 페이지를 점검한다. 사이트맵 색인(sitemapindex)이면 같은 출처의 하위 사이트맵을 다섯 개까지 읽는다. */
-async function checkSubpages(homepage: string, sitemap: Fetched, deadline: number): Promise<LaunchCheckPages | undefined> {
+async function checkSubpages(homepage: string, requested: string, sitemap: Fetched, deadline: number): Promise<LaunchCheckPages | undefined> {
   if (!realSitemap(sitemap)) return undefined;
   const origin = new URL(homepage).origin;
   const sameOrigin = (u: URL) => u.origin === origin;
@@ -105,12 +106,14 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
     for (const url of sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER)) if (!byKey.has(pageKey(url))) byKey.set(pageKey(url), url);
     await new Promise((resolve) => setImmediate(resolve));
   }
+  // 홈페이지가 /index.html 등으로 넘어갔으면 원래 주소(/)도 홈페이지다. 하위 페이지로 세지 않는다.
+  byKey.delete(pageKey(requested));
   const all = [...byKey.values()];
   if (!all.length) return missedSitemaps ? { checked: 0, unreachable: 0, total: 0, issues: [], missedSitemaps } : undefined;
   const urls = all.slice(0, MAX_PAGES);
   // 홈페이지로 넘어가는 옛 주소는 그 페이지를 본 것이 아니다(이미 본 홈을 다시 봤을 뿐). 열지 못한 것으로 센다.
-  const home = pageKey(homepage);
-  const inScope = (u: URL) => withinSite(u.href, homepage) && pageKey(u.href) !== home;
+  const homes = new Set([pageKey(homepage), pageKey(requested)]);
+  const inScope = (u: URL) => withinSite(u.href, homepage) && !homes.has(pageKey(u.href));
   const results: { url: string; items?: CheckItem[] }[] = [];
   for (let i = 0; i < urls.length; i += PAGE_CONCURRENCY) {
     const batch = urls.slice(i, i + PAGE_CONCURRENCY);
@@ -142,7 +145,7 @@ async function crawl(requested: string): Promise<Crawl> {
   const sitemap = realSitemap(ownSitemap) ? ownSitemap : rootSitemap;
   // 사이트맵 항목도 실제로 쓴 사이트맵으로 판정한다(프로젝트 사이트맵이 있는데 출처 404로 경고하지 않게).
   const items = [...checkPage(page.body), checkRobots(robots), checkSitemap(sitemap)];
-  const pages = await checkSubpages(homepage, sitemap, deadline);
+  const pages = await checkSubpages(homepage, requested, sitemap, deadline);
   // 5xx, 429(요청 제한), 408과 연결 실패는 잠시의 실패다.
   const transient = (r: Fetched) => !r || r.status >= 500 || r.status === 429 || r.status === 408;
   // 먼저 보려던 프로젝트 사이트맵이 잠시 실패해 출처 사이트맵으로 넘어갔어도 미완료다(404는 사이트맵이 없다는 뜻이라 아니다).

@@ -1213,8 +1213,8 @@ export const en: Record<string, string> = {
   "열어 본 하위 페이지는 모두 통과했습니다.": "Every page opened passed.",
   "하위 페이지를 하나도 열지 못했습니다.": "None of the other pages could be opened.",
   "다 보지 못함": "Incomplete",
-  "사이트맵을 잠시 열지 못해 하위 페이지를 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.":
-    "The sitemap could not be opened just now, so not every page was checked. It will be checked again in a few minutes.",
+  "사이트맵이나 하위 페이지 일부를 읽지 못해 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.":
+    "Part of the sitemap or some pages could not be read, so not every page was checked. It will be checked again in a few minutes.",
   "하위 사이트맵 {n}개를 열지 못해 그 안의 페이지는 세지 못했습니다.":
     "{n} child sitemaps could not be opened, so their pages are not counted.",
   "사이트맵 형식(urlset·sitemapindex)이 아닙니다.": "Not a sitemap (no urlset or sitemapindex).",

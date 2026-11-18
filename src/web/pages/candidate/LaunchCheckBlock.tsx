@@ -165,8 +165,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             })}
           </ul>
         ) : null}
-        {data?.partial && !data.pages && (
-          <p className="tiny muted m-0">{t("사이트맵을 잠시 열지 못해 하위 페이지를 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.")}</p>
+        {data?.partial && (
+          <p className="tiny muted m-0">{t("사이트맵이나 하위 페이지 일부를 읽지 못해 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.")}</p>
         )}
         {data?.pages && (
           <div className="mt-8">
