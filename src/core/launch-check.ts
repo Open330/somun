@@ -244,12 +244,11 @@ export function checkRobots(res: Fetched): CheckItem {
 
 export function checkSitemap(res: Fetched): CheckItem {
   if (!res || res.status >= 400) return { id: "sitemap", level: "warn", value: res ? String(res.status) : "none" };
-  const xml = /xml/i.test(res.contentType) || /^\s*(<\?xml|<urlset|<sitemapindex)/i.test(res.body);
-  if (!xml) return { id: "sitemap", level: "fail", value: "html" };
-  // xml로 와도 첫 요소가 urlset·sitemapindex가 아니면 사이트맵이 아니다(200으로 온 오류 문서, 주석 속 <urlset>).
+  // content-type이 아니라 첫 요소로 판정한다. 압축 사이트맵(application/gzip)이나 주석으로 시작하는 문서도 사이트맵일 수 있고,
+  // xml로 온 오류 문서나 주석 속 <urlset>은 사이트맵이 아니다.
   const root = sitemapRoot(res.body);
-  if (root !== "urlset" && root !== "sitemapindex") return { id: "sitemap", level: "fail", value: root === "html" ? "html" : "invalid" };
-  return { id: "sitemap", level: "ok", value: String(sitemapLocs(res.body).length) };
+  if (root === "urlset" || root === "sitemapindex") return { id: "sitemap", level: "ok", value: String(sitemapLocs(res.body).length) };
+  return { id: "sitemap", level: "fail", value: root === "html" || /html/i.test(res.contentType) ? "html" : "invalid" };
 }
 
 /** 홈페이지의 검색 제목과 설명 원문(자르지 않음). 문구 일관성 점검(core/consistency)에 쓴다. */

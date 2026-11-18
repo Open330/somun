@@ -17,7 +17,8 @@ const TTL_MS = 3600_000, INCOMPLETE_TTL_MS = 120_000, MAX_CACHE = 200, MAX_BYTES
  * 점검 하나는 시작부터 20초 안에 끝내고(요청마다 남은 시간만큼만 기다린다), 서버 전체에서 동시에 여는 하위 페이지는 8개까지다.
  */
 const MAX_PAGES = 25, PAGE_CONCURRENCY = 4, CRAWL_BUDGET_MS = 20_000, REQUEST_MS = 6_000, GLOBAL_SUBPAGES = 8, MAX_CHILD_SITEMAPS = 5;
-type Crawl = { items: CheckItem[]; pages?: LaunchCheckPages; homeCopy: { title?: string; description?: string } } | { unreachable: true };
+/** partial: 열지 못한 하위 페이지·사이트맵이 있거나 사이트맵이 잠시 실패했다(5xx, 연결 실패). 짧게만 기억한다. */
+type Crawl = { items: CheckItem[]; pages?: LaunchCheckPages; homeCopy: { title?: string; description?: string }; partial: boolean } | { unreachable: true };
 const cache = new Map<string, { at: number; ttl: number; crawl: Crawl }>();
 /** 같은 홈페이지(#… 차이는 같은 페이지)를 동시에 여러 번 점검하면 한 번만 연다. */
 const inflight = new Map<string, Promise<Crawl>>();
@@ -133,7 +134,9 @@ async function crawl(requested: string): Promise<Crawl> {
   // 사이트맵 항목도 실제로 쓴 사이트맵으로 판정한다(프로젝트 사이트맵이 있는데 출처 404로 경고하지 않게).
   const items = [...checkPage(page.body), checkRobots(robots), checkSitemap(sitemap)];
   const pages = await checkSubpages(homepage, sitemap, deadline);
-  return { items, pages, homeCopy: pageCopy(page.body) };
+  const transient = (r: Fetched) => !r || r.status >= 500;
+  const partial = transient(sitemap) || Boolean(pages && (pages.unreachable > 0 || pages.missedSitemaps));
+  return { items, pages, homeCopy: pageCopy(page.body), partial };
 }
 
 /**
@@ -173,8 +176,8 @@ export async function launchCheck(ctx: AppContext, ownerId: string, candidateId:
     hit = cache.get(key);
     if (!hit || Date.now() - hit.at >= hit.ttl) {
       if ("unreachable" in result) ctx.log.info({ homepage }, "launch check: homepage unreachable");
-      // 열지 못한 페이지나 사이트맵이 있으면(동시 점검이 몰려 시간이 모자랐을 수도 있다) 2분만 기억한다.
-      const partial = !("unreachable" in result) && Boolean(result.pages && (result.pages.unreachable > 0 || result.pages.missedSitemaps));
+      // 열지 못한 페이지·사이트맵이 있거나 사이트맵이 잠시 실패했으면(동시 점검이 몰려 시간이 모자랐을 수도 있다) 2분만 기억한다.
+      const partial = !("unreachable" in result) && result.partial;
       hit = { at: Date.now(), ttl: partial ? INCOMPLETE_TTL_MS : TTL_MS, crawl: result };
       // 열지 못한 결과는 기억하지 않는다. 사이트가 돌아오면 바로 다시 점검한다.
       if (!("unreachable" in result)) {

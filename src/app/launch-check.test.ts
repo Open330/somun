@@ -20,7 +20,7 @@ vi.mock("../infra/net.js", () => ({
     // 실제 publicFetch처럼 리다이렉트 대상은 요청하기 전에 거른다.
     if (page.finalUrl && allowRedirect && !allowRedirect(new URL(page.finalUrl))) throw new Error("redirect out of scope");
     if (page.delayMs) await new Promise((r) => setTimeout(r, page.delayMs));
-    const res = new Response(page.body ?? "", { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html" } });
+    const res = new Response((page.body ?? "") as BodyInit, { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html" } });
     Object.defineProperty(res, "url", { value: page.finalUrl ?? url });
     return res;
     } finally { if (sub) inFlight--; }
@@ -186,6 +186,33 @@ describe("launchCheck limits and coverage", () => {
     web.set("https://t.example/sitemap.xml", { body: `<sitemapindex><sitemap><loc>https://t.example/pages.xml.gz</loc></sitemap></sitemapindex>`, type: "application/xml" });
     web.set("https://t.example/pages.xml.gz", { body: gzipSync(urlset("https://t.example/docs")), type: "application/gzip" });
     web.set("https://t.example/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+  });
+
+  it("re-crawls after two minutes when the sitemap failed transiently", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const home = "https://v.example/";
+      web.set(home, { body: GOOD("Home page title is fine") });
+      web.set("https://v.example/sitemap.xml", { status: 503, body: "busy" });
+      const { ctx, id } = setup(home);
+      expect((await launchCheck(ctx, "o", id)).pages).toBeUndefined();
+      web.set("https://v.example/sitemap.xml", { body: urlset("https://v.example/docs"), type: "application/xml" });
+      web.set("https://v.example/docs", { body: GOOD("Docs page title is fine") });
+      vi.setSystemTime(Date.now() + 121_000);
+      expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ checked: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads a gzip child sitemap that starts with a comment", async () => {
+    const home = "https://w.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://w.example/sitemap.xml", { body: `<sitemapindex><sitemap><loc>https://w.example/pages.xml.gz</loc></sitemap></sitemapindex>`, type: "application/xml" });
+    web.set("https://w.example/pages.xml.gz", { body: gzipSync(`<!-- generated --><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://w.example/docs</loc></url></urlset>`), type: "application/gzip" });
+    web.set("https://w.example/docs", { body: GOOD("Docs page title is fine") });
     const { ctx, id } = setup(home);
     expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
   });
