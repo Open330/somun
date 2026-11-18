@@ -48,6 +48,16 @@ async function slot<T>(deadline: number, fn: () => Promise<T>): Promise<T | unde
   }
 }
 
+const sitemapsInFlight = new Map<string, Promise<Fetched>>();
+function sharedSitemap(url: string, open: () => Promise<Fetched>): Promise<Fetched> {
+  let pending = sitemapsInFlight.get(url);
+  if (!pending) {
+    pending = open().finally(() => sitemapsInFlight.delete(url));
+    sitemapsInFlight.set(url, pending);
+  }
+  return pending;
+}
+
 type Get = { deadline: number; scope?: (url: URL) => boolean; gzip?: boolean; maxBytes?: number };
 
 /** 한 번 연다. scope가 있으면 리다이렉트 대상을 요청하기 전에 거른다. 시간이 다 됐으면 열지 않는다. */
@@ -93,7 +103,8 @@ async function checkSubpages(homepage: string, requested: string, sitemap: Fetch
   // 주석 속 낱말이 아니라 첫 요소로 색인인지 본다(사이트맵 항목 판정과 같은 기준).
   if (sitemapRoot(sitemap!.body) === "sitemapindex") {
     const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } });
-    const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => get(u, { deadline, scope: sameOrigin, gzip: true, maxBytes: MAX_SITEMAP_BYTES })));
+    // 하위 사이트맵도 서버 전체 동시 요청 상한 안에서 열고, 같은 파일을 동시에 여러 점검이 열면 한 번만 연다.
+    const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => sharedSitemap(u, () => slot(deadline, () => get(u, { deadline, scope: sameOrigin, gzip: true, maxBytes: MAX_SITEMAP_BYTES })))));
     // 열지 못했거나 상한 밖이라 읽지 않은 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.
     // 크기 한도에서 잘린 사이트맵도 뒷부분을 못 본 것이다.
     missedSitemaps = fetched.filter((r) => !realSitemap(r) || r?.truncated).length + Math.max(0, children.length - MAX_CHILD_SITEMAPS);

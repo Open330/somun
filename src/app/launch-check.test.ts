@@ -314,6 +314,22 @@ describe("launchCheck limits and coverage", () => {
     }
   });
 
+  it("opens a shared child sitemap once for concurrent checks", async () => {
+    const kids = Array.from({ length: 5 }, (_, k) => `https://ae.example/s${k}.xml`);
+    web.set("https://ae.example/sitemap.xml", { body: `<sitemapindex>${kids.map((u) => `<sitemap><loc>${u}</loc></sitemap>`).join("")}</sitemapindex>`, type: "application/xml" });
+    kids.forEach((u, k) => { web.set(u, { body: urlset(`https://ae.example/p${k}`), type: "application/xml", delayMs: 20 }); web.set(`https://ae.example/p${k}`, { body: GOOD("Sub page title is fine") }); });
+    const checks = [];
+    for (let e = 0; e < 6; e++) {
+      const home = `https://ae.example/?edition=${e}`;
+      web.set(home, { body: GOOD("Home page title is fine") });
+      const { ctx, id } = setup(home);
+      checks.push(launchCheck(ctx, "o", id));
+    }
+    opened.length = 0;
+    await Promise.all(checks);
+    expect(opened.filter((u) => u === "https://ae.example/s0.xml")).toHaveLength(1);
+  });
+
   it("reads up to five child sitemaps and counts the rest as missed", async () => {
     const home = "https://q.example/";
     web.set(home, { body: GOOD("Home page title is fine") });
