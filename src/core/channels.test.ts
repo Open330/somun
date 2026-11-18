@@ -75,62 +75,24 @@ describe("disquiet lint", () => {
   const facts = { purpose: "introduction" as const, language: "ko", publicName: "Tool", repo: "o/tool", preferLink: "https://tool.example/" };
   const failed = (title: string, body: string) => lintDraft("disquiet", title, body, [], facts).filter((r) => !r.ok).map((r) => r.rule);
 
-  it("rejects exclamation marks and vote requests", () => {
-    const rules = failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/");
-    expect(rules).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다. 추천 버튼을 눌러 주세요.\n\nhttps://tool.example/")).toContain("no_vote_request");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다. 추천 좀 눌러 주세요.\n\nhttps://tool.example/")).toContain("no_vote_request");
-    // 제품 기능 이름인 '추천'을 누르라는 안내는 추천 요청이 아니다.
+  it("rejects exclamation marks and vote requests, but not a product feature called 추천", () => {
+    expect(failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/")).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
+    for (const ask of ["추천 부탁드려요.", "추천 버튼을 눌러 주세요.", "추천 좀 눌러 주세요.", "좋아요 부탁해요.", "투표 해 주세요.", "추천해 주세요."]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 저장합니다. ${ask}\n\nhttps://tool.example/`)).toContain("no_vote_request");
     expect(failed("Tool로 기록 저장하기", "Tool은 추천 탭을 눌러 비슷한 기록을 보여 줍니다.\n\nhttps://tool.example/")).not.toContain("no_vote_request");
     expect(failed("Tool로 기록 저장하기", "Tool의 추천 버튼을 눌러 비슷한 기록을 확인할 수 있습니다.\n\nhttps://tool.example/")).not.toContain("no_vote_request");
-    for (const ask of ["추천 부탁드려요.", "추천 눌러 주세요.", "좋아요 부탁해요.", "투표 해 주세요.", "추천해 주세요."]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 저장합니다. ${ask}\n\nhttps://tool.example/`)).toContain("no_vote_request");
   });
 
-  it("accepts the registered product page or the homepage as the link, and requires a link", () => {
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).not.toContain("preferred_link");
+  it("links an introduction to the homepage like other channels and requires a usable link", () => {
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/")).not.toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://unrelated.example/?next=https://disquiet.io/@maker/products/tool")).toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/announcement")).toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/tool")).not.toContain("preferred_link");
-    for (const other of ["https://disquiet.io/products/tool", "https://disquiet.io/@maker/product/tool", "https://disquiet.io/product/tool/comments"]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 CSV로 저장합니다.\n\n${other}`)).toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool/")).not.toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/unrelated")).toContain("preferred_link");
-    // 홈페이지가 없어도 다른 제품 페이지 링크는 걸린다. 하이픈은 이름의 일부다.
-    const bare = { purpose: "introduction" as const, language: "ko", publicName: "My-Tool", repo: "o/my-tool" };
-    const bareFailed = (body: string) => lintDraft("disquiet", "제목", body, [], bare).filter((r) => !r.ok).map((r) => r.rule);
-    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/unrelated")).toContain("preferred_link");
-    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/mytool")).toContain("preferred_link");
-    expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/my-tool")).not.toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/\nHTTPS://disquiet.io/product/unrelated")).toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nHTTPS://disquiet.io/product/tool")).not.toEqual(expect.arrayContaining(["has_link"]));
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nHTTPS://tool.example/")).not.toContain("preferred_link");
-    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/\nhttps://disquiet.io./product/unrelated")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/tool")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
     expect(lintDraft("disquiet", "제목", "Tool은 기록을 저장합니다.\n\nhttps://?", [], { language: "ko", publicName: "Tool" }).find((r) => r.rule === "has_link")?.ok).toBe(false);
     expect(lintDraft("x", undefined, "Release notes [https://example.com]", [], {}).find((r) => r.rule === "has_link")?.ok).toBe(true);
-    // 이름의 %가 다른 채널의 lint를 깨지 않는다.
     expect(() => lintDraft("x", undefined, "100% Tool은 기록을 저장합니다. https://tool.example/", [], { purpose: "introduction", publicName: "100% Tool", preferLink: "https://tool.example/" })).not.toThrow();
   });
 
   it("only claims authorship when the facts establish it", () => {
     expect(channelSpec("disquiet").rules).toContain("never claim authorship");
   });
-});
-
-it("requires the exact Disquiet product page when it is the homepage", () => {
-  const facts = { purpose: "introduction" as const, language: "ko", publicName: "Tool", repo: "o/tool", preferLink: "https://disquiet.io/@maker/products/tool" };
-  const pref = (body: string) => lintDraft("disquiet", "Tool로 기록 저장하기", body, [], facts).find((r) => r.rule === "preferred_link")?.ok;
-  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@other/products/tool")).toBe(false);
-  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).toBe(true);
-  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool\nhttps://disquiet.io/@other/products/tool")).toBe(false);
-  // 업데이트 글도 저장소 홈페이지가 디스콰이엇 페이지면 다른 메이커 페이지를 걸러 낸다.
-  const update = { purpose: "update" as const, language: "ko", publicName: "Tool", repo: "o/tool", homepage: "https://disquiet.io/@maker/products/tool" };
-  expect(lintDraft("disquiet", "Tool 업데이트", "Tool이 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@other/products/tool", [], update).find((r) => r.rule === "preferred_link")?.ok).toBe(false);
-});
-
-it("uses the name rule when the Disquiet homepage is a maker profile", () => {
-  const facts = { purpose: "update" as const, language: "ko", publicName: "Tool", repo: "o/tool", homepage: "https://disquiet.io/@maker" };
-  const pref = (body: string) => lintDraft("disquiet", "Tool 업데이트", body, [], facts).find((r) => r.rule === "preferred_link")?.ok;
-  expect(pref("Tool이 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).not.toBe(false);
-  expect(pref("Tool이 기록을 저장합니다.\n\nhttps://disquiet.io/@maker")).toBe(false);
 });
