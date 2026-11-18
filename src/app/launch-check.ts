@@ -1,6 +1,6 @@
 import { gunzipSync } from "node:zlib";
 import { copyIssues, type CopyIssue, type CopySource } from "../core/consistency.js";
-import { checkPage, checkRobots, checkSitemap, pageCopy, pageKey, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
+import { MAX_SITEMAP, checkPage, checkRobots, checkSitemap, pageCopy, pageKey, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
 import { publicFetch } from "../infra/net.js";
 import type { Evidence, LaunchCheck, LaunchCheckPages } from "../shared/types.js";
 import type { AppContext } from "./context.js";
@@ -11,7 +11,7 @@ import { getProfile } from "./profiles.js";
  * 글감의 홈페이지를 올리기 전에 점검한다. 공인 주소만(publicFetch), 크기 제한, 한 시간 기억.
  * GitHub 저장소 페이지는 미리보기가 이미 갖춰져 있어 점검하지 않는다.
  */
-const TTL_MS = 3600_000, INCOMPLETE_TTL_MS = 120_000, MAX_CACHE = 200, MAX_BYTES = 300_000, MAX_SITEMAP_BYTES = 2_000_000, MAX_GUNZIP_BYTES = 2_000_000;
+const TTL_MS = 3600_000, INCOMPLETE_TTL_MS = 120_000, MAX_CACHE = 200, MAX_BYTES = 300_000, MAX_SITEMAP_BYTES = MAX_SITEMAP;
 /**
  * 남의 사이트에 부담을 주지 않게: 하위 페이지는 사이트맵 순서로 최대 25개, 한 점검에서 4개씩.
  * 점검 하나는 시작부터 20초 안에 끝내고(요청마다 남은 시간만큼만 기다린다), 서버 전체에서 동시에 여는 하위 페이지는 8개까지다.
@@ -71,7 +71,8 @@ async function get(url: string, opts: Get): Promise<Fetched> {
     let bytes = Buffer.concat(chunks);
     // 압축한 사이트맵(pages.xml.gz)은 풀어서 읽는다. 풀린 크기는 묶어 둔다(압축 폭탄).
     // 홈페이지·하위 페이지는 풀지 않는다(전송 압축은 fetch가 이미 푼다). 하위 사이트맵 파일만 푼다.
-    if (opts.gzip && bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes, { maxOutputLength: MAX_GUNZIP_BYTES });
+    // 풀린 크기가 한도를 넘으면 gunzipSync가 실패하고, 그 사이트맵은 못 본 것으로 센다.
+    if (opts.gzip && bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes, { maxOutputLength: limit });
     return { status: res.status, contentType, body: bytes.toString("utf8"), url: res.url || url, ...(truncated ? { truncated } : {}) };
   } catch {
     return undefined;
@@ -98,9 +99,12 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
     xmls = fetched.filter(realSitemap).map((r) => r!.body);
   }
   // 하위 사이트맵마다 따로 고른다. 하나로 이으면 앞 사이트맵이 길 때 뒤 사이트맵이 잘린다.
-  // 하위 사이트맵끼리도 /p0와 /p0/를 한 페이지로 센다.
+  // 하위 사이트맵끼리도 /p0와 /p0/를 한 페이지로 센다. 사이트맵 하나를 읽을 때마다 다른 요청에 차례를 넘긴다.
   const byKey = new Map<string, string>();
-  for (const url of xmls.flatMap((xml) => sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER))) if (!byKey.has(pageKey(url))) byKey.set(pageKey(url), url);
+  for (const xml of xmls) {
+    for (const url of sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER)) if (!byKey.has(pageKey(url))) byKey.set(pageKey(url), url);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   const all = [...byKey.values()];
   if (!all.length) return missedSitemaps ? { checked: 0, unreachable: 0, total: 0, issues: [], missedSitemaps } : undefined;
   const urls = all.slice(0, MAX_PAGES);

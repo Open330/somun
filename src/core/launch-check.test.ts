@@ -148,6 +148,7 @@ describe("sitemap pages and page copy", () => {
 
   it("reads CDATA locations and does not parse tags inside a title", () => {
     expect(sitemapPages(`<urlset><url><loc><![CDATA[https://example.org/docs]]></loc></url></urlset>`, "https://example.org/", 10)).toEqual(["https://example.org/docs"]);
+    expect(sitemapPages(`<urlset><url><loc>https://example.org/search?q=x<![CDATA[&show=all]]></loc></url></urlset>`, "https://example.org/", 10)).toEqual(["https://example.org/search?q=x&show=all"]);
     const html = `<head><title>Guide to <script> tags</title><meta name="description" content="Learn how script tags load code on a page, with examples."></head><body><p>Visible guide text that is long enough to count.</p></body>`;
     const items = checkPage(html);
     expect(level(items, "title")).toBe("ok");

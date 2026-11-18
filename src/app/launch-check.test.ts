@@ -254,6 +254,20 @@ describe("launchCheck limits and coverage", () => {
     expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
   });
 
+  it("does not block the event loop for long while reading large child sitemaps", async () => {
+    const home = "https://ac.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    const kids = Array.from({ length: 5 }, (_, k) => `https://ac.example/s${k}.xml`);
+    web.set("https://ac.example/sitemap.xml", { body: `<sitemapindex>${kids.map((u) => `<sitemap><loc>${u}</loc></sitemap>`).join("")}</sitemapindex>`, type: "application/xml" });
+    kids.forEach((u, k) => web.set(u, { body: urlset(...Array.from({ length: 46_000 }, (_, i) => `https://ac.example/${k}/${i}`)), type: "application/xml" }));
+    const { ctx, id } = setup(home);
+    let worst = 0, last = performance.now();
+    const timer = setInterval(() => { const now = performance.now(); worst = Math.max(worst, now - last); last = now; }, 5);
+    await launchCheck(ctx, "o", id);
+    clearInterval(timer);
+    expect(worst).toBeLessThan(400);
+  });
+
   it("does not decompress a gzip homepage body", async () => {
     const home = "https://y.example/";
     web.set(home, { body: gzipSync(GOOD("Home page title is fine")), type: "application/gzip" });

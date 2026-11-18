@@ -7,8 +7,8 @@ export type CheckId = "title" | "description" | "og_text" | "og_image" | "twitte
 export type CheckItem = { id: CheckId; level: CheckLevel; value?: string };
 
 const MAX_HTML = 200_000;
-/** 사이트맵은 수천 항목이라 페이지보다 길다. 토크나이저가 선형이라 2MB까지 읽는다. */
-const MAX_SITEMAP = 2_000_000;
+/** 사이트맵은 수천 항목이라 페이지보다 길다. 한 번에 서버를 오래 붙잡지 않게 500KB까지 읽는다(넘으면 가져올 때 잘렸다고 표시한다). */
+export const MAX_SITEMAP = 500_000;
 
 const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" };
 /** HTML·XML 문자 참조를 한 번에 푼다(&amp; &#38; &#x26;). 한 번만 풀어야 &amp;lt;가 <로 두 번 풀리지 않는다. */
@@ -290,6 +290,19 @@ export function pageCopy(rawHtml: string): { title?: string; description?: strin
   return { title: title || undefined, description: description || undefined };
 }
 
+/** XML 글자: 문자 참조는 풀고, CDATA 구간(<![CDATA[…]]>)은 그대로 이어 붙인다. 섞여 있어도 앞에서 뒤로 한 번만 읽는다. */
+function xmlText(raw: string): string {
+  let out = "", at = 0;
+  for (;;) {
+    const open = raw.indexOf("<![CDATA[", at);
+    if (open < 0) return out + decode(raw.slice(at));
+    const close = raw.indexOf("]]>", open + 9);
+    out += decode(raw.slice(at, open)) + raw.slice(open + 9, close < 0 ? raw.length : close);
+    if (close < 0) return out;
+    at = close + 3;
+  }
+}
+
 /** 사이트맵 문서의 첫 요소 이름(<?xml …?>과 주석은 건너뛴다). 이름공간 접두어(ns:urlset)는 뗀다. */
 export function sitemapRoot(xml: string): string | undefined {
   const head = xml.slice(0, MAX_SITEMAP);
@@ -335,10 +348,7 @@ export function sitemapLocs(xml: string): string[] {
     if (local !== "loc" || tag.closing || entryPrefix !== prefix) return;
     const close = closeAt(lower, tag.name, tag.end);
     if (close < 0) return doc.length;
-    // <loc><![CDATA[https://…]]></loc>도 같은 주소다.
-    const inner = doc.slice(tag.end, close).trim();
-    const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/.exec(inner);
-    const value = cdata ? cdata[1]!.trim() : decode(inner);
+    const value = xmlText(doc.slice(tag.end, close)).trim();
     if (value && !/\s/.test(value)) out.push(value);
     entryPrefix = undefined;
     return close;
