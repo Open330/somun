@@ -166,6 +166,19 @@ describe("launchCheck limits and coverage", () => {
     expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
   });
 
+  it("counts slash variants across child sitemaps once", async () => {
+    const home = "https://s.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://s.example/sitemap.xml", { body: `<sitemapindex><sitemap><loc>https://s.example/a.xml</loc></sitemap><sitemap><loc>https://s.example/b.xml</loc></sitemap></sitemapindex>`, type: "application/xml" });
+    web.set("https://s.example/a.xml", { body: urlset(...Array.from({ length: 13 }, (_, i) => `https://s.example/p${i}`)), type: "application/xml" });
+    web.set("https://s.example/b.xml", { body: urlset(...Array.from({ length: 13 }, (_, i) => `https://s.example/p${i}/`), "https://s.example/pricing"), type: "application/xml" });
+    for (let i = 0; i < 13; i++) web.set(`https://s.example/p${i}`, { body: GOOD("Sub page title is fine") });
+    web.set("https://s.example/pricing", { body: GOOD("Pricing page title fine") });
+    const { ctx, id } = setup(home);
+    const pages = (await launchCheck(ctx, "o", id)).pages;
+    expect(pages).toMatchObject({ total: 14, checked: 14, unreachable: 0 });
+  });
+
   it("reads up to five child sitemaps and counts the rest as missed", async () => {
     const home = "https://q.example/";
     web.set(home, { body: GOOD("Home page title is fine") });

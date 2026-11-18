@@ -1,5 +1,5 @@
 import { copyIssues, type CopyIssue, type CopySource } from "../core/consistency.js";
-import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, pageKey, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
 import { publicFetch } from "../infra/net.js";
 import type { Evidence, LaunchCheck, LaunchCheckPages } from "../shared/types.js";
 import type { AppContext } from "./context.js";
@@ -89,7 +89,10 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
     xmls = fetched.filter(realSitemap).map((r) => r!.body);
   }
   // 하위 사이트맵마다 따로 고른다. 하나로 이으면 앞 사이트맵이 길 때 뒤 사이트맵이 잘린다.
-  const all = [...new Set(xmls.flatMap((xml) => sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER)))];
+  // 하위 사이트맵끼리도 /p0와 /p0/를 한 페이지로 센다.
+  const byKey = new Map<string, string>();
+  for (const url of xmls.flatMap((xml) => sitemapPages(xml, homepage, Number.MAX_SAFE_INTEGER))) if (!byKey.has(pageKey(url))) byKey.set(pageKey(url), url);
+  const all = [...byKey.values()];
   if (!all.length) return missedSitemaps ? { checked: 0, unreachable: 0, total: 0, issues: [], missedSitemaps } : undefined;
   const urls = all.slice(0, MAX_PAGES);
   const inScope = (u: URL) => withinSite(u.href, homepage);

@@ -117,6 +117,13 @@ describe("sitemap pages and page copy", () => {
     expect(sitemapPages(urlsetOf("https://a.example/p0", "https://a.example/p0/", "https://a.example/pricing"), "https://a.example/", 10)).toEqual(["https://a.example/p0", "https://a.example/pricing"]);
   });
 
+  it("keeps body text when </head> is omitted", () => {
+    const text = "Read the complete installation guide and learn how to configure the app for your team.";
+    expect(level(checkPage(`<head><title>Product documentation</title><body><p>${text}</p></body>`), "text_without_js")).toBe("ok");
+    expect(level(checkPage(`<title>Product documentation</title><p>${text}</p>`), "text_without_js")).toBe("ok");
+    expect(level(checkPage(`<head><title>${text}</title></head><body></body>`), "text_without_js")).toBe("fail");
+  });
+
   it("decodes numeric character references once", () => {
     expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
     expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");

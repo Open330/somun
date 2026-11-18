@@ -161,6 +161,30 @@ function metas(html: string): Map<string, string> {
   return out;
 }
 
+/**
+ * 방문자에게 보이는 본문 글자. <body>가 있으면 그 뒤를, 없으면 </head> 뒤를 읽는다.
+ * 둘 다 없으면(생략 가능한 태그) 제목만 빼고 읽는다. </head>가 없다고 문서 끝까지 지우지 않는다.
+ */
+function bodyText(html: string): string {
+  const lower = asciiLower(html);
+  let bodyAt = -1;
+  eachTag(html, lower, (tag) => {
+    if (tag.name !== "body" || tag.closing) return;
+    bodyAt = tag.end;
+    return html.length;
+  });
+  if (bodyAt >= 0) return textOnly(html.slice(bodyAt));
+  const headClose = closeAt(lower, "head", 0);
+  const gt = headClose < 0 ? -1 : lower.indexOf(">", headClose);
+  return gt >= 0 ? textOnly(html.slice(gt + 1)) : textOnly(removeBlocks(html, ["title"]));
+}
+
+/** 사이트맵 주소를 같은 페이지끼리 묶는 열쇠: 끝 / 와 # 차이는 같은 페이지, 쿼리가 다르면 다른 페이지. */
+export function pageKey(url: string): string {
+  const u = new URL(url);
+  return `${u.origin}${trimSlashes(u.pathname)}${u.search}`;
+}
+
 /** 첫 <title>의 글자. 주석·스크립트를 지운 뒤에 찾고, 속성값 속 <title>은 태그로 보지 않는다. */
 function titleOf(clean: string): string {
   const lower = asciiLower(clean);
@@ -185,7 +209,7 @@ export function checkPage(rawHtml: string): CheckItem[] {
   const ogTitle = m.get("og:title"), ogDesc = m.get("og:description");
   const ogImage = m.get("og:image") ?? m.get("twitter:image");
   const card = m.get("twitter:card");
-  const body = textOnly(removeBlocks(html, ["head"]));
+  const body = bodyText(html);
   const text = decode(body).replace(/\s+/g, " ").trim();
 
   return [
@@ -295,17 +319,16 @@ export function sitemapLocs(xml: string): string[] {
  */
 export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
   // 쿼리가 다르면 다른 페이지다(/?page=2). 끝 / 차이와 #만 같은 것으로 본다.
-  const norm = (u: URL) => `${u.origin}${trimSlashes(u.pathname)}${u.search}`;
-  const home = norm(new URL(homepage));
+  const home = pageKey(homepage);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const loc of sitemapLocs(xml)) {
     let url: URL;
     try { url = new URL(loc); } catch { continue; }
-    if (!withinSite(url.href, homepage) || norm(url) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
+    if (!withinSite(url.href, homepage) || pageKey(url.href) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
     // /p0와 /p0/는 같은 페이지로 본다(한쪽이 다른 쪽으로 넘어가는 경우가 대부분이라 자리를 두 번 쓰지 않게).
-    const key = norm(url);
+    const key = pageKey(url.href);
     if (!seen.has(key)) { seen.add(key); out.push(url.href); }
     if (out.length >= limit) break;
   }
