@@ -333,9 +333,11 @@ export function siteBase(homepage: string): string {
 export function withinSite(url: string, homepage: string): boolean {
   let u: URL, home: URL;
   try { u = new URL(url); home = new URL(homepage); } catch { return false; }
-  const base = siteBase(homepage);
-  return u.origin === home.origin && (!base || u.pathname === base || u.pathname.startsWith(`${base}/`));
+  return inSite(u, home.origin, siteBase(homepage));
 }
+
+/** withinSite의 안쪽: 홈페이지의 출처와 기준 경로를 한 번만 구해 두고 여러 주소에 쓴다. */
+const inSite = (u: URL, origin: string, base: string) => u.origin === origin && (!base || u.pathname === base || u.pathname.startsWith(`${base}/`));
 
 /**
  * 사이트맵의 페이지(또는 하위 사이트맵) 주소들. 각 <url>·<sitemap> 안에서 같은 이름공간 접두어의 첫 <loc>만 읽는다.
@@ -368,6 +370,8 @@ export function sitemapLocs(xml: string): string[] {
 export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
   // 쿼리가 다르면 다른 페이지다(/?page=2). 끝 / 차이와 #만 같은 것으로 본다.
   const home = pageKey(homepage);
+  // 홈페이지 주소는 항목마다 다시 풀지 않는다(아주 긴 경로면 항목 수만큼 느려진다).
+  const origin = new URL(homepage).origin, base = siteBase(homepage);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const loc of sitemapLocs(xml)) {
@@ -375,7 +379,7 @@ export function sitemapPages(xml: string, homepage: string, limit: number): stri
     // 사이트맵 규약의 주소 길이 상한(2048자)을 넘는 항목은 건너뛴다. 결과와 기억에 아주 긴 주소가 쌓이지 않게.
     try { url = new URL(loc); } catch { continue; }
     if (url.href.length > 2048) continue;
-    if (!withinSite(url.href, homepage) || pageKey(url.href) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
+    if (!inSite(url, origin, base) || pageKey(url.href) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
     // /p0와 /p0/는 같은 페이지로 본다(한쪽이 다른 쪽으로 넘어가는 경우가 대부분이라 자리를 두 번 쓰지 않게).
     const key = pageKey(url.href);
