@@ -78,11 +78,32 @@ function eachTag(html: string, lower: string, visit: (tag: Tag) => number | void
   }
 }
 
-/** 원자료처럼 읽는 블록(<script>…</script>)의 끝. 닫는 태그가 없으면 문서 끝까지다. */
+/** lower에서 from 이후 처음 나오는 <tag(뒤가 이름 글자가 아닌 것)의 위치. */
+function openAt(lower: string, tag: string, from: number): number {
+  const prefix = `<${tag}`;
+  for (let i = lower.indexOf(prefix, from); i >= 0; i = lower.indexOf(prefix, i + 1)) {
+    if (!/[a-z0-9-]/.test(lower[i + prefix.length] ?? "")) return i;
+  }
+  return -1;
+}
+
+/**
+ * 블록(<script>…</script>)의 끝. 닫는 태그가 없으면 문서 끝까지다.
+ * <template>은 안에 또 <template>이 올 수 있어 깊이를 센다. 여는·닫는 위치를 앞으로만 옮기므로 한 번만 훑는다.
+ */
 function blockEnd(lower: string, tag: Tag): number {
-  const close = closeAt(lower, tag.name, tag.end);
-  const gt = close < 0 ? -1 : lower.indexOf(">", close);
-  return gt < 0 ? lower.length : gt + 1;
+  let depth = 1, at = tag.end;
+  let open = tag.name === "template" ? openAt(lower, tag.name, at) : -1;
+  for (;;) {
+    const close = closeAt(lower, tag.name, at);
+    if (close < 0) return lower.length;
+    while (open >= 0 && open < close) { depth++; open = openAt(lower, tag.name, open + 1); }
+    depth--;
+    const gt = lower.indexOf(">", close);
+    if (gt < 0) return lower.length;
+    if (depth === 0) return gt + 1;
+    at = gt + 1;
+  }
 }
 
 /** 주석과 지정한 태그 블록(<script>…</script> 등)을 지운다. 따옴표 안의 <script>는 태그가 아니다. */

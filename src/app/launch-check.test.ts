@@ -212,7 +212,7 @@ describe("launchCheck limits and coverage", () => {
     try {
       const home = "https://x.example/project/";
       web.set(home, { body: GOOD("Project home page title") });
-      web.set("https://x.example/project/sitemap.xml", { status: 503, body: "busy" });
+      web.set("https://x.example/project/sitemap.xml", { status: 429, body: "slow down" });
       web.set("https://x.example/sitemap.xml", { body: urlset("https://x.example/other/docs"), type: "application/xml" });
       const { ctx, id } = setup(home);
       expect((await launchCheck(ctx, "o", id)).pages).toBeUndefined();
@@ -223,6 +223,14 @@ describe("launchCheck limits and coverage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("does not decompress a gzip homepage body", async () => {
+    const home = "https://y.example/";
+    web.set(home, { body: gzipSync(GOOD("Home page title is fine")), type: "application/gzip" });
+    const { ctx, id } = setup(home);
+    const res = await launchCheck(ctx, "o", id);
+    expect(res.items.find((i) => i.id === "title")?.level).toBe("fail");
   });
 
   it("reads a gzip child sitemap that starts with a comment", async () => {

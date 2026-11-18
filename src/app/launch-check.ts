@@ -69,7 +69,8 @@ async function get(url: string, opts: Get): Promise<Fetched> {
     const contentType = res.headers.get("content-type") ?? "";
     let bytes = Buffer.concat(chunks);
     // 압축한 사이트맵(pages.xml.gz)은 풀어서 읽는다. 풀린 크기는 묶어 둔다(압축 폭탄).
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b && (opts.gzip || /gzip/i.test(contentType))) bytes = gunzipSync(bytes, { maxOutputLength: MAX_GUNZIP_BYTES });
+    // 홈페이지·하위 페이지는 풀지 않는다(전송 압축은 fetch가 이미 푼다). 하위 사이트맵 파일만 푼다.
+    if (opts.gzip && bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes, { maxOutputLength: MAX_GUNZIP_BYTES });
     return { status: res.status, contentType, body: bytes.toString("utf8"), url: res.url || url };
   } catch {
     return undefined;
@@ -134,7 +135,8 @@ async function crawl(requested: string): Promise<Crawl> {
   // 사이트맵 항목도 실제로 쓴 사이트맵으로 판정한다(프로젝트 사이트맵이 있는데 출처 404로 경고하지 않게).
   const items = [...checkPage(page.body), checkRobots(robots), checkSitemap(sitemap)];
   const pages = await checkSubpages(homepage, sitemap, deadline);
-  const transient = (r: Fetched) => !r || r.status >= 500;
+  // 5xx, 429(요청 제한), 408과 연결 실패는 잠시의 실패다.
+  const transient = (r: Fetched) => !r || r.status >= 500 || r.status === 429 || r.status === 408;
   // 먼저 보려던 프로젝트 사이트맵이 잠시 실패해 출처 사이트맵으로 넘어갔어도 미완료다(404는 사이트맵이 없다는 뜻이라 아니다).
   const partial = transient(sitemap) || Boolean(sub && transient(ownSitemap)) || Boolean(pages && (pages.unreachable > 0 || pages.missedSitemaps));
   return { items, pages, homeCopy: pageCopy(page.body), partial };
@@ -179,7 +181,8 @@ export async function launchCheck(ctx: AppContext, ownerId: string, candidateId:
       if ("unreachable" in result) ctx.log.info({ homepage }, "launch check: homepage unreachable");
       // 열지 못한 페이지·사이트맵이 있거나 사이트맵이 잠시 실패했으면(동시 점검이 몰려 시간이 모자랐을 수도 있다) 2분만 기억한다.
       const partial = !("unreachable" in result) && result.partial;
-      hit = { at: Date.now(), ttl: partial ? INCOMPLETE_TTL_MS : TTL_MS, crawl: result };
+      // 결과의 글자들은 원본 페이지의 일부를 잘라 낸 것이라 원본 전체를 붙잡고 있을 수 있다. 새 문자열로 복사해 기억한다.
+      hit = { at: Date.now(), ttl: partial ? INCOMPLETE_TTL_MS : TTL_MS, crawl: JSON.parse(JSON.stringify(result)) as Crawl };
       // 열지 못한 결과는 기억하지 않는다. 사이트가 돌아오면 바로 다시 점검한다.
       if (!("unreachable" in result)) {
         if (cache.size >= MAX_CACHE && !cache.has(key)) cache.delete(cache.keys().next().value!);

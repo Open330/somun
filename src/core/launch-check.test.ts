@@ -124,6 +124,16 @@ describe("sitemap pages and page copy", () => {
     expect(level(checkPage(`<head><title>${text}</title></head><body></body>`), "text_without_js")).toBe("fail");
   });
 
+  it("skips nested templates as one inert block", () => {
+    const inner = `<meta name="description" content="A description that is long enough for search results."><p>Inert paragraph text that should never count as visible.</p>`;
+    const html = `<head><title>Product documentation</title></head><body><template><template></template>${inner}</template></body>`;
+    expect(level(checkPage(html), "description")).toBe("fail");
+    expect(level(checkPage(html), "text_without_js")).toBe("fail");
+    const start = performance.now();
+    checkPage(`<template>${"<template>".repeat(20_000)}${"</template>".repeat(20_000)}`);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
   it("decodes numeric character references once", () => {
     expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
     expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");
