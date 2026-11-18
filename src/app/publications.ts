@@ -97,7 +97,8 @@ export function updatePublication(ctx: AppContext, ownerId: string, id: number, 
   const publication = ctx.db.select().from(schema.publications).where(and(eq(schema.publications.id, id), eq(schema.publications.ownerId, ownerId))).get();
   if (!publication) throw new NotFoundError("publication");
   const url = input.url?.trim() ?? publication.url;
-  validateUrl(ctx, ownerId, publication.channel as Channel, url);
+  // 링크를 바꿀 때만 채널과 맞는지 본다. 판별 규칙이 늘어(디스콰이엇 등) 예전 기록이 다른 채널로 읽혀도, 시각·계정 수정은 막지 않는다.
+  if (url !== publication.url) validateUrl(ctx, ownerId, publication.channel as Channel, url);
   if (input.publishedAt !== undefined) validatePublishedAt(ctx, ownerId, input.publishedAt);
   ctx.db.$client.transaction(() => {
     // 계정을 적으면 그 값, 링크만 바꾸면 새 링크에서 다시 읽는다(직접 적어 둔 계정은 링크가 바뀌어도 둔다).

@@ -103,6 +103,8 @@ describe("disquiet lint", () => {
     expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/mytool")).toContain("preferred_link");
     expect(bareFailed("My-Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/product/my-tool")).not.toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/\nHTTPS://disquiet.io/product/unrelated")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nHTTPS://disquiet.io/product/tool")).not.toEqual(expect.arrayContaining(["has_link"]));
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nHTTPS://tool.example/")).not.toContain("preferred_link");
     // 이름의 %가 다른 채널의 lint를 깨지 않는다.
     expect(() => lintDraft("x", undefined, "100% Tool은 기록을 저장합니다. https://tool.example/", [], { purpose: "introduction", publicName: "100% Tool", preferLink: "https://tool.example/" })).not.toThrow();
   });

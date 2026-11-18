@@ -38,7 +38,7 @@ export const DEFAULT_BANNED_PHRASES = [
 ];
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
-const LINK = /https?:\/\/\S+/;
+const LINK = /https?:\/\/\S+/i;
 const EXCLAMATION = /[!！]/;
 
 export { normalizeForMatch } from "./text-match.js";
@@ -315,7 +315,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       } catch { return undefined; }
     };
     const expected = canonical(facts.preferLink);
-    const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some(token => {
+    const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []).some(token => {
       // Compare the complete URL; an autolinker may stop at a known TLD inside another hostname.
       if (canonical(token) === expected) return true;
       let candidate = token.replace(/[.,;:!?，。；：！？]+$/u, "");
