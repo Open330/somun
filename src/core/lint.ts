@@ -40,10 +40,13 @@ export const DEFAULT_BANNED_PHRASES = [
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
 const LINK = /https?:\/\/\S+/i;
 
+/** 링크 끝에 붙은 문장부호·닫는 괄호·따옴표를 뗀다([https://a.dev] → https://a.dev). */
+const trimLinkEnd = (token: string) => token.replace(/[.,;:!?，。；：！？)\]}>'"’”]+$/u, "");
+
 /** 열 수 있는 링크가 있는가: 스킴만 맞는 글자(https://?)가 아니라 주소로 풀리고 점이 든 호스트가 있어야 한다. */
 function hasUsableLink(body: string): boolean {
   return (body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []).some((token) => {
-    try { return /\.[a-z0-9-]+\.?$/i.test(new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")).hostname); } catch { return false; }
+    try { return /\.[a-z0-9-]+\.?$/i.test(new URL(trimLinkEnd(token)).hostname); } catch { return false; }
   });
 }
 const EXCLAMATION = /[!！]/;
@@ -177,7 +180,7 @@ function disquietLinks(channel: string, body: string, facts: LintFacts): { produ
   // 스킴은 대소문자를 가리지 않는다(HTTPS://도 링크다).
   for (const token of body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []) {
     let u: URL;
-    try { u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); } catch { continue; }
+    try { u = new URL(trimLinkEnd(token)); } catch { continue; }
     // 끝의 점(disquiet.io.)도 같은 호스트다.
     if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname.replace(/\.+$/, ""))) continue;
     const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
