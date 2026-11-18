@@ -68,6 +68,8 @@ describe("disquiet channel", () => {
     const prompt = draftPrompt(candidate, "disquiet", "ko", []);
     expect(JSON.stringify(prompt)).toContain("never claim authorship");
     expect(JSON.stringify(prompt)).not.toContain("직접 만들었다는 한 문장");
+    expect(JSON.stringify(prompt)).not.toContain("linked to that product's page");
+    expect(JSON.stringify(prompt)).toContain("End with the supplied link");
   });
 });
 
