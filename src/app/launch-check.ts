@@ -139,7 +139,9 @@ async function crawl(requested: string): Promise<Crawl> {
   const transient = (r: Fetched) => !r || r.status >= 500 || r.status === 429 || r.status === 408;
   // 먼저 보려던 프로젝트 사이트맵이 잠시 실패해 출처 사이트맵으로 넘어갔어도 미완료다(404는 사이트맵이 없다는 뜻이라 아니다).
   const partial = transient(sitemap) || Boolean(sub && transient(ownSitemap)) || Boolean(pages && (pages.unreachable > 0 || pages.missedSitemaps));
-  return { items, pages, homeCopy: pageCopy(page.body), partial };
+  // 문구 점검은 앞 2000자만 읽으므로 그만큼만 기억한다.
+  const copy = pageCopy(page.body);
+  return { items, pages, homeCopy: { title: copy.title?.slice(0, 2000), description: copy.description?.slice(0, 2000) }, partial };
 }
 
 /**
@@ -192,5 +194,5 @@ export async function launchCheck(ctx: AppContext, ownerId: string, candidateId:
   }
   const { at, crawl: c } = hit;
   if ("unreachable" in c) return { homepage, items: [], unreachable: true, copy: copyCheck(ctx, ownerId, evidence, {}) };
-  return { homepage, items: c.items, checkedAt: at, pages: c.pages, copy: copyCheck(ctx, ownerId, evidence, c.homeCopy) };
+  return { homepage, items: c.items, checkedAt: at, pages: c.pages, ...(c.partial ? { partial: true } : {}), copy: copyCheck(ctx, ownerId, evidence, c.homeCopy) };
 }

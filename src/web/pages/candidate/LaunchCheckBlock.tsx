@@ -88,6 +88,7 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   // 사이트맵 상한(25개)으로 덜 연 것은 문장으로 알리고, 열려다 실패한 페이지가 있으면 통과라고 하지 않는다.
   const incomplete =
     Boolean(data?.unreachable) ||
+    Boolean(data?.partial) ||
     data?.pages?.checked === 0 ||
     (data?.pages?.unreachable ?? 0) > 0 ||
     (data?.pages?.missedSitemaps ?? 0) > 0;
@@ -146,6 +147,9 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             })}
           </ul>
         ) : null}
+        {data?.partial && !data.pages && (
+          <p className="tiny muted m-0">{t("사이트맵을 잠시 열지 못해 하위 페이지를 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.")}</p>
+        )}
         {data?.pages && (
           <div className="mt-8">
             <b className="small">{t("하위 페이지")}</b>

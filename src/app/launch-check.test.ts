@@ -215,7 +215,9 @@ describe("launchCheck limits and coverage", () => {
       web.set("https://x.example/project/sitemap.xml", { status: 429, body: "slow down" });
       web.set("https://x.example/sitemap.xml", { body: urlset("https://x.example/other/docs"), type: "application/xml" });
       const { ctx, id } = setup(home);
-      expect((await launchCheck(ctx, "o", id)).pages).toBeUndefined();
+      const first = await launchCheck(ctx, "o", id);
+      expect(first.pages).toBeUndefined();
+      expect(first.partial).toBe(true);
       web.set("https://x.example/project/sitemap.xml", { body: urlset("https://x.example/project/docs"), type: "application/xml" });
       web.set("https://x.example/project/docs", { body: GOOD("Docs page title is fine") });
       vi.setSystemTime(Date.now() + 121_000);
@@ -223,6 +225,14 @@ describe("launchCheck limits and coverage", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("keeps only the first 2000 characters of homepage copy", async () => {
+    const home = "https://z.example/";
+    web.set(home, { body: `<title>Home page title is fine</title><meta name="description" content="한${"x".repeat(199_000)}"><p>Visible text that is long enough to count as content here.</p>` });
+    const { ctx, id } = setup(home, { readmeForChecks: "# z", readmeTruncated: false });
+    const res = await launchCheck(ctx, "o", id);
+    expect(res.items.find((i) => i.id === "description")?.level).toBe("ok");
   });
 
   it("does not decompress a gzip homepage body", async () => {
