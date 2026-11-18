@@ -164,11 +164,17 @@ describe("sitemap pages and page copy", () => {
   });
 
   it("filters a large sitemap quickly under a homepage with a very long path", () => {
-    const home = `https://a.example/p/${"/".repeat(15_000)}`;
+    // 기계마다 속도가 달라 절대 시간 대신, 같은 사이트맵을 짧은 홈 주소로 거른 시간과 비교한다.
     const xml = urlsetOf(...Array.from({ length: 10_500 }, (_, i) => `https://a.example/p/x${i}`));
-    const start = performance.now();
-    expect(sitemapPages(xml, home, Number.MAX_SAFE_INTEGER)).toHaveLength(10_500);
-    expect(performance.now() - start).toBeLessThan(150);
+    const time = (home: string) => {
+      const start = performance.now();
+      expect(sitemapPages(xml, home, Number.MAX_SAFE_INTEGER)).toHaveLength(10_500);
+      return performance.now() - start;
+    };
+    time("https://a.example/p/");
+    const short = time("https://a.example/p/");
+    const long = time(`https://a.example/p/${"/".repeat(15_000)}`);
+    expect(long).toBeLessThan(short * 3 + 50);
   });
 
   it("decodes numeric character references once", () => {

@@ -101,10 +101,17 @@ describe("copyIssues", () => {
   });
 
   it("bounds the retired-name scan over long copy", () => {
+    // 기계마다 속도가 달라 절대 시간 대신, 2000자 문구와 그보다 훨씬 긴 문구의 시간을 비교한다(앞 2000자만 보므로 비슷해야 한다).
     const readme = Array.from({ length: 782 }, (_, i) => `AAAAAAAAAAAAAAAAAAAA X${i} is deprecated.`).join("\n");
-    const start = performance.now();
-    copyIssues({ readme, readmeTruncated: false, texts: [{ source: "homepage_title", text: "AAAAAAAAAAAAAAAAAAAA ".repeat(9000) }] });
-    expect(performance.now() - start).toBeLessThan(200);
+    const time = (text: string) => {
+      const start = performance.now();
+      copyIssues({ readme, readmeTruncated: false, texts: [{ source: "homepage_title", text }] });
+      return performance.now() - start;
+    };
+    time("AAAAAAAAAAAAAAAAAAAA ".repeat(95));
+    const short = time("AAAAAAAAAAAAAAAAAAAA ".repeat(95));
+    const long = time("AAAAAAAAAAAAAAAAAAAA ".repeat(9000));
+    expect(long).toBeLessThan(short * 3 + 30);
   });
 
   it("treats underscores as part of a name when matching the README", () => {
