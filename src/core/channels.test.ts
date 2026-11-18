@@ -127,3 +127,10 @@ it("requires the exact Disquiet product page when it is the homepage", () => {
   const update = { purpose: "update" as const, language: "ko", publicName: "Tool", repo: "o/tool", homepage: "https://disquiet.io/@maker/products/tool" };
   expect(lintDraft("disquiet", "Tool 업데이트", "Tool이 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@other/products/tool", [], update).find((r) => r.rule === "preferred_link")?.ok).toBe(false);
 });
+
+it("uses the name rule when the Disquiet homepage is a maker profile", () => {
+  const facts = { purpose: "update" as const, language: "ko", publicName: "Tool", repo: "o/tool", homepage: "https://disquiet.io/@maker" };
+  const pref = (body: string) => lintDraft("disquiet", "Tool 업데이트", body, [], facts).find((r) => r.rule === "preferred_link")?.ok;
+  expect(pref("Tool이 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).not.toBe(false);
+  expect(pref("Tool이 기록을 저장합니다.\n\nhttps://disquiet.io/@maker")).toBe(false);
+});

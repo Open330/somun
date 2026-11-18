@@ -177,8 +177,10 @@ function disquietLinks(channel: string, body: string, facts: LintFacts): { produ
   const isDisquiet = (u: URL) => /^(?:www\.)?disquiet\.io$/i.test(u.hostname.replace(/\.+$/, ""));
   const canonical = (u: URL) => `${u.hostname.replace(/^www\./i, "").replace(/\.+$/, "").toLowerCase()}${u.pathname.replace(/\/+$/, "").toLowerCase()}`;
   const parse = (v: string | undefined) => { try { return v ? new URL(v) : undefined; } catch { return undefined; } };
+  const productPath = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i;
   const home = parse(facts.homepage ?? facts.preferLink);
-  const exact = home && isDisquiet(home) ? canonical(home) : undefined;
+  // 홈페이지가 제품 페이지 주소일 때만 정확히 맞춘다. 메이커 프로필(/@maker) 같은 다른 디스콰이엇 주소면 이름 규칙으로 본다.
+  const exact = home && isDisquiet(home) && productPath.test(home.pathname) ? canonical(home) : undefined;
   const slug = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "-");
   const decode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
   const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
@@ -187,7 +189,7 @@ function disquietLinks(channel: string, body: string, facts: LintFacts): { produ
   for (const token of body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []) {
     const u = parse(trimLinkEnd(token));
     if (!u || !isDisquiet(u)) continue;
-    const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
+    const m = productPath.exec(u.pathname);
     const ours = exact ? canonical(u) === exact : Boolean(m && names.includes(slug(decode(m[1]!))));
     if (ours) product = true;
     else wrong = true;
