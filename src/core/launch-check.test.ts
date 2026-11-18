@@ -129,8 +129,15 @@ describe("sitemap pages and page copy", () => {
     const html = `<head><title>Product documentation</title></head><body><template><template></template>${inner}</template></body>`;
     expect(level(checkPage(html), "description")).toBe("fail");
     expect(level(checkPage(html), "text_without_js")).toBe("fail");
+    const visible = "Installation and configuration instructions for everyone on your team.";
+    expect(level(checkPage(`<template><!-- </template> --><p>${visible}</p></template>`), "text_without_js")).toBe("fail");
+    expect(level(checkPage(`<template><div data-example="<template>"></div></template><p>${visible}</p>`), "text_without_js")).toBe("ok");
+    expect(level(checkPage(`<template><script>"</template>"</script></template><p>${visible}</p>`), "text_without_js")).toBe("ok");
+    expect(sitemapPages(urlsetOf(`https://a.example/${"x".repeat(2100)}`, "https://a.example/ok"), "https://a.example/", 10)).toEqual(["https://a.example/ok"]);
     const start = performance.now();
     checkPage(`<template>${"<template>".repeat(20_000)}${"</template>".repeat(20_000)}`);
+    checkPage("<template></template>".repeat(20_000));
+    checkPage("<template><script>".repeat(20_000));
     expect(performance.now() - start).toBeLessThan(1000);
   });
 

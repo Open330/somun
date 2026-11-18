@@ -71,39 +71,37 @@ function nextTag(html: string, lower: string, from: number): Tag | undefined {
 }
 
 /** 태그들을 차례로 돈다. visit가 숫자를 돌려주면 거기서부터 다시 읽는다(블록을 건너뛸 때). */
-function eachTag(html: string, lower: string, visit: (tag: Tag) => number | void): void {
-  for (let at = 0, tag = nextTag(html, lower, 0); tag; tag = nextTag(html, lower, at)) {
+function eachTag(html: string, lower: string, visit: (tag: Tag) => number | void, from = 0): void {
+  for (let at = from, tag = nextTag(html, lower, from); tag; tag = nextTag(html, lower, at)) {
     const skip = visit(tag);
     at = typeof skip === "number" ? skip : tag.end;
   }
 }
 
-/** lower에서 from 이후 처음 나오는 <tag(뒤가 이름 글자가 아닌 것)의 위치. */
-function openAt(lower: string, tag: string, from: number): number {
-  const prefix = `<${tag}`;
-  for (let i = lower.indexOf(prefix, from); i >= 0; i = lower.indexOf(prefix, i + 1)) {
-    if (!/[a-z0-9-]/.test(lower[i + prefix.length] ?? "")) return i;
-  }
-  return -1;
+/** 원자료처럼 읽는 블록(<script>·<style>·<textarea>)의 끝. 안의 글자는 태그가 아니다. 닫는 태그가 없으면 문서 끝까지다. */
+function rawEnd(lower: string, tag: Tag): number {
+  const close = closeAt(lower, tag.name, tag.end);
+  const gt = close < 0 ? -1 : lower.indexOf(">", close);
+  return gt < 0 ? lower.length : gt + 1;
 }
 
+const RAW = new Set(["script", "style", "textarea", "title", "xmp"]);
+
 /**
- * 블록(<script>…</script>)의 끝. 닫는 태그가 없으면 문서 끝까지다.
- * <template>은 안에 또 <template>이 올 수 있어 깊이를 센다. 여는·닫는 위치를 앞으로만 옮기므로 한 번만 훑는다.
+ * 블록의 끝. <template> 안은 HTML로 읽히므로 같은 토크나이저로 깊이를 센다(주석·속성값 속 <template>은 세지 않는다).
+ * 안의 <script> 같은 원자료 블록은 통째로 건너뛴다. 앞으로만 읽으므로 한 번만 훑는다.
  */
-function blockEnd(lower: string, tag: Tag): number {
-  let depth = 1, at = tag.end;
-  let open = tag.name === "template" ? openAt(lower, tag.name, at) : -1;
-  for (;;) {
-    const close = closeAt(lower, tag.name, at);
-    if (close < 0) return lower.length;
-    while (open >= 0 && open < close) { depth++; open = openAt(lower, tag.name, open + 1); }
-    depth--;
-    const gt = lower.indexOf(">", close);
-    if (gt < 0) return lower.length;
-    if (depth === 0) return gt + 1;
-    at = gt + 1;
-  }
+function blockEnd(html: string, lower: string, tag: Tag): number {
+  if (tag.name !== "template") return rawEnd(lower, tag);
+  let depth = 1, end = html.length;
+  eachTag(html, lower, (t) => {
+    if (t.name === "!--") return;
+    if (!t.closing && RAW.has(t.name)) return rawEnd(lower, t);
+    if (t.name !== "template") return;
+    depth += t.closing ? -1 : 1;
+    if (depth === 0) { end = t.end; return html.length; }
+  }, tag.end);
+  return end;
 }
 
 /** 주석과 지정한 태그 블록(<script>…</script> 등)을 지운다. 따옴표 안의 <script>는 태그가 아니다. */
@@ -114,7 +112,7 @@ function removeBlocks(html: string, blocks: string[]): string {
   eachTag(html, lower, (tag) => {
     if (tag.name !== "!--" && (tag.closing || !set.has(tag.name))) return;
     out += `${html.slice(copied, tag.start)} `;
-    copied = tag.name === "!--" ? tag.end : blockEnd(lower, tag);
+    copied = tag.name === "!--" ? tag.end : blockEnd(html, lower, tag);
     return copied;
   });
   return out + html.slice(copied);
@@ -344,7 +342,9 @@ export function sitemapPages(xml: string, homepage: string, limit: number): stri
   const seen = new Set<string>();
   for (const loc of sitemapLocs(xml)) {
     let url: URL;
+    // 사이트맵 규약의 주소 길이 상한(2048자)을 넘는 항목은 건너뛴다. 결과와 기억에 아주 긴 주소가 쌓이지 않게.
     try { url = new URL(loc); } catch { continue; }
+    if (url.href.length > 2048) continue;
     if (!withinSite(url.href, homepage) || pageKey(url.href) === home || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
     url.hash = "";
     // /p0와 /p0/는 같은 페이지로 본다(한쪽이 다른 쪽으로 넘어가는 경우가 대부분이라 자리를 두 번 쓰지 않게).
