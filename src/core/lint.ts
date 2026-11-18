@@ -167,7 +167,8 @@ function disquietLinks(channel: string, body: string, facts: LintFacts): { produ
   const decode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
   const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
   let product = false, wrong = false;
-  for (const token of body.match(/https?:\/\/[^\s<>"`]+/g) ?? []) {
+  // 스킴은 대소문자를 가리지 않는다(HTTPS://도 링크다).
+  for (const token of body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []) {
     let u: URL;
     try { u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); } catch { continue; }
     if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname)) continue;
