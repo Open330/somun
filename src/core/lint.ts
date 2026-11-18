@@ -310,8 +310,15 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     });
     // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
     // 주소를 하나씩 풀어 실제로 여는 곳이 disquiet.io인지 본다(다른 사이트 주소 안에 든 글자는 아니다).
+    // 제품 페이지 주소는 저장하지 않으므로, 마지막 경로(제품 이름)가 공개 이름이나 저장소 이름과 같을 때만 이 제품의 페이지로 본다.
+    const slug = (v: string) => decodeURIComponent(v).toLowerCase().replace(/[^a-z0-9가-힣]/g, "");
+    const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
     const productPage = channel === "disquiet" && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some((token) => {
-      try { const u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); return /^(?:www\.)?disquiet\.io$/i.test(u.hostname) && /^\/(?:product|@[^/]+\/products)\/[^/]+\/?$/i.test(u.pathname); } catch { return false; }
+      try {
+        const u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, ""));
+        const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
+        return /^(?:www\.)?disquiet\.io$/i.test(u.hostname) && m !== null && names.includes(slug(m[1]!));
+      } catch { return false; }
     });
     results.push({ rule: "preferred_link", ok: matches || productPage, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }

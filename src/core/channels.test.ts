@@ -95,6 +95,7 @@ describe("disquiet lint", () => {
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/tool")).not.toContain("preferred_link");
     for (const other of ["https://disquiet.io/products/tool", "https://disquiet.io/@maker/product/tool", "https://disquiet.io/product/tool/comments"]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 CSV로 저장합니다.\n\n${other}`)).toContain("preferred_link");
     expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool/")).not.toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/unrelated")).toContain("preferred_link");
   });
 
   it("only claims authorship when the facts establish it", () => {
