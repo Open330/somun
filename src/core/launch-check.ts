@@ -54,6 +54,11 @@ function nextTag(html: string, lower: string, from: number): Tag | undefined {
       const close = lower.indexOf("-->", i + 4);
       return { name: "!--", closing: false, start: i, end: close < 0 ? html.length : close + 3 };
     }
+    // CDATA 구간(사이트맵 확장 설명 등) 안의 <script> 같은 글자는 태그가 아니다. 주석처럼 통째로 건너뛴다.
+    if (lower.startsWith("<![cdata[", i)) {
+      const close = lower.indexOf("]]>", i + 9);
+      return { name: "!--", closing: false, start: i, end: close < 0 ? html.length : close + 3 };
+    }
     const closing = html[i + 1] === "/";
     let j = i + (closing ? 2 : 1);
     if (!/[a-z]/.test(lower[j] ?? "")) continue;

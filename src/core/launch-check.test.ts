@@ -157,6 +157,12 @@ describe("sitemap pages and page copy", () => {
     expect(pageCopy(html).title).toBe("Guide to <script> tags");
   });
 
+  it("skips CDATA sections in sitemap extensions", () => {
+    const xml = `<urlset><url><loc>https://a.example/guide</loc><video:video><video:description><![CDATA[Learn when to use the <script> element.]]></video:description></video:video></url><url><loc>https://a.example/pricing</loc></url></urlset>`;
+    expect(sitemapPages(xml, "https://a.example/", 10)).toEqual(["https://a.example/guide", "https://a.example/pricing"]);
+    expect(checkSitemap({ status: 200, contentType: "application/xml", body: xml })).toEqual({ id: "sitemap", level: "ok", value: "2" });
+  });
+
   it("decodes numeric character references once", () => {
     expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
     expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");
