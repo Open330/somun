@@ -235,6 +235,25 @@ describe("launchCheck limits and coverage", () => {
     expect(res.items.find((i) => i.id === "description")?.level).toBe("ok");
   });
 
+  it("does not count a sitemap URL that redirects back to the homepage as checked", async () => {
+    const home = "https://aa.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://aa.example/sitemap.xml", { body: urlset("https://aa.example/old", "https://aa.example/docs"), type: "application/xml" });
+    web.set("https://aa.example/old", { body: GOOD("Home page title is fine"), finalUrl: "https://aa.example/" });
+    web.set("https://aa.example/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 2, checked: 1, unreachable: 1 });
+  });
+
+  it("reads a sitemap longer than 200,000 characters", async () => {
+    const home = "https://ab.example/tool/";
+    web.set(home, { body: GOOD("Tool home page title") });
+    web.set("https://ab.example/sitemap.xml", { body: urlset(...Array.from({ length: 1500 }, (_, i) => `https://ab.example/other/page-${i}-${"y".repeat(100)}`), "https://ab.example/tool/docs"), type: "application/xml" });
+    web.set("https://ab.example/tool/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+  });
+
   it("does not decompress a gzip homepage body", async () => {
     const home = "https://y.example/";
     web.set(home, { body: gzipSync(GOOD("Home page title is fine")), type: "application/gzip" });

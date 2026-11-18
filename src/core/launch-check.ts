@@ -7,6 +7,8 @@ export type CheckId = "title" | "description" | "og_text" | "og_image" | "twitte
 export type CheckItem = { id: CheckId; level: CheckLevel; value?: string };
 
 const MAX_HTML = 200_000;
+/** 사이트맵은 수천 항목이라 페이지보다 길다. 토크나이저가 선형이라 2MB까지 읽는다. */
+const MAX_SITEMAP = 2_000_000;
 
 const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'" };
 /** HTML·XML 문자 참조를 한 번에 푼다(&amp; &#38; &#x26;). 한 번만 풀어야 &amp;lt;가 <로 두 번 풀리지 않는다. */
@@ -243,8 +245,8 @@ export function checkPage(rawHtml: string): CheckItem[] {
   ];
 }
 
-/** url은 리다이렉트를 따라간 뒤 실제로 연 주소다. */
-export type Fetched = { status: number; contentType: string; body: string; url?: string } | undefined;
+/** url은 리다이렉트를 따라간 뒤 실제로 연 주소다. truncated면 크기 한도에서 잘려 뒷부분을 못 읽었다. */
+export type Fetched = { status: number; contentType: string; body: string; url?: string; truncated?: boolean } | undefined;
 
 export function checkRobots(res: Fetched): CheckItem {
   if (!res || res.status === 404) return { id: "robots", level: "ok", value: "none" };
@@ -280,7 +282,7 @@ export function pageCopy(rawHtml: string): { title?: string; description?: strin
 
 /** 사이트맵 문서의 첫 요소 이름(<?xml …?>과 주석은 건너뛴다). 이름공간 접두어(ns:urlset)는 뗀다. */
 export function sitemapRoot(xml: string): string | undefined {
-  const head = xml.slice(0, MAX_HTML);
+  const head = xml.slice(0, MAX_SITEMAP);
   const lower = asciiLower(head);
   let root: string | undefined;
   eachTag(head, lower, (tag) => {
@@ -312,7 +314,7 @@ export function withinSite(url: string, homepage: string): boolean {
  * <image:loc>·<video:loc> 같은 첨부 주소는 페이지가 아니다. 주석으로 막은 항목은 사이트맵에 없는 것이다.
  */
 export function sitemapLocs(xml: string): string[] {
-  const doc = xml.slice(0, MAX_HTML);
+  const doc = xml.slice(0, MAX_SITEMAP);
   const lower = asciiLower(doc);
   const out: string[] = [];
   let entryPrefix: string | undefined;
