@@ -15,7 +15,7 @@ const TTL_MS = 3600_000, MAX_CACHE = 200, MAX_BYTES = 300_000;
  * 남의 사이트에 부담을 주지 않게: 하위 페이지는 사이트맵 순서로 최대 25개, 한 점검에서 4개씩.
  * 점검 하나는 시작부터 20초 안에 끝내고(요청마다 남은 시간만큼만 기다린다), 서버 전체에서 동시에 여는 하위 페이지는 8개까지다.
  */
-const MAX_PAGES = 25, PAGE_CONCURRENCY = 4, CRAWL_BUDGET_MS = 20_000, REQUEST_MS = 6_000, GLOBAL_SUBPAGES = 8;
+const MAX_PAGES = 25, PAGE_CONCURRENCY = 4, CRAWL_BUDGET_MS = 20_000, REQUEST_MS = 6_000, GLOBAL_SUBPAGES = 8, MAX_CHILD_SITEMAPS = 5;
 type Crawl = { items: CheckItem[]; pages?: LaunchCheckPages; homeCopy: { title?: string; description?: string } } | { unreachable: true };
 const cache = new Map<string, { at: number; crawl: Crawl }>();
 /** 같은 홈페이지(#… 차이는 같은 페이지)를 동시에 여러 번 점검하면 한 번만 연다. */
@@ -73,7 +73,7 @@ async function get(url: string, opts: Get): Promise<Fetched> {
 /** 사이트맵 본문이 진짜 사이트맵인가(사이트맵 항목 판정과 같은 기준). 200으로 온 오류 문서는 아니다. */
 const realSitemap = (res: Fetched) => checkSitemap(res).level === "ok";
 
-/** 사이트맵의 하위 페이지를 점검한다. 사이트맵 색인(sitemapindex)이면 같은 출처의 첫 하위 사이트맵 두 개까지 읽는다. */
+/** 사이트맵의 하위 페이지를 점검한다. 사이트맵 색인(sitemapindex)이면 같은 출처의 하위 사이트맵을 다섯 개까지 읽는다. */
 async function checkSubpages(homepage: string, sitemap: Fetched, deadline: number): Promise<LaunchCheckPages | undefined> {
   if (!realSitemap(sitemap)) return undefined;
   const origin = new URL(homepage).origin;
@@ -81,10 +81,10 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
   let xmls = [sitemap!.body];
   let missedSitemaps = 0;
   if (/<sitemapindex\b/i.test(sitemap!.body)) {
-    const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } }).slice(0, 2);
-    const fetched = await Promise.all(children.map((u) => get(u, { deadline, scope: sameOrigin })));
-    // 열지 못한 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.
-    missedSitemaps = fetched.filter((r) => !realSitemap(r)).length;
+    const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } });
+    const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => get(u, { deadline, scope: sameOrigin })));
+    // 열지 못했거나 상한 밖이라 읽지 않은 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.
+    missedSitemaps = fetched.filter((r) => !realSitemap(r)).length + Math.max(0, children.length - MAX_CHILD_SITEMAPS);
     xmls = fetched.filter(realSitemap).map((r) => r!.body);
   }
   // 하위 사이트맵마다 따로 고른다. 하나로 이으면 앞 사이트맵이 길 때 뒤 사이트맵이 잘린다.

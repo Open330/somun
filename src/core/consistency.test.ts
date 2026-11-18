@@ -40,6 +40,13 @@ describe("retiredNames edge cases", () => {
     expect(performance.now() - start).toBeLessThan(200);
   });
 
+  it("strips emphasis underscores in linear time", () => {
+    expect(retiredNames("_Legacy Sync_ is deprecated.")).toEqual(["Legacy Sync"]);
+    const start = performance.now();
+    retiredNames(`A${"_".repeat(31_998)}B is deprecated`);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
   it("scans long runs of whitespace quickly", () => {
     const start = performance.now();
     expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}x`)).toEqual([]);

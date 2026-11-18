@@ -8,84 +8,132 @@ export type CheckItem = { id: CheckId; level: CheckLevel; value?: string };
 
 const MAX_HTML = 200_000;
 
-const attr = (tag: string, name: string): string | undefined => {
-  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
-  return m ? (m[2] ?? m[3]) : undefined;
-};
-
-function metas(head: string): Map<string, string> {
-  const out = new Map<string, string>();
-  // 따옴표 안의 < 는 값의 일부다(content="price < $20"). 세 갈래의 첫 글자가 서로 달라 되돌아가지 않는다.
-  for (const tag of head.match(/<meta\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi) ?? []) {
-    const key = (attr(tag, "property") ?? attr(tag, "name"))?.toLowerCase();
-    const content = attr(tag, "content");
-    if (key && content !== undefined && !out.has(key)) out.set(key, content.trim());
-  }
-  return out;
-}
-
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 const clip = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** 대문자 A–Z만 소문자로. toLowerCase는 İ 같은 글자를 두 글자로 늘려 원문과 위치가 어긋난다. */
 const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
 
-/** lower에서 from 이후 처음 나오는 <tag 또는 </tag(뒤가 이름 글자가 아닌 것)의 위치. </scripture는 </script가 아니다. */
-function tagAt(lower: string, prefix: string, from: number): number {
+/** 끝의 / 를 뗀다. 정규식(/\/+$/)은 / 가 수만 개 이어지면 제곱 시간이 걸린다. */
+export function trimSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === "/") end--;
+  return path.slice(0, end);
+}
+
+/** lower에서 from 이후 처음 나오는 </tag(뒤가 이름 글자가 아닌 것)의 위치. </scripture는 </script가 아니다. */
+function closeAt(lower: string, tag: string, from: number): number {
+  const prefix = `</${tag}`;
   for (let i = lower.indexOf(prefix, from); i >= 0; i = lower.indexOf(prefix, i + 1)) {
     if (!/[a-z0-9-]/.test(lower[i + prefix.length] ?? "")) return i;
   }
   return -1;
 }
 
-/** lower에서 from 이후 처음 나오는 <tag(뒤가 글자가 아닌 것)의 위치. */
-function openAt(lower: string, tag: string, from: number): number {
-  return tagAt(lower, `<${tag}`, from);
-}
+type Tag = { name: string; closing: boolean; start: number; end: number };
 
 /**
- * 주석과 지정한 태그 블록(<script>…</script> 등)을 지운다. 남의 페이지는 닫히지 않은 태그가 수만 개일 수 있어,
- * 정규식 대신 indexOf로 앞에서 뒤로 한 번만 훑는다. 닫히지 않은 블록은 끝까지 지운다.
+ * from 이후의 다음 실제 태그(또는 주석, name "!--"). 남의 페이지를 정규식 없이 앞에서 뒤로 한 번만 읽는다.
+ * 따옴표로 묶은 속성값 안의 < > 는 값의 일부다(content="<script> 요소"). 닫히지 않은 태그를 만나면 undefined.
  */
-function removeBlocks(html: string, tags: string[]): string {
-  const lower = asciiLower(html);
-  const next = new Map<string, number>();
-  const find = (key: string, from: number) => {
-    let at = next.get(key);
-    if (at === undefined || (at >= 0 && at < from)) {
-      at = key === "!--" ? lower.indexOf("<!--", from) : openAt(lower, key, from);
-      next.set(key, at);
+function nextTag(html: string, lower: string, from: number): Tag | undefined {
+  for (let i = html.indexOf("<", from); i >= 0; i = html.indexOf("<", i + 1)) {
+    if (lower.startsWith("<!--", i)) {
+      const close = lower.indexOf("-->", i + 4);
+      return { name: "!--", closing: false, start: i, end: close < 0 ? html.length : close + 3 };
     }
-    return at;
-  };
-  let out = "", i = 0;
-  for (;;) {
-    let start = -1, tag = "";
-    for (const key of ["!--", ...tags]) {
-      const at = find(key, i);
-      if (at >= 0 && (start < 0 || at < start)) { start = at; tag = key; }
+    const closing = html[i + 1] === "/";
+    let j = i + (closing ? 2 : 1);
+    if (!/[a-z]/.test(lower[j] ?? "")) continue;
+    const nameStart = j;
+    while (j < html.length && /[a-z0-9:-]/.test(lower[j]!)) j++;
+    const name = lower.slice(nameStart, j);
+    // 속성값의 따옴표는 = 바로 뒤에서만 연다(따옴표 없는 값 don't의 ' 는 글자다).
+    let quote = "", last = "";
+    for (; j < html.length; j++) {
+      const ch = html[j]!;
+      if (quote) { if (ch === quote) quote = ""; continue; }
+      if ((ch === "\"" || ch === "'") && last === "=") quote = ch;
+      else if (ch === ">") break;
+      if (!/\s/.test(ch)) last = ch;
     }
-    if (start < 0) return out + html.slice(i);
-    out += `${html.slice(i, start)} `;
-    if (tag === "!--") {
-      const close = lower.indexOf("-->", start + 4);
-      i = close < 0 ? html.length : close + 3;
-    } else {
-      const close = tagAt(lower, `</${tag}`, start + tag.length + 1);
-      const gt = close < 0 ? -1 : lower.indexOf(">", close);
-      i = gt < 0 ? html.length : gt + 1;
-    }
+    if (j >= html.length) return undefined;
+    return { name, closing, start: i, end: j + 1 };
+  }
+  return undefined;
+}
+
+/** 태그들을 차례로 돈다. visit가 숫자를 돌려주면 거기서부터 다시 읽는다(블록을 건너뛸 때). */
+function eachTag(html: string, lower: string, visit: (tag: Tag) => number | void): void {
+  for (let at = 0, tag = nextTag(html, lower, 0); tag; tag = nextTag(html, lower, at)) {
+    const skip = visit(tag);
+    at = typeof skip === "number" ? skip : tag.end;
   }
 }
 
-/** 첫 <title>의 글자. 주석·스크립트를 지운 뒤에 찾으므로 스크립트 문자열 속 <title>은 읽지 않는다. */
+/** 원자료처럼 읽는 블록(<script>…</script>)의 끝. 닫는 태그가 없으면 문서 끝까지다. */
+function blockEnd(lower: string, tag: Tag): number {
+  const close = closeAt(lower, tag.name, tag.end);
+  const gt = close < 0 ? -1 : lower.indexOf(">", close);
+  return gt < 0 ? lower.length : gt + 1;
+}
+
+/** 주석과 지정한 태그 블록(<script>…</script> 등)을 지운다. 따옴표 안의 <script>는 태그가 아니다. */
+function removeBlocks(html: string, blocks: string[]): string {
+  const lower = asciiLower(html);
+  const set = new Set(blocks);
+  let out = "", copied = 0;
+  eachTag(html, lower, (tag) => {
+    if (tag.name !== "!--" && (tag.closing || !set.has(tag.name))) return;
+    out += `${html.slice(copied, tag.start)} `;
+    copied = tag.name === "!--" ? tag.end : blockEnd(lower, tag);
+    return copied;
+  });
+  return out + html.slice(copied);
+}
+
+/** 태그를 모두 빼고 글자만 남긴다(닫히지 않은 마지막 태그 뒤는 버린다). */
+function textOnly(html: string): string {
+  const lower = asciiLower(html);
+  let out = "", copied = 0;
+  eachTag(html, lower, (tag) => {
+    out += `${html.slice(copied, tag.start)} `;
+    copied = tag.end;
+  });
+  const rest = html.slice(copied);
+  return out + (rest.includes("<") ? rest.slice(0, rest.indexOf("<")) : rest);
+}
+
+const attr = (tag: string, name: string): string | undefined => {
+  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
+  return m ? (m[2] ?? m[3]) : undefined;
+};
+
+/** <meta> 태그의 name·property → content. 태그 경계는 nextTag가 따옴표를 보며 정한다. */
+function metas(html: string): Map<string, string> {
+  const lower = asciiLower(html);
+  const out = new Map<string, string>();
+  eachTag(html, lower, (tag) => {
+    if (tag.name !== "meta" || tag.closing) return;
+    const raw = html.slice(tag.start, tag.end);
+    const key = (attr(raw, "property") ?? attr(raw, "name"))?.toLowerCase();
+    const content = attr(raw, "content");
+    if (key && content !== undefined && !out.has(key)) out.set(key, content.trim());
+  });
+  return out;
+}
+
+/** 첫 <title>의 글자. 주석·스크립트를 지운 뒤에 찾고, 속성값 속 <title>은 태그로 보지 않는다. */
 function titleOf(clean: string): string {
   const lower = asciiLower(clean);
-  const open = openAt(lower, "title", 0);
-  if (open < 0) return "";
-  const gt = lower.indexOf(">", open);
-  const close = gt < 0 ? -1 : tagAt(lower, "</title", gt);
-  return close < 0 ? "" : decode(clean.slice(gt + 1, close).trim());
+  let title = "";
+  eachTag(clean, lower, (tag) => {
+    if (tag.name !== "title" || tag.closing) return;
+    const close = closeAt(lower, "title", tag.end);
+    title = close < 0 ? "" : decode(clean.slice(tag.end, close).trim());
+    return clean.length;
+  });
+  return title;
 }
 
 /** 검색엔진과 방문자가 보는 부분만 남긴다: 주석, 스크립트, 스타일, 템플릿을 뺀다. */
@@ -99,8 +147,7 @@ export function checkPage(rawHtml: string): CheckItem[] {
   const ogTitle = m.get("og:title"), ogDesc = m.get("og:description");
   const ogImage = m.get("og:image") ?? m.get("twitter:image");
   const card = m.get("twitter:card");
-  // [^<>]: 닫히지 않은 < 가 많아도 선형으로 지운다.
-  const body = removeBlocks(html, ["head"]).replace(/<[^<>]*>/g, " ");
+  const body = textOnly(removeBlocks(html, ["head"]));
   const text = decode(body).replace(/\s+/g, " ").trim();
 
   return [
@@ -137,8 +184,9 @@ export function checkSitemap(res: Fetched): CheckItem {
   if (!res || res.status >= 400) return { id: "sitemap", level: "warn", value: res ? String(res.status) : "none" };
   const xml = /xml/i.test(res.contentType) || /^\s*(<\?xml|<urlset|<sitemapindex)/i.test(res.body);
   if (!xml) return { id: "sitemap", level: "fail", value: "html" };
-  // xml로 와도 urlset·sitemapindex가 없으면 사이트맵이 아니다(200으로 온 오류 문서).
-  if (!/<(?:urlset|sitemapindex)\b/i.test(res.body)) return { id: "sitemap", level: "fail", value: /<html\b/i.test(res.body) ? "html" : "invalid" };
+  // xml로 와도 첫 요소가 urlset·sitemapindex가 아니면 사이트맵이 아니다(200으로 온 오류 문서, 주석 속 <urlset>).
+  const root = sitemapRoot(res.body);
+  if (root !== "urlset" && root !== "sitemapindex") return { id: "sitemap", level: "fail", value: root === "html" ? "html" : "invalid" };
   return { id: "sitemap", level: "ok", value: String(sitemapLocs(res.body).length) };
 }
 
@@ -150,11 +198,25 @@ export function pageCopy(rawHtml: string): { title?: string; description?: strin
   return { title: title || undefined, description: description || undefined };
 }
 
+/** 사이트맵 문서의 첫 요소 이름(<?xml …?>과 주석은 건너뛴다). 이름공간 접두어(ns:urlset)는 뗀다. */
+export function sitemapRoot(xml: string): string | undefined {
+  const head = xml.slice(0, MAX_HTML);
+  const lower = asciiLower(head);
+  let root: string | undefined;
+  eachTag(head, lower, (tag) => {
+    if (tag.name === "!--" || tag.closing) return;
+    root = tag.name.split(":").at(-1);
+    return head.length;
+  });
+  return root;
+}
+
 /** 사이트의 기준 경로. 마지막 마디가 파일(index.html)이면 그 폴더다. 루트는 빈 문자열. */
 export function siteBase(homepage: string): string {
   const path = new URL(homepage).pathname;
-  const dir = /\/[^/]*\.[^/]*$/.test(path) ? path.replace(/\/[^/]*$/, "") : path;
-  return dir.replace(/\/+$/, "");
+  const lastSlash = path.lastIndexOf("/");
+  const dir = path.slice(lastSlash + 1).includes(".") ? path.slice(0, lastSlash) : path;
+  return trimSlashes(dir);
 }
 
 /** url이 홈페이지와 같은 출처이고 홈페이지 경로 아래(또는 그 폴더 자신)인가. GitHub Pages 프로젝트 사이트는 출처를 다른 프로젝트와 나눠 쓴다. */
@@ -176,7 +238,7 @@ export function sitemapLocs(xml: string): string[] {
  */
 export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
   // 쿼리가 다르면 다른 페이지다(/?page=2). 끝 / 차이와 #만 같은 것으로 본다.
-  const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}${u.search}`;
+  const norm = (u: URL) => `${u.origin}${trimSlashes(u.pathname)}${u.search}`;
   const home = norm(new URL(homepage));
   const out: string[] = [];
   const seen = new Set<string>();

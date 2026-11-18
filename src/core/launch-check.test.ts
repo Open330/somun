@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapPages, withinSite } from "./launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapPages, trimSlashes, withinSite } from "./launch-check.js";
 
 const level = (items: ReturnType<typeof checkPage>, id: string) => items.find((i) => i.id === id)?.level;
 
@@ -79,6 +79,23 @@ describe("sitemap pages and page copy", () => {
       <url><loc>https://barshelf.jiun.dev/widgets/weather#top</loc></url><url><loc>https://barshelf.jiun.dev/widgets/battery</loc></url></urlset>`;
     expect(sitemapPages(xml, "https://barshelf.jiun.dev", 10)).toEqual(["https://barshelf.jiun.dev/widgets/weather", "https://barshelf.jiun.dev/widgets/battery"]);
     expect(sitemapPages(xml, "https://barshelf.jiun.dev/", 1)).toEqual(["https://barshelf.jiun.dev/widgets/weather"]);
+  });
+
+  it("reads a quoted <script> in an attribute as text, not as a tag", () => {
+    const html = `<head><meta name="description" content="Learn to use the <script> element on your page, step by step."><title>Script element guide</title></head><body><p>Visible text that is long enough to count as content.</p></body>`;
+    const items = checkPage(html);
+    expect(level(items, "description")).toBe("ok");
+    expect(level(items, "text_without_js")).toBe("ok");
+    expect(pageCopy(html).title).toBe("Script element guide");
+  });
+
+  it("finds the sitemap root element outside comments and trims long slash runs quickly", () => {
+    expect(checkSitemap({ status: 200, contentType: "application/xml", body: "<html><!-- expected <urlset> --><p>Not found</p></html>" }).level).toBe("fail");
+    expect(checkSitemap({ status: 200, contentType: "application/xml", body: `<?xml version="1.0"?><!-- c --><ns:urlset><url><loc>a</loc></url></ns:urlset>` }).level).toBe("ok");
+    expect(trimSlashes("/a///")).toBe("/a");
+    const start = performance.now();
+    sitemapPages(urlsetOf(`https://a.example/${"/".repeat(32_000)}docs`, `https://a.example/x${"/".repeat(32_000)}`), "https://a.example/", 10);
+    expect(performance.now() - start).toBeLessThan(200);
   });
 
   it("rejects an XML document that is not a sitemap", () => {

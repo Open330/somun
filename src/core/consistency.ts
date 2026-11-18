@@ -36,7 +36,8 @@ export function retiredNames(readme: string): string[] {
   const text = readme
     .replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,500}\)/g, "$1")
     .replace(/[*`]+/g, "")
-    .replace(/(?<!\w)_+|_+(?!\w)/g, "");
+    // 밑줄 묶음은 한 번에 잡고(_+ 는 묶음 끝까지 간 뒤 앞으로 나아간다), 양옆이 모두 글자일 때만 남긴다.
+    .replace(/_+/g, (run: string, at: number, all: string) => (/\w/.test(all[at - 1] ?? "") && /\w/.test(all[at + run.length] ?? "") ? run : ""));
   const out = new Set<string>();
   for (const m of text.matchAll(RETIRED_MARK)) {
     // 대문자로 시작한 표현(Deprecated flags…)은 새 문장이라 앞 낱말을 가리키지 않는다.

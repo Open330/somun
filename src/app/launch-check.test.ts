@@ -157,6 +157,16 @@ describe("launchCheck limits and coverage", () => {
     expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1, missedSitemaps: 1 });
   });
 
+  it("reads up to five child sitemaps and counts the rest as missed", async () => {
+    const home = "https://q.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    const kids = Array.from({ length: 7 }, (_, i) => `https://q.example/s${i}.xml`);
+    web.set("https://q.example/sitemap.xml", { body: `<sitemapindex>${kids.map((k) => `<sitemap><loc>${k}</loc></sitemap>`).join("")}</sitemapindex>`, type: "application/xml" });
+    kids.forEach((k, i) => { web.set(k, { body: urlset(`https://q.example/p${i}`), type: "application/xml" }); web.set(`https://q.example/p${i}`, { body: GOOD("Sub page title is fine") }); });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 5, checked: 5, missedSitemaps: 2 });
+  });
+
   it("keeps the project folder when the homepage redirects to index.html, and counts every eligible page", async () => {
     const home = "https://n.example/project/";
     web.set(home, { body: GOOD("Project home page title"), finalUrl: "https://n.example/project/index.html" });
