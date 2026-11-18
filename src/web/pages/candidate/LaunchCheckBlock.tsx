@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CopyIssue } from "@core/consistency";
 import type { CheckItem } from "@core/launch-check";
 import type { LaunchCheck } from "@shared/types";
 import { api } from "../../lib/api";
@@ -33,7 +34,9 @@ function hint(item: CheckItem): string | undefined {
       ? t("URL {n}개", { n: value ?? "0" })
       : value === "html"
         ? t("HTML이 나옵니다. SPA가 모든 경로에 index.html을 돌려주는지 확인하세요.")
-        : t("없습니다. 페이지가 여럿이면 만들어 두세요.");
+        : value === "invalid"
+          ? t("사이트맵 형식(urlset·sitemapindex)이 아닙니다.")
+          : t("없습니다. 페이지가 여럿이면 만들어 두세요.");
   if (level === "ok") return value;
   if (id === "title") return level === "fail" ? t("<title>이 없습니다.") : t("{value} · 10~70자가 좋습니다.", { value: value ?? "" });
   if (id === "description")
@@ -49,46 +52,91 @@ function hint(item: CheckItem): string | undefined {
   return undefined;
 }
 
+const SOURCE: Record<CopyIssue["source"], string> = {
+  description: "저장소 설명",
+  homepage_title: "홈페이지 제목",
+  homepage_description: "홈페이지 설명",
+  oneliner_ko: "승인한 한 줄(한국어)",
+  oneliner_en: "승인한 한 줄(영어)",
+};
+
+/** 문구 점검 한 줄. 어디의 어떤 낱말이 왜 걸렸는지만 말하고, 고칠지는 사람이 정한다. */
+function copyHint(issue: CopyIssue): string {
+  return issue.kind === "retired"
+    ? t("README가 지원 종료라고 적은 이름이 남아 있습니다: {term}", { term: issue.term })
+    : t("README에 없는 이름입니다: {term}. README와 맞는지 확인하세요.", { term: issue.term });
+}
+
 const MARK: Record<CheckItem["level"], [string, string]> = { ok: ["✓", "badge ok"], warn: ["!", "badge warn"], fail: ["✕", "badge bad"] };
 
 /** 올리기 전 링크 점검: 글감의 홈페이지가 검색과 링크 미리보기에 어떻게 보이는지. 펼칠 때 한 번 불러온다. */
 export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homepage?: string }) {
   const [data, setData] = useState<LaunchCheck | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const details = useRef<HTMLDetailsElement>(null);
+  // 요청마다 번호를 붙여 마지막 요청의 답만 쓴다. 다른 글감으로 옮긴 뒤 늦게 온 답이 새 글감에 붙지 않게.
+  const ticket = useRef(0);
   const load = async () => {
+    const mine = ++ticket.current;
+    // 다시 점검하는 동안이나 실패했을 때 이전 결과를 통과처럼 남기지 않는다.
+    setData(null);
     setState("loading");
     try {
-      setData(await api<LaunchCheck>(`/candidates/${cid}/launch-check`));
+      const result = await api<LaunchCheck>(`/candidates/${cid}/launch-check`);
+      if (mine !== ticket.current) return;
+      setData(result);
       setState("idle");
     } catch {
-      setState("error");
+      if (mine === ticket.current) setState("error");
     }
   };
-  const failing = data?.items.filter((i) => i.level !== "ok").length ?? 0;
+  // 글감이 바뀌면 이전 결과를 지우고, 패널이 열려 있으면 새 글감을 점검한다.
+  useEffect(() => {
+    ticket.current++;
+    setData(null);
+    setState("idle");
+    if (details.current?.open) void load();
+    // load는 cid로 정해지므로 cid만 본다.
+  }, [cid]);
+  const failing = (data?.items.filter((i) => i.level !== "ok").length ?? 0) + (data?.pages?.issues.length ?? 0) + (data?.copy?.length ?? 0);
+  const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
+  // 홈페이지나 하위 페이지를 열지 못했으면 통과라고 하지 않는다.
+  // 사이트맵 상한(25개)으로 덜 연 것은 문장으로 알리고, 열려다 실패한 페이지가 있으면 통과라고 하지 않는다.
+  const incomplete =
+    Boolean(data?.unreachable) ||
+    Boolean(data?.partial) ||
+    data?.pages?.checked === 0 ||
+    (data?.pages?.unreachable ?? 0) > 0 ||
+    (data?.pages?.missedSitemaps ?? 0) > 0;
   return (
     <section className="side-block">
       <details
+        ref={details}
         className="raw"
         onToggle={(ev) => {
-          if ((ev.target as HTMLDetailsElement).open && !data && state !== "loading") void load();
+          // 열 때마다 다시 묻는다. 승인 문장·설명을 고친 뒤 다시 열면 새 결과를 보여 준다(사이트 점검은 서버가 기억해 다시 열지 않는다).
+          if ((ev.target as HTMLDetailsElement).open) void load();
         }}
       >
         <summary>
           {t("링크 미리보기 점검")}
-          {data?.items.length ? (
-            <span className={`badge ml-6 ${failing ? "warn" : "ok"}`}>{failing ? t("고칠 곳 {n}", { n: failing }) : t("통과")}</span>
+          {checked ? (
+            <span className={`badge ml-6 ${failing || incomplete ? "warn" : "ok"}`}>
+              {failing ? t("고칠 곳 {n}", { n: failing }) : incomplete ? t("다 보지 못함") : t("통과")}
+            </span>
           ) : null}
         </summary>
         <p className="tiny muted launch-check-intro">
-          {t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}
+          {t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}{" "}
+          {t("사이트맵의 하위 페이지와, 저장소 설명·홈페이지·승인한 한 줄이 README와 맞는지도 봅니다.")}
         </p>
         {!homepage && (
           <p className="small muted m-0">
             {t("저장소에 홈페이지가 없습니다. GitHub 저장소의 Website 칸에 사이트 주소를 넣으면 다음 수집부터 점검합니다.")}
           </p>
         )}
-        {homepage && state === "loading" && <p className="small muted m-0">{t("점검하는 중…")}</p>}
-        {homepage && state === "error" && (
+        {state === "loading" && <p className="small muted m-0">{t("점검하는 중…")}</p>}
+        {state === "error" && (
           <p className="small muted m-0">
             {t("점검하지 못했습니다.")}{" "}
             <button className="ghost sm" onClick={() => void load()}>
@@ -117,6 +165,64 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             })}
           </ul>
         ) : null}
+        {data?.partial && (
+          <p className="tiny muted m-0">{t("사이트맵이나 하위 페이지 일부를 읽지 못해 다 보지 못했습니다. 몇 분 뒤 다시 점검합니다.")}</p>
+        )}
+        {data?.pages && (
+          <div className="mt-8">
+            <b className="small">{t("하위 페이지")}</b>
+            <div className="tiny muted">
+              {t("사이트맵 {total}개 가운데 {checked}개를 열어 봤습니다.", { total: data.pages.total, checked: data.pages.checked })}
+              {data.pages.unreachable ? ` ${t("{n}개는 열지 못했습니다.", { n: data.pages.unreachable })}` : ""}
+              {data.pages.missedSitemaps
+                ? ` ${t("하위 사이트맵 {n}개를 열지 못해 그 안의 페이지는 세지 못했습니다.", { n: data.pages.missedSitemaps })}`
+                : ""}
+            </div>
+            {data.pages.issues.length ? (
+              <ul className="launch-check small">
+                {data.pages.issues.map((p) => (
+                  <li key={p.url}>
+                    <span className="badge warn" aria-label="warn">
+                      !
+                    </span>{" "}
+                    <a href={p.url} target="_blank" rel="noreferrer">
+                      {p.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                    </a>
+                    {p.items.map((item) => (
+                      <div key={item.id} className="tiny muted">
+                        {t(LABEL[item.id])}: {hint(item)}
+                      </div>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="tiny muted">
+                {data.pages.checked ? t("열어 본 하위 페이지는 모두 통과했습니다.") : t("하위 페이지를 하나도 열지 못했습니다.")}
+              </div>
+            )}
+          </div>
+        )}
+        {data?.copy && (
+          <div className="mt-8">
+            <b className="small">{t("문구 일관성")}</b>
+            {data.copy.length ? (
+              <ul className="launch-check small">
+                {data.copy.map((issue) => (
+                  <li key={`${issue.kind}-${issue.source}-${issue.term}`}>
+                    <span className="badge warn" aria-label="warn">
+                      !
+                    </span>{" "}
+                    <b>{t(SOURCE[issue.source])}</b>
+                    <div className="tiny muted">{copyHint(issue)}</div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="tiny muted">{t("저장소 설명·홈페이지·승인한 한 줄에서 README와 어긋난 이름을 찾지 못했습니다.")}</div>
+            )}
+          </div>
+        )}
         {data?.homepage && data.items.length > 0 && (
           <div className="meta-line">
             <a href={data.homepage} target="_blank" rel="noreferrer">

@@ -1,6 +1,7 @@
 /** 서버와 웹이 공유하는 도메인 타입. DB 행과 API 응답의 모양. */
 import type { Channel, ChannelLangs, CustomChannel } from "../core/channels.js";
 import type { CheckItem } from "../core/launch-check.js";
+import type { CopyIssue } from "../core/consistency.js";
 export type { Channel, ChannelLangs, CustomChannel } from "../core/channels.js";
 
 export type SourceKind = "github" | "npm" | "blog" | "sessions" | "omp";
@@ -109,7 +110,11 @@ export type Source = { id: number; kind: SourceKind; targets: string[]; options?
 export type Judgment = { id: number; candidateId: number; scores: RubricScores; total: number; reasoning: string; angle?: string; decision: Decision; suggestedChannels: Channel[]; model: string; overriddenDecision?: "draft" | "drop" | "defer"; overrideReason?: string; purpose?: DraftPurpose; createdAt: number };
 
 /** 올리기 전 홈페이지 점검. items가 비어 있으면 점검할 홈페이지가 없거나(GitHub 페이지 포함) 열리지 않은 것. */
-export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean };
+/** 사이트맵 하위 페이지 점검 결과. 고칠 곳이 있는 페이지만 담고, 몇 개를 봤는지는 따로 센다. */
+/** missedSitemaps: 사이트맵 색인에서 열지 못한 하위 사이트맵 수(그 안의 페이지는 total에 없다). */
+export type LaunchCheckPages = { checked: number; unreachable: number; total: number; issues: { url: string; items: CheckItem[] }[]; missedSitemaps?: number };
+/** partial: 사이트맵이 잠시 실패했거나 열지 못한 페이지가 있어 다 보지 못했다(몇 분 뒤 다시 점검한다). */
+export type LaunchCheck = { homepage?: string; items: CheckItem[]; checkedAt?: number; unreachable?: boolean; pages?: LaunchCheckPages; partial?: boolean; copy?: CopyIssue[] };
 
 export type LintResult = { rule: string; ok: boolean; detail?: string };
 
