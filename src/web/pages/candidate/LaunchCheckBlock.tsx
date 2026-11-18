@@ -74,6 +74,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   const [data, setData] = useState<LaunchCheck | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const load = async () => {
+    // 다시 점검하는 동안이나 실패했을 때 이전 결과를 통과처럼 남기지 않는다.
+    setData(null);
     setState("loading");
     try {
       setData(await api<LaunchCheck>(`/candidates/${cid}/launch-check`));
@@ -118,8 +120,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             {t("저장소에 홈페이지가 없습니다. GitHub 저장소의 Website 칸에 사이트 주소를 넣으면 다음 수집부터 점검합니다.")}
           </p>
         )}
-        {homepage && state === "loading" && <p className="small muted m-0">{t("점검하는 중…")}</p>}
-        {homepage && state === "error" && (
+        {state === "loading" && <p className="small muted m-0">{t("점검하는 중…")}</p>}
+        {state === "error" && (
           <p className="small muted m-0">
             {t("점검하지 못했습니다.")}{" "}
             <button className="ghost sm" onClick={() => void load()}>
