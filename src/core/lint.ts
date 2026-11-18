@@ -275,7 +275,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? say("제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요.", "This limitation is not in the evidence. Check the source.") : undefined });
   }
 
-  if (channel === "x" || channel === "linkedin" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
+  if (channel === "x" || channel === "linkedin" || channel === "disquiet" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
     results.push({ rule: "has_link", ok: LINK.test(body) });
   }
   if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
@@ -308,7 +308,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       candidate = candidate.slice(0, end);
       return canonical(candidate) === expected;
     });
-    results.push({ rule: "preferred_link", ok: matches, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
+    // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
+    const productPage = channel === "disquiet" && /https?:\/\/(?:www\.)?disquiet\.io\/\S+/i.test(body);
+    results.push({ rule: "preferred_link", ok: matches || productPage, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.
@@ -318,7 +320,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "paragraphs", ok, detail: ok ? undefined : say(`문단 ${paragraphs}개. 근거가 적으면 훅과 링크만으로 2문단이면 충분합니다.`, `${paragraphs} paragraph(s). With limited evidence, a hook and a link in two paragraphs are enough.`) });
   }
 
-  if (channel === "show_hn" || channel === "x") {
+  if (channel === "show_hn" || channel === "x" || channel === "disquiet") {
     results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(text) });
   }
 
@@ -370,7 +372,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const len = [...(title ?? "")].length;
     results.push({ rule: "title_length", ok: len > 0 && len <= spec.titleMaxChars, detail: `${len}/${spec.titleMaxChars}` });
   }
-  if (channel === "show_hn" || channel === "show_gn") {
+  if (channel === "show_hn" || channel === "show_gn" || channel === "disquiet") {
     const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|추천\s?부탁|추천(?:을|해)?\s?(?:눌러|주세요)|투표\s?(?:부탁|해\s?주세요)|좋아요\s?(?:부탁|눌러)/i.test(normalizeForMatch(text));
     results.push({ rule: "no_vote_request", ok: !asksVotes });
   }

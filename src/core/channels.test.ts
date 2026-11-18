@@ -63,9 +63,30 @@ describe("disquiet channel", () => {
     expect(DEFAULT_CHANNEL_LANGS).not.toHaveProperty("disquiet");
   });
 
-  it("puts the channel rules and own-product disclosure into the draft prompt", () => {
+  it("puts the channel rules into the draft prompt without forcing an authorship claim", () => {
     const candidate = { title: "Tool", type: "release", evidence: { repo: "owner/tool", repoUrl: "https://github.com/owner/tool" } };
     const prompt = draftPrompt(candidate, "disquiet", "ko", []);
-    expect(JSON.stringify(prompt)).toContain("the author made it");
+    expect(JSON.stringify(prompt)).toContain("never claim authorship");
+    expect(JSON.stringify(prompt)).not.toContain("직접 만들었다는 한 문장");
+  });
+});
+
+describe("disquiet lint", () => {
+  const facts = { purpose: "introduction" as const, language: "ko", publicName: "Tool", repo: "o/tool", preferLink: "https://tool.example/" };
+  const failed = (title: string, body: string) => lintDraft("disquiet", title, body, [], facts).filter((r) => !r.ok).map((r) => r.rule);
+
+  it("rejects exclamation marks and vote requests", () => {
+    const rules = failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/");
+    expect(rules).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
+  });
+
+  it("accepts the registered product page or the homepage as the link, and requires a link", () => {
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).not.toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/")).not.toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
+  });
+
+  it("only claims authorship when the facts establish it", () => {
+    expect(channelSpec("disquiet").rules).toContain("never claim authorship");
   });
 });
