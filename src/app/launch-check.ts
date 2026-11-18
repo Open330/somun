@@ -1,3 +1,4 @@
+import { gunzipSync } from "node:zlib";
 import { copyIssues, type CopyIssue, type CopySource } from "../core/consistency.js";
 import { checkPage, checkRobots, checkSitemap, pageCopy, pageKey, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
 import { publicFetch } from "../infra/net.js";
@@ -10,14 +11,14 @@ import { getProfile } from "./profiles.js";
  * 글감의 홈페이지를 올리기 전에 점검한다. 공인 주소만(publicFetch), 크기 제한, 한 시간 기억.
  * GitHub 저장소 페이지는 미리보기가 이미 갖춰져 있어 점검하지 않는다.
  */
-const TTL_MS = 3600_000, MAX_CACHE = 200, MAX_BYTES = 300_000;
+const TTL_MS = 3600_000, INCOMPLETE_TTL_MS = 120_000, MAX_CACHE = 200, MAX_BYTES = 300_000, MAX_GUNZIP_BYTES = 2_000_000;
 /**
  * 남의 사이트에 부담을 주지 않게: 하위 페이지는 사이트맵 순서로 최대 25개, 한 점검에서 4개씩.
  * 점검 하나는 시작부터 20초 안에 끝내고(요청마다 남은 시간만큼만 기다린다), 서버 전체에서 동시에 여는 하위 페이지는 8개까지다.
  */
 const MAX_PAGES = 25, PAGE_CONCURRENCY = 4, CRAWL_BUDGET_MS = 20_000, REQUEST_MS = 6_000, GLOBAL_SUBPAGES = 8, MAX_CHILD_SITEMAPS = 5;
 type Crawl = { items: CheckItem[]; pages?: LaunchCheckPages; homeCopy: { title?: string; description?: string } } | { unreachable: true };
-const cache = new Map<string, { at: number; crawl: Crawl }>();
+const cache = new Map<string, { at: number; ttl: number; crawl: Crawl }>();
 /** 같은 홈페이지(#… 차이는 같은 페이지)를 동시에 여러 번 점검하면 한 번만 연다. */
 const inflight = new Map<string, Promise<Crawl>>();
 
@@ -46,7 +47,7 @@ async function slot<T>(deadline: number, fn: () => Promise<T>): Promise<T | unde
   }
 }
 
-type Get = { deadline: number; scope?: (url: URL) => boolean };
+type Get = { deadline: number; scope?: (url: URL) => boolean; gzip?: boolean };
 
 /** 한 번 연다. scope가 있으면 리다이렉트 대상을 요청하기 전에 거른다. 시간이 다 됐으면 열지 않는다. */
 async function get(url: string, opts: Get): Promise<Fetched> {
@@ -64,7 +65,11 @@ async function get(url: string, opts: Get): Promise<Fetched> {
       if (size > MAX_BYTES) { await reader.cancel().catch(() => undefined); break; }
       chunks.push(value);
     }
-    return { status: res.status, contentType: res.headers.get("content-type") ?? "", body: Buffer.concat(chunks).toString("utf8"), url: res.url || url };
+    const contentType = res.headers.get("content-type") ?? "";
+    let bytes = Buffer.concat(chunks);
+    // 압축한 사이트맵(pages.xml.gz)은 풀어서 읽는다. 풀린 크기는 묶어 둔다(압축 폭탄).
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b && (opts.gzip || /gzip/i.test(contentType))) bytes = gunzipSync(bytes, { maxOutputLength: MAX_GUNZIP_BYTES });
+    return { status: res.status, contentType, body: bytes.toString("utf8"), url: res.url || url };
   } catch {
     return undefined;
   }
@@ -83,7 +88,7 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
   // 주석 속 낱말이 아니라 첫 요소로 색인인지 본다(사이트맵 항목 판정과 같은 기준).
   if (sitemapRoot(sitemap!.body) === "sitemapindex") {
     const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } });
-    const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => get(u, { deadline, scope: sameOrigin })));
+    const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => get(u, { deadline, scope: sameOrigin, gzip: true })));
     // 열지 못했거나 상한 밖이라 읽지 않은 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.
     missedSitemaps = fetched.filter((r) => !realSitemap(r)).length + Math.max(0, children.length - MAX_CHILD_SITEMAPS);
     xmls = fetched.filter(realSitemap).map((r) => r!.body);
@@ -158,7 +163,7 @@ export async function launchCheck(ctx: AppContext, ownerId: string, candidateId:
   let key: string;
   try { const u = new URL(homepage); u.hash = ""; key = u.href; } catch { return { homepage, items: [], unreachable: true, copy: copyCheck(ctx, ownerId, evidence, {}) }; }
   let hit = cache.get(key);
-  if (!hit || Date.now() - hit.at >= TTL_MS) {
+  if (!hit || Date.now() - hit.at >= hit.ttl) {
     let pending = inflight.get(key);
     if (!pending) {
       pending = crawl(key).finally(() => inflight.delete(key));
@@ -166,9 +171,11 @@ export async function launchCheck(ctx: AppContext, ownerId: string, candidateId:
     }
     const result = await pending;
     hit = cache.get(key);
-    if (!hit || Date.now() - hit.at >= TTL_MS) {
+    if (!hit || Date.now() - hit.at >= hit.ttl) {
       if ("unreachable" in result) ctx.log.info({ homepage }, "launch check: homepage unreachable");
-      hit = { at: Date.now(), crawl: result };
+      // 열지 못한 페이지나 사이트맵이 있으면(동시 점검이 몰려 시간이 모자랐을 수도 있다) 2분만 기억한다.
+      const partial = !("unreachable" in result) && Boolean(result.pages && (result.pages.unreachable > 0 || result.pages.missedSitemaps));
+      hit = { at: Date.now(), ttl: partial ? INCOMPLETE_TTL_MS : TTL_MS, crawl: result };
       // 열지 못한 결과는 기억하지 않는다. 사이트가 돌아오면 바로 다시 점검한다.
       if (!("unreachable" in result)) {
         if (cache.size >= MAX_CACHE && !cache.has(key)) cache.delete(cache.keys().next().value!);

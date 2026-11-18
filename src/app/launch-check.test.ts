@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
+import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import pino from "pino";
 import { openDb, schema } from "../infra/db/index.js";
 import type { AppContext } from "./context.js";
 
 // 가짜 웹: 주소마다 [상태, 본문, content-type, 리다이렉트 끝 주소]. 연 주소를 모두 기록한다.
-type Page = { status?: number; body?: string; type?: string; finalUrl?: string; delayMs?: number };
+type Page = { status?: number; body?: string | Uint8Array; type?: string; finalUrl?: string; delayMs?: number };
 const web = new Map<string, Page>();
 const opened: string[] = [];
 let inFlight = 0, peak = 0;
@@ -177,6 +178,33 @@ describe("launchCheck limits and coverage", () => {
     const { ctx, id } = setup(home);
     const pages = (await launchCheck(ctx, "o", id)).pages;
     expect(pages).toMatchObject({ total: 14, checked: 14, unreachable: 0 });
+  });
+
+  it("reads a gzip child sitemap", async () => {
+    const home = "https://t.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://t.example/sitemap.xml", { body: `<sitemapindex><sitemap><loc>https://t.example/pages.xml.gz</loc></sitemap></sitemapindex>`, type: "application/xml" });
+    web.set("https://t.example/pages.xml.gz", { body: gzipSync(urlset("https://t.example/docs")), type: "application/gzip" });
+    web.set("https://t.example/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+  });
+
+  it("re-crawls an incomplete result after two minutes instead of an hour", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const home = "https://u.example/";
+      web.set(home, { body: GOOD("Home page title is fine") });
+      web.set("https://u.example/sitemap.xml", { body: urlset("https://u.example/a"), type: "application/xml" });
+      web.delete("https://u.example/a");
+      const { ctx, id } = setup(home);
+      expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ checked: 0, unreachable: 1 });
+      web.set("https://u.example/a", { body: GOOD("Sub page title is fine") });
+      vi.setSystemTime(Date.now() + 121_000);
+      expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ checked: 1, unreachable: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reads up to five child sitemaps and counts the rest as missed", async () => {
