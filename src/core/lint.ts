@@ -39,6 +39,13 @@ export const DEFAULT_BANNED_PHRASES = [
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
 const LINK = /https?:\/\/\S+/i;
+
+/** 열 수 있는 링크가 있는가: 스킴만 맞는 글자(https://?)가 아니라 주소로 풀리고 점이 든 호스트가 있어야 한다. */
+function hasUsableLink(body: string): boolean {
+  return (body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []).some((token) => {
+    try { return /\.[a-z0-9-]+\.?$/i.test(new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")).hostname); } catch { return false; }
+  });
+}
 const EXCLAMATION = /[!！]/;
 
 export { normalizeForMatch } from "./text-match.js";
@@ -171,7 +178,8 @@ function disquietLinks(channel: string, body: string, facts: LintFacts): { produ
   for (const token of body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []) {
     let u: URL;
     try { u = new URL(token.replace(/[.,;:!?，。；：！？)]+$/u, "")); } catch { continue; }
-    if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname)) continue;
+    // 끝의 점(disquiet.io.)도 같은 호스트다.
+    if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname.replace(/\.+$/, ""))) continue;
     const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
     if (m && names.includes(slug(decode(m[1]!)))) product = true;
     else wrong = true;
@@ -298,7 +306,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
   }
 
   if (channel === "x" || channel === "linkedin" || channel === "disquiet" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
-    results.push({ rule: "has_link", ok: LINK.test(body) });
+    results.push({ rule: "has_link", ok: hasUsableLink(body) });
   }
   if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
   const disquiet = disquietLinks(channel, body, facts);
