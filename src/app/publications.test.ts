@@ -242,3 +242,11 @@ describe("posting accounts", () => {
     expect(ctx.db.select().from(schema.publications).all().find((r) => r.id === c)!.account).toBe("@first");
   });
 });
+
+it("still edits the time of an older publication whose URL is now detected as another channel", () => {
+  const id = Number(ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId, channel: "blog", url: "https://disquiet.io/@maker/products/tool", publishedAt: Date.now() - 86_400_000 }).run().lastInsertRowid);
+  const corrected = Date.now() - 2 * 86_400_000;
+  expect(() => updatePublication(ctx, "me", id, { publishedAt: corrected })).not.toThrow();
+  expect(ctx.db.select().from(schema.publications).get()?.publishedAt).toBe(corrected);
+  expect(() => updatePublicationUrl(ctx, "me", id, "https://disquiet.io/@maker/products/other")).toThrow(/디스콰이엇|Disquiet/);
+});

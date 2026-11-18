@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { ALL_CHANNELS, enabledTargets, knownChannel, type Channel } from "../../core/channels.js";
+import { ALL_CHANNELS, channelSpec, enabledTargets, knownChannel, type Channel } from "../../core/channels.js";
 import { getCandidateDetail, listInbox, overrideJudgment, setCandidateStatus } from "../../app/candidates.js";
 import { backfillStarTrend, collectAll, collectSource, profileMaterialFor } from "../../app/collect.js";
 import { checkLocalResult } from "../../app/draft-repair.js";
@@ -147,6 +147,9 @@ export function apiRoutes(ctx: AppContext, config: Config, tickets: TicketStore 
   app.post("/candidates/:id/redraft", async (c) => {
     const { targets, instruction, introduction } = await body(c, z.object({ introduction: z.boolean().optional(), targets: z.array(z.object({ channel, lang })).min(1).max(30), instruction: z.string().max(600).optional() }));
     const ownerId = c.get("ownerId"), cid = id(c.req.param("id"));
+    // 언어가 고정된 채널(Show HN 영어, Show GN·디스콰이엇 한국어)에 다른 언어를 요청하면 만들지 않는다.
+    const fixed = targets.find((t) => { const f = channelSpec(t.channel, getSettings(ctx, ownerId).customChannels).fixedLang; return f !== undefined && f !== t.lang; });
+    if (fixed) throw new InvalidInputError(say(localeOf(ctx, ownerId), `${fixed.channel} 채널은 정해진 언어로만 쓸 수 있습니다.`, `The ${fixed.channel} channel only supports its fixed language.`));
     const detail = getCandidateDetail(ctx, ownerId, cid), cand = detail.candidate;
     const judgedAt = detail.judgments.find((j) => j.id === cand.latestJudgmentId)?.createdAt;
     const unique = targets.filter((t, i) => targets.findIndex((o) => o.channel === t.channel && o.lang === t.lang) === i);

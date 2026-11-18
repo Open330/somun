@@ -391,6 +391,15 @@ it('keeps the grounded first draft when a shorter repair invents a measurement',
   expect(ctx.db.select().from(schema.drafts).all()[0].body).toBe(first.body);
 });
 
+it('rejects a redraft in a language the channel does not use', async () => {
+  updateSettings(ctx, 'local', { channelLangs: { disquiet: ['ko'] } });
+  const response = await request(`/api/candidates/${cid}/redraft`, { introduction: true, targets: [{ channel: 'disquiet', lang: 'en' }] });
+  expect(response.status).toBe(400);
+  expect(ctx.db.select().from(schema.llmJobs).all()).toHaveLength(0);
+  const ok = await request(`/api/candidates/${cid}/redraft`, { introduction: true, targets: [{ channel: 'disquiet', lang: 'ko' }] });
+  expect(ok.status).toBe(202);
+});
+
 it('rejects prepare-drafts requests without a target before enqueuing model calls', async () => {
   updateSettings(ctx, 'local', {channelLangs:{x:[], linkedin:[], show_hn:[], show_gn:[]}});
   const response=await request('/api/candidates/judge', {ids:[cid]});

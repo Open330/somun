@@ -38,7 +38,17 @@ export const DEFAULT_BANNED_PHRASES = [
 ];
 
 const EMOJI_BULLET = /^\s*(?:[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]️?)\s+\S/mu;
-const LINK = /https?:\/\/\S+/;
+const LINK = /https?:\/\/\S+/i;
+
+/** 링크 끝에 붙은 문장부호·닫는 괄호·따옴표를 뗀다([https://a.dev] → https://a.dev). */
+const trimLinkEnd = (token: string) => token.replace(/[.,;:!?，。；：！？)\]}>'"’”]+$/u, "");
+
+/** 열 수 있는 링크가 있는가: 스킴만 맞는 글자(https://?)가 아니라 주소로 풀리고 점이 든 호스트가 있어야 한다. */
+function hasUsableLink(body: string): boolean {
+  return (body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []).some((token) => {
+    try { return /\.[a-z0-9-]+\.?$/i.test(new URL(trimLinkEnd(token)).hostname); } catch { return false; }
+  });
+}
 const EXCLAMATION = /[!！]/;
 
 export { normalizeForMatch } from "./text-match.js";
@@ -275,8 +285,8 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "no_invented_limit", ok: !invented, detail: invented ? say("제공된 근거에 없는 한계 표현입니다. 원문을 확인해 주세요.", "This limitation is not in the evidence. Check the source.") : undefined });
   }
 
-  if (channel === "x" || channel === "linkedin" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
-    results.push({ rule: "has_link", ok: LINK.test(body) });
+  if (channel === "x" || channel === "linkedin" || channel === "disquiet" || (channel.startsWith("custom_") && spec.linkPlacement === "body")) {
+    results.push({ rule: "has_link", ok: hasUsableLink(body) });
   }
   if (spec.linkPlacement === "reply" || spec.linkPlacement === "none") results.push({ rule: "no_body_link", ok: !LINK.test(body), detail: say("이 채널의 링크 위치 설정에 따라 본문에서 URL을 빼 주세요.", "Remove URLs from the body to match this channel’s link placement.") });
   if (facts.preferLink && channel !== "blog" && spec.linkPlacement !== "reply" && spec.linkPlacement !== "none" && channel !== "threads") {
@@ -290,7 +300,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
       } catch { return undefined; }
     };
     const expected = canonical(facts.preferLink);
-    const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/g) ?? []).some(token => {
+    const matches = expected !== undefined && (body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []).some(token => {
       // Compare the complete URL; an autolinker may stop at a known TLD inside another hostname.
       if (canonical(token) === expected) return true;
       let candidate = token.replace(/[.,;:!?，。；：！？]+$/u, "");
@@ -318,7 +328,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     results.push({ rule: "paragraphs", ok, detail: ok ? undefined : say(`문단 ${paragraphs}개. 근거가 적으면 훅과 링크만으로 2문단이면 충분합니다.`, `${paragraphs} paragraph(s). With limited evidence, a hook and a link in two paragraphs are enough.`) });
   }
 
-  if (channel === "show_hn" || channel === "x") {
+  if (channel === "show_hn" || channel === "x" || channel === "disquiet") {
     results.push({ rule: "no_exclamation", ok: !EXCLAMATION.test(text) });
   }
 
@@ -370,8 +380,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     const len = [...(title ?? "")].length;
     results.push({ rule: "title_length", ok: len > 0 && len <= spec.titleMaxChars, detail: `${len}/${spec.titleMaxChars}` });
   }
-  if (channel === "show_hn" || channel === "show_gn") {
-    const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|추천\s?부탁|추천(?:을|해)?\s?(?:눌러|주세요)|투표\s?(?:부탁|해\s?주세요)|좋아요\s?(?:부탁|눌러)/i.test(normalizeForMatch(text));
+  if (channel === "show_hn" || channel === "show_gn" || channel === "disquiet") {
+    // 부탁하는 끝맺음(눌러 주세요, 부탁)이 있을 때만 추천 요청이다. 제품의 '추천' 기능을 눌러 쓰는 설명은 요청이 아니다.
+    const asksVotes = /\b(?:up-?votes?|vote (?:for|on|it|this|us)|please vote|give (?:it|us|the repo) a star|star (?:it|this|the repo))\b|(?:추천|좋아요|업보트|투표)\s?(?:좀|한\s?번|버튼(?:을|를)?|표(?:를)?|을|를|해)?\s?(?:좀\s?)?(?:눌러\s?(?:주세요|주시면|주십시오|줘)|부탁|주세요)/i.test(normalizeForMatch(text));
     results.push({ rule: "no_vote_request", ok: !asksVotes });
   }
   return results;

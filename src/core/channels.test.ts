@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeLink, channelSpec, draftChannelSpec } from "./channels.js";
+import { DEFAULT_CHANNEL_LANGS, composeLink, channelSpec, draftChannelSpec } from "./channels.js";
 import { lintDraft } from "./lint.js";
 import { draftPrompt } from "./prompts.js";
 
@@ -48,5 +48,53 @@ describe("composeLink", () => {
   it("falls back to the empty composer elsewhere or without text", () => {
     expect(composeLink(channelSpec("linkedin"), "body")).toBe(channelSpec("linkedin").composeUrl);
     expect(composeLink(channelSpec("x"), "  ")).toBe("https://x.com/compose/post");
+  });
+});
+
+describe("disquiet channel", () => {
+  it("is a Korean titled channel with the link in the body and an editorial identity", () => {
+    const spec = channelSpec("disquiet");
+    expect(spec).toMatchObject({ id: "disquiet", fixedLang: "ko", hasTitle: true, linkPlacement: "body", composeUrl: "https://disquiet.io/" });
+    expect(spec.identity?.audience).toContain("메이커");
+    expect(spec.runbook.join(" ")).toContain("제품에 연결");
+  });
+
+  it("is not enabled by default, so no extra drafts are generated until a user turns it on", () => {
+    expect(DEFAULT_CHANNEL_LANGS).not.toHaveProperty("disquiet");
+  });
+
+  it("puts the channel rules into the draft prompt without forcing an authorship claim", () => {
+    const candidate = { title: "Tool", type: "release", evidence: { repo: "owner/tool", repoUrl: "https://github.com/owner/tool" } };
+    const prompt = draftPrompt(candidate, "disquiet", "ko", []);
+    expect(JSON.stringify(prompt)).toContain("never claim authorship");
+    expect(JSON.stringify(prompt)).not.toContain("직접 만들었다는 한 문장");
+    expect(JSON.stringify(prompt)).not.toContain("linked to that product's page");
+    expect(JSON.stringify(prompt)).toContain("End with the supplied link");
+  });
+});
+
+describe("disquiet lint", () => {
+  const facts = { purpose: "introduction" as const, language: "ko", publicName: "Tool", repo: "o/tool", preferLink: "https://tool.example/" };
+  const failed = (title: string, body: string) => lintDraft("disquiet", title, body, [], facts).filter((r) => !r.ok).map((r) => r.rule);
+
+  it("rejects exclamation marks and vote requests, but not a product feature called 추천", () => {
+    expect(failed("Tool에서 기록을 CSV로 저장하기", "Tool은 기록을 CSV로 저장합니다!\n\n추천 눌러 주세요.\n\nhttps://tool.example/")).toEqual(expect.arrayContaining(["no_exclamation", "no_vote_request"]));
+    for (const ask of ["추천 부탁드려요.", "추천 버튼을 눌러 주세요.", "추천 좀 눌러 주세요.", "좋아요 부탁해요.", "투표 해 주세요.", "추천해 주세요."]) expect(failed("Tool로 기록 저장하기", `Tool은 기록을 저장합니다. ${ask}\n\nhttps://tool.example/`)).toContain("no_vote_request");
+    expect(failed("Tool로 기록 저장하기", "Tool은 추천 탭을 눌러 비슷한 기록을 보여 줍니다.\n\nhttps://tool.example/")).not.toContain("no_vote_request");
+    expect(failed("Tool로 기록 저장하기", "Tool의 추천 버튼을 눌러 비슷한 기록을 확인할 수 있습니다.\n\nhttps://tool.example/")).not.toContain("no_vote_request");
+  });
+
+  it("links an introduction to the homepage like other channels and requires a usable link", () => {
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://tool.example/")).not.toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nHTTPS://tool.example/")).not.toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/product/tool")).toContain("preferred_link");
+    expect(failed("Tool로 기록 저장하기", "Tool은 기록을 CSV로 저장합니다.")).toContain("has_link");
+    expect(lintDraft("disquiet", "제목", "Tool은 기록을 저장합니다.\n\nhttps://?", [], { language: "ko", publicName: "Tool" }).find((r) => r.rule === "has_link")?.ok).toBe(false);
+    expect(lintDraft("x", undefined, "Release notes [https://example.com]", [], {}).find((r) => r.rule === "has_link")?.ok).toBe(true);
+    expect(() => lintDraft("x", undefined, "100% Tool은 기록을 저장합니다. https://tool.example/", [], { purpose: "introduction", publicName: "100% Tool", preferLink: "https://tool.example/" })).not.toThrow();
+  });
+
+  it("only claims authorship when the facts establish it", () => {
+    expect(channelSpec("disquiet").rules).toContain("never claim authorship");
   });
 });

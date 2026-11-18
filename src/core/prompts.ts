@@ -236,7 +236,7 @@ export const JUDGE_SCHEMA = {
       additionalProperties: false,
     },
     reasoning: { type: "string" },
-    suggestedChannels: { type: "array", items: { type: "string", enum: ["x", "threads", "linkedin", "show_hn", "show_gn", "blog"] } },
+    suggestedChannels: { type: "array", items: { type: "string", enum: ["x", "threads", "linkedin", "show_hn", "show_gn", "disquiet", "blog"] } },
     angle: { type: "string" },
   },
   required: ["scores", "reasoning", "suggestedChannels", "angle"],
