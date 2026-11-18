@@ -122,4 +122,8 @@ it("requires the exact Disquiet product page when it is the homepage", () => {
   const pref = (body: string) => lintDraft("disquiet", "Tool로 기록 저장하기", body, [], facts).find((r) => r.rule === "preferred_link")?.ok;
   expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@other/products/tool")).toBe(false);
   expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).toBe(true);
+  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool\nhttps://disquiet.io/@other/products/tool")).toBe(false);
+  // 업데이트 글도 저장소 홈페이지가 디스콰이엇 페이지면 다른 메이커 페이지를 걸러 낸다.
+  const update = { purpose: "update" as const, language: "ko", publicName: "Tool", repo: "o/tool", homepage: "https://disquiet.io/@maker/products/tool" };
+  expect(lintDraft("disquiet", "Tool 업데이트", "Tool이 기록을 CSV로 저장합니다.\n\nhttps://disquiet.io/@other/products/tool", [], update).find((r) => r.rule === "preferred_link")?.ok).toBe(false);
 });

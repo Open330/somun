@@ -77,7 +77,7 @@ function unsupportedEndorsements(text: string, source: string): string[] {
 /** 근거 없이 덧붙이기 쉬운 한계 표현. 원자료에 같은 말이 있으면 근거가 있는 것이다. */
 const INVENTED_LIMITS = /API가 바뀔|API may (?:still )?change|아직 (?:0\.x|베타|실험)|still (?:0\.x|beta|experimental)|not yet tested|(?:is|are) (?:still )?experimental|in (?:early )?beta|may break|(?:API|it) is unstable|실험 단계/gi;
 
-export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** 첫 소개 필수 전제어(evidence.introFacts). */ prerequisites?: string[]; /** 사용자가 승인한 첫 소개 한 줄(프로필). */ oneLiners?: { ko?: string; en?: string }; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; why?: string; sourceConditionPrs?: number[] };
+export type LintFacts = { purpose?: "introduction" | "update" | null; language?: string; editorInstruction?: string; repo?: string; publicName?: string; limitations?: string[]; sourceText?: string; avoid?: string[]; unreleased?: string[]; /** 첫 소개 필수 전제어(evidence.introFacts). */ prerequisites?: string[]; /** 사용자가 승인한 첫 소개 한 줄(프로필). */ oneLiners?: { ko?: string; en?: string }; /** README·홈페이지만으로 쓴 소개(core/condition-review readmeOnlyIntroduction). */ readmeOnly?: boolean; preferLink?: string; /** 저장소의 홈페이지(소개·업데이트 모두). 디스콰이엇 제품 페이지면 그 주소만 이 제품의 페이지로 본다. */ homepage?: string; why?: string; sourceConditionPrs?: number[] };
 
 /** 원문의 조건 유무만 알린다. 문안이 조건을 보존했는지 자동 인증하지 않는다. */
 export function sourceConditionReview(prNumbers: number[], locale: Locale = "ko"): LintResult | undefined {
@@ -110,7 +110,7 @@ export function draftLintFacts(candidate: CandidateLike, profile?: ProfileLike, 
   // Legacy profiles may combine the public name with owner/repo. Do not require that whole string in prose.
   const publicName = naming && repo.includes("/") && normalizeForMatch(naming).includes(normalizeForMatch(repo))
     ? undefined : naming || repo.split("/").at(-1);
-  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence), oneLiners: purpose === "introduction" && (profile?.oneLinerKo || profile?.oneLinerEn) ? { ko: profile?.oneLinerKo || undefined, en: profile?.oneLinerEn || undefined } : undefined };
+  return { purpose, repo: candidate.evidence.repo, publicName, limitations: [...(candidate.evidence.limitations ?? []), ...(profile?.limitations ?? [])], sourceText: groundingText(candidate, profile), avoid: profile?.avoid ?? [], unreleased: profile?.unreleased ?? [], prerequisites: purpose === "introduction" && candidate.evidence.introFacts?.hash === introFactsHash(publicName ?? repo.split("/").at(-1)!, candidate.evidence) ? candidate.evidence.introFacts.facts.prerequisites.map((p) => p.term) : undefined, preferLink, why: profile?.why || undefined, sourceConditionPrs: sourceConditionPrNumbers(candidate.evidence), homepage: candidate.evidence.homepage || undefined, oneLiners: purpose === "introduction" && (profile?.oneLinerKo || profile?.oneLinerEn) ? { ko: profile?.oneLinerKo || undefined, en: profile?.oneLinerEn || undefined } : undefined };
 }
 
 /**
@@ -168,23 +168,28 @@ function afterApproved(body: string, approved: string): string {
 }
 
 /**
- * 디스콰이엇 글의 disquiet.io 링크 분류. 제품 페이지 주소는 저장하지 않으므로, /product/<이름> 또는 /@<메이커>/products/<이름>이고
- * 그 이름이 공개 이름이나 저장소 이름과 같을 때만 이 제품의 페이지로 본다(공백은 -로, 대소문자 무시, 그 밖의 글자는 그대로).
+ * 디스콰이엇 글의 disquiet.io 링크 분류. 저장소 홈페이지가 디스콰이엇 제품 페이지면 그 주소와 정확히 같은 링크만 이 제품의 페이지다.
+ * 아니면 제품 페이지 주소를 저장하지 않으므로, /product/<이름> 또는 /@<메이커>/products/<이름>이고 그 이름이 공개 이름이나
+ * 저장소 이름과 같을 때만 이 제품의 페이지로 본다(공백은 -로, 대소문자 무시, 그 밖의 글자는 그대로). 그 밖의 disquiet.io 링크는 wrong이다.
  */
 function disquietLinks(channel: string, body: string, facts: LintFacts): { product: boolean; wrong: boolean } {
   if (channel !== "disquiet") return { product: false, wrong: false };
+  const isDisquiet = (u: URL) => /^(?:www\.)?disquiet\.io$/i.test(u.hostname.replace(/\.+$/, ""));
+  const canonical = (u: URL) => `${u.hostname.replace(/^www\./i, "").replace(/\.+$/, "").toLowerCase()}${u.pathname.replace(/\/+$/, "").toLowerCase()}`;
+  const parse = (v: string | undefined) => { try { return v ? new URL(v) : undefined; } catch { return undefined; } };
+  const home = parse(facts.homepage ?? facts.preferLink);
+  const exact = home && isDisquiet(home) ? canonical(home) : undefined;
   const slug = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "-");
   const decode = (v: string) => { try { return decodeURIComponent(v); } catch { return v; } };
   const names = [facts.publicName, facts.repo?.split("/").at(-1)].filter((n): n is string => Boolean(n?.trim())).map(slug);
   let product = false, wrong = false;
   // 스킴은 대소문자를 가리지 않는다(HTTPS://도 링크다).
   for (const token of body.match(/https?:\/\/[^\s<>"`]+/gi) ?? []) {
-    let u: URL;
-    try { u = new URL(trimLinkEnd(token)); } catch { continue; }
-    // 끝의 점(disquiet.io.)도 같은 호스트다.
-    if (!/^(?:www\.)?disquiet\.io$/i.test(u.hostname.replace(/\.+$/, ""))) continue;
+    const u = parse(trimLinkEnd(token));
+    if (!u || !isDisquiet(u)) continue;
     const m = /^\/(?:product|@[^/]+\/products)\/([^/]+)\/?$/i.exec(u.pathname);
-    if (m && names.includes(slug(decode(m[1]!)))) product = true;
+    const ours = exact ? canonical(u) === exact : Boolean(m && names.includes(slug(decode(m[1]!))));
+    if (ours) product = true;
     else wrong = true;
   }
   return { product, wrong };
@@ -346,9 +351,7 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     });
     // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
     // 주소를 하나씩 풀어 실제로 여는 곳이 disquiet.io인지 본다(다른 사이트 주소 안에 든 글자는 아니다).
-    // 홈페이지가 디스콰이엇 제품 페이지 자체면 그 주소와 정확히 같아야 한다(같은 이름의 다른 메이커 페이지는 아니다).
-    const preferIsDisquiet = (() => { try { return /^(?:www\.)?disquiet\.io$/i.test(new URL(facts.preferLink).hostname.replace(/\.+$/, "")); } catch { return false; } })();
-    results.push({ rule: "preferred_link", ok: (matches || (disquiet.product && !preferIsDisquiet)) && !disquiet.wrong, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
+    results.push({ rule: "preferred_link", ok: (matches || disquiet.product) && !disquiet.wrong, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.
