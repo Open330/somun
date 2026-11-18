@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkPage, checkRobots, checkSitemap } from "./launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, sitemapPages } from "./launch-check.js";
 
 const level = (items: ReturnType<typeof checkPage>, id: string) => items.find((i) => i.id === id)?.level;
 
@@ -42,5 +42,26 @@ describe("robots and sitemap", () => {
     expect(checkSitemap({ status: 200, contentType: "application/xml", body: "<urlset><url><loc>a</loc></url><url><loc>b</loc></url></urlset>" })).toEqual({ id: "sitemap", level: "ok", value: "2" });
     expect(checkSitemap({ status: 200, contentType: "text/html", body: "<!doctype html>" }).level).toBe("fail");
     expect(checkSitemap(undefined).level).toBe("warn");
+  });
+});
+
+describe("sitemap pages and page copy", () => {
+  it("lists same-origin pages in order, without the homepage, files or duplicates", () => {
+    const xml = `<urlset><url><loc>https://barshelf.jiun.dev/</loc></url><url><loc>https://barshelf.jiun.dev/widgets/weather</loc></url>
+      <url><loc>https://other.dev/x</loc></url><url><loc>https://barshelf.jiun.dev/og.png</loc></url>
+      <url><loc>https://barshelf.jiun.dev/widgets/weather#top</loc></url><url><loc>https://barshelf.jiun.dev/widgets/battery</loc></url></urlset>`;
+    expect(sitemapPages(xml, "https://barshelf.jiun.dev", 10)).toEqual(["https://barshelf.jiun.dev/widgets/weather", "https://barshelf.jiun.dev/widgets/battery"]);
+    expect(sitemapPages(xml, "https://barshelf.jiun.dev/", 1)).toEqual(["https://barshelf.jiun.dev/widgets/weather"]);
+  });
+
+  it("keeps only pages under a project site's path", () => {
+    const xml = `<urlset><url><loc>https://open330.github.io/</loc></url><url><loc>https://open330.github.io/kiwimu/</loc></url>
+      <url><loc>https://open330.github.io/tend/</loc></url><url><loc>https://open330.github.io/tend/docs/</loc></url><url><loc>https://open330.github.io/tendency/</loc></url></urlset>`;
+    expect(sitemapPages(xml, "https://open330.github.io/tend/", 10)).toEqual(["https://open330.github.io/tend/docs/"]);
+  });
+
+  it("reads the full title and description", () => {
+    expect(pageCopy(`<title>BarShelf &amp; widgets</title><meta name="description" content="One icon for your menu bar.">`)).toEqual({ title: "BarShelf & widgets", description: "One icon for your menu bar." });
+    expect(pageCopy("<p>no head</p>")).toEqual({ title: undefined, description: undefined });
   });
 });

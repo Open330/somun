@@ -1198,6 +1198,22 @@ export const en: Record<string, string> = {
     "Crawlers and previews that don't run JS (Naver, for one) see an empty page.",
   "링크 미리보기 점검": "Link preview check",
   "고칠 곳 {n}": "{n} to fix",
+  "저장소 설명": "Repository description",
+  "홈페이지 제목": "Homepage title",
+  "홈페이지 설명": "Homepage description",
+  "승인한 한 줄(한국어)": "Approved one-liner (Korean)",
+  "승인한 한 줄(영어)": "Approved one-liner (English)",
+  "README가 지원 종료라고 적은 이름이 남아 있습니다: {term}": "Still names something the README says is no longer supported: {term}",
+  "README에 없는 이름입니다: {term}. README와 맞는지 확인하세요.": "Not in the README: {term}. Check that it matches the README.",
+  "사이트맵의 하위 페이지와, 저장소 설명·홈페이지·승인한 한 줄이 README와 맞는지도 봅니다.":
+    "It also checks the pages in the sitemap, and whether the repository description, homepage and approved one-liners match the README.",
+  "하위 페이지": "Other pages",
+  "사이트맵 {total}개 가운데 {checked}개를 열어 봤습니다.": "Opened {checked} of {total} sitemap pages.",
+  "{n}개는 열지 못했습니다.": "{n} could not be opened.",
+  "열어 본 하위 페이지는 모두 통과했습니다.": "Every page opened passed.",
+  "문구 일관성": "Copy consistency",
+  "저장소 설명·홈페이지·승인한 한 줄에서 README와 어긋난 이름을 찾지 못했습니다.":
+    "No names in the repository description, homepage or approved one-liners conflict with the README.",
   통과: "Passed",
   "글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.":
     "Before you post, see how the homepage you link to looks in search results and in X and LinkedIn link cards.",

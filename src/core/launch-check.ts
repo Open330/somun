@@ -72,3 +72,32 @@ export function checkSitemap(res: Fetched): CheckItem {
   if (!xml) return { id: "sitemap", level: "fail", value: "html" };
   return { id: "sitemap", level: "ok", value: String((res.body.match(/<loc>/gi) ?? []).length) };
 }
+
+/** 홈페이지의 검색 제목과 설명 원문(자르지 않음). 문구 일관성 점검(core/consistency)에 쓴다. */
+export function pageCopy(rawHtml: string): { title?: string; description?: string } {
+  const html = rawHtml.slice(0, MAX_HTML);
+  const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "");
+  const description = decode(metas(html).get("description") ?? "");
+  return { title: title || undefined, description: description || undefined };
+}
+
+/**
+ * sitemap.xml에서 홈페이지 경로 아래의 페이지 주소를 순서대로 limit개까지(홈페이지 자신은 뺀다).
+ * 생성기로 만든 하위 페이지(BarShelf 위젯 25개 등)가 검색 노출 대부분을 받으므로 홈페이지만 보면 모자라다.
+ * GitHub Pages 프로젝트 사이트(open330.github.io/tend/)는 출처 사이트맵에 다른 프로젝트가 섞이므로 경로 아래만 본다.
+ */
+export function sitemapPages(xml: string, homepage: string, limit: number): string[] {
+  const home = new URL(homepage);
+  const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
+  const base = home.pathname.replace(/\/+$/, "");
+  const out: string[] = [];
+  for (const m of xml.slice(0, MAX_HTML).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+    let url: URL;
+    try { url = new URL(decode(m[1]!)); } catch { continue; }
+    if (url.origin !== home.origin || norm(url) === norm(home) || (base && !url.pathname.startsWith(`${base}/`)) || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
+    url.hash = "";
+    if (!out.includes(url.href)) out.push(url.href);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+import { copyIssues, properTerms, retiredNames } from "./consistency.js";
+
+const README = `# Tend
+Tend watches Claude Code, Codex and Antigravity CLI sessions in tmux.
+The Google Gemini CLI is no longer supported; use its successor, the Antigravity CLI.
+Press Esc to stop. 설정에서 현재 작업 중단을 고를 수 있습니다.`;
+
+describe("retiredNames", () => {
+  it("finds a name the README says is no longer supported, without the leading article or vendor", () => {
+    expect(retiredNames(README)).toEqual(["Gemini CLI"]);
+  });
+
+  it("finds Korean and deprecated phrasings but not an ordinary stop action", () => {
+    expect(retiredNames("Legacy Sync is deprecated.\nOld Bridge는 지원 종료되었습니다.\n작업 중단 버튼")).toEqual(["Legacy Sync", "Old Bridge"]);
+  });
+});
+
+describe("properTerms", () => {
+  it("keeps capitalized names but skips sentence-initial words and common terms", () => {
+    expect(properTerms("Record every prompt to MinIO. Then see usage in a CLI on macOS.")).toEqual(["MinIO"]);
+    expect(properTerms("Tend는 tmux에서 Claude Code·Codex 세션을 지켜봅니다.")).toEqual(["Claude", "Code", "Codex"]);
+  });
+});
+
+describe("copyIssues", () => {
+  const texts = (description: string) => [{ source: "description" as const, text: description }];
+
+  it("flags a retired name left in the repository description", () => {
+    expect(copyIssues({ readme: README, readmeTruncated: false, productName: "Tend", texts: texts("Works with Claude Code, Codex, Gemini CLI and Antigravity CLI.") })).toEqual([
+      { kind: "retired", source: "description", term: "Gemini CLI" },
+    ]);
+  });
+
+  it("flags a name that the README never mentions", () => {
+    expect(copyIssues({ readme: README, readmeTruncated: false, productName: "Tend", texts: texts("Tend stores sessions in MinIO.") })).toEqual([
+      { kind: "not_in_readme", source: "description", term: "MinIO" },
+    ]);
+  });
+
+  it("does not report absent names when the README was cut short, but still reports retired ones", () => {
+    const issues = copyIssues({ readme: README, readmeTruncated: true, productName: "Tend", texts: texts("Tend stores sessions in MinIO and supports Gemini CLI.") });
+    expect(issues).toEqual([{ kind: "retired", source: "description", term: "Gemini CLI" }]);
+  });
+
+  it("passes copy that matches the README and ignores the product name", () => {
+    expect(copyIssues({ readme: README, readmeTruncated: false, productName: "Tend", texts: [...texts("Know which tmux coding agent is waiting. Works with Claude Code and Codex."), { source: "oneliner_en", text: "Tend watches the Claude Code and Codex sessions you run." }] })).toEqual([]);
+  });
+
+  it("returns nothing without a README", () => {
+    expect(copyIssues({ readme: "", texts: texts("Uses MinIO.") })).toEqual([]);
+  });
+});

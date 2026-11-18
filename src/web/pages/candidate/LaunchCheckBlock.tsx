@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { CopyIssue } from "@core/consistency";
 import type { CheckItem } from "@core/launch-check";
 import type { LaunchCheck } from "@shared/types";
 import { api } from "../../lib/api";
@@ -49,6 +50,21 @@ function hint(item: CheckItem): string | undefined {
   return undefined;
 }
 
+const SOURCE: Record<CopyIssue["source"], string> = {
+  description: "저장소 설명",
+  homepage_title: "홈페이지 제목",
+  homepage_description: "홈페이지 설명",
+  oneliner_ko: "승인한 한 줄(한국어)",
+  oneliner_en: "승인한 한 줄(영어)",
+};
+
+/** 문구 점검 한 줄. 어디의 어떤 낱말이 왜 걸렸는지만 말하고, 고칠지는 사람이 정한다. */
+function copyHint(issue: CopyIssue): string {
+  return issue.kind === "retired"
+    ? t("README가 지원 종료라고 적은 이름이 남아 있습니다: {term}", { term: issue.term })
+    : t("README에 없는 이름입니다: {term}. README와 맞는지 확인하세요.", { term: issue.term });
+}
+
 const MARK: Record<CheckItem["level"], [string, string]> = { ok: ["✓", "badge ok"], warn: ["!", "badge warn"], fail: ["✕", "badge bad"] };
 
 /** 올리기 전 링크 점검: 글감의 홈페이지가 검색과 링크 미리보기에 어떻게 보이는지. 펼칠 때 한 번 불러온다. */
@@ -64,7 +80,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
       setState("error");
     }
   };
-  const failing = data?.items.filter((i) => i.level !== "ok").length ?? 0;
+  const failing = (data?.items.filter((i) => i.level !== "ok").length ?? 0) + (data?.pages?.issues.length ?? 0) + (data?.copy?.length ?? 0);
+  const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
   return (
     <section className="side-block">
       <details
@@ -75,12 +92,13 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
       >
         <summary>
           {t("링크 미리보기 점검")}
-          {data?.items.length ? (
+          {checked ? (
             <span className={`badge ml-6 ${failing ? "warn" : "ok"}`}>{failing ? t("고칠 곳 {n}", { n: failing }) : t("통과")}</span>
           ) : null}
         </summary>
         <p className="tiny muted launch-check-intro">
-          {t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}
+          {t("글에 넣을 홈페이지가 검색 결과와 X·LinkedIn 링크 카드에 어떻게 보이는지 올리기 전에 확인합니다.")}{" "}
+          {t("사이트맵의 하위 페이지와, 저장소 설명·홈페이지·승인한 한 줄이 README와 맞는지도 봅니다.")}
         </p>
         {!homepage && (
           <p className="small muted m-0">
@@ -117,6 +135,56 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
             })}
           </ul>
         ) : null}
+        {data?.pages && (
+          <div className="mt-8">
+            <b className="small">{t("하위 페이지")}</b>
+            <div className="tiny muted">
+              {t("사이트맵 {total}개 가운데 {checked}개를 열어 봤습니다.", { total: data.pages.total, checked: data.pages.checked })}
+              {data.pages.unreachable ? ` ${t("{n}개는 열지 못했습니다.", { n: data.pages.unreachable })}` : ""}
+            </div>
+            {data.pages.issues.length ? (
+              <ul className="launch-check small">
+                {data.pages.issues.map((p) => (
+                  <li key={p.url}>
+                    <span className="badge warn" aria-label="warn">
+                      !
+                    </span>{" "}
+                    <a href={p.url} target="_blank" rel="noreferrer">
+                      {p.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                    </a>
+                    {p.items.map((item) => (
+                      <div key={item.id} className="tiny muted">
+                        {t(LABEL[item.id])}: {hint(item)}
+                      </div>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="tiny muted">{t("열어 본 하위 페이지는 모두 통과했습니다.")}</div>
+            )}
+          </div>
+        )}
+        {data?.copy && (
+          <div className="mt-8">
+            <b className="small">{t("문구 일관성")}</b>
+            {data.copy.length ? (
+              <ul className="launch-check small">
+                {data.copy.map((issue) => (
+                  <li key={`${issue.kind}-${issue.source}-${issue.term}`}>
+                    <span className="badge warn" aria-label="warn">
+                      !
+                    </span>{" "}
+                    <b>{t(SOURCE[issue.source])}</b>
+                    <div className="tiny muted">{copyHint(issue)}</div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="tiny muted">{t("저장소 설명·홈페이지·승인한 한 줄에서 README와 어긋난 이름을 찾지 못했습니다.")}</div>
+            )}
+          </div>
+        )}
         {data?.homepage && data.items.length > 0 && (
           <div className="meta-line">
             <a href={data.homepage} target="_blank" rel="noreferrer">
