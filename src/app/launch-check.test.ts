@@ -157,6 +157,15 @@ describe("launchCheck limits and coverage", () => {
     expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1, missedSitemaps: 1 });
   });
 
+  it("does not treat a urlset as an index because a comment mentions sitemapindex", async () => {
+    const home = "https://r.example/";
+    web.set(home, { body: GOOD("Home page title is fine") });
+    web.set("https://r.example/sitemap.xml", { body: `<urlset><!-- Replaced the old <sitemapindex> --><url><loc>https://r.example/docs</loc></url></urlset>`, type: "application/xml" });
+    web.set("https://r.example/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+  });
+
   it("reads up to five child sitemaps and counts the rest as missed", async () => {
     const home = "https://q.example/";
     web.set(home, { body: GOOD("Home page title is fine") });

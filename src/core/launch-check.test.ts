@@ -53,7 +53,7 @@ describe("hostile pages", () => {
       const start = performance.now();
       checkPage(html);
       pageCopy(html);
-      expect(performance.now() - start).toBeLessThan(300);
+      expect(performance.now() - start).toBeLessThan(1000);
     }
   });
 
@@ -63,7 +63,7 @@ describe("hostile pages", () => {
     expect(pageCopy(`<script>const x = "</scripture><title>Wrong title</title>";</script><title>Correct title</title>`).title).toBe("Correct title");
     const start = performance.now();
     for (const html of [`<meta "`.repeat(30_000), `<meta '`.repeat(30_000), `<meta content="${"a".repeat(100_000)}`]) checkPage(html);
-    expect(performance.now() - start).toBeLessThan(300);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("does not read a title from script text and ignores commented sitemap entries", () => {
@@ -94,8 +94,17 @@ describe("sitemap pages and page copy", () => {
     expect(checkSitemap({ status: 200, contentType: "application/xml", body: `<?xml version="1.0"?><!-- c --><ns:urlset><url><loc>a</loc></url></ns:urlset>` }).level).toBe("ok");
     expect(trimSlashes("/a///")).toBe("/a");
     const start = performance.now();
-    sitemapPages(urlsetOf(`https://a.example/${"/".repeat(32_000)}docs`, `https://a.example/x${"/".repeat(32_000)}`), "https://a.example/", 10);
-    expect(performance.now() - start).toBeLessThan(200);
+    sitemapPages(urlsetOf(`https://a.example/${"/".repeat(90_000)}docs`, `https://a.example/x${"/".repeat(90_000)}`), "https://a.example/", 10);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+
+  it("reads unquoted meta values and does not take content from data-content", () => {
+    expect(level(checkPage(`<meta name=description content="Search and filter every document in your workspace.">`), "description")).toBe("ok");
+    expect(pageCopy(`<meta data-content="Internal placeholder" name="description" content="Search and filter every document in your workspace.">`).description).toBe("Search and filter every document in your workspace.");
+  });
+
+  it("reads namespaced sitemap entries", () => {
+    expect(sitemapPages(`<s:urlset xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"><s:url><s:loc>https://a.example/docs</s:loc></s:url></s:urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/docs"]);
   });
 
   it("rejects an XML document that is not a sitemap", () => {

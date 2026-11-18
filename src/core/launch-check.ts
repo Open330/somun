@@ -104,10 +104,41 @@ function textOnly(html: string): string {
   return out + (rest.includes("<") ? rest.slice(0, rest.indexOf("<")) : rest);
 }
 
-const attr = (tag: string, name: string): string | undefined => {
-  const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
-  return m ? (m[2] ?? m[3]) : undefined;
-};
+/**
+ * 태그의 속성들(이름은 소문자, 처음 나온 값). 따옴표 없는 값(name=description)도 읽고,
+ * data-content 같은 다른 속성의 끝부분을 content로 착각하지 않는다. 앞에서 뒤로 한 번만 걷는다.
+ */
+function attrs(raw: string): Map<string, string> {
+  const out = new Map<string, string>();
+  let i = 1;
+  while (i < raw.length && !/[\s/>]/.test(raw[i]!)) i++;
+  const space = (c: string | undefined) => c !== undefined && /\s/.test(c);
+  while (i < raw.length) {
+    while (i < raw.length && (space(raw[i]) || raw[i] === "/")) i++;
+    if (i >= raw.length || raw[i] === ">") break;
+    const nameStart = i;
+    while (i < raw.length && !/[\s=/>]/.test(raw[i]!)) i++;
+    const name = asciiLower(raw.slice(nameStart, i));
+    while (space(raw[i])) i++;
+    let value = "";
+    if (raw[i] === "=") {
+      i++;
+      while (space(raw[i])) i++;
+      const q = raw[i];
+      if (q === "\"" || q === "'") {
+        const close = raw.indexOf(q, i + 1);
+        value = raw.slice(i + 1, close < 0 ? raw.length : close);
+        i = close < 0 ? raw.length : close + 1;
+      } else {
+        const start = i;
+        while (i < raw.length && !space(raw[i]) && raw[i] !== ">") i++;
+        value = raw.slice(start, i);
+      }
+    }
+    if (name && !out.has(name)) out.set(name, value);
+  }
+  return out;
+}
 
 /** <meta> 태그의 name·property → content. 태그 경계는 nextTag가 따옴표를 보며 정한다. */
 function metas(html: string): Map<string, string> {
@@ -115,9 +146,9 @@ function metas(html: string): Map<string, string> {
   const out = new Map<string, string>();
   eachTag(html, lower, (tag) => {
     if (tag.name !== "meta" || tag.closing) return;
-    const raw = html.slice(tag.start, tag.end);
-    const key = (attr(raw, "property") ?? attr(raw, "name"))?.toLowerCase();
-    const content = attr(raw, "content");
+    const a = attrs(html.slice(tag.start, tag.end));
+    const key = (a.get("property") ?? a.get("name"))?.toLowerCase();
+    const content = a.get("content");
     if (key && content !== undefined && !out.has(key)) out.set(key, content.trim());
   });
   return out;
@@ -229,7 +260,8 @@ export function withinSite(url: string, homepage: string): boolean {
 
 /** 사이트맵의 <loc> 주소들. 주석으로 막은 항목(<!-- <url>…</url> -->)은 사이트맵에 없는 것이다. */
 export function sitemapLocs(xml: string): string[] {
-  return [...removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => decode(m[1]!));
+  // 이름공간 접두어(<s:loc>)도 같은 항목이다.
+  return [...removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<(?:[\w-]+:)?loc>\s*([^<\s]+)\s*<\/(?:[\w-]+:)?loc>/gi)].map((m) => decode(m[1]!));
 }
 
 /**

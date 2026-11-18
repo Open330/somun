@@ -1,5 +1,5 @@
 import { copyIssues, type CopyIssue, type CopySource } from "../core/consistency.js";
-import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapLocs, sitemapPages, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
+import { checkPage, checkRobots, checkSitemap, pageCopy, siteBase, sitemapLocs, sitemapPages, sitemapRoot, withinSite, type CheckItem, type Fetched } from "../core/launch-check.js";
 import { publicFetch } from "../infra/net.js";
 import type { Evidence, LaunchCheck, LaunchCheckPages } from "../shared/types.js";
 import type { AppContext } from "./context.js";
@@ -80,7 +80,8 @@ async function checkSubpages(homepage: string, sitemap: Fetched, deadline: numbe
   const sameOrigin = (u: URL) => u.origin === origin;
   let xmls = [sitemap!.body];
   let missedSitemaps = 0;
-  if (/<sitemapindex\b/i.test(sitemap!.body)) {
+  // 주석 속 낱말이 아니라 첫 요소로 색인인지 본다(사이트맵 항목 판정과 같은 기준).
+  if (sitemapRoot(sitemap!.body) === "sitemapindex") {
     const children = sitemapLocs(sitemap!.body).filter((u) => { try { return sameOrigin(new URL(u)); } catch { return false; } });
     const fetched = await Promise.all(children.slice(0, MAX_CHILD_SITEMAPS).map((u) => get(u, { deadline, scope: sameOrigin })));
     // 열지 못했거나 상한 밖이라 읽지 않은 하위 사이트맵은 그 안의 페이지를 못 본 것이다. 결과에서 사라지지 않게 센다.

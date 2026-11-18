@@ -88,10 +88,12 @@ export function copyIssues(input: { readme?: string; readmeTruncated?: boolean; 
   // 낱말 단위로 찾는다. Git이 GitHub 안에 들어 있다고 README에 있는 것으로 치지 않는다.
   // 라틴 글자·숫자로만 경계를 본다. 한국어 조사(MinIO를)는 붙어 있어도 언급으로 친다.
   const mentioned = (term: string) => new RegExp(`(?<![A-Za-z0-9_])${escape(term)}(?![A-Za-z0-9_])`, "i").test(readme);
-  const retired = retiredNames(readme);
+  // 지원 종료 이름은 앞의 20개만, 문구는 앞 2000자만 본다. 이름마다 문구를 다시 훑으므로 둘 다 묶어야 한다.
+  const retired = retiredNames(readme).slice(0, 20);
   const name = input.productName?.toLowerCase();
   const issues: CopyIssue[] = [];
-  for (const { source, text } of input.texts) {
+  for (const { source, text: full } of input.texts) {
+    const text = full?.slice(0, 2000);
     if (!text?.trim()) continue;
     for (const term of retired) {
       if (new RegExp(`(?<![\\w])${escape(term)}(?![\\w])`, "i").test(text)) issues.push({ kind: "retired", source, term });

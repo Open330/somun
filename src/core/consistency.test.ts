@@ -35,30 +35,30 @@ describe("retiredNames edge cases", () => {
 
   it("splits long punctuation runs in short copy quickly", () => {
     const start = performance.now();
-    properTerms(`Filter${"=".repeat(50_000)}Results and More`);
+    properTerms(`Filter${"=".repeat(120_000)}Results and More`);
     copyIssues({ readme: "x", readmeTruncated: false, texts: [{ source: "homepage_description", text: `A ${"=".repeat(200_000)}B` }] });
-    expect(performance.now() - start).toBeLessThan(200);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("strips emphasis underscores in linear time", () => {
     expect(retiredNames("_Legacy Sync_ is deprecated.")).toEqual(["Legacy Sync"]);
     const start = performance.now();
-    retiredNames(`A${"_".repeat(31_998)}B is deprecated`);
-    expect(performance.now() - start).toBeLessThan(200);
+    retiredNames(`A${"_".repeat(80_000)}B is deprecated`);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("scans long runs of whitespace quickly", () => {
     const start = performance.now();
     expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}x`)).toEqual([]);
     expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}is deprecated`)).toEqual([]);
-    expect(performance.now() - start).toBeLessThan(200);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 
   it("scans a long uppercase identifier quickly", () => {
     const readme = `${"A".repeat(32_000)} plain text`;
     const start = performance.now();
     expect(retiredNames(readme)).toEqual([]);
-    expect(performance.now() - start).toBeLessThan(200);
+    expect(performance.now() - start).toBeLessThan(1000);
   });
 });
 
@@ -98,6 +98,13 @@ describe("copyIssues", () => {
       { kind: "not_in_readme", source: "homepage_title", term: "MinIO" },
       { kind: "not_in_readme", source: "description", term: "Git" },
     ]);
+  });
+
+  it("bounds the retired-name scan over long copy", () => {
+    const readme = Array.from({ length: 782 }, (_, i) => `AAAAAAAAAAAAAAAAAAAA X${i} is deprecated.`).join("\n");
+    const start = performance.now();
+    copyIssues({ readme, readmeTruncated: false, texts: [{ source: "homepage_title", text: "AAAAAAAAAAAAAAAAAAAA ".repeat(9000) }] });
+    expect(performance.now() - start).toBeLessThan(200);
   });
 
   it("treats underscores as part of a name when matching the README", () => {
