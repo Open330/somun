@@ -9,9 +9,10 @@ export type CopySource = "description" | "homepage_title" | "homepage_descriptio
 export type CopyIssue = { kind: "retired" | "not_in_readme"; source: CopySource; term: string };
 
 // README에서 "<이름> is no longer supported", "<이름> (is) deprecated", "<이름>은 지원 종료" 꼴만 잡는다. "작업 중단" 같은 일반 문장은 잡지 않는다.
-// 긴 README에서 정규식이 글자마다 되돌아가지 않게, 먼저 표현 자체를 찾고 그 앞 짧은 구간에서만 이름을 읽는다.
-const RETIRED_MARK = /(?:\s+(?:support\s+)?(?:is|are|has been|have been|was|were)?\s*(?:no longer supported|deprecated|discontinued|end[- ]of[- ]life|retired)\b)|(?:\s*(?:은|는|의|에 대한)?\s*(?:지원(?:이|을)?\s*(?:종료|중단)|더 이상 지원하지))/g;
-const NAME_BEFORE = /((?:[A-Z][\w+#.-]{0,40}\s){0,3}[A-Z][\w+#.-]{0,40})$/;
+// 긴 README에서 정규식이 되돌아가지 않게, 반복 없는 표현 자체만 먼저 찾고, 그 앞 짧은 구간에서 연결어를 떼고 이름을 읽는다.
+const RETIRED_MARK = /no longer supported|deprecated|discontinued|end[- ]of[- ]life|\bretired\b|지원(?:이|을)? ?(?:종료|중단)|더 이상 지원하지/gi;
+const CONNECTOR = / (?:support )?(?:is|are|has been|have been|was|were|now|being)?(?: now)? ?$| ?(?:은|는|의|에 대한) ?$/;
+const NAME_BEFORE = /((?:[A-Z][\w+#.-]{0,40} ){0,3}[A-Z][\w+#.-]{0,40})$/;
 const WINDOW = 160;
 const LEADING = new Set(["The", "A", "An", "Google", "Note", "Warning"]);
 // 문장 첫머리가 아니어도 대문자로 쓰는 일반 낱말. 고유명이 아니므로 README에 없어도 알리지 않는다.
@@ -23,11 +24,19 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** README가 지원 종료라고 적은 이름들. 맨 앞의 관사·회사 이름은 뺀 이름도 함께 돌려준다(The Google Gemini CLI → Gemini CLI). */
 export function retiredNames(readme: string): string[] {
   // **Gemini CLI**, `Gemini CLI`, [Gemini CLI](url) 같은 Markdown 꾸밈을 벗겨야 이름 바로 뒤의 표현과 붙는다.
-  const text = readme.replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,500}\)/g, "$1").replace(/[*_`]+/g, "");
+  // 낱말 안의 밑줄(OLD_SYNC)은 이름의 일부라 남긴다.
+  const text = readme
+    .replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,500}\)/g, "$1")
+    .replace(/[*`]+/g, "")
+    .replace(/(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, "");
   const out = new Set<string>();
   for (const m of text.matchAll(RETIRED_MARK)) {
-    const before = text.slice(Math.max(0, m.index - WINDOW), m.index);
-    const found = before.match(NAME_BEFORE);
+    // 짧은 구간 안에서만 공백을 하나로 모은다. 긴 공백 줄도 이 구간 길이만큼만 본다.
+    const before = text.slice(Math.max(0, m.index - WINDOW), m.index).replace(/\s+/g, " ");
+    const stripped = before.replace(CONNECTOR, "");
+    // 문장이 끝난 뒤에 나온 표현("…Tend. Deprecated options")은 앞 낱말을 가리키지 않는다.
+    if (/[.:!?]$/.test(stripped)) continue;
+    const found = stripped.match(NAME_BEFORE);
     if (!found) continue;
     let w = words(found[1]!);
     // 앞 문장 끝 낱말(Foo.)은 이름이 아니다. 마침표로 끝나는 마지막 낱말 다음부터 읽는다.
@@ -63,7 +72,8 @@ export function copyIssues(input: { readme?: string; readmeTruncated?: boolean; 
   const readme = input.readme ?? "";
   if (!readme.trim()) return [];
   // 낱말 단위로 찾는다. Git이 GitHub 안에 들어 있다고 README에 있는 것으로 치지 않는다.
-  const mentioned = (term: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escape(term)}(?![\\p{L}\\p{N}])`, "iu").test(readme);
+  // 라틴 글자·숫자로만 경계를 본다. 한국어 조사(MinIO를)는 붙어 있어도 언급으로 친다.
+  const mentioned = (term: string) => new RegExp(`(?<![A-Za-z0-9])${escape(term)}(?![A-Za-z0-9])`, "i").test(readme);
   const retired = retiredNames(readme);
   const name = input.productName?.toLowerCase();
   const issues: CopyIssue[] = [];

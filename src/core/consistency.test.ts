@@ -22,6 +22,18 @@ describe("retiredNames edge cases", () => {
     expect(retiredNames("Use the [Old Sync](https://x.dev) app. Legacy Bridge is deprecated.")).toEqual(["Legacy Bridge"]);
   });
 
+  it("keeps underscores inside names and ignores a mark after a finished sentence", () => {
+    expect(retiredNames("`OLD_SYNC` is deprecated.")).toEqual(["OLD_SYNC"]);
+    expect(retiredNames("Configure Tend. Deprecated options are listed below.")).toEqual([]);
+  });
+
+  it("scans long runs of whitespace quickly", () => {
+    const start = performance.now();
+    expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}x`)).toEqual([]);
+    expect(retiredNames(`Legacy Sync${" ".repeat(30_000)}is deprecated`)).toEqual([]);
+    expect(performance.now() - start).toBeLessThan(200);
+  });
+
   it("scans a long uppercase identifier quickly", () => {
     const readme = `${"A".repeat(32_000)} plain text`;
     const start = performance.now();
@@ -66,6 +78,10 @@ describe("copyIssues", () => {
       { kind: "not_in_readme", source: "homepage_title", term: "MinIO" },
       { kind: "not_in_readme", source: "description", term: "Git" },
     ]);
+  });
+
+  it("counts a name followed by a Korean particle as mentioned", () => {
+    expect(copyIssues({ readme: "MinIO를 설치하면 됩니다.", readmeTruncated: false, productName: "p", texts: [{ source: "description", text: "Works with MinIO." }] })).toEqual([]);
   });
 
   it("returns nothing without a README", () => {

@@ -82,8 +82,9 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
   };
   const failing = (data?.items.filter((i) => i.level !== "ok").length ?? 0) + (data?.pages?.issues.length ?? 0) + (data?.copy?.length ?? 0);
   const checked = (data?.items.length ?? 0) > 0 || data?.copy !== undefined;
-  // 홈페이지를 열지 못했거나 하위 페이지를 하나도 열지 못했으면 통과라고 하지 않는다.
-  const incomplete = Boolean(data?.unreachable) || data?.pages?.checked === 0;
+  // 홈페이지나 하위 페이지를 열지 못했으면 통과라고 하지 않는다.
+  // 사이트맵 상한(25개)으로 덜 연 것은 문장으로 알리고, 열려다 실패한 페이지가 있으면 통과라고 하지 않는다.
+  const incomplete = Boolean(data?.unreachable) || data?.pages?.checked === 0 || (data?.pages?.unreachable ?? 0) > 0;
   return (
     <section className="side-block">
       <details

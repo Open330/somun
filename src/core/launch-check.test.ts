@@ -45,6 +45,22 @@ describe("robots and sitemap", () => {
   });
 });
 
+describe("hostile pages", () => {
+  it("parses malformed pages in linear time", () => {
+    for (const html of ["<".repeat(200_000), "<script".repeat(28_000), "<title>".repeat(28_000), "<meta".repeat(40_000), "<!--".repeat(50_000), "<head".repeat(40_000)]) {
+      const start = performance.now();
+      checkPage(html);
+      pageCopy(html);
+      expect(performance.now() - start).toBeLessThan(300);
+    }
+  });
+
+  it("does not read a title from script text and ignores commented sitemap entries", () => {
+    expect(pageCopy(`<script>const t = "<title>Uses MinIO</title>";</script><title>Product</title>`).title).toBe("Product");
+    expect(sitemapPages(`<urlset><!-- <url><loc>https://a.example/old</loc></url> --><url><loc>https://a.example/new</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/new"]);
+  });
+});
+
 describe("sitemap pages and page copy", () => {
   it("lists same-origin pages in order, without the homepage, files or duplicates", () => {
     const xml = `<urlset><url><loc>https://barshelf.jiun.dev/</loc></url><url><loc>https://barshelf.jiun.dev/widgets/weather</loc></url>

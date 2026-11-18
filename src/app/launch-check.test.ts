@@ -9,9 +9,11 @@ type Page = { status?: number; body?: string; type?: string; finalUrl?: string; 
 const web = new Map<string, Page>();
 const opened: string[] = [];
 vi.mock("../infra/net.js", () => ({
-  publicFetch: async (url: string) => {
+  publicFetch: async (url: string, _init: unknown, _max: number, allowRedirect?: (u: URL) => boolean) => {
     opened.push(url);
     const page = web.get(url) ?? { status: 404, body: "not found", type: "text/html" };
+    // 실제 publicFetch처럼 리다이렉트 대상은 요청하기 전에 거른다.
+    if (page.finalUrl && allowRedirect && !allowRedirect(new URL(page.finalUrl))) throw new Error("redirect out of scope");
     if (page.delayMs) await new Promise((r) => setTimeout(r, page.delayMs));
     const res = new Response(page.body ?? "", { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html" } });
     Object.defineProperty(res, "url", { value: page.finalUrl ?? url });
@@ -79,9 +81,57 @@ describe("launchCheck sub-pages", () => {
   });
 });
 
+describe("launchCheck discovery", () => {
+  it("treats URLs that differ only by fragment as one crawl", async () => {
+    web.set("https://e.example/", { body: GOOD("Home page title is fine"), delayMs: 20 });
+    web.set("https://e.example/sitemap.xml", { body: urlset("https://e.example/a", "https://e.example/b"), type: "application/xml" });
+    web.set("https://e.example/a", { body: GOOD("Sub page title is fine") });
+    web.set("https://e.example/b", { body: GOOD("Sub page title is fine") });
+    const one = setup("https://e.example/#one"), two = setup("https://e.example/#two");
+    opened.length = 0;
+    await Promise.all([launchCheck(one.ctx, "o", one.id), launchCheck(two.ctx, "o", two.id)]);
+    expect(opened.filter((u) => u === "https://e.example/a")).toHaveLength(1);
+  });
+
+  it("follows a homepage redirect to another host for robots, sitemap and sub-pages", async () => {
+    web.set("https://f.example/", { body: GOOD("Home page title is fine"), finalUrl: "https://www.f.example/" });
+    web.set("https://f.example/sitemap.xml", { body: urlset("https://f.example/stale"), type: "application/xml" });
+    web.set("https://www.f.example/sitemap.xml", { body: urlset("https://www.f.example/docs"), type: "application/xml" });
+    web.set("https://www.f.example/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup("https://f.example/");
+    opened.length = 0;
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+    expect(opened).not.toContain("https://f.example/sitemap.xml");
+  });
+
+  it("rejects an XML-typed error page as the project sitemap and judges the sitemap item by the one used", async () => {
+    const home = "https://g.example/project/";
+    web.set(home, { body: GOOD("Project home page title") });
+    web.set("https://g.example/project/sitemap.xml", { status: 200, body: "<html>Not found</html>", type: "application/xml" });
+    web.set("https://g.example/sitemap.xml", { body: urlset("https://g.example/project/docs"), type: "application/xml" });
+    web.set("https://g.example/project/docs", { body: GOOD("Docs page title is fine") });
+    const { ctx, id } = setup(home);
+    expect((await launchCheck(ctx, "o", id)).pages).toMatchObject({ total: 1, checked: 1 });
+
+    const home2 = "https://h.example/project/";
+    web.set(home2, { body: GOOD("Project home page title") });
+    web.set("https://h.example/project/sitemap.xml", { body: urlset("https://h.example/project/docs"), type: "application/xml" });
+    web.set("https://h.example/project/docs", { body: GOOD("Docs page title is fine") });
+    const second = setup(home2);
+    const res = await launchCheck(second.ctx, "o", second.id);
+    expect(res.items.find((i) => i.id === "sitemap")?.level).toBe("ok");
+    expect(res.pages).toMatchObject({ checked: 1 });
+  });
+});
+
 describe("launchCheck copy", () => {
   it("reports no copy result when there is no README to compare with", async () => {
     const { ctx, id } = setup("https://github.com/o/p", { description: "Uses MinIO." });
+    expect((await launchCheck(ctx, "o", id)).copy).toBeUndefined();
+  });
+
+  it("reports no copy result when there is no copy to compare", async () => {
+    const { ctx, id } = setup("", { readmeForChecks: "# p\nA README.", readmeTruncated: false });
     expect((await launchCheck(ctx, "o", id)).copy).toBeUndefined();
   });
 

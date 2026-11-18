@@ -86,8 +86,11 @@ export function guardedLookup(hostname: string, options: LookupOptions, callback
 
 const publicAgent = new Agent({ connect: { lookup: guardedLookup as never } });
 
-/** 공인 주소에만 요청한다. 리다이렉트는 최대 3번, 넘어갈 때마다 확인하고 301·302·303은 GET으로 바꾼다. */
-export async function publicFetch(raw: string, init: UndiciRequestInit = {}, maxRedirects = 3): Promise<UndiciResponse> {
+/**
+ * 공인 주소에만 요청한다. 리다이렉트는 최대 3번, 넘어갈 때마다 확인하고 301·302·303은 GET으로 바꾼다.
+ * allowRedirect가 있으면 리다이렉트 대상을 요청하기 전에 거른다(예: 홈페이지 경로 밖으로 나가는 하위 페이지).
+ */
+export async function publicFetch(raw: string, init: UndiciRequestInit = {}, maxRedirects = 3, allowRedirect?: (url: URL) => boolean): Promise<UndiciResponse> {
   let url = checkUrl(raw);
   let req: UndiciRequestInit = { ...init };
   for (let i = 0; ; i++) {
@@ -97,6 +100,7 @@ export async function publicFetch(raw: string, init: UndiciRequestInit = {}, max
     await res.body?.cancel().catch(() => undefined);
     if (i >= maxRedirects) throw new UnsafeUrlError("too many redirects");
     url = checkUrl(new URL(location, url));
+    if (allowRedirect && !allowRedirect(url)) throw new UnsafeUrlError("redirect out of scope");
     if ([301, 302, 303].includes(res.status) && req.method && !["GET", "HEAD"].includes(req.method.toUpperCase())) req = { ...req, method: "GET", body: undefined };
   }
 }

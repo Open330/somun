@@ -15,7 +15,8 @@ const attr = (tag: string, name: string): string | undefined => {
 
 function metas(head: string): Map<string, string> {
   const out = new Map<string, string>();
-  for (const tag of head.match(/<meta\b[^>]*>/gi) ?? []) {
+  // [^<>]: 닫히지 않은 <meta가 많아도 다음 < 에서 멈춰 한 번만 훑는다.
+  for (const tag of head.match(/<meta\b[^<>]*>/gi) ?? []) {
     const key = (attr(tag, "property") ?? attr(tag, "name"))?.toLowerCase();
     const content = attr(tag, "content");
     if (key && content !== undefined && !out.has(key)) out.set(key, content.trim());
@@ -26,18 +27,72 @@ function metas(head: string): Map<string, string> {
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'");
 const clip = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-// 주석 안의 <title>·<meta>는 검색엔진과 방문자가 보지 않는다.
-const stripComments = (html: string) => html.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+/** lower에서 from 이후 처음 나오는 <tag(뒤가 글자가 아닌 것)의 위치. */
+function openAt(lower: string, tag: string, from: number): number {
+  for (let i = lower.indexOf(`<${tag}`, from); i >= 0; i = lower.indexOf(`<${tag}`, i + 1)) {
+    if (!/[a-z0-9-]/.test(lower[i + tag.length + 1] ?? "")) return i;
+  }
+  return -1;
+}
+
+/**
+ * 주석과 지정한 태그 블록(<script>…</script> 등)을 지운다. 남의 페이지는 닫히지 않은 태그가 수만 개일 수 있어,
+ * 정규식 대신 indexOf로 앞에서 뒤로 한 번만 훑는다. 닫히지 않은 블록은 끝까지 지운다.
+ */
+function removeBlocks(html: string, tags: string[]): string {
+  const lower = html.toLowerCase();
+  const next = new Map<string, number>();
+  const find = (key: string, from: number) => {
+    let at = next.get(key);
+    if (at === undefined || (at >= 0 && at < from)) {
+      at = key === "!--" ? lower.indexOf("<!--", from) : openAt(lower, key, from);
+      next.set(key, at);
+    }
+    return at;
+  };
+  let out = "", i = 0;
+  for (;;) {
+    let start = -1, tag = "";
+    for (const key of ["!--", ...tags]) {
+      const at = find(key, i);
+      if (at >= 0 && (start < 0 || at < start)) { start = at; tag = key; }
+    }
+    if (start < 0) return out + html.slice(i);
+    out += `${html.slice(i, start)} `;
+    if (tag === "!--") {
+      const close = lower.indexOf("-->", start + 4);
+      i = close < 0 ? html.length : close + 3;
+    } else {
+      const close = lower.indexOf(`</${tag}`, start + tag.length + 1);
+      const gt = close < 0 ? -1 : lower.indexOf(">", close);
+      i = gt < 0 ? html.length : gt + 1;
+    }
+  }
+}
+
+/** 첫 <title>의 글자. 주석·스크립트를 지운 뒤에 찾으므로 스크립트 문자열 속 <title>은 읽지 않는다. */
+function titleOf(clean: string): string {
+  const lower = clean.toLowerCase();
+  const open = openAt(lower, "title", 0);
+  if (open < 0) return "";
+  const gt = lower.indexOf(">", open);
+  const close = gt < 0 ? -1 : lower.indexOf("</title", gt);
+  return close < 0 ? "" : decode(clean.slice(gt + 1, close).trim());
+}
+
+/** 검색엔진과 방문자가 보는 부분만 남긴다: 주석, 스크립트, 스타일, 템플릿을 뺀다. */
+const visible = (rawHtml: string) => removeBlocks(rawHtml.slice(0, MAX_HTML), ["script", "style", "noscript", "template"]);
 
 export function checkPage(rawHtml: string): CheckItem[] {
-  const html = stripComments(rawHtml.slice(0, MAX_HTML));
+  const html = visible(rawHtml);
   const m = metas(html);
-  const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "");
+  const title = titleOf(html);
   const description = m.get("description") ?? "";
   const ogTitle = m.get("og:title"), ogDesc = m.get("og:description");
   const ogImage = m.get("og:image") ?? m.get("twitter:image");
   const card = m.get("twitter:card");
-  const body = html.replace(/<head[\s\S]*?<\/head>/i, "").replace(/<(script|style|noscript|template)[\s\S]*?<\/\1>/gi, "").replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]+>/g, " ");
+  // [^<>]: 닫히지 않은 < 가 많아도 선형으로 지운다.
+  const body = removeBlocks(html, ["head"]).replace(/<[^<>]*>/g, " ");
   const text = decode(body).replace(/\s+/g, " ").trim();
 
   return [
@@ -79,8 +134,8 @@ export function checkSitemap(res: Fetched): CheckItem {
 
 /** 홈페이지의 검색 제목과 설명 원문(자르지 않음). 문구 일관성 점검(core/consistency)에 쓴다. */
 export function pageCopy(rawHtml: string): { title?: string; description?: string } {
-  const html = stripComments(rawHtml.slice(0, MAX_HTML));
-  const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? "");
+  const html = visible(rawHtml);
+  const title = titleOf(html);
   const description = decode(metas(html).get("description") ?? "");
   return { title: title || undefined, description: description || undefined };
 }
@@ -101,7 +156,8 @@ export function sitemapPages(xml: string, homepage: string, limit: number): stri
   const home = new URL(homepage);
   const norm = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
   const out: string[] = [];
-  for (const m of xml.slice(0, MAX_HTML).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+  // 주석으로 막은 항목(<!-- <url>…</url> -->)은 사이트맵에 없는 것이다.
+  for (const m of removeBlocks(xml.slice(0, MAX_HTML), []).matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
     let url: URL;
     try { url = new URL(decode(m[1]!)); } catch { continue; }
     if (!withinSite(url.href, homepage) || norm(url) === norm(home) || /\.(xml|png|jpe?g|gif|webp|svg|pdf|zip)$/i.test(url.pathname)) continue;
