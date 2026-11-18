@@ -346,7 +346,9 @@ export function lintDraft(channel: Channel, title: string | undefined, body: str
     });
     // 디스콰이엇은 등록한 제품 페이지(disquiet.io)로 연결해도 된다. 그 채널에서는 제품 페이지가 홈페이지 역할을 한다.
     // 주소를 하나씩 풀어 실제로 여는 곳이 disquiet.io인지 본다(다른 사이트 주소 안에 든 글자는 아니다).
-    results.push({ rule: "preferred_link", ok: (matches || disquiet.product) && !disquiet.wrong, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
+    // 홈페이지가 디스콰이엇 제품 페이지 자체면 그 주소와 정확히 같아야 한다(같은 이름의 다른 메이커 페이지는 아니다).
+    const preferIsDisquiet = (() => { try { return /^(?:www\.)?disquiet\.io$/i.test(new URL(facts.preferLink).hostname.replace(/\.+$/, "")); } catch { return false; } })();
+    results.push({ rule: "preferred_link", ok: (matches || (disquiet.product && !preferIsDisquiet)) && !disquiet.wrong, detail: say(`소개 글은 홈페이지로 연결해 주세요: ${link}`, `Link an introduction to the homepage: ${link}`) });
   }
 
   // 적은 근거를 문단 수에 맞춰 반복하지 않는다. 훅+링크의 두 문단도 유효하다.

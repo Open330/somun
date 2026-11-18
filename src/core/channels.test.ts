@@ -116,3 +116,10 @@ describe("disquiet lint", () => {
     expect(channelSpec("disquiet").rules).toContain("never claim authorship");
   });
 });
+
+it("requires the exact Disquiet product page when it is the homepage", () => {
+  const facts = { purpose: "introduction" as const, language: "ko", publicName: "Tool", repo: "o/tool", preferLink: "https://disquiet.io/@maker/products/tool" };
+  const pref = (body: string) => lintDraft("disquiet", "Tool로 기록 저장하기", body, [], facts).find((r) => r.rule === "preferred_link")?.ok;
+  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@other/products/tool")).toBe(false);
+  expect(pref("Tool은 기록을 저장합니다.\n\nhttps://disquiet.io/@maker/products/tool")).toBe(true);
+});
