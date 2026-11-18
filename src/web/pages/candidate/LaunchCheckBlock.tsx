@@ -97,7 +97,8 @@ export default function LaunchCheckBlock({ cid, homepage }: { cid: number; homep
       <details
         className="raw"
         onToggle={(ev) => {
-          if ((ev.target as HTMLDetailsElement).open && !data && state !== "loading") void load();
+          // 열 때마다 다시 묻는다. 승인 문장·설명을 고친 뒤 다시 열면 새 결과를 보여 준다(사이트 점검은 서버가 기억해 다시 열지 않는다).
+          if ((ev.target as HTMLDetailsElement).open && state !== "loading") void load();
         }}
       >
         <summary>

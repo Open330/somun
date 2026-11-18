@@ -141,6 +141,11 @@ describe("sitemap pages and page copy", () => {
     expect(performance.now() - start).toBeLessThan(1000);
   });
 
+  it("clips an oversized twitter:card value", () => {
+    const card = checkPage(`<meta name=twitter:card content=한${"x".repeat(199_000)}>`).find((i) => i.id === "twitter_card");
+    expect(card?.value?.length).toBeLessThanOrEqual(80);
+  });
+
   it("decodes numeric character references once", () => {
     expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
     expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");

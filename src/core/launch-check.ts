@@ -237,7 +237,7 @@ export function checkPage(rawHtml: string): CheckItem[] {
     { id: "og_text", level: ogTitle && ogDesc ? "ok" : ogTitle || ogDesc ? "warn" : "fail", value: ogTitle ? clip(ogTitle) : undefined },
     // og:image는 절대 주소여야 카드에 뜬다. 상대 주소는 대부분의 미리보기가 무시한다.
     { id: "og_image", level: !ogImage ? "fail" : /^https?:\/\//i.test(ogImage) ? "ok" : "warn", value: ogImage ? clip(ogImage) : undefined },
-    { id: "twitter_card", level: card ? "ok" : "warn", value: card },
+    { id: "twitter_card", level: card ? "ok" : "warn", value: card ? clip(card) : undefined },
     // JS를 돌리지 않는 크롤러(네이버 등)와 미리보기는 빈 SPA 껍데기만 본다.
     { id: "text_without_js", level: text.length >= 40 ? "ok" : "fail", value: text ? clip(text, 60) : undefined },
   ];
