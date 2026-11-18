@@ -146,6 +146,16 @@ describe("sitemap pages and page copy", () => {
     expect(card?.value?.length).toBeLessThanOrEqual(80);
   });
 
+  it("reads CDATA locations and does not parse tags inside a title", () => {
+    expect(sitemapPages(`<urlset><url><loc><![CDATA[https://example.org/docs]]></loc></url></urlset>`, "https://example.org/", 10)).toEqual(["https://example.org/docs"]);
+    const html = `<head><title>Guide to <script> tags</title><meta name="description" content="Learn how script tags load code on a page, with examples."></head><body><p>Visible guide text that is long enough to count.</p></body>`;
+    const items = checkPage(html);
+    expect(level(items, "title")).toBe("ok");
+    expect(level(items, "description")).toBe("ok");
+    expect(level(items, "text_without_js")).toBe("ok");
+    expect(pageCopy(html).title).toBe("Guide to <script> tags");
+  });
+
   it("decodes numeric character references once", () => {
     expect(sitemapPages(`<urlset><url><loc>https://a.example/search?q=x&#38;show=all</loc></url><url><loc>https://a.example/b?x=1&#x26;y=2</loc></url></urlset>`, "https://a.example/", 10)).toEqual(["https://a.example/search?q=x&show=all", "https://a.example/b?x=1&y=2"]);
     expect(pageCopy(`<title>A &amp;lt; B &#8212; C</title>`).title).toBe("A &lt; B — C");

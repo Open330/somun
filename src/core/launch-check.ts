@@ -41,6 +41,9 @@ function closeAt(lower: string, tag: string, from: number): number {
 
 type Tag = { name: string; closing: boolean; start: number; end: number };
 
+/** 안의 글자를 태그로 읽지 않는 요소(브라우저의 원자료·RCDATA 요소). */
+const RAW = new Set(["script", "style", "textarea", "title", "xmp"]);
+
 /**
  * from 이후의 다음 실제 태그(또는 주석, name "!--"). 남의 페이지를 정규식 없이 앞에서 뒤로 한 번만 읽는다.
  * 따옴표로 묶은 속성값 안의 < > 는 값의 일부다(content="<script> 요소"). 닫히지 않은 태그를 만나면 undefined.
@@ -72,11 +75,18 @@ function nextTag(html: string, lower: string, from: number): Tag | undefined {
   return undefined;
 }
 
-/** 태그들을 차례로 돈다. visit가 숫자를 돌려주면 거기서부터 다시 읽는다(블록을 건너뛸 때). */
+/**
+ * 태그들을 차례로 돈다. visit가 숫자를 돌려주면 거기서부터 다시 읽는다(블록을 건너뛸 때).
+ * 원자료 요소(<title>·<textarea>·<script> 등) 안의 글자는 태그가 아니므로, visit가 건너뛰지 않으면 닫는 태그 앞으로 바로 간다.
+ */
 function eachTag(html: string, lower: string, visit: (tag: Tag) => number | void, from = 0): void {
   for (let at = from, tag = nextTag(html, lower, from); tag; tag = nextTag(html, lower, at)) {
     const skip = visit(tag);
-    at = typeof skip === "number" ? skip : tag.end;
+    if (typeof skip === "number") at = skip;
+    else if (!tag.closing && RAW.has(tag.name)) {
+      const close = closeAt(lower, tag.name, tag.end);
+      at = close < 0 ? html.length : close;
+    } else at = tag.end;
   }
 }
 
@@ -87,7 +97,7 @@ function rawEnd(lower: string, tag: Tag): number {
   return gt < 0 ? lower.length : gt + 1;
 }
 
-const RAW = new Set(["script", "style", "textarea", "title", "xmp"]);
+// 위로 옮김: eachTag가 쓴다.
 
 /**
  * 블록의 끝. <template> 안은 HTML로 읽히므로 같은 토크나이저로 깊이를 센다(주석·속성값 속 <template>은 세지 않는다).
@@ -325,7 +335,10 @@ export function sitemapLocs(xml: string): string[] {
     if (local !== "loc" || tag.closing || entryPrefix !== prefix) return;
     const close = closeAt(lower, tag.name, tag.end);
     if (close < 0) return doc.length;
-    const value = decode(doc.slice(tag.end, close).trim());
+    // <loc><![CDATA[https://…]]></loc>도 같은 주소다.
+    const inner = doc.slice(tag.end, close).trim();
+    const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/.exec(inner);
+    const value = cdata ? cdata[1]!.trim() : decode(inner);
     if (value && !/\s/.test(value)) out.push(value);
     entryPrefix = undefined;
     return close;
