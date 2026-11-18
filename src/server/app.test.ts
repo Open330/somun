@@ -141,7 +141,7 @@ describe("HTTP response boundaries", () => {
     expect(home.headers.get("x-frame-options")).toBe("DENY");
     expect(home.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     for (const path of ["/does-not-exist", "/.env", "/favicon.ico"]) expect((await app.request(path)).status).toBe(404);
-    for (const path of ["/c/12", "/voice", "/github/pick"]) expect((await app.request(path)).status).toBe(200);
+    for (const path of ["/c/12", "/voice", "/github/pick", "/products", "/products/", "/published/", "/Products/", "/C/12"]) expect((await app.request(path)).status).toBe(200);
     // 자기 Referrer-Policy를 정한 응답은 덮어쓰지 않는다.
     const callback = await app.request("/api/github/app/created?code=x&state=y");
     expect(callback.headers.get("referrer-policy")).toBe("no-referrer");

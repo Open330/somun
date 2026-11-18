@@ -21,6 +21,7 @@ const Candidate = lazy(() => import("./pages/Candidate"));
 const Connectors = lazy(() => import("./pages/Connectors"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const Published = lazy(() => import("./pages/Published"));
+const Products = lazy(() => import("./pages/Products"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Voice = lazy(() => import("./pages/Voice"));
 const GithubSetup = lazy(() => import("./pages/GithubSetup"));
@@ -37,6 +38,7 @@ const Booting = () => (
 
 const NAV = [
   ["/", "글감"],
+  ["/products", "제품"],
   ["/published", "발행 기록"],
   ["/connectors", "연결 관리"],
   ["/voice", "문체"],
@@ -188,6 +190,7 @@ function Shell({ onSignOut, who, account }: { account: AccountWorkspaces; onSign
               <Routes>
                 <Route path="/" element={<Inbox />} />
                 <Route path="/c/:id" element={<Candidate />} />
+                <Route path="/products" element={<Products />} />
                 <Route path="/published" element={<Published />} />
                 <Route path="/connectors" element={<Connectors />} />
                 <Route path="/voice" element={<Voice />} />

@@ -183,6 +183,9 @@ export type RepoProfile = {
   oneLinerKo?: string;
   oneLinerEn?: string;
 };
+/** 제품 표 한 줄(app/products). 수치는 가장 최근 글감의 수집값이다. */
+export type ProductRow = { repo: string; name: string; oneLinerKo?: string; oneLinerEn?: string; homepage?: string; stars?: number; candidateId?: number; lastPublishedAt?: number; stage: RepoProfile["stage"]; status: "ready" | "needs_line" | "hold" };
+
 export type RepoProfileView = { repo: string; profile: RepoProfile; editedFields: (keyof RepoProfile)[]; model: string; updatedAt: number };
 
 export type CandidateDetail = { unpublishedDraftCount?: number; candidate: Candidate; judgments: Judgment[]; drafts: Draft[]; publications: Publication[]; signals: { id: number; kind: SignalKind; title: string; occurredAt: number }[]; profile?: RepoProfileView; told: { text: string; publishedAt?: number; publishedChannel?: string; candidateId?: number }[]; consistency: { channel: Channel; langs: string[]; onlyIn: { lang: string; numbers: string[] }[] }[] };

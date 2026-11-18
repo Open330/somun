@@ -36,7 +36,7 @@ describe("per-account isolation", () => {
   const asBob = (method: string, path: string, body?: unknown) => call(bob, "bob-token", method, path, body);
 
   it("hides every resource of another account from list endpoints", async () => {
-    for (const path of ["/candidates", "/sources", "/publications", "/examples", "/suggestions", "/profiles", "/jobs/status", "/jobs/pending"]) {
+    for (const path of ["/candidates", "/sources", "/publications", "/examples", "/suggestions", "/profiles", "/products", "/jobs/status", "/jobs/pending"]) {
       const res = await asBob("GET", path);
       expect(res.status, path).toBe(200);
       expect(await res.json(), path).toEqual([]);

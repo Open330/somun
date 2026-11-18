@@ -13,7 +13,8 @@ import type { Config } from "./config.js";
 const LANDING = /<!--landing:start-->[\s\S]*?<!--landing:end-->/;
 
 /** 웹 앱의 라우트(App.tsx). 이 밖의 주소는 앱 화면을 그대로 내려주되 404로 알린다(검색엔진·모니터링이 없는 페이지를 정상으로 보지 않게). */
-const APP_ROUTES = [/^\/$/, /^\/c\/\d+$/, /^\/(?:published|connectors|voice|settings|welcome)$/, /^\/github\/(?:setup|pick)$/, /^\/setup\/github-app$/, /^\/auth\/callback$/];
+// React Router는 대소문자를 가리지 않고 맞춘다. 서버도 같게 본다(/Products도 같은 화면).
+const APP_ROUTES = [/^\/$/, /^\/c\/\d+$/i, /^\/(?:products|published|connectors|voice|settings|welcome)$/i, /^\/github\/(?:setup|pick)$/i, /^\/setup\/github-app$/i, /^\/auth\/callback$/i];
 
 /** 첫 화면 머리말의 영어판. 웹 앱처럼 Accept-Language에 한국어가 있으면 한국어, 없으면 영어. 헤더가 없으면(일부 크롤러) 기본 한국어. */
 const EN_HEAD = {
@@ -59,7 +60,11 @@ export function seoRoutes(app: Hono, config: Config) {
     const english = prefersEnglish(acceptLanguage);
     const html = english ? toEnglish(source) : source;
     const image = english ? "og-en.png" : "og.png";
-    const status = APP_ROUTES.some((re) => re.test(path)) ? 200 : 404;
+    // 끝의 / 는 같은 화면이다(React Router도 /products/를 /products로 연다).
+    let end = path.length;
+    while (end > 1 && path[end - 1] === "/") end--;
+    const route = path.slice(0, end);
+    const status = APP_ROUTES.some((re) => re.test(route)) ? 200 : 404;
     const home = path === "/";
     const head: string[] = [];
     if (!home) head.push(`<meta name="robots" content="noindex" />`);
