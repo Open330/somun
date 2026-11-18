@@ -29,7 +29,7 @@ describe("listProducts", () => {
     ctx.db.insert(schema.publications).values({ ownerId: "me", candidateId: latest, channel: "x", url: "https://x.com/me/status/1", publishedAt: now - 1000 }).run();
 
     const rows = listProducts(ctx, "me");
-    expect(rows.map((r) => [r.name, r.status])).toEqual([["aas", "needs_line"], ["Tend", "ready"], ["old", "hold"]]);
+    expect(rows.map((r) => [r.name, r.status])).toEqual([["Tend", "ready"], ["aas", "needs_line"], ["old", "hold"]]);
     expect(rows.find((r) => r.repo === "o/tend")).toMatchObject({ stars: 42, homepage: "https://tend.example/", candidateId: latest, lastPublishedAt: now - 1000, oneLinerEn: "Tend watches sessions." });
     expect(rows.find((r) => r.repo === "o/aas")).toMatchObject({ oneLinerKo: "aas는 계정을 바꿉니다.", oneLinerEn: undefined, candidateId: undefined, lastPublishedAt: undefined });
     expect(rows.some((r) => r.repo === "x/secret")).toBe(false);
@@ -52,6 +52,16 @@ describe("listProducts", () => {
     const start = performance.now();
     expect(listProducts(ctx, "me")).toHaveLength(300);
     expect(performance.now() - start).toBeLessThan(500);
+  });
+
+  it("puts ready products first, then products with stories, then the rest", () => {
+    const { ctx, profile, candidate } = setup();
+    profile("me", "o/a-noline", {}, {});
+    profile("me", "o/b-story", {}, {});
+    profile("me", "o/c-ready", {}, { oneLinerKo: "가", oneLinerEn: "A" });
+    profile("me", "o/d-old", { stage: "archived" });
+    candidate("me", "o/b-story", { stars: 1 }, "s");
+    expect(listProducts(ctx, "me").map((r) => r.repo)).toEqual(["o/c-ready", "o/b-story", "o/a-noline", "o/d-old"]);
   });
 
   it("treats blank approved lines as missing", () => {

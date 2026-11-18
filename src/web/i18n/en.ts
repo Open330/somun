@@ -415,6 +415,7 @@ export const en: Record<string, string> = {
   "마지막 게시 {date}": "Last posted {date}",
   "아직 게시 안 함": "Not posted yet",
   "승인한 한 줄 없음": "No approved one-liner",
+  "그 밖의 저장소 {n}개 (글감 없음·보관)": "Other repositories: {n} (no stories or archived)",
   디스콰이엇: "Disquiet",
   릴리스: "Release",
   "새 저장소": "New repository",
